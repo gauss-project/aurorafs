@@ -17,7 +17,7 @@ import (
 
 	"github.com/ethersphere/bee/pkg/logging"
 	"github.com/ethersphere/bee/pkg/p2p"
-	"github.com/ethersphere/bee/pkg/pricing"
+	"github.com/ethersphere/bee/pkg/oracle"
 	"github.com/ethersphere/bee/pkg/storage"
 	"github.com/ethersphere/bee/pkg/swarm"
 )
@@ -119,7 +119,7 @@ type Accounting struct {
 	refreshRate *big.Int
 	// lower bound for the value of issued cheques
 	minimumPayment *big.Int
-	pricing        pricing.Interface
+	pricing        oracle.Price
 	metrics        metrics
 	wg             sync.WaitGroup
 	p2p            p2p.Service
@@ -144,7 +144,7 @@ func NewAccounting(
 	EarlyPayment *big.Int,
 	Logger logging.Logger,
 	Store storage.StateStorer,
-	Pricing pricing.Interface,
+	Pricing oracle.Price,
 	refreshRate *big.Int,
 	p2pService p2p.Service,
 

@@ -23,11 +23,11 @@ import (
 	"github.com/ethersphere/bee/pkg/jsonhttp"
 	"github.com/ethersphere/bee/pkg/logging"
 	"github.com/ethersphere/bee/pkg/manifest"
-	"github.com/ethersphere/bee/pkg/postage"
-	"github.com/ethersphere/bee/pkg/sctx"
+
+	//"github.com/ethersphere/bee/pkg/sctx"
 	"github.com/ethersphere/bee/pkg/storage"
 	"github.com/ethersphere/bee/pkg/swarm"
-	"github.com/ethersphere/bee/pkg/tags"
+
 	"github.com/ethersphere/bee/pkg/tracing"
 )
 
@@ -61,16 +61,9 @@ func (s *server) dirUploadHandler(w http.ResponseWriter, r *http.Request, storer
 	}
 	defer r.Body.Close()
 
-	tag, created, err := s.getOrCreateTag(r.Header.Get(SwarmTagHeader))
-	if err != nil {
-		logger.Debugf("bzz upload dir: get or create tag: %v", err)
-		logger.Error("bzz upload dir: get or create tag")
-		jsonhttp.InternalServerError(w, nil)
-		return
-	}
 
 	// Add the tag to the context
-	ctx := sctx.SetTag(r.Context(), tag)
+	ctx := r.Context()
 
 	reference, err := storeDir(
 		ctx,
@@ -81,40 +74,16 @@ func (s *server) dirUploadHandler(w http.ResponseWriter, r *http.Request, storer
 		loadsave.New(storer, requestModePut(r), requestEncrypt(r)),
 		r.Header.Get(SwarmIndexDocumentHeader),
 		r.Header.Get(SwarmErrorDocumentHeader),
-		tag,
-		created,
 	)
 	if err != nil {
 		logger.Debugf("bzz upload dir: store dir err: %v", err)
 		logger.Errorf("bzz upload dir: store dir")
-		switch {
-		case errors.Is(err, postage.ErrBucketFull):
-			jsonhttp.PaymentRequired(w, "batch is overissued")
-		default:
-			jsonhttp.InternalServerError(w, errDirectoryStore)
-		}
+		jsonhttp.InternalServerError(w, errDirectoryStore)
 		return
 	}
-	if created {
-		_, err = tag.DoneSplit(reference)
-		if err != nil {
-			logger.Debugf("bzz upload dir: done split: %v", err)
-			logger.Error("bzz upload dir: done split failed")
-			jsonhttp.InternalServerError(w, nil)
-			return
-		}
-	}
 
-	if strings.ToLower(r.Header.Get(SwarmPinHeader)) == "true" {
-		if err := s.pinning.CreatePin(r.Context(), reference, false); err != nil {
-			logger.Debugf("bzz upload dir: creation of pin for %q failed: %v", reference, err)
-			logger.Error("bzz upload dir: creation of pin failed")
-			jsonhttp.InternalServerError(w, nil)
-			return
-		}
-	}
 
-	w.Header().Set(SwarmTagHeader, fmt.Sprint(tag.Uid))
+
 	jsonhttp.Created(w, bzzUploadResponse{
 		Reference: reference,
 	})
@@ -131,8 +100,6 @@ func storeDir(
 	ls file.LoadSaver,
 	indexFilename,
 	errorFilename string,
-	tag *tags.Tag,
-	tagCreated bool,
 ) (swarm.Address, error) {
 	logger := tracing.NewLoggerWithTraceID(ctx, log)
 
@@ -156,14 +123,9 @@ func storeDir(
 			return swarm.ZeroAddress, fmt.Errorf("read tar stream: %w", err)
 		}
 
-		if !tagCreated {
-			// only in the case when tag is sent via header (i.e. not created by this request)
-			// for each file
-			if estimatedTotalChunks := calculateNumberOfChunks(fileInfo.Size, encrypt); estimatedTotalChunks > 0 {
-				err = tag.IncN(tags.TotalChunks, estimatedTotalChunks)
-				if err != nil {
-					return swarm.ZeroAddress, fmt.Errorf("increment tag: %w", err)
-				}
+		if estimatedTotalChunks := calculateNumberOfChunks(fileInfo.Size, encrypt); estimatedTotalChunks > 0 {
+			if err != nil {
+				return swarm.ZeroAddress, fmt.Errorf("increment tag: %w", err)
 			}
 		}
 
@@ -208,19 +170,17 @@ func storeDir(
 	}
 
 	storeSizeFn := []manifest.StoreSizeFunc{}
-	if !tagCreated {
-		// only in the case when tag is sent via header (i.e. not created by this request)
-		// each content that is saved for manifest
-		storeSizeFn = append(storeSizeFn, func(dataSize int64) error {
-			if estimatedTotalChunks := calculateNumberOfChunks(dataSize, encrypt); estimatedTotalChunks > 0 {
-				err = tag.IncN(tags.TotalChunks, estimatedTotalChunks)
-				if err != nil {
-					return fmt.Errorf("increment tag: %w", err)
-				}
+	// only in the case when tag is sent via header (i.e. not created by this request)
+	// each content that is saved for manifest
+	storeSizeFn = append(storeSizeFn, func(dataSize int64) error {
+		if estimatedTotalChunks := calculateNumberOfChunks(dataSize, encrypt); estimatedTotalChunks > 0 {
+
+			if err != nil {
+				return fmt.Errorf("increment tag: %w", err)
 			}
-			return nil
-		})
-	}
+		}
+		return nil
+	})
 
 	// save manifest
 	manifestReference, err := dirManifest.Store(ctx, storeSizeFn...)

@@ -14,19 +14,19 @@ import (
 	"io"
 	"math"
 	"net/http"
-	"strconv"
+
 	"strings"
 	"sync"
 	"time"
 	"unicode/utf8"
 
 	"github.com/ethersphere/bee/pkg/crypto"
-	"github.com/ethersphere/bee/pkg/feeds"
+
 	"github.com/ethersphere/bee/pkg/file/pipeline/builder"
 	"github.com/ethersphere/bee/pkg/logging"
 	m "github.com/ethersphere/bee/pkg/metrics"
 
-	"github.com/ethersphere/bee/pkg/pss"
+
 	"github.com/ethersphere/bee/pkg/resolver"
 	"github.com/ethersphere/bee/pkg/steward"
 	"github.com/ethersphere/bee/pkg/storage"
@@ -84,19 +84,14 @@ type Service interface {
 }
 
 type server struct {
-	tags            *tags.Tags
 	storer          storage.Storer
 	resolver        resolver.Interface
-	pss             pss.Interface
 	traversal       traversal.Traverser
-	pinning         pinning.Interface
 	steward         steward.Reuploader
 	logger          logging.Logger
 	tracer          *tracing.Tracer
-	feedFactory     feeds.Factory
 	signer          crypto.Signer
-	post            postage.Service
-	postageContract postagecontract.Interface
+	pricer           oracle.Price
 	Options
 	http.Handler
 	metrics metrics
@@ -117,17 +112,15 @@ const (
 )
 
 // New will create a and initialize a new API service.
-func New(tags *tags.Tags, storer storage.Storer, resolver resolver.Interface, pss pss.Interface, traversalService traversal.Traverser, pinning pinning.Interface, feedFactory feeds.Factory, post postage.Service, postageContract postagecontract.Interface, steward steward.Reuploader, signer crypto.Signer, logger logging.Logger, tracer *tracing.Tracer, o Options) Service {
+func New( storer storage.Storer, resolver resolver.Interface,  traversalService traversal.Traverser,  steward steward.Reuploader, signer crypto.Signer,pricer           oracle.Price, logger logging.Logger, tracer *tracing.Tracer, o Options) Service {
 	s := &server{
-		tags:            tags,
+
 		storer:          storer,
 		resolver:        resolver,
-		pss:             pss,
+
 		traversal:       traversalService,
-		pinning:         pinning,
-		feedFactory:     feedFactory,
-		post:            post,
-		postageContract: postageContract,
+
+		pricer: 		 pricer,
 		steward:         steward,
 		signer:          signer,
 		Options:         o,
@@ -162,28 +155,6 @@ func (s *server) Close() error {
 	return nil
 }
 
-// getOrCreateTag attempts to get the tag if an id is supplied, and returns an error if it does not exist.
-// If no id is supplied, it will attempt to create a new tag with a generated name and return it.
-func (s *server) getOrCreateTag(tagUid string) (*tags.Tag, bool, error) {
-	// if tag ID is not supplied, create a new tag
-	if tagUid == "" {
-		tag, err := s.tags.Create(0)
-		if err != nil {
-			return nil, false, fmt.Errorf("cannot create tag: %w", err)
-		}
-		return tag, true, nil
-	}
-	t, err := s.getTag(tagUid)
-	return t, false, err
-}
-
-func (s *server) getTag(tagUid string) (*tags.Tag, error) {
-	uid, err := strconv.Atoi(tagUid)
-	if err != nil {
-		return nil, fmt.Errorf("cannot parse taguid: %w", err)
-	}
-	return s.tags.Get(uint32(uid))
-}
 
 func (s *server) resolveNameOrAddress(str string) (swarm.Address, error) {
 	log := s.logger
@@ -312,55 +283,6 @@ func equalASCIIFold(s, t string) bool {
 	return s == t
 }
 
-type stamperPutter struct {
-	storage.Storer
-	stamper postage.Stamper
-}
-
-func newStamperPutter(s storage.Storer, post postage.Service, signer crypto.Signer, batch []byte) (storage.Storer, error) {
-	i, err := post.GetStampIssuer(batch)
-	if err != nil {
-		return nil, fmt.Errorf("stamp issuer: %w", err)
-	}
-
-	stamper := postage.NewStamper(i, signer)
-	return &stamperPutter{Storer: s, stamper: stamper}, nil
-}
-
-func (p *stamperPutter) Put(ctx context.Context, mode storage.ModePut, chs ...swarm.Chunk) (exists []bool, err error) {
-	var (
-		ctp []swarm.Chunk
-		idx []int
-	)
-	exists = make([]bool, len(chs))
-
-	for i, c := range chs {
-		has, err := p.Storer.Has(ctx, c.Address())
-		if err != nil {
-			return nil, err
-		}
-		if has || containsChunk(c.Address(), chs[:i]...) {
-			exists[i] = true
-			continue
-		}
-		stamp, err := p.stamper.Stamp(c.Address())
-		if err != nil {
-			return nil, err
-		}
-		chs[i] = c.WithStamp(stamp)
-		ctp = append(ctp, chs[i])
-		idx = append(idx, i)
-	}
-
-	exists2, err := p.Storer.Put(ctx, mode, ctp...)
-	if err != nil {
-		return nil, err
-	}
-	for i, v := range idx {
-		exists[v] = exists2[i]
-	}
-	return exists, nil
-}
 
 type pipelineFunc func(context.Context, io.Reader) (swarm.Address, error)
 

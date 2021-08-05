@@ -6,7 +6,6 @@ package api
 
 import (
 	"context"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -16,19 +15,18 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
+
 	"github.com/gorilla/mux"
 
-	"github.com/ethersphere/bee/pkg/feeds"
+
 	"github.com/ethersphere/bee/pkg/file/joiner"
 	"github.com/ethersphere/bee/pkg/file/loadsave"
 	"github.com/ethersphere/bee/pkg/jsonhttp"
 	"github.com/ethersphere/bee/pkg/manifest"
-	"github.com/ethersphere/bee/pkg/postage"
 	"github.com/ethersphere/bee/pkg/sctx"
 	"github.com/ethersphere/bee/pkg/storage"
 	"github.com/ethersphere/bee/pkg/swarm"
-	"github.com/ethersphere/bee/pkg/tags"
+
 	"github.com/ethersphere/bee/pkg/tracing"
 	"github.com/ethersphere/langos"
 )
@@ -45,35 +43,12 @@ func (s *server) bzzUploadHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	batch, err := requestPostageBatchId(r)
-	if err != nil {
-		logger.Debugf("bzz upload: postage batch id: %v", err)
-		logger.Error("bzz upload: postage batch id")
-		jsonhttp.BadRequest(w, "invalid postage batch id")
-		return
-	}
-
-	putter, err := newStamperPutter(s.storer, s.post, s.signer, batch)
-	if err != nil {
-		logger.Debugf("bzz upload: putter: %v", err)
-		logger.Error("bzz upload: putter")
-		switch {
-		case errors.Is(err, postage.ErrNotFound):
-			jsonhttp.BadRequest(w, "batch not found")
-		case errors.Is(err, postage.ErrNotUsable):
-			jsonhttp.BadRequest(w, "batch not usable yet")
-		default:
-			jsonhttp.BadRequest(w, nil)
-		}
-		return
-	}
-
 	isDir := r.Header.Get(SwarmCollectionHeader)
 	if strings.ToLower(isDir) == "true" || mediaType == multiPartFormData {
-		s.dirUploadHandler(w, r, putter)
+		s.dirUploadHandler(w, r, s.storer)
 		return
 	}
-	s.fileUploadHandler(w, r, putter)
+	s.fileUploadHandler(w, r, s.storer)
 }
 
 // fileUploadResponse is returned when an HTTP request to upload a file is successful
@@ -93,29 +68,8 @@ func (s *server) fileUploadHandler(w http.ResponseWriter, r *http.Request, store
 	// Content-Type has already been validated by this time
 	contentType := r.Header.Get(contentTypeHeader)
 
-	tag, created, err := s.getOrCreateTag(r.Header.Get(SwarmTagHeader))
-	if err != nil {
-		logger.Debugf("bzz upload file: get or create tag: %v", err)
-		logger.Error("bzz upload file: get or create tag")
-		jsonhttp.InternalServerError(w, nil)
-		return
-	}
-
-	if !created {
-		// only in the case when tag is sent via header (i.e. not created by this request)
-		if estimatedTotalChunks := requestCalculateNumberOfChunks(r); estimatedTotalChunks > 0 {
-			err = tag.IncN(tags.TotalChunks, estimatedTotalChunks)
-			if err != nil {
-				s.logger.Debugf("bzz upload file: increment tag: %v", err)
-				s.logger.Error("bzz upload file: increment tag")
-				jsonhttp.InternalServerError(w, nil)
-				return
-			}
-		}
-	}
-
-	// Add the tag to the context
-	ctx := sctx.SetTag(r.Context(), tag)
+		// Add the tag to the context
+	ctx := r.Context()
 
 	fileName = r.URL.Query().Get("name")
 	reader = r.Body
@@ -127,12 +81,7 @@ func (s *server) fileUploadHandler(w http.ResponseWriter, r *http.Request, store
 	if err != nil {
 		logger.Debugf("bzz upload file: file store, file %q: %v", fileName, err)
 		logger.Errorf("bzz upload file: file store, file %q", fileName)
-		switch {
-		case errors.Is(err, postage.ErrBucketFull):
-			jsonhttp.PaymentRequired(w, "batch is overissued")
-		default:
-			jsonhttp.InternalServerError(w, errFileStore)
-		}
+		jsonhttp.InternalServerError(w, errFileStore)
 		return
 	}
 
@@ -181,55 +130,32 @@ func (s *server) fileUploadHandler(w http.ResponseWriter, r *http.Request, store
 		encrypt, fileName, fr.String(), fileMtdt)
 
 	storeSizeFn := []manifest.StoreSizeFunc{}
-	if !created {
-		// only in the case when tag is sent via header (i.e. not created by this request)
-		// each content that is saved for manifest
-		storeSizeFn = append(storeSizeFn, func(dataSize int64) error {
-			if estimatedTotalChunks := calculateNumberOfChunks(dataSize, encrypt); estimatedTotalChunks > 0 {
-				err = tag.IncN(tags.TotalChunks, estimatedTotalChunks)
-				if err != nil {
-					return fmt.Errorf("increment tag: %w", err)
-				}
+	// only in the case when tag is sent via header (i.e. not created by this request)
+	// each content that is saved for manifest
+	storeSizeFn = append(storeSizeFn, func(dataSize int64) error {
+		if estimatedTotalChunks := calculateNumberOfChunks(dataSize, encrypt); estimatedTotalChunks > 0 {
+
+			if err != nil {
+				return fmt.Errorf("increment tag: %w", err)
 			}
-			return nil
-		})
-	}
+		}
+		return nil
+	})
 
 	manifestReference, err := m.Store(ctx, storeSizeFn...)
 	if err != nil {
 		logger.Debugf("bzz upload file: manifest store, file %q: %v", fileName, err)
 		logger.Errorf("bzz upload file: manifest store, file %q", fileName)
-		switch {
-		case errors.Is(err, postage.ErrBucketFull):
-			jsonhttp.PaymentRequired(w, "batch is overissued")
-		default:
-			jsonhttp.InternalServerError(w, nil)
-		}
+		jsonhttp.InternalServerError(w, nil)
 		return
 	}
 	logger.Debugf("Manifest Reference: %s", manifestReference.String())
 
-	if created {
-		_, err = tag.DoneSplit(manifestReference)
-		if err != nil {
-			logger.Debugf("bzz upload file: done split: %v", err)
-			logger.Error("bzz upload file: done split failed")
-			jsonhttp.InternalServerError(w, nil)
-			return
-		}
-	}
 
-	if strings.ToLower(r.Header.Get(SwarmPinHeader)) == "true" {
-		if err := s.pinning.CreatePin(ctx, manifestReference, false); err != nil {
-			logger.Debugf("bzz upload file: creation of pin for %q failed: %v", manifestReference, err)
-			logger.Error("bzz upload file: creation of pin failed")
-			jsonhttp.InternalServerError(w, nil)
-			return
-		}
-	}
+
 
 	w.Header().Set("ETag", fmt.Sprintf("%q", manifestReference.String()))
-	w.Header().Set(SwarmTagHeader, fmt.Sprint(tag.Uid))
+
 	w.Header().Set("Access-Control-Expose-Headers", SwarmTagHeader)
 	jsonhttp.Created(w, bzzUploadResponse{
 		Reference: manifestReference,
@@ -263,7 +189,7 @@ func (s *server) bzzDownloadHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-FETCH:
+
 	// read manifest entry
 	m, err := manifest.NewDefaultManifestReference(
 		address,
@@ -276,52 +202,6 @@ FETCH:
 		return
 	}
 
-	// there's a possible ambiguity here, right now the data which was
-	// read can be an entry.Entry or a mantaray feed manifest. Try to
-	// unmarshal as mantaray first and possibly resolve the feed, otherwise
-	// go on normally.
-	if !feedDereferenced {
-		if l, err := s.manifestFeed(ctx, m); err == nil {
-			//we have a feed manifest here
-			ch, cur, _, err := l.At(ctx, time.Now().Unix(), 0)
-			if err != nil {
-				logger.Debugf("bzz download: feed lookup: %v", err)
-				logger.Error("bzz download: feed lookup")
-				jsonhttp.NotFound(w, "feed not found")
-				return
-			}
-			if ch == nil {
-				logger.Debugf("bzz download: feed lookup: no updates")
-				logger.Error("bzz download: feed lookup")
-				jsonhttp.NotFound(w, "no update found")
-				return
-			}
-			ref, _, err := parseFeedUpdate(ch)
-			if err != nil {
-				logger.Debugf("bzz download: parse feed update: %v", err)
-				logger.Error("bzz download: parse feed update")
-				jsonhttp.InternalServerError(w, "parse feed update")
-				return
-			}
-			address = ref
-			feedDereferenced = true
-			curBytes, err := cur.MarshalBinary()
-			if err != nil {
-				s.logger.Debugf("bzz download: marshal feed index: %v", err)
-				s.logger.Error("bzz download: marshal index")
-				jsonhttp.InternalServerError(w, "marshal index")
-				return
-			}
-
-			w.Header().Set(SwarmFeedIndexHeader, hex.EncodeToString(curBytes))
-			// this header might be overriding others. handle with care. in the future
-			// we should implement an append functionality for this specific header,
-			// since different parts of handlers might be overriding others' values
-			// resulting in inconsistent headers in the response.
-			w.Header().Set("Access-Control-Expose-Headers", SwarmFeedIndexHeader)
-			goto FETCH
-		}
-	}
 
 	if pathVar == "" {
 		logger.Tracef("bzz download: handle empty path %s", address)
@@ -484,43 +364,7 @@ func manifestMetadataLoad(
 	return "", false
 }
 
-func (s *server) manifestFeed(
-	ctx context.Context,
-	m manifest.Interface,
-) (feeds.Lookup, error) {
-	e, err := m.Lookup(ctx, "/")
-	if err != nil {
-		return nil, fmt.Errorf("node lookup: %w", err)
-	}
-	var (
-		owner, topic []byte
-		t            = new(feeds.Type)
-	)
-	meta := e.Metadata()
-	if e := meta[feedMetadataEntryOwner]; e != "" {
-		owner, err = hex.DecodeString(e)
-		if err != nil {
-			return nil, err
-		}
-	}
-	if e := meta[feedMetadataEntryTopic]; e != "" {
-		topic, err = hex.DecodeString(e)
-		if err != nil {
-			return nil, err
-		}
-	}
-	if e := meta[feedMetadataEntryType]; e != "" {
-		err := t.FromString(e)
-		if err != nil {
-			return nil, err
-		}
-	}
-	if len(owner) == 0 || len(topic) == 0 {
-		return nil, fmt.Errorf("node lookup: %s", "feed metadata absent")
-	}
-	f := feeds.New(topic, common.BytesToAddress(owner))
-	return s.feedFactory.NewLookup(*t, f)
-}
+
 
 func (s *server) bzzPatchHandler(w http.ResponseWriter, r *http.Request) {
 	nameOrHex := mux.Vars(r)["address"]
