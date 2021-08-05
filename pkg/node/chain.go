@@ -9,9 +9,7 @@ import (
 	"github.com/ethersphere/bee/pkg/oracle"
 	"time"
 
-	"github.com/ethersphere/bee/pkg/crypto"
 	"github.com/ethersphere/bee/pkg/logging"
-	"github.com/ethersphere/bee/pkg/storage"
 )
 
 const (
@@ -22,12 +20,13 @@ const (
 // InitChain will initialize the Ethereum backend at the given endpoint and
 // set up the Transaction Service to interact with it using the provided signer.
 func InitChain(
-	ctx context.Context,
+	p2pCtx context.Context,
 	logger logging.Logger,
-	stateStore storage.StateStorer,
+
 	endpoint string,
-	signer crypto.Signer,
+
 	pollingInterval time.Duration,
+	networkID uint64,
 ) (oracle.ChainOracle, error) {
-	return oracle.Init(logger,endpoint,pollingInterval)
+	return oracle.Init(p2pCtx,logger,endpoint,pollingInterval,networkID)
 }

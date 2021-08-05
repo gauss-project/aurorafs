@@ -7,13 +7,11 @@ package api
 import (
 	"encoding/hex"
 	"errors"
-	"io/ioutil"
-	"net/http"
-	"strings"
-
 	"github.com/ethersphere/bee/pkg/cac"
 	"github.com/ethersphere/bee/pkg/jsonhttp"
-	"github.com/ethersphere/bee/pkg/postage"
+	"io/ioutil"
+	"net/http"
+
 	"github.com/ethersphere/bee/pkg/soc"
 	"github.com/ethersphere/bee/pkg/swarm"
 	"github.com/gorilla/mux"
@@ -127,42 +125,7 @@ func (s *server) socUploadHandler(w http.ResponseWriter, r *http.Request) {
 		jsonhttp.Conflict(w, "chunk already exists")
 		return
 	}
-	batch, err := requestPostageBatchId(r)
-	if err != nil {
-		s.logger.Debugf("soc upload: postage batch id: %v", err)
-		s.logger.Error("soc upload: postage batch id")
-		jsonhttp.BadRequest(w, "invalid postage batch id")
-		return
-	}
 
-	i, err := s.post.GetStampIssuer(batch)
-	if err != nil {
-		s.logger.Debugf("soc upload: postage batch issuer: %v", err)
-		s.logger.Error("soc upload: postage batch issue")
-		switch {
-		case errors.Is(err, postage.ErrNotFound):
-			jsonhttp.BadRequest(w, "batch not found")
-		case errors.Is(err, postage.ErrNotUsable):
-			jsonhttp.BadRequest(w, "batch not usable yet")
-		default:
-			jsonhttp.BadRequest(w, "postage stamp issuer")
-		}
-		return
-	}
-	stamper := postage.NewStamper(i, s.signer)
-	stamp, err := stamper.Stamp(sch.Address())
-	if err != nil {
-		s.logger.Debugf("soc upload: stamp: %v", err)
-		s.logger.Error("soc upload: stamp error")
-		switch {
-		case errors.Is(err, postage.ErrBucketFull):
-			jsonhttp.PaymentRequired(w, "batch is overissued")
-		default:
-			jsonhttp.InternalServerError(w, "stamp error")
-		}
-		return
-	}
-	sch = sch.WithStamp(stamp)
 	_, err = s.storer.Put(ctx, requestModePut(r), sch)
 	if err != nil {
 		s.logger.Debugf("soc upload: chunk write error: %v", err)
@@ -171,14 +134,6 @@ func (s *server) socUploadHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if strings.ToLower(r.Header.Get(SwarmPinHeader)) == "true" {
-		if err := s.pinning.CreatePin(ctx, sch.Address(), false); err != nil {
-			s.logger.Debugf("soc upload: creation of pin for %q failed: %v", sch.Address(), err)
-			s.logger.Error("soc upload: creation of pin failed")
-			jsonhttp.InternalServerError(w, nil)
-			return
-		}
-	}
 
 	jsonhttp.Created(w, chunkAddressResponse{Reference: sch.Address()})
 }

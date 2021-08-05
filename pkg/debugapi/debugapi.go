@@ -17,17 +17,16 @@ import (
 	"github.com/ethersphere/bee/pkg/logging"
 	"github.com/ethersphere/bee/pkg/p2p"
 	"github.com/ethersphere/bee/pkg/pingpong"
-	"github.com/ethersphere/bee/pkg/postage"
+	"github.com/ethersphere/bee/pkg/oracle"
 	"github.com/ethersphere/bee/pkg/settlement"
 	"github.com/ethersphere/bee/pkg/settlement/swap"
 	"github.com/ethersphere/bee/pkg/settlement/swap/chequebook"
 	"github.com/ethersphere/bee/pkg/storage"
 	"github.com/ethersphere/bee/pkg/swarm"
-	"github.com/ethersphere/bee/pkg/tags"
 	"github.com/ethersphere/bee/pkg/topology"
 	"github.com/ethersphere/bee/pkg/topology/lightnode"
 	"github.com/ethersphere/bee/pkg/tracing"
-	"github.com/ethersphere/bee/pkg/transaction"
+
 	"github.com/prometheus/client_golang/prometheus"
 )
 
@@ -43,14 +42,13 @@ type Service struct {
 	storer             storage.Storer
 	logger             logging.Logger
 	tracer             *tracing.Tracer
-	tags               *tags.Tags
+
 	accounting         accounting.Interface
 	pseudosettle       settlement.Interface
 	chequebookEnabled  bool
 	chequebook         chequebook.Service
 	swap               swap.Interface
-	batchStore         postage.Storer
-	transaction        transaction.Service
+
 	corsAllowedOrigins []string
 	metricsRegistry    *prometheus.Registry
 	lightNodes         *lightnode.Container
@@ -81,20 +79,20 @@ func New(publicKey, pssPublicKey ecdsa.PublicKey, ethereumAddress common.Address
 // Configure injects required dependencies and configuration parameters and
 // constructs HTTP routes that depend on them. It is intended and safe to call
 // this method only once.
-func (s *Service) Configure(overlay swarm.Address, p2p p2p.DebugService, pingpong pingpong.Interface, topologyDriver topology.Driver, lightNodes *lightnode.Container, storer storage.Storer, tags *tags.Tags, accounting accounting.Interface, pseudosettle settlement.Interface, chequebookEnabled bool, swap swap.Interface, chequebook chequebook.Service, batchStore postage.Storer, transaction transaction.Service) {
+func (s *Service) Configure(overlay swarm.Address, p2p p2p.DebugService, pingpong pingpong.Interface, topologyDriver topology.Driver, lightNodes *lightnode.Container, storer storage.Storer,  accounting accounting.Interface, pseudosettle settlement.Interface, chequebookEnabled bool, swap swap.Interface, chequebook chequebook.Service) {
 	s.p2p = p2p
 	s.pingpong = pingpong
 	s.topologyDriver = topologyDriver
 	s.storer = storer
-	s.tags = tags
+
 	s.accounting = accounting
 	s.chequebookEnabled = chequebookEnabled
 	s.chequebook = chequebook
 	s.swap = swap
 	s.lightNodes = lightNodes
-	s.batchStore = batchStore
+
 	s.pseudosettle = pseudosettle
-	s.transaction = transaction
+
 	s.overlay = &overlay
 
 	s.setRouter(s.newRouter())

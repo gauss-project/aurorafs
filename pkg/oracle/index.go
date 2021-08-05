@@ -2,7 +2,6 @@ package oracle
 
 import (
 	"context"
-	"github.com/ethersphere/bee/pkg/bigint"
 	"github.com/ethersphere/bee/pkg/logging"
 	"github.com/ethersphere/bee/pkg/swarm"
 	"github.com/ipfs/go-cid"
@@ -35,7 +34,7 @@ func (ora *ChainOracle)  Price() uint64{
 	return 1
 }
 
-func (ora *ChainOracle) SetPrice( value uint64, signature []byte) {
+func (ora *ChainOracle) SetPrice( value uint64, signature []byte,resCh chan ChainResult) {
 
 }
 
@@ -55,7 +54,8 @@ func (ora *ChainOracle)GetSourceNodes(aufsUri string) []swarm.Address{
 func (ora *ChainOracle)OnStoreMatched(cid cid.Cid,dataLen uint64, salt uint64,address swarm.Address){
 
 }
-func (ora *ChainOracle)DataStoreFinished(cid cid.Cid,dataLen uint64, salt uint64,proof []byte){
+
+func (ora *ChainOracle)DataStoreFinished(cid cid.Cid,dataLen uint64, salt uint64,proof []byte,resCh chan ChainResult){
 
 }
 
@@ -63,24 +63,24 @@ func (ora *ChainOracle) CheckAutoInfo([]byte) bool{
 	return false
 }
 
-func (ora *ChainOracle)ReportInvalidAuthInfo([]byte){
+func (ora *ChainOracle)ReportInvalidAuthInfo([]byte,chan ChainResult){
 
 }
 
-func (ora *ChainOracle) GetPeerBalance(peer swarm.Address) *bigint.BigInt{
+func (ora *ChainOracle) GetPeerBalance(peer swarm.Address) *big.Int{
 
-	return bigint.Wrap(big.NewInt(1000000))
+	return big.NewInt(1000000)
 }
 
-func (ora *ChainOracle) GetSentAmount(peer swarm.Address){
-
+func (ora *ChainOracle) GetSentAmount(peer swarm.Address) *big.Int{
+	return big.NewInt(0)
 }
 
-func (ora *ChainOracle) GetReceivedAmount(peer swarm.Address){
-
+func (ora *ChainOracle) GetReceivedAmount(peer swarm.Address) *big.Int{
+	return big.NewInt(0)
 }
 
-func (ora *ChainOracle) ReportSignedAmount(voucher []byte, signature []byte){
+func (ora *ChainOracle) ReportSignedAmount(voucher []byte, signature []byte,resCh chan ChainResult){
 
 }
 

@@ -14,9 +14,7 @@ import (
 	"fmt"
 
 	"github.com/ethersphere/bee/pkg/logging"
-	"github.com/ethersphere/bee/pkg/recovery"
 	"github.com/ethersphere/bee/pkg/retrieval"
-	"github.com/ethersphere/bee/pkg/sctx"
 	"github.com/ethersphere/bee/pkg/storage"
 	"github.com/ethersphere/bee/pkg/swarm"
 )
@@ -26,7 +24,7 @@ type store struct {
 	retrieval        retrieval.Interface
 	logger           logging.Logger
 	validStamp       func(swarm.Chunk, []byte) (swarm.Chunk, error)
-	recoveryCallback recovery.Callback // this is the callback to be executed when a chunk fails to be retrieved
+	//recoveryCallback recovery.Callback // this is the callback to be executed when a chunk fails to be retrieved
 }
 
 var (
@@ -34,8 +32,8 @@ var (
 )
 
 // New returns a new NetStore that wraps a given Storer.
-func New(s storage.Storer, validStamp func(swarm.Chunk, []byte) (swarm.Chunk, error), rcb recovery.Callback, r retrieval.Interface, logger logging.Logger) storage.Storer {
-	return &store{Storer: s, validStamp: validStamp, recoveryCallback: rcb, retrieval: r, logger: logger}
+func New(s storage.Storer, validStamp func(swarm.Chunk, []byte) (swarm.Chunk, error), /*rcb recovery.Callback,*/ r retrieval.Interface, logger logging.Logger) storage.Storer {
+	return &store{Storer: s, validStamp: validStamp,/* recoveryCallback: rcb,*/ retrieval: r, logger: logger}
 }
 
 // Get retrieves a given chunk address.
@@ -48,14 +46,14 @@ func (s *store) Get(ctx context.Context, mode storage.ModeGet, addr swarm.Addres
 		if errors.Is(err, storage.ErrNotFound) {
 			// request from network
 			ch, err = s.retrieval.RetrieveChunk(ctx, addr, true)
-			if err != nil {
-				targets := sctx.GetTargets(ctx)
-				if targets == nil || s.recoveryCallback == nil {
-					return nil, err
-				}
-				go s.recoveryCallback(addr, targets)
-				return nil, ErrRecoveryAttempt
-			}
+			//if err != nil {
+			//	targets := sctx.GetTargets(ctx)
+			//	if targets == nil || s.recoveryCallback == nil {
+			//		return nil, err
+			//	}
+			//	go s.recoveryCallback(addr, targets)
+			//	return nil, ErrRecoveryAttempt
+			//}
 			stamp, err := ch.Stamp().MarshalBinary()
 			if err != nil {
 				return nil, err

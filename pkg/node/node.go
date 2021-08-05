@@ -44,11 +44,9 @@ import (
 	"github.com/ethersphere/bee/pkg/resolver/multiresolver"
 	"github.com/ethersphere/bee/pkg/retrieval"
 	"github.com/ethersphere/bee/pkg/settlement/pseudosettle"
-	"github.com/ethersphere/bee/pkg/settlement/swap"
-	"github.com/ethersphere/bee/pkg/settlement/swap/chequebook"
-	"github.com/ethersphere/bee/pkg/settlement/swap/priceoracle"
+
 	"github.com/ethersphere/bee/pkg/shed"
-	"github.com/ethersphere/bee/pkg/steward"
+
 	"github.com/ethersphere/bee/pkg/storage"
 	"github.com/ethersphere/bee/pkg/swarm"
 
@@ -79,17 +77,10 @@ type Bee struct {
 	localstoreCloser         io.Closer
 	topologyCloser           io.Closer
 	topologyHalter           topology.Halter
-	pusherCloser             io.Closer
-	pullerCloser             io.Closer
 	accountingCloser         io.Closer
-	pullSyncCloser           io.Closer
-	pssCloser                io.Closer
-	ethClientCloser          func()
-	transactionMonitorCloser io.Closer
-	transactionCloser        io.Closer
 	recoveryHandleCleanup    func()
 	listenerCloser           io.Closer
-	postageServiceCloser     io.Closer
+	oracleCloser			 io.Closer
 	priceOracleCloser        io.Closer
 	shutdownInProgress       bool
 	shutdownMutex            sync.Mutex

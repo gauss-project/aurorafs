@@ -57,19 +57,19 @@ func init() {
 type testServerOptions struct {
 	Storer             storage.Storer
 	Resolver           resolver.Interface
-	Pss                pss.Interface
+
 	Traversal          traversal.Traverser
-	Pinning            pinning.Interface
+
 	WsPath             string
-	Tags               *tags.Tags
+
 	GatewayMode        bool
 	WsPingPeriod       time.Duration
 	Logger             logging.Logger
 	PreventRedirect    bool
-	Feeds              feeds.Factory
+
 	CORSAllowedOrigins []string
-	PostageContract    postagecontract.Interface
-	Post               postage.Service
+
+
 	Steward            steward.Reuploader
 }
 
