@@ -1,29 +1,21 @@
-package discover
+package chunk_info
 
 import (
-	send "github.com/ethersphere/bee/pkg/chunkinfo/send"
-	"sync"
 	"time"
 )
 
-type ChunkInfoDiscover struct {
-	sync.RWMutex
-	presence map[string]map[string][]string
-}
-
-type ChunkInfoReq struct {
-	rootCid    string
-	createTime int64
-}
-
-func New() *ChunkInfoDiscover {
-	return &ChunkInfoDiscover{presence: make(map[string]map[string][]string)}
-}
-
-func (cd *ChunkInfoDiscover) getChunkInfo(rootCid string, cid string) []string {
+func (cd *ChunkInfoDiscover) isExists(rootCid string) bool {
 	cd.RLock()
 	defer cd.RUnlock()
-	return cd.presence[rootCid][cid]
+	_, ok := cd.presence[rootCid]
+	return ok
+}
+
+func (cd *ChunkInfoDiscover) getChunkInfo(rootCid string, cid string) *[]string {
+	cd.RLock()
+	defer cd.RUnlock()
+	v, _ := cd.presence[rootCid][cid]
+	return &v
 }
 
 func (cd *ChunkInfoDiscover) UpdateChunkInfo(rootCid string, pyramids map[string][]string) {
@@ -44,10 +36,12 @@ func (cd *ChunkInfoDiscover) createChunkInfoReq(rootCid string) ChunkInfoReq {
 	return ciReq
 }
 
-func (cd *ChunkInfoDiscover) DoFindChunkInfo(authInfo []byte, rootCid string, nodes []string) {
+func (cd *ChunkInfoDiscover) doFindChunkInfo(authInfo []byte, rootCid string, nodes []string) {
 	// todo 定时器 对请求超时做处理
+	// pulled + pulling >= pullMax
+	// pull 过程
 	ciReq := cd.createChunkInfoReq(rootCid)
 	for _, node := range nodes {
-		send.SendDataToNode(ciReq, node)
+		SendDataToNode(ciReq, node)
 	}
 }

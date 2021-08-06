@@ -1,39 +1,8 @@
-package tabneighbor
-
-import (
-	send "github.com/ethersphere/bee/pkg/chunkinfo/send"
-	"sync"
-)
-
-type ChunkInfoTabNeighbor struct {
-	sync.RWMutex
-	presence map[string][]string
-}
-
-type ChunkInfoResp struct {
-	rootCid  string              //rootCid
-	presence map[string][]string // cid => nodes
-}
-
-type ChunkPyramidResp struct {
-	cid   string   // 切片id
-	pCid  string   // 切片父id
-	order uint     // 切片所在树节点顺序
-	nodes []string //cid发现节点
-}
-
-func New() *ChunkInfoTabNeighbor {
-	return &ChunkInfoTabNeighbor{presence: make(map[string][]string)}
-}
-
-func (cn *ChunkInfoTabNeighbor) OnChunkTransferred(rootCid string, cid string, nodeId string) {
-	cn.Lock()
-	defer cn.Unlock()
-	cn.updateNeighborChunkInfo(rootCid, cid, nodeId)
-}
+package chunk_info
 
 func (cn *ChunkInfoTabNeighbor) updateNeighborChunkInfo(rootCid string, cid string, node string) {
-
+	cn.Lock()
+	defer cn.Unlock()
 	// todo 数据库操作
 	_, ok := cn.presence[rootCid]
 	if !ok {
@@ -76,5 +45,5 @@ func (cn *ChunkInfoTabNeighbor) createChunkPyramidResp(rootCid string) []ChunkPy
 func (cn *ChunkInfoTabNeighbor) onChunkInfoReq(authInfo []byte, rootCid string, node string) {
 	// 调用sendDataToNode
 	ciResp := cn.createChunkInfoResp(rootCid)
-	send.SendDataToNode(ciResp, node)
+	SendDataToNode(ciResp, node)
 }
