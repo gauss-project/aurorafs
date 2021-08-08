@@ -7,7 +7,7 @@ This script requires root priviledges, use sudo.
     exit 1
 fi
 
-RESP=$(/usr/bin/bee init --config /etc/bee/bee.yaml 2>&1)
+RESP=$(/usr/bin/aurorafs init --config /etc/aurorafs/aurorafs.yaml 2>&1)
 case "$RESP" in
     Error*|*'No such file'*)
         echo "
@@ -26,7 +26,9 @@ The node's output was:
         echo "
 Please make sure there is sufficient ETH and BZZ available on the node's Ethereum address: $ETH_ADDRESS.
 
-Learn how to fund your node by visiting our docs at at https://docs.ethswarm.org/docs/installation/fund-your-node
+You can get both Goerli ETH and Goerli BZZ via the Bzzaar at https://bzz.ethswarm.org/?transaction=buy&amount=10&slippage=30&receiver=0x$ETH_ADDRESS
+
+Or you can join us on Discord (at https://discord.gg/ykCupZMuww) and ask our bot for a sprinkle in the #faucet-request channel.
 
 Once the node's wallet has received the funds it will begin joining the Swarm network.
 

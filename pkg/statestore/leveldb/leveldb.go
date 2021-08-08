@@ -1,6 +1,6 @@
 // Copyright 2020 The Swarm Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
+// license that can be found in the LICENSE file.package storage
 
 package leveldb
 
@@ -10,8 +10,8 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/ethersphere/bee/pkg/logging"
-	"github.com/ethersphere/bee/pkg/storage"
+	"github.com/gauss-project/aurorafs/pkg/logging"
+	"github.com/gauss-project/aurorafs/pkg/storage"
 	"github.com/syndtr/goleveldb/leveldb"
 	ldberr "github.com/syndtr/goleveldb/leveldb/errors"
 	"github.com/syndtr/goleveldb/leveldb/util"
@@ -25,7 +25,7 @@ type store struct {
 	logger logging.Logger
 }
 
-// NewStateStore creates a new persistent state storage.
+// New creates a new persistent state storage.
 func NewStateStore(path string, l logging.Logger) (storage.StateStorer, error) {
 	db, err := leveldb.OpenFile(path, nil)
 	if err != nil {
@@ -67,9 +67,7 @@ func NewStateStore(path string, l logging.Logger) (storage.StateStorer, error) {
 
 	return s, nil
 }
-func (s *store) GetLimited(key string, i interface{}) error{
-	return s.Get(key,i)
-}
+
 // Get retrieves a value of the requested key. If no results are found,
 // storage.ErrNotFound will be returned.
 func (s *store) Get(key string, i interface{}) error {
@@ -87,9 +85,7 @@ func (s *store) Get(key string, i interface{}) error {
 
 	return json.Unmarshal(data, i)
 }
-func (s *store) PutLimited(key string, i interface{}) (err error){
-	return s.PutLimited(key,i)
-}
+
 // Put stores a value for an arbitrary key. BinaryMarshaler
 // interface method will be called on the provided value
 // with fallback to JSON serialization.
@@ -140,11 +136,6 @@ func (s *store) getSchemaName() (string, error) {
 
 func (s *store) putSchemaName(val string) error {
 	return s.db.Put([]byte(dbSchemaKey), []byte(val), nil)
-}
-
-// DB implements StateStorer.DB method.
-func (s *store) DB() *leveldb.DB {
-	return s.db
 }
 
 // Close releases the resources used by the store.

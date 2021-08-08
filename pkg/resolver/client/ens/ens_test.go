@@ -13,8 +13,8 @@ import (
 	"github.com/ethereum/go-ethereum/rpc"
 	goens "github.com/wealdtech/go-ens/v3"
 
-	"github.com/ethersphere/bee/pkg/resolver/client/ens"
-	"github.com/ethersphere/bee/pkg/swarm"
+	"github.com/gauss-project/aurorafs/pkg/resolver/client/ens"
+	"github.com/gauss-project/aurorafs/pkg/boson"
 )
 
 func TestNewENSClient(t *testing.T) {
@@ -119,7 +119,7 @@ func TestClose(t *testing.T) {
 func TestResolve(t *testing.T) {
 	testContractAddrString := "00000000000C2E074eC69A0dFb2997BA6C702e1B"
 	testContractAddr := common.HexToAddress(testContractAddrString)
-	testSwarmAddr := swarm.MustParseHexAddress("aaabbbcc")
+	testSwarmAddr := boson.MustParseHexAddress("aaabbbcc")
 
 	testCases := []struct {
 		desc         string
@@ -148,7 +148,7 @@ func TestResolve(t *testing.T) {
 			wantErr: ens.ErrInvalidContentHash,
 		},
 		{
-			desc: "resolve does not prefix address with /swarm",
+			desc: "resolve does not prefix address with /boson",
 			resolveFn: func(*goens.Registry, common.Address, string) (string, error) {
 				return testSwarmAddr.String(), nil
 			},

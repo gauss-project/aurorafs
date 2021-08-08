@@ -7,14 +7,14 @@ package debugapi
 import (
 	"net/http"
 
-	"github.com/ethersphere/bee/pkg/jsonhttp"
-	"github.com/ethersphere/bee/pkg/storage"
-	"github.com/ethersphere/bee/pkg/swarm"
+	"github.com/gauss-project/aurorafs/pkg/jsonhttp"
+	"github.com/gauss-project/aurorafs/pkg/storage"
+	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gorilla/mux"
 )
 
 func (s *Service) hasChunkHandler(w http.ResponseWriter, r *http.Request) {
-	addr, err := swarm.ParseHexAddress(mux.Vars(r)["address"])
+	addr, err := boson.ParseHexAddress(mux.Vars(r)["address"])
 	if err != nil {
 		s.logger.Debugf("debug api: parse chunk address: %v", err)
 		jsonhttp.BadRequest(w, "bad address")
@@ -36,7 +36,7 @@ func (s *Service) hasChunkHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Service) removeChunk(w http.ResponseWriter, r *http.Request) {
-	addr, err := swarm.ParseHexAddress(mux.Vars(r)["address"])
+	addr, err := boson.ParseHexAddress(mux.Vars(r)["address"])
 	if err != nil {
 		s.logger.Debugf("debug api: parse chunk address: %v", err)
 		jsonhttp.BadRequest(w, "bad address")

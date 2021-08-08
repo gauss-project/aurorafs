@@ -1,6 +1,6 @@
 // Copyright 2020 The Swarm Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
+// license that can be found in the LICENSE file.package storage
 
 package mock
 
@@ -11,8 +11,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/ethersphere/bee/pkg/storage"
-	"github.com/syndtr/goleveldb/leveldb"
+	"github.com/gauss-project/aurorafs/pkg/storage"
 )
 
 var _ storage.StateStorer = (*store)(nil)
@@ -35,12 +34,7 @@ func NewStateStore() storage.StateStorer {
 
 	return s
 }
-func (s *store) GetLimited(key string, i interface{}) (err error){
-	return s.Get(key,i)
-}
-func (s *store) PutLimited(key string, i interface{}) (err error) {
-	return s.Put(key,i)
-}
+
 func (s *store) Get(key string, i interface{}) (err error) {
 	s.mtx.RLock()
 	defer s.mtx.RUnlock()
@@ -102,11 +96,6 @@ func (s *store) Iterate(prefix string, iterFunc storage.StateIterFunc) (err erro
 			return nil
 		}
 	}
-	return nil
-}
-
-// DB implements StateStorer.DB method.
-func (s *store) DB() *leveldb.DB {
 	return nil
 }
 

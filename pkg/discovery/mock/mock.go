@@ -8,22 +8,22 @@ import (
 	"context"
 	"sync"
 
-	"github.com/ethersphere/bee/pkg/swarm"
+	"github.com/gauss-project/aurorafs/pkg/boson"
 )
 
 type Discovery struct {
 	mtx     sync.Mutex
 	ctr     int //how many ops
-	records map[string][]swarm.Address
+	records map[string][]boson.Address
 }
 
 func NewDiscovery() *Discovery {
 	return &Discovery{
-		records: make(map[string][]swarm.Address),
+		records: make(map[string][]boson.Address),
 	}
 }
 
-func (d *Discovery) BroadcastPeers(ctx context.Context, addressee swarm.Address, peers ...swarm.Address) error {
+func (d *Discovery) BroadcastPeers(ctx context.Context, addressee boson.Address, peers ...boson.Address) error {
 	for _, peer := range peers {
 		d.mtx.Lock()
 		d.records[addressee.String()] = append(d.records[addressee.String()], peer)
@@ -41,7 +41,7 @@ func (d *Discovery) Broadcasts() int {
 	return d.ctr
 }
 
-func (d *Discovery) AddresseeRecords(addressee swarm.Address) (peers []swarm.Address, exists bool) {
+func (d *Discovery) AddresseeRecords(addressee boson.Address) (peers []boson.Address, exists bool) {
 	d.mtx.Lock()
 	defer d.mtx.Unlock()
 	peers, exists = d.records[addressee.String()]
@@ -52,5 +52,5 @@ func (d *Discovery) Reset() {
 	d.mtx.Lock()
 	defer d.mtx.Unlock()
 	d.ctr = 0
-	d.records = make(map[string][]swarm.Address)
+	d.records = make(map[string][]boson.Address)
 }

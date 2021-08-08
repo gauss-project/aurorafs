@@ -10,17 +10,17 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/ethersphere/bee/pkg/file/pipeline"
-	"github.com/ethersphere/bee/pkg/file/pipeline/bmt"
-	"github.com/ethersphere/bee/pkg/file/pipeline/hashtrie"
-	"github.com/ethersphere/bee/pkg/file/pipeline/store"
-	"github.com/ethersphere/bee/pkg/storage"
-	"github.com/ethersphere/bee/pkg/storage/mock"
-	"github.com/ethersphere/bee/pkg/swarm"
+	"github.com/gauss-project/aurorafs/pkg/file/pipeline"
+	"github.com/gauss-project/aurorafs/pkg/file/pipeline/bmt"
+	"github.com/gauss-project/aurorafs/pkg/file/pipeline/hashtrie"
+	"github.com/gauss-project/aurorafs/pkg/file/pipeline/store"
+	"github.com/gauss-project/aurorafs/pkg/storage"
+	"github.com/gauss-project/aurorafs/pkg/storage/mock"
+	"github.com/gauss-project/aurorafs/pkg/boson"
 )
 
 var (
-	addr swarm.Address
+	addr boson.Address
 	span []byte
 	ctx  = context.Background()
 	mode = storage.ModePutUpload
@@ -29,7 +29,7 @@ var (
 func init() {
 	b := make([]byte, 32)
 	b[31] = 0x01
-	addr = swarm.NewAddress(b)
+	addr = boson.NewAddress(b)
 
 	span = make([]byte, 8)
 	binary.LittleEndian.PutUint64(span, 1)
@@ -110,13 +110,13 @@ func TestLevels(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			rootch, err := s.Get(ctx, storage.ModeGetRequest, swarm.NewAddress(ref))
+			rootch, err := s.Get(ctx, storage.ModeGetRequest, boson.NewAddress(ref))
 			if err != nil {
 				t.Fatal(err)
 			}
 
 			//check the span. since write spans are 1 value 1, then expected span == tc.writes
-			sp := binary.LittleEndian.Uint64(rootch.Data()[:swarm.SpanSize])
+			sp := binary.LittleEndian.Uint64(rootch.Data()[:boson.SpanSize])
 			if sp != uint64(tc.writes) {
 				t.Fatalf("want span %d got %d", tc.writes, sp)
 			}
@@ -164,7 +164,7 @@ func TestLevels_TrieFull(t *testing.T) {
 }
 
 // TestRegression is a regression test for the bug
-// described in https://github.com/ethersphere/bee/issues/1175
+// described in https://github.com/gauss-project/aurorafs/issues/1175
 func TestRegression(t *testing.T) {
 	var (
 		branching = 128
@@ -194,12 +194,12 @@ func TestRegression(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	rootch, err := s.Get(ctx, storage.ModeGetRequest, swarm.NewAddress(ref))
+	rootch, err := s.Get(ctx, storage.ModeGetRequest, boson.NewAddress(ref))
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	sp := binary.LittleEndian.Uint64(rootch.Data()[:swarm.SpanSize])
+	sp := binary.LittleEndian.Uint64(rootch.Data()[:boson.SpanSize])
 	if sp != uint64(writes*4096) {
 		t.Fatalf("want span %d got %d", writes*4096, sp)
 	}

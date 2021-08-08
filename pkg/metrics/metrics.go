@@ -12,7 +12,7 @@ import (
 
 // Namespace is prefixed before every metric. If it is changed, it must be done
 // before any metrics collector is registered.
-var Namespace = "bee"
+var Namespace = "aurorafs"
 
 type Collector interface {
 	Metrics() []prometheus.Collector

@@ -1,25 +1,25 @@
 openapi: 3.0.3
 info:
-  version: 0.6.0
+  version: 0.5.3
   title: Bee Debug API
-  description: "A list of the currently provided debug interfaces to interact with the bee node"
+  description: "A list of the currently provided debug interfaces to interact with the aurorafs node"
 
 security:
   - {}
 
 externalDocs:
   description: Browse the documentation @ the Swarm Docs
-  url: "https://docs.swarm.eth"
+  url: "https://docs.boson.eth"
 
 servers:
   - url: "http://{apiRoot}:{port}"
     variables:
       apiRoot:
         default: "localhost"
-        description: Base address of the local bee node debug API
+        description: Base address of the local aurorafs node debug API
       port:
-        default: "1635"
-        description: Service port provided in bee node config
+        default: 1635
+        description: Service port provided in aurorafs node config
 
 paths:
   "/addresses":
@@ -249,36 +249,6 @@ paths:
         default:
           description: Default response
 
-  "/reservestate":
-    get:
-      summary: Get reserve state
-      tags:
-        - Status
-      responses:
-        "200":
-          description: Reserve State
-          content:
-            application/json:
-              schema:
-                $ref: "SwarmCommon.yaml#/components/schemas/ReserveState"
-        default:
-          description: Default response
-
-  "/chainstate":
-    get:
-      summary: Get chain state
-      tags:
-        - Status
-      responses:
-        "200":
-          description: Chain State
-          content:
-            application/json:
-              schema:
-                $ref: "SwarmCommon.yaml#/components/schemas/ChainState"
-        default:
-          description: Default response
-
   "/health":
     get:
       summary: Get health of node
@@ -421,24 +391,6 @@ paths:
         default:
           description: Default response
 
-  "/timesettlements":
-    get:
-      summary: Get time based settlements with all known peers and total amount sent or received
-      tags:
-        - Settlements
-      responses:
-        "200":
-          description: Time based settlements with all known peers and total amount sent or received
-          content:
-            application/json:
-              schema:
-                $ref: "SwarmCommon.yaml#/components/schemas/Settlements"
-        "500":
-          $ref: "SwarmCommon.yaml#/components/responses/500"
-        default:
-          description: Default response
-
-
   "/topology":
     get:
       description: Get topology of known network
@@ -446,7 +398,7 @@ paths:
         - Connectivity
       responses:
         "200":
-          description: Swarm topology of the bee node
+          description: Swarm topology of the aurorafs node
           content:
             application/json:
               schema:
@@ -530,7 +482,7 @@ paths:
       tags:
         - Chequebook
       responses:
-        "201":
+        "200":
           description: OK
           content:
             application/json:
@@ -598,11 +550,10 @@ paths:
             type: integer
           required: true
           description: amount of tokens to deposit
-        - $ref: "SwarmCommon.yaml#/components/parameters/GasPriceParameter"
       tags:
         - Chequebook
       responses:
-        "201":
+        "200":
           description: Transaction hash of the deposit transaction
           content:
             application/json:
@@ -625,11 +576,10 @@ paths:
             type: integer
           required: true
           description: amount of tokens to withdraw
-        - $ref: "SwarmCommon.yaml#/components/parameters/GasPriceParameter"
       tags:
         - Chequebook
       responses:
-        "201":
+        "200":
           description: Transaction hash of the withdraw transaction
           content:
             application/json:
@@ -665,73 +615,6 @@ paths:
           $ref: "SwarmCommon.yaml#/components/responses/400"
         "403":
           $ref: "SwarmCommon.yaml#/components/responses/403"
-        "500":
-          $ref: "SwarmCommon.yaml#/components/responses/500"
-        default:
-          description: Default response
-
-  "/transaction":
-    get:
-      summary: Get list of pending transactions      
-      tags:
-        - Transaction
-      responses:
-        "200":
-          description: List of pending transactions
-          content:
-            application/json:
-              schema:
-                $ref: "SwarmCommon.yaml#/components/schemas/PendingTransactionReponse"
-        "500":
-          $ref: "SwarmCommon.yaml#/components/responses/500"
-        default:
-          description: Default response
-
-  "/transaction/{txHash}":
-    get:
-      summary: Get information about a sent transaction
-      parameters:
-        - in: path
-          name: txHash
-          schema:
-            $ref: "SwarmCommon.yaml#/components/schemas/TransactionHash"
-          required: true
-          description: Hash of the transaction
-      tags:
-        - Transaction
-      responses:
-        "200":
-          description: Get info about transaction
-          content:
-            application/json:
-              schema:
-                $ref: "SwarmCommon.yaml#/components/schemas/TransactionInfoResponse"
-        "404":
-          $ref: "SwarmCommon.yaml#/components/responses/404"
-        "500":
-          $ref: "SwarmCommon.yaml#/components/responses/500"
-        default:
-          description: Default response
-    post:
-      summary: Rebroadcast existing transaction
-      parameters:
-        - in: path
-          name: txHash
-          schema:
-            $ref: "SwarmCommon.yaml#/components/schemas/TransactionHash"
-          required: true
-          description: Hash of the transaction
-      tags:
-        - Transaction
-      responses:
-        "200":
-          description: Hash of the transaction
-          content:
-            application/json:
-              schema:
-                $ref: "SwarmCommon.yaml#/components/schemas/TransactionResponse"
-        "404":
-          $ref: "SwarmCommon.yaml#/components/responses/404"
         "500":
           $ref: "SwarmCommon.yaml#/components/responses/500"
         default:

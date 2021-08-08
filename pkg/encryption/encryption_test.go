@@ -23,8 +23,8 @@ import (
 	"math/rand"
 	"testing"
 
-	"github.com/ethersphere/bee/pkg/encryption"
-	"github.com/ethersphere/bee/pkg/swarm"
+	"github.com/gauss-project/aurorafs/pkg/encryption"
+	"github.com/gauss-project/aurorafs/pkg/boson"
 	"golang.org/x/crypto/sha3"
 )
 
@@ -34,7 +34,7 @@ var hashFunc = sha3.NewLegacyKeccak256
 var testKey encryption.Key
 
 func init() {
-	testKey = swarm.MustParseHexAddress("8abf1502f557f15026716030fb6384792583daf39608a3cd02ff2f47e9bc6e49").Bytes()
+	testKey = boson.MustParseHexAddress("8abf1502f557f15026716030fb6384792583daf39608a3cd02ff2f47e9bc6e49").Bytes()
 }
 
 func TestEncryptDataLongerThanPadding(t *testing.T) {

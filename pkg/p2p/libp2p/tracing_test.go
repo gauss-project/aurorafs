@@ -10,15 +10,14 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ethersphere/bee/pkg/p2p"
-	"github.com/ethersphere/bee/pkg/p2p/libp2p"
-	"github.com/ethersphere/bee/pkg/tracing"
+	"github.com/gauss-project/aurorafs/pkg/p2p"
+	"github.com/gauss-project/aurorafs/pkg/tracing"
 )
 
 func TestTracing(t *testing.T) {
 	tracer1, closer1, err := tracing.NewTracer(&tracing.Options{
 		Enabled:     true,
-		ServiceName: "bee-test",
+		ServiceName: "aurorafs-test",
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -27,16 +26,14 @@ func TestTracing(t *testing.T) {
 
 	tracer2, closer2, err := tracing.NewTracer(&tracing.Options{
 		Enabled:     true,
-		ServiceName: "bee-test",
+		ServiceName: "aurorafs-test",
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer closer2.Close()
 
-	s1, overlay1 := newService(t, 1, libp2pServiceOpts{libp2pOpts: libp2p.Options{
-		FullNode: true,
-	}})
+	s1, overlay1 := newService(t, 1, libp2pServiceOpts{})
 
 	s2, _ := newService(t, 1, libp2pServiceOpts{})
 

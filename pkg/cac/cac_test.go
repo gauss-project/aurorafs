@@ -9,16 +9,16 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/ethersphere/bee/pkg/cac"
-	"github.com/ethersphere/bee/pkg/swarm"
+	"github.com/gauss-project/aurorafs/pkg/cac"
+	"github.com/gauss-project/aurorafs/pkg/boson"
 )
 
 func TestNewCAC(t *testing.T) {
 	data := []byte("greaterthanspan")
 	bmtHashOfData := "27913f1bdb6e8e52cbd5a5fd4ab577c857287edf6969b41efe926b51de0f4f23"
-	address := swarm.MustParseHexAddress(bmtHashOfData)
+	address := boson.MustParseHexAddress(bmtHashOfData)
 
-	expectedSpan := make([]byte, swarm.SpanSize)
+	expectedSpan := make([]byte, boson.SpanSize)
 	binary.LittleEndian.PutUint64(expectedSpan, uint64(len(data)))
 	expectedContent := append(expectedSpan, data...)
 
@@ -39,7 +39,7 @@ func TestNewCAC(t *testing.T) {
 func TestNewWithDataSpan(t *testing.T) {
 	data := []byte("greaterthanspan")
 	bmtHashOfData := "95022e6af5c6d6a564ee55a67f8455a3e18c511b5697c932d9e44f07f2fb8c53"
-	address := swarm.MustParseHexAddress(bmtHashOfData)
+	address := boson.MustParseHexAddress(bmtHashOfData)
 
 	c, err := cac.NewWithDataSpan(data)
 	if err != nil {
@@ -58,7 +58,7 @@ func TestNewWithDataSpan(t *testing.T) {
 func TestChunkInvariants(t *testing.T) {
 	chunkerFunc := []struct {
 		name    string
-		chunker func(data []byte) (swarm.Chunk, error)
+		chunker func(data []byte) (boson.Chunk, error)
 	}{
 		{
 			name:    "new cac",
@@ -88,7 +88,7 @@ func TestChunkInvariants(t *testing.T) {
 			},
 			{
 				name:    "too large data chunk",
-				data:    []byte(strings.Repeat("a", swarm.ChunkSize+swarm.SpanSize+1)),
+				data:    []byte(strings.Repeat("a", boson.ChunkSize+boson.SpanSize+1)),
 				wantErr: cac.ErrTooLargeChunkData,
 			},
 		} {
@@ -106,14 +106,14 @@ func TestChunkInvariants(t *testing.T) {
 // TestValid checks whether a chunk is a valid content-addressed chunk
 func TestValid(t *testing.T) {
 	bmtHashOfFoo := "2387e8e7d8a48c2a9339c97c1dc3461a9a7aa07e994c5cb8b38fd7c1b3e6ea48"
-	address := swarm.MustParseHexAddress(bmtHashOfFoo)
+	address := boson.MustParseHexAddress(bmtHashOfFoo)
 
 	foo := "foo"
 	fooLength := len(foo)
-	fooBytes := make([]byte, swarm.SpanSize+fooLength)
+	fooBytes := make([]byte, boson.SpanSize+fooLength)
 	binary.LittleEndian.PutUint64(fooBytes, uint64(fooLength))
-	copy(fooBytes[swarm.SpanSize:], foo)
-	ch := swarm.NewChunk(address, fooBytes)
+	copy(fooBytes[boson.SpanSize:], foo)
+	ch := boson.NewChunk(address, fooBytes)
 	if !cac.Valid(ch) {
 		t.Fatalf("data '%s' should have validated to hash '%s'", ch.Data(), ch.Address())
 	}
@@ -123,20 +123,20 @@ func TestValid(t *testing.T) {
 func TestInvalid(t *testing.T) {
 	// Generates a chunk with the given data. No validation is performed here,
 	// the chunks are create as it is.
-	chunker := func(addr string, dataBytes []byte) swarm.Chunk {
+	chunker := func(addr string, dataBytes []byte) boson.Chunk {
 		// Decoding errors are ignored here since they will be captured
 		// when validating
 		addrBytes, _ := hex.DecodeString(addr)
-		address := swarm.NewAddress(addrBytes)
-		return swarm.NewChunk(address, dataBytes)
+		address := boson.NewAddress(addrBytes)
+		return boson.NewChunk(address, dataBytes)
 	}
 
 	// Appends span to given input data.
 	dataWithSpan := func(inputData []byte) []byte {
 		dataLength := len(inputData)
-		dataBytes := make([]byte, swarm.SpanSize+dataLength)
+		dataBytes := make([]byte, boson.SpanSize+dataLength)
 		binary.LittleEndian.PutUint64(dataBytes, uint64(dataLength))
-		copy(dataBytes[swarm.SpanSize:], inputData)
+		copy(dataBytes[boson.SpanSize:], inputData)
 		return dataBytes
 	}
 
@@ -173,7 +173,7 @@ func TestInvalid(t *testing.T) {
 		{
 			name:    "large data",
 			address: "ffd70157e48063fc33c97a050f7f640233bf646cc98d9524c6b92bcf3ab56f83",
-			data:    []byte(strings.Repeat("a", swarm.ChunkSize+swarm.SpanSize+1)),
+			data:    []byte(strings.Repeat("a", boson.ChunkSize+boson.SpanSize+1)),
 		},
 	} {
 		t.Run(c.name, func(t *testing.T) {

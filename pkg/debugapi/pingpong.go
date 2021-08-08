@@ -8,9 +8,9 @@ import (
 	"errors"
 	"net/http"
 
-	"github.com/ethersphere/bee/pkg/jsonhttp"
-	"github.com/ethersphere/bee/pkg/p2p"
-	"github.com/ethersphere/bee/pkg/swarm"
+	"github.com/gauss-project/aurorafs/pkg/jsonhttp"
+	"github.com/gauss-project/aurorafs/pkg/p2p"
+	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gorilla/mux"
 )
 
@@ -25,14 +25,14 @@ func (s *Service) pingpongHandler(w http.ResponseWriter, r *http.Request) {
 	span, logger, ctx := s.tracer.StartSpanFromContext(ctx, "pingpong-api", s.logger)
 	defer span.Finish()
 
-	address, err := swarm.ParseHexAddress(peerID)
+	address, err := boson.ParseHexAddress(peerID)
 	if err != nil {
 		logger.Debugf("pingpong: parse peer address %s: %v", peerID, err)
 		jsonhttp.BadRequest(w, "invalid peer address")
 		return
 	}
 
-	rtt, err := s.pingpong.Ping(ctx, address, "ping")
+	rtt, err := s.pingpong.Ping(ctx, address, "hey", "there", ",", "how are", "you", "?")
 	if err != nil {
 		logger.Debugf("pingpong: ping %s: %v", peerID, err)
 		if errors.Is(err, p2p.ErrPeerNotFound) {

@@ -14,17 +14,17 @@ import (
 	"github.com/ethereum/go-ethereum/ethclient"
 	goens "github.com/wealdtech/go-ens/v3"
 
-	"github.com/ethersphere/bee/pkg/resolver/client"
-	"github.com/ethersphere/bee/pkg/swarm"
+	"github.com/gauss-project/aurorafs/pkg/resolver/client"
+	"github.com/gauss-project/aurorafs/pkg/boson"
 )
 
 const (
 	defaultENSContractAddress = "00000000000C2E074eC69A0dFb2997BA6C7d2e1e"
-	swarmContentHashPrefix    = "/swarm/"
+	swarmContentHashPrefix    = "/boson/"
 )
 
-// Address is the swarm bzz address.
-type Address = swarm.Address
+// Address is the boson aurora address.
+type Address = boson.Address
 
 // Make sure Client implements the resolver.Client interface.
 var _ client.Interface = (*Client)(nil)
@@ -37,7 +37,7 @@ var (
 	ErrResolveFailed = errors.New("resolve failed")
 	// ErrInvalidContentHash denotes that the value of the contenthash record is
 	// not valid.
-	ErrInvalidContentHash = errors.New("invalid swarm content hash")
+	ErrInvalidContentHash = errors.New("invalid boson content hash")
 	// errNotImplemented denotes that the function has not been implemented.
 	errNotImplemented = errors.New("function not implemented")
 	// errNameNotRegistered denotes that the name is not registered.
@@ -111,22 +111,22 @@ func (c *Client) Endpoint() string {
 // Resolve implements the resolver.Client interface.
 func (c *Client) Resolve(name string) (Address, error) {
 	if c.resolveFn == nil {
-		return swarm.ZeroAddress, fmt.Errorf("resolveFn: %w", errNotImplemented)
+		return boson.ZeroAddress, fmt.Errorf("resolveFn: %w", errNotImplemented)
 	}
 
 	hash, err := c.resolveFn(c.registry, common.HexToAddress(c.contractAddr), name)
 	if err != nil {
-		return swarm.ZeroAddress, fmt.Errorf("%v: %w", err, ErrResolveFailed)
+		return boson.ZeroAddress, fmt.Errorf("%v: %w", err, ErrResolveFailed)
 	}
 
 	// Ensure that the content hash string is in a valid format, eg.
-	// "/swarm/<address>".
+	// "/boson/<address>".
 	if !strings.HasPrefix(hash, swarmContentHashPrefix) {
-		return swarm.ZeroAddress, fmt.Errorf("contenthash %s: %w", hash, ErrInvalidContentHash)
+		return boson.ZeroAddress, fmt.Errorf("contenthash %s: %w", hash, ErrInvalidContentHash)
 	}
 
-	// Trim the prefix and try to parse the result as a bzz address.
-	return swarm.ParseHexAddress(strings.TrimPrefix(hash, swarmContentHashPrefix))
+	// Trim the prefix and try to parse the result as a aurora address.
+	return boson.ParseHexAddress(strings.TrimPrefix(hash, swarmContentHashPrefix))
 }
 
 // Close closes the RPC connection with the client, terminating all unfinished
@@ -141,7 +141,7 @@ func (c *Client) Close() error {
 	return nil
 }
 
-func wrapDial(endpoint, contractAddr string) (*ethclient.Client, *goens.Registry, error) {
+func wrapDial(endpoint string, contractAddr string) (*ethclient.Client, *goens.Registry, error) {
 	// Dial the eth client.
 	ethCl, err := ethclient.Dial(endpoint)
 	if err != nil {

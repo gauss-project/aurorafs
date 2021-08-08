@@ -7,11 +7,9 @@ package crypto_test
 import (
 	"bytes"
 	"encoding/hex"
-	"errors"
 	"testing"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethersphere/bee/pkg/crypto"
+	"github.com/gauss-project/aurorafs/pkg/crypto"
 )
 
 func TestGenerateSecp256k1Key(t *testing.T) {
@@ -40,17 +38,12 @@ func TestNewAddress(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	a, err := crypto.NewOverlayAddress(k.PublicKey, 1, common.HexToHash("0x1").Bytes())
+	a, err := crypto.NewOverlayAddress(k.PublicKey, 1)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if l := len(a.Bytes()); l != 32 {
 		t.Errorf("got address length %v, want %v", l, 32)
-	}
-
-	_, err = crypto.NewOverlayAddress(k.PublicKey, 1, nil)
-	if !errors.Is(err, crypto.ErrBadHashLength) {
-		t.Fatalf("expected %v, got %v", crypto.ErrBadHashLength, err)
 	}
 }
 

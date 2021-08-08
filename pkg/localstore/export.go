@@ -25,18 +25,17 @@ import (
 	"io/ioutil"
 	"sync"
 
-	"github.com/ethersphere/bee/pkg/postage"
-	"github.com/ethersphere/bee/pkg/shed"
-	"github.com/ethersphere/bee/pkg/storage"
-	"github.com/ethersphere/bee/pkg/swarm"
+	"github.com/gauss-project/aurorafs/pkg/shed"
+	"github.com/gauss-project/aurorafs/pkg/storage"
+	"github.com/gauss-project/aurorafs/pkg/boson"
 )
 
 const (
 	// filename in tar archive that holds the information
 	// about exported data format version
-	exportVersionFilename = ".swarm-export-version"
+	exportVersionFilename = ".boson-export-version"
 	// current export format version
-	currentExportVersion = "3"
+	currentExportVersion = "1"
 )
 
 // Export writes a tar structured data to the writer of
@@ -62,22 +61,10 @@ func (db *DB) Export(w io.Writer) (count int64, err error) {
 		hdr := &tar.Header{
 			Name: hex.EncodeToString(item.Address),
 			Mode: 0644,
-			Size: int64(postage.StampSize + len(item.Data)),
+			Size: int64(len(item.Data)),
 		}
 
 		if err := tw.WriteHeader(hdr); err != nil {
-			return false, err
-		}
-		if _, err := tw.Write(item.BatchID); err != nil {
-			return false, err
-		}
-		if _, err := tw.Write(item.Index); err != nil {
-			return false, err
-		}
-		if _, err := tw.Write(item.Timestamp); err != nil {
-			return false, err
-		}
-		if _, err := tw.Write(item.Sig); err != nil {
 			return false, err
 		}
 		if _, err := tw.Write(item.Data); err != nil {
@@ -93,8 +80,11 @@ func (db *DB) Export(w io.Writer) (count int64, err error) {
 // Import reads a tar structured data from the reader and
 // stores chunks in the database. It returns the number of
 // chunks imported.
-func (db *DB) Import(ctx context.Context, r io.Reader) (count int64, err error) {
+func (db *DB) Import(r io.Reader, legacy bool) (count int64, err error) {
 	tr := tar.NewReader(r)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
 	errC := make(chan error)
 	doneC := make(chan struct{})
@@ -145,28 +135,19 @@ func (db *DB) Import(ctx context.Context, r io.Reader) (count int64, err error) 
 				continue
 			}
 
-			rawdata, err := ioutil.ReadAll(tr)
+			data, err := ioutil.ReadAll(tr)
 			if err != nil {
 				select {
 				case errC <- err:
 				case <-ctx.Done():
 				}
 			}
-			stamp := new(postage.Stamp)
-			err = stamp.UnmarshalBinary(rawdata[:postage.StampSize])
-			if err != nil {
-				select {
-				case errC <- err:
-				case <-ctx.Done():
-				}
-			}
-			data := rawdata[postage.StampSize:]
-			key := swarm.NewAddress(keybytes)
+			key := boson.NewAddress(keybytes)
 
-			var ch swarm.Chunk
+			var ch boson.Chunk
 			switch version {
 			case currentExportVersion:
-				ch = swarm.NewChunk(key, data).WithStamp(stamp)
+				ch = boson.NewChunk(key, data)
 			default:
 				select {
 				case errC <- fmt.Errorf("unsupported export data version %q", version):

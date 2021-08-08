@@ -7,10 +7,10 @@ package testing
 import (
 	"testing"
 
-	"github.com/ethersphere/bee/pkg/cac"
-	"github.com/ethersphere/bee/pkg/crypto"
-	"github.com/ethersphere/bee/pkg/soc"
-	"github.com/ethersphere/bee/pkg/swarm"
+	"github.com/gauss-project/aurorafs/pkg/cac"
+	"github.com/gauss-project/aurorafs/pkg/crypto"
+	"github.com/gauss-project/aurorafs/pkg/soc"
+	"github.com/gauss-project/aurorafs/pkg/boson"
 )
 
 // MockSOC defines a mocked SOC with exported fields for easy testing.
@@ -18,18 +18,18 @@ type MockSOC struct {
 	ID           soc.ID
 	Owner        []byte
 	Signature    []byte
-	WrappedChunk swarm.Chunk
+	WrappedChunk boson.Chunk
 }
 
 // Address returns the SOC address of the mocked SOC.
-func (ms MockSOC) Address() swarm.Address {
+func (ms MockSOC) Address() boson.Address {
 	addr, _ := soc.CreateAddress(ms.ID, ms.Owner)
 	return addr
 }
 
 // Chunk returns the SOC chunk of the mocked SOC.
-func (ms MockSOC) Chunk() swarm.Chunk {
-	return swarm.NewChunk(ms.Address(), append(ms.ID, append(ms.Signature, ms.WrappedChunk.Data()...)...))
+func (ms MockSOC) Chunk() boson.Chunk {
+	return boson.NewChunk(ms.Address(), append(ms.ID, append(ms.Signature, ms.WrappedChunk.Data()...)...))
 }
 
 // GenerateMockSOC generates a valid mocked SOC from given data.
@@ -52,7 +52,7 @@ func GenerateMockSOC(t *testing.T, data []byte) *MockSOC {
 	}
 
 	id := make([]byte, soc.IdSize)
-	hasher := swarm.NewHasher()
+	hasher := boson.NewHasher()
 	_, err = hasher.Write(append(id, ch.Address().Bytes()...))
 	if err != nil {
 		t.Fatal(err)

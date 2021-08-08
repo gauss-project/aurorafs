@@ -29,12 +29,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ethersphere/bee/pkg/logging"
-	"github.com/ethersphere/bee/pkg/postage"
-	"github.com/ethersphere/bee/pkg/shed"
-	"github.com/ethersphere/bee/pkg/storage"
-	chunktesting "github.com/ethersphere/bee/pkg/storage/testing"
-	"github.com/ethersphere/bee/pkg/swarm"
+	"github.com/gauss-project/aurorafs/pkg/logging"
+	"github.com/gauss-project/aurorafs/pkg/shed"
+	"github.com/gauss-project/aurorafs/pkg/storage"
+	chunktesting "github.com/gauss-project/aurorafs/pkg/storage/testing"
+	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/syndtr/goleveldb/leveldb"
 )
 
@@ -58,13 +57,13 @@ func init() {
 	}
 }
 
-func TestCacheCapacity(t *testing.T) {
+func TestDBCapacity(t *testing.T) {
 	lo := Options{
 		Capacity: 500,
 	}
 	db := newTestDB(t, &lo)
-	if db.cacheCapacity != 500 {
-		t.Fatal("could not set cache capacity")
+	if db.capacity != 500 {
+		t.Fatal("could not set db capacity")
 	}
 }
 
@@ -158,7 +157,7 @@ func newTestDB(t testing.TB, o *Options) *DB {
 		t.Fatal(err)
 	}
 	logger := logging.New(ioutil.Discard, 0)
-	db, err := New("", baseKey, nil, o, logger)
+	db, err := New("", baseKey, o, logger)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -172,14 +171,13 @@ func newTestDB(t testing.TB, o *Options) *DB {
 }
 
 var (
-	generateTestRandomChunk   = chunktesting.GenerateTestRandomChunk
-	generateTestRandomChunks  = chunktesting.GenerateTestRandomChunks
-	generateTestRandomChunkAt = chunktesting.GenerateTestRandomChunkAt
+	generateTestRandomChunk  = chunktesting.GenerateTestRandomChunk
+	generateTestRandomChunks = chunktesting.GenerateTestRandomChunks
 )
 
 // chunkAddresses return chunk addresses of provided chunks.
-func chunkAddresses(chunks []swarm.Chunk) []swarm.Address {
-	addrs := make([]swarm.Address, len(chunks))
+func chunkAddresses(chunks []boson.Chunk) []boson.Address {
+	addrs := make([]boson.Address, len(chunks))
 	for i, ch := range chunks {
 		addrs[i] = ch.Address()
 	}
@@ -224,16 +222,16 @@ func TestGenerateTestRandomChunk(t *testing.T) {
 		t.Errorf("first chunk address length %v, want %v", addrLen, 32)
 	}
 	dataLen := len(c1.Data())
-	if dataLen != swarm.ChunkSize+swarm.SpanSize {
-		t.Errorf("first chunk data length %v, want %v", dataLen, swarm.ChunkSize)
+	if dataLen != boson.ChunkSize+boson.SpanSize {
+		t.Errorf("first chunk data length %v, want %v", dataLen, boson.ChunkSize)
 	}
 	addrLen = len(c2.Address().Bytes())
 	if addrLen != 32 {
 		t.Errorf("second chunk address length %v, want %v", addrLen, 32)
 	}
 	dataLen = len(c2.Data())
-	if dataLen != swarm.ChunkSize+swarm.SpanSize {
-		t.Errorf("second chunk data length %v, want %v", dataLen, swarm.ChunkSize)
+	if dataLen != boson.ChunkSize+boson.SpanSize {
+		t.Errorf("second chunk data length %v, want %v", dataLen, boson.ChunkSize)
 	}
 	if c1.Address().Equal(c2.Address()) {
 		t.Error("fake chunks addresses do not differ")
@@ -245,7 +243,7 @@ func TestGenerateTestRandomChunk(t *testing.T) {
 
 // newRetrieveIndexesTest returns a test function that validates if the right
 // chunk values are in the retrieval indexes
-func newRetrieveIndexesTest(db *DB, chunk swarm.Chunk, storeTimestamp, accessTimestamp int64) func(t *testing.T) {
+func newRetrieveIndexesTest(db *DB, chunk boson.Chunk, storeTimestamp, accessTimestamp int64) func(t *testing.T) {
 	return func(t *testing.T) {
 		t.Helper()
 
@@ -253,7 +251,7 @@ func newRetrieveIndexesTest(db *DB, chunk swarm.Chunk, storeTimestamp, accessTim
 		if err != nil {
 			t.Fatal(err)
 		}
-		validateItem(t, item, chunk.Address().Bytes(), chunk.Data(), storeTimestamp, 0, chunk.Stamp())
+		validateItem(t, item, chunk.Address().Bytes(), chunk.Data(), storeTimestamp, 0)
 
 		// access index should not be set
 		wantErr := leveldb.ErrNotFound
@@ -266,7 +264,7 @@ func newRetrieveIndexesTest(db *DB, chunk swarm.Chunk, storeTimestamp, accessTim
 
 // newRetrieveIndexesTestWithAccess returns a test function that validates if the right
 // chunk values are in the retrieval indexes when access time must be stored.
-func newRetrieveIndexesTestWithAccess(db *DB, ch swarm.Chunk, storeTimestamp, accessTimestamp int64) func(t *testing.T) {
+func newRetrieveIndexesTestWithAccess(db *DB, ch boson.Chunk, storeTimestamp, accessTimestamp int64) func(t *testing.T) {
 	return func(t *testing.T) {
 		t.Helper()
 
@@ -274,20 +272,21 @@ func newRetrieveIndexesTestWithAccess(db *DB, ch swarm.Chunk, storeTimestamp, ac
 		if err != nil {
 			t.Fatal(err)
 		}
+		validateItem(t, item, ch.Address().Bytes(), ch.Data(), storeTimestamp, 0)
 
 		if accessTimestamp > 0 {
-			item, err = db.retrievalAccessIndex.Get(item)
+			item, err = db.retrievalAccessIndex.Get(addressToItem(ch.Address()))
 			if err != nil {
 				t.Fatal(err)
 			}
+			validateItem(t, item, ch.Address().Bytes(), nil, 0, accessTimestamp)
 		}
-		validateItem(t, item, ch.Address().Bytes(), ch.Data(), storeTimestamp, accessTimestamp, ch.Stamp())
 	}
 }
 
 // newPullIndexTest returns a test function that validates if the right
 // chunk values are in the pull index.
-func newPullIndexTest(db *DB, ch swarm.Chunk, binID uint64, wantError error) func(t *testing.T) {
+func newPullIndexTest(db *DB, ch boson.Chunk, binID uint64, wantError error) func(t *testing.T) {
 	return func(t *testing.T) {
 		t.Helper()
 
@@ -299,14 +298,14 @@ func newPullIndexTest(db *DB, ch swarm.Chunk, binID uint64, wantError error) fun
 			t.Errorf("got error %v, want %v", err, wantError)
 		}
 		if err == nil {
-			validateItem(t, item, ch.Address().Bytes(), nil, 0, 0, postage.NewStamp(ch.Stamp().BatchID(), nil, nil, nil))
+			validateItem(t, item, ch.Address().Bytes(), nil, 0, 0)
 		}
 	}
 }
 
 // newPushIndexTest returns a test function that validates if the right
 // chunk values are in the push index.
-func newPushIndexTest(db *DB, ch swarm.Chunk, storeTimestamp int64, wantError error) func(t *testing.T) {
+func newPushIndexTest(db *DB, ch boson.Chunk, storeTimestamp int64, wantError error) func(t *testing.T) {
 	return func(t *testing.T) {
 		t.Helper()
 
@@ -318,14 +317,14 @@ func newPushIndexTest(db *DB, ch swarm.Chunk, storeTimestamp int64, wantError er
 			t.Errorf("got error %v, want %v", err, wantError)
 		}
 		if err == nil {
-			validateItem(t, item, ch.Address().Bytes(), nil, storeTimestamp, 0, postage.NewStamp(nil, nil, nil, nil))
+			validateItem(t, item, ch.Address().Bytes(), nil, storeTimestamp, 0)
 		}
 	}
 }
 
 // newGCIndexTest returns a test function that validates if the right
 // chunk values are in the GC index.
-func newGCIndexTest(db *DB, chunk swarm.Chunk, storeTimestamp, accessTimestamp int64, binID uint64, wantError error, stamp *postage.Stamp) func(t *testing.T) {
+func newGCIndexTest(db *DB, chunk boson.Chunk, storeTimestamp, accessTimestamp int64, binID uint64, wantError error) func(t *testing.T) {
 	return func(t *testing.T) {
 		t.Helper()
 
@@ -338,14 +337,14 @@ func newGCIndexTest(db *DB, chunk swarm.Chunk, storeTimestamp, accessTimestamp i
 			t.Errorf("got error %v, want %v", err, wantError)
 		}
 		if err == nil {
-			validateItem(t, item, chunk.Address().Bytes(), nil, 0, accessTimestamp, stamp)
+			validateItem(t, item, chunk.Address().Bytes(), nil, 0, accessTimestamp)
 		}
 	}
 }
 
 // newPinIndexTest returns a test function that validates if the right
 // chunk values are in the pin index.
-func newPinIndexTest(db *DB, chunk swarm.Chunk, wantError error) func(t *testing.T) {
+func newPinIndexTest(db *DB, chunk boson.Chunk, wantError error) func(t *testing.T) {
 	return func(t *testing.T) {
 		t.Helper()
 
@@ -356,7 +355,7 @@ func newPinIndexTest(db *DB, chunk swarm.Chunk, wantError error) func(t *testing
 			t.Errorf("got error %v, want %v", err, wantError)
 		}
 		if err == nil {
-			validateItem(t, item, chunk.Address().Bytes(), nil, 0, 0, postage.NewStamp(nil, nil, nil, nil))
+			validateItem(t, item, chunk.Address().Bytes(), nil, 0, 0)
 		}
 	}
 }
@@ -408,7 +407,7 @@ func newIndexGCSizeTest(db *DB) func(t *testing.T) {
 // testIndexChunk embeds storageChunk with additional data that is stored
 // in database. It is used for index values validations.
 type testIndexChunk struct {
-	swarm.Chunk
+	boson.Chunk
 	binID uint64
 }
 
@@ -439,7 +438,7 @@ func testItemsOrder(t *testing.T, i shed.Index, chunks []testIndexChunk, sortFun
 }
 
 // validateItem is a helper function that checks Item values.
-func validateItem(t *testing.T, item shed.Item, address, data []byte, storeTimestamp, accessTimestamp int64, stamp swarm.Stamp) {
+func validateItem(t *testing.T, item shed.Item, address, data []byte, storeTimestamp, accessTimestamp int64) {
 	t.Helper()
 
 	if !bytes.Equal(item.Address, address) {
@@ -453,12 +452,6 @@ func validateItem(t *testing.T, item shed.Item, address, data []byte, storeTimes
 	}
 	if item.AccessTimestamp != accessTimestamp {
 		t.Errorf("got item access timestamp %v, want %v", item.AccessTimestamp, accessTimestamp)
-	}
-	if !bytes.Equal(item.BatchID, stamp.BatchID()) {
-		t.Errorf("got batch ID %x, want %x", item.BatchID, stamp.BatchID())
-	}
-	if !bytes.Equal(item.Sig, stamp.Sig()) {
-		t.Errorf("got signature %x, want %x", item.Sig, stamp.Sig())
 	}
 }
 
@@ -521,7 +514,7 @@ func TestSetNow(t *testing.T) {
 	}
 }
 
-func testIndexCounts(t *testing.T, pushIndex, pullIndex, gcIndex, pinIndex, retrievalDataIndex, retrievalAccessIndex int, indexInfo map[string]int) {
+func testIndexCounts(t *testing.T, pushIndex, pullIndex, gcIndex, gcExcludeIndex, pinIndex, retrievalDataIndex, retrievalAccessIndex int, indexInfo map[string]int) {
 	t.Helper()
 	if indexInfo["pushIndex"] != pushIndex {
 		t.Fatalf("pushIndex count mismatch. got %d want %d", indexInfo["pushIndex"], pushIndex)
@@ -533,6 +526,10 @@ func testIndexCounts(t *testing.T, pushIndex, pullIndex, gcIndex, pinIndex, retr
 
 	if indexInfo["gcIndex"] != gcIndex {
 		t.Fatalf("gcIndex count mismatch. got %d want %d", indexInfo["gcIndex"], gcIndex)
+	}
+
+	if indexInfo["gcExcludeIndex"] != gcExcludeIndex {
+		t.Fatalf("gcExcludeIndex count mismatch. got %d want %d", indexInfo["gcExcludeIndex"], gcExcludeIndex)
 	}
 
 	if indexInfo["pinIndex"] != pinIndex {
@@ -571,7 +568,7 @@ func TestDBDebugIndexes(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	testIndexCounts(t, 1, 1, 0, 0, 1, 0, indexCounts)
+	testIndexCounts(t, 1, 1, 0, 0, 0, 1, 0, indexCounts)
 
 	// set the chunk for pinning and expect the index count to grow
 	err = db.Set(ctx, storage.ModeSetPin, ch.Address())
@@ -585,5 +582,5 @@ func TestDBDebugIndexes(t *testing.T) {
 	}
 
 	// assert that there's a pin and gc exclude entry now
-	testIndexCounts(t, 1, 1, 0, 1, 1, 0, indexCounts)
+	testIndexCounts(t, 1, 1, 0, 1, 1, 1, 0, indexCounts)
 }

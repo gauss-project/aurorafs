@@ -8,8 +8,8 @@ import (
 	"crypto/ecdsa"
 	"hash"
 
-	"github.com/ethersphere/bee/pkg/crypto"
-	"github.com/ethersphere/bee/pkg/encryption"
+	"github.com/gauss-project/aurorafs/pkg/crypto"
+	"github.com/gauss-project/aurorafs/pkg/encryption"
 )
 
 // New constructs an encryption interface (the modified blockcipher) with a base key derived from

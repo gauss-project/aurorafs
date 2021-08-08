@@ -17,19 +17,13 @@
 // Package shed provides a simple abstraction components to compose
 // more complex operations on storage data organized in fields and indexes.
 //
-// Only type which holds logical information about swarm storage chunks data
+// Only type which holds logical information about boson storage chunks data
 // and metadata is Item. This part is not generalized mostly for
 // performance reasons.
 package shed
 
 import (
 	"errors"
-	"fmt"
-	"golang.org/x/time/rate"
-	"os"
-	"strconv"
-	"sync"
-	"time"
 
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/iterator"
@@ -59,12 +53,6 @@ type DB struct {
 	ldb     *leveldb.DB
 	metrics metrics
 	quit    chan struct{} // Quit channel to stop the metrics collection before closing the database
-	getLimiter *rate.Limiter
-	putLimiter *rate.Limiter
-	getRate int
-	putRate int
-	getLock sync.Mutex
-	putLock sync.Mutex
 }
 
 // NewDB constructs a new DB and validates the schema
@@ -95,41 +83,14 @@ func NewDB(path string, o *Options) (db *DB, err error) {
 		return nil, err
 	}
 
-	return NewDBWrap(ldb)
-}
-
-// NewDBWrap returns new DB which uses the given ldb as its underlying storage.
-// The function will panics if the given ldb is nil.
-func NewDBWrap(ldb *leveldb.DB) (db *DB, err error) {
-	if ldb == nil {
-		panic(errors.New("shed: NewDBWrap: nil ldb"))
-	}
-
-	get_limit := os.Getenv("GET_RATE")
-	getLimit,err :=strconv.ParseInt(get_limit,10,32)
-	if err != nil {
-		getLimit = 100
-	}
-
-	put_limit := os.Getenv("PUT_RATE")
-	putLimit,err  := strconv.ParseInt(put_limit,10,32)
-	if err != nil {
-		putLimit = 100
-	}
-
-	fmt.Printf("Set Get/Put :%v/%v\n", getLimit,putLimit)
 	db = &DB{
 		ldb:     ldb,
 		metrics: newMetrics(),
-		getRate: int(getLimit),
-		putRate: int(putLimit),
-		getLimiter: rate.NewLimiter(rate.Limit(getLimit),int(getLimit*10)),
-		putLimiter: rate.NewLimiter(rate.Limit(putLimit),int(putLimit*10)),
 	}
 
 	if _, err = db.getSchema(); err != nil {
 		if errors.Is(err, leveldb.ErrNotFound) {
-			// Save schema with initialized default fields.
+			// save schema with initialized default fields
 			if err = db.putSchema(schema{
 				Fields:  make(map[string]fieldSpec),
 				Indexes: make(map[byte]indexSpec),
@@ -141,19 +102,12 @@ func NewDBWrap(ldb *leveldb.DB) (db *DB, err error) {
 		}
 	}
 
-	// Create a quit channel for the periodic metrics collector and run it.
+	// Create a quit channel for the periodic metrics collector and run it
 	db.quit = make(chan struct{})
 
 	return db, nil
 }
 
-func (db *DB) PutLimited(key, value []byte) (err error) {
-	if db.putLimiter.AllowN(time.Now(),db.putRate) {
-		return db.Put(key,value)
-	}else{
-		return errors.New("Exceed put limit")
-	}
-}
 // Put wraps LevelDB Put method to increment metrics counter.
 func (db *DB) Put(key, value []byte) (err error) {
 	err = db.ldb.Put(key, value, nil)
@@ -164,13 +118,7 @@ func (db *DB) Put(key, value []byte) (err error) {
 	db.metrics.PutCounter.Inc()
 	return nil
 }
-func (db *DB) GetLimited(key []byte) (value []byte, err error) {
-	if db.putLimiter.AllowN(time.Now(),db.getRate) {
-		return db.Get(key)
-	}else{
-		return nil,errors.New("Exceed get limit")
-	}
-}
+
 // Get wraps LevelDB Get method to increment metrics counter.
 func (db *DB) Get(key []byte) (value []byte, err error) {
 	value, err = db.ldb.Get(key, nil)

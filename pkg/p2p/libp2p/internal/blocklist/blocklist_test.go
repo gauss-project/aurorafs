@@ -8,15 +8,15 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ethersphere/bee/pkg/p2p"
-	"github.com/ethersphere/bee/pkg/p2p/libp2p/internal/blocklist"
-	"github.com/ethersphere/bee/pkg/statestore/mock"
-	"github.com/ethersphere/bee/pkg/swarm"
+	"github.com/gauss-project/aurorafs/pkg/p2p"
+	"github.com/gauss-project/aurorafs/pkg/p2p/libp2p/internal/blocklist"
+	"github.com/gauss-project/aurorafs/pkg/statestore/mock"
+	"github.com/gauss-project/aurorafs/pkg/boson"
 )
 
 func TestExist(t *testing.T) {
-	addr1 := swarm.NewAddress([]byte{0, 1, 2, 3})
-	addr2 := swarm.NewAddress([]byte{4, 5, 6, 7})
+	addr1 := boson.NewAddress([]byte{0, 1, 2, 3})
+	addr2 := boson.NewAddress([]byte{4, 5, 6, 7})
 
 	bl := blocklist.NewBlocklist(mock.NewStateStore())
 
@@ -62,8 +62,8 @@ func TestExist(t *testing.T) {
 }
 
 func TestPeers(t *testing.T) {
-	addr1 := swarm.NewAddress([]byte{0, 1, 2, 3})
-	addr2 := swarm.NewAddress([]byte{4, 5, 6, 7})
+	addr1 := boson.NewAddress([]byte{0, 1, 2, 3})
+	addr2 := boson.NewAddress([]byte{4, 5, 6, 7})
 
 	bl := blocklist.NewBlocklist(mock.NewStateStore())
 
@@ -106,7 +106,7 @@ func TestPeers(t *testing.T) {
 	}
 }
 
-func isIn(p swarm.Address, peers []p2p.Peer) bool {
+func isIn(p boson.Address, peers []p2p.Peer) bool {
 	for _, v := range peers {
 		if v.Address.Equal(p) {
 			return true

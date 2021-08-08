@@ -18,8 +18,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/ethersphere/bee/pkg/jsonhttp"
-	"github.com/ethersphere/bee/pkg/jsonhttp/jsonhttptest"
+	"github.com/gauss-project/aurorafs/pkg/jsonhttp"
+	"github.com/gauss-project/aurorafs/pkg/jsonhttp/jsonhttptest"
 )
 
 func TestRequest_statusCode(t *testing.T) {
@@ -65,7 +65,7 @@ func TestRequest_url(t *testing.T) {
 	})
 
 	assert(t, "", "", func(m *mock) {
-		jsonhttptest.Request(m, c, http.MethodPost, endpoint+"/bzz", http.StatusNotFound)
+		jsonhttptest.Request(m, c, http.MethodPost, endpoint+"/aurora", http.StatusNotFound)
 	})
 }
 
@@ -154,7 +154,7 @@ func TestWithJSONRequestBody(t *testing.T) {
 
 func TestWithMultipartRequest(t *testing.T) {
 	wantBody := []byte("somebody")
-	filename := "swarm.jpg"
+	filename := "boson.jpg"
 	contentType := "image/jpeg"
 	var gotBody []byte
 	var gotContentDisposition, gotContentType string
@@ -324,7 +324,7 @@ func TestWithNoResponseBody(t *testing.T) {
 	})
 
 	assert(t, `got response body "not found", want none`, "", func(m *mock) {
-		jsonhttptest.Request(m, c, http.MethodGet, endpoint+"/bzz", http.StatusOK,
+		jsonhttptest.Request(m, c, http.MethodGet, endpoint+"/aurora", http.StatusOK,
 			jsonhttptest.WithNoResponseBody(),
 		)
 	})

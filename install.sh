@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 APP_NAME="bee"
-REPO_URL="https://github.com/ethersphere/bee"
+REPO_URL="https://github.com/gauss-project/aurorafs"
 
 : "${USE_SUDO:="true"}"
 : "${BEE_INSTALL_DIR:="/usr/local/bin"}"
@@ -59,11 +59,11 @@ supported() {
   fi
 }
 
-# check_installed_version checks which version of bee is installed and
+# check_installed_version checks which version of aurorafs is installed and
 # if it needs to be changed.
 check_installed_version() {
   if [[ -f "${BEE_INSTALL_DIR}/${APP_NAME}" ]]; then
-    local version=$(bee version 2>&1)
+    local version=$(aurorafs version 2>&1)
     if [[ "${version%-*}" == "${TAG#v}" ]]; then
       echo "bee ${version} is already ${DESIRED_VERSION:-latest}"
       return 0
@@ -99,7 +99,7 @@ download_file() {
     BEE_DIST="bee-$OS-$ARCH.exe"
   fi
   DOWNLOAD_URL="$REPO_URL/releases/download/$TAG/$BEE_DIST"
-  BEE_TMP_ROOT="$(mktemp -dt bee-binary-XXXXXX)"
+  BEE_TMP_ROOT="$(mktemp -dt aurorafs-binary-XXXXXX)"
   BEE_TMP_FILE="$BEE_TMP_ROOT/$BEE_DIST"
   if command -v curl &> /dev/null; then
     curl -SsL "$DOWNLOAD_URL" -o "$BEE_TMP_FILE"

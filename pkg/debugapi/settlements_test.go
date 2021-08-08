@@ -11,13 +11,12 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/ethersphere/bee/pkg/bigint"
-	"github.com/ethersphere/bee/pkg/debugapi"
-	"github.com/ethersphere/bee/pkg/jsonhttp"
-	"github.com/ethersphere/bee/pkg/jsonhttp/jsonhttptest"
-	"github.com/ethersphere/bee/pkg/settlement"
-	"github.com/ethersphere/bee/pkg/settlement/swap/mock"
-	"github.com/ethersphere/bee/pkg/swarm"
+	"github.com/gauss-project/aurorafs/pkg/debugapi"
+	"github.com/gauss-project/aurorafs/pkg/jsonhttp"
+	"github.com/gauss-project/aurorafs/pkg/jsonhttp/jsonhttptest"
+	"github.com/gauss-project/aurorafs/pkg/settlement"
+	"github.com/gauss-project/aurorafs/pkg/settlement/swap/mock"
+	"github.com/gauss-project/aurorafs/pkg/boson"
 )
 
 func TestSettlements(t *testing.T) {
@@ -37,32 +36,32 @@ func TestSettlements(t *testing.T) {
 	}
 
 	testServer := newTestServer(t, testServerOptions{
-		SwapOpts: []mock.Option{mock.WithSettlementsSentFunc(settlementsSentFunc), mock.WithSettlementsRecvFunc(settlementsRecvFunc)},
+		SettlementOpts: []mock.Option{mock.WithSettlementsSentFunc(settlementsSentFunc), mock.WithSettlementsRecvFunc(settlementsRecvFunc)},
 	})
 
 	expected := &debugapi.SettlementsResponse{
-		TotalSettlementReceived: bigint.Wrap(big.NewInt(15000)),
-		TotalSettlementSent:     bigint.Wrap(big.NewInt(80000)),
+		TotalSettlementReceived: big.NewInt(15000),
+		TotalSettlementSent:     big.NewInt(80000),
 		Settlements: []debugapi.SettlementResponse{
 			{
 				Peer:               "DEAD",
-				SettlementReceived: bigint.Wrap(big.NewInt(0)),
-				SettlementSent:     bigint.Wrap(big.NewInt(10000)),
+				SettlementReceived: big.NewInt(0),
+				SettlementSent:     big.NewInt(10000),
 			},
 			{
 				Peer:               "BEEF",
-				SettlementReceived: bigint.Wrap(big.NewInt(10000)),
-				SettlementSent:     bigint.Wrap(big.NewInt(20000)),
+				SettlementReceived: big.NewInt(10000),
+				SettlementSent:     big.NewInt(20000),
 			},
 			{
 				Peer:               "FFFF",
-				SettlementReceived: bigint.Wrap(big.NewInt(0)),
-				SettlementSent:     bigint.Wrap(big.NewInt(50000)),
+				SettlementReceived: big.NewInt(0),
+				SettlementSent:     big.NewInt(50000),
 			},
 			{
 				Peer:               "EEEE",
-				SettlementReceived: bigint.Wrap(big.NewInt(5000)),
-				SettlementSent:     bigint.Wrap(big.NewInt(0)),
+				SettlementReceived: big.NewInt(5000),
+				SettlementSent:     big.NewInt(0),
 			},
 		},
 	}
@@ -85,7 +84,7 @@ func TestSettlementsError(t *testing.T) {
 		return nil, wantErr
 	}
 	testServer := newTestServer(t, testServerOptions{
-		SwapOpts: []mock.Option{mock.WithSettlementsSentFunc(settlementsSentFunc)},
+		SettlementOpts: []mock.Option{mock.WithSettlementsSentFunc(settlementsSentFunc)},
 	})
 
 	jsonhttptest.Request(t, testServer.Client, http.MethodGet, "/settlements", http.StatusInternalServerError,
@@ -98,34 +97,34 @@ func TestSettlementsError(t *testing.T) {
 
 func TestSettlementsPeers(t *testing.T) {
 	peer := "bff2c89e85e78c38bd89fca1acc996afb876c21bf5a8482ad798ce15f1c223fa"
-	settlementSentFunc := func(swarm.Address) (*big.Int, error) {
+	settlementSentFunc := func(boson.Address) (*big.Int, error) {
 		return big.NewInt(1000000000000000000), nil
 	}
 	testServer := newTestServer(t, testServerOptions{
-		SwapOpts: []mock.Option{mock.WithSettlementSentFunc(settlementSentFunc)},
+		SettlementOpts: []mock.Option{mock.WithSettlementSentFunc(settlementSentFunc)},
 	})
 
 	jsonhttptest.Request(t, testServer.Client, http.MethodGet, "/settlements/"+peer, http.StatusOK,
 		jsonhttptest.WithExpectedJSONResponse(debugapi.SettlementResponse{
 			Peer:               peer,
-			SettlementSent:     bigint.Wrap(big.NewInt(1000000000000000000)),
-			SettlementReceived: bigint.Wrap(big.NewInt(0)),
+			SettlementSent:     big.NewInt(1000000000000000000),
+			SettlementReceived: big.NewInt(0),
 		}),
 	)
 }
 
 func TestSettlementsPeersNoSettlements(t *testing.T) {
 	peer := "bff2c89e85e78c38bd89fca1acc996afb876c21bf5a8482ad798ce15f1c223fa"
-	noErrFunc := func(swarm.Address) (*big.Int, error) {
+	noErrFunc := func(boson.Address) (*big.Int, error) {
 		return big.NewInt(1000000000000000000), nil
 	}
-	errFunc := func(swarm.Address) (*big.Int, error) {
+	errFunc := func(boson.Address) (*big.Int, error) {
 		return nil, settlement.ErrPeerNoSettlements
 	}
 
 	t.Run("no sent", func(t *testing.T) {
 		testServer := newTestServer(t, testServerOptions{
-			SwapOpts: []mock.Option{
+			SettlementOpts: []mock.Option{
 				mock.WithSettlementSentFunc(errFunc),
 				mock.WithSettlementRecvFunc(noErrFunc),
 			},
@@ -134,15 +133,15 @@ func TestSettlementsPeersNoSettlements(t *testing.T) {
 		jsonhttptest.Request(t, testServer.Client, http.MethodGet, "/settlements/"+peer, http.StatusOK,
 			jsonhttptest.WithExpectedJSONResponse(debugapi.SettlementResponse{
 				Peer:               peer,
-				SettlementSent:     bigint.Wrap(big.NewInt(0)),
-				SettlementReceived: bigint.Wrap(big.NewInt(1000000000000000000)),
+				SettlementSent:     big.NewInt(0),
+				SettlementReceived: big.NewInt(1000000000000000000),
 			}),
 		)
 	})
 
 	t.Run("no received", func(t *testing.T) {
 		testServer := newTestServer(t, testServerOptions{
-			SwapOpts: []mock.Option{
+			SettlementOpts: []mock.Option{
 				mock.WithSettlementSentFunc(noErrFunc),
 				mock.WithSettlementRecvFunc(errFunc),
 			},
@@ -151,8 +150,8 @@ func TestSettlementsPeersNoSettlements(t *testing.T) {
 		jsonhttptest.Request(t, testServer.Client, http.MethodGet, "/settlements/"+peer, http.StatusOK,
 			jsonhttptest.WithExpectedJSONResponse(debugapi.SettlementResponse{
 				Peer:               peer,
-				SettlementSent:     bigint.Wrap(big.NewInt(1000000000000000000)),
-				SettlementReceived: bigint.Wrap(big.NewInt(0)),
+				SettlementSent:     big.NewInt(1000000000000000000),
+				SettlementReceived: big.NewInt(0),
 			}),
 		)
 	})
@@ -161,11 +160,11 @@ func TestSettlementsPeersNoSettlements(t *testing.T) {
 func TestSettlementsPeersError(t *testing.T) {
 	peer := "bff2c89e85e78c38bd89fca1acc996afb876c21bf5a8482ad798ce15f1c223fa"
 	wantErr := errors.New("Error")
-	settlementSentFunc := func(swarm.Address) (*big.Int, error) {
+	settlementSentFunc := func(boson.Address) (*big.Int, error) {
 		return nil, wantErr
 	}
 	testServer := newTestServer(t, testServerOptions{
-		SwapOpts: []mock.Option{mock.WithSettlementSentFunc(settlementSentFunc)},
+		SettlementOpts: []mock.Option{mock.WithSettlementSentFunc(settlementSentFunc)},
 	})
 
 	jsonhttptest.Request(t, testServer.Client, http.MethodGet, "/settlements/"+peer, http.StatusInternalServerError,
@@ -218,11 +217,11 @@ func equalSettlements(a, b *debugapi.SettlementsResponse) bool {
 		}
 	}
 
-	if a.TotalSettlementReceived.Cmp(b.TotalSettlementReceived.Int) != 0 {
+	if a.TotalSettlementReceived.Cmp(b.TotalSettlementReceived) != 0 {
 		return false
 	}
 
-	if a.TotalSettlementSent.Cmp(b.TotalSettlementSent.Int) != 0 {
+	if a.TotalSettlementSent.Cmp(b.TotalSettlementSent) != 0 {
 		return false
 	}
 

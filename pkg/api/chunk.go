@@ -7,26 +7,22 @@ package api
 import (
 	"bytes"
 	"errors"
-
 	"io"
 	"io/ioutil"
 	"net/http"
 
+	"github.com/gauss-project/aurorafs/pkg/cac"
+	"github.com/gauss-project/aurorafs/pkg/netstore"
 
-	"github.com/ethersphere/bee/pkg/cac"
-	"github.com/ethersphere/bee/pkg/netstore"
-
-	"github.com/ethersphere/bee/pkg/jsonhttp"
-	//"github.com/ethersphere/bee/pkg/oracle"
-	"github.com/ethersphere/bee/pkg/sctx"
-	"github.com/ethersphere/bee/pkg/storage"
-	"github.com/ethersphere/bee/pkg/swarm"
+	"github.com/gauss-project/aurorafs/pkg/boson"
+	"github.com/gauss-project/aurorafs/pkg/jsonhttp"
+	"github.com/gauss-project/aurorafs/pkg/storage"
 
 	"github.com/gorilla/mux"
 )
 
 type chunkAddressResponse struct {
-	Reference swarm.Address `json:"reference"`
+	Reference boson.Address `json:"reference"`
 }
 
 func (s *server) chunkUploadHandler(w http.ResponseWriter, r *http.Request) {
@@ -35,7 +31,6 @@ func (s *server) chunkUploadHandler(w http.ResponseWriter, r *http.Request) {
 		ctx = r.Context()
 		err error
 	)
-
 
 	data, err := ioutil.ReadAll(r.Body)
 	if err != nil {
@@ -48,7 +43,7 @@ func (s *server) chunkUploadHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if len(data) < swarm.SpanSize {
+	if len(data) < boson.SpanSize {
 		s.logger.Debug("chunk upload: not enough data")
 		s.logger.Error("chunk upload: data length")
 		jsonhttp.BadRequest(w, "data length")
@@ -63,27 +58,27 @@ func (s *server) chunkUploadHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-
-
-
-	_, err2 := s.storer.Put(ctx, requestModePut(r), chunk)
-	if err2 != nil {
-		s.logger.Debugf("chunk upload: chunk write error: %v, addr %s", err2, chunk.Address())
+	seen, err := s.storer.Put(ctx, requestModePut(r), chunk)
+	if err != nil {
+		s.logger.Debugf("chunk upload: chunk write error: %v, addr %s", err, chunk.Address())
 		s.logger.Error("chunk upload: chunk write error")
-		jsonhttp.InternalServerError(w, "chunk write error")
+		jsonhttp.BadRequest(w, "chunk write error")
+		return
+	} else if len(seen) > 0 && seen[0]  {
+
+		s.logger.Debugf("chunk upload: increment tag", err)
+		s.logger.Error("chunk upload: increment tag")
+		jsonhttp.BadRequest(w, "increment tag")
 		return
 	}
 
 
-	w.Header().Set("Access-Control-Expose-Headers", SwarmTagHeader)
-	jsonhttp.Created(w, chunkAddressResponse{Reference: chunk.Address()})
+	jsonhttp.OK(w, chunkAddressResponse{Reference: chunk.Address()})
 }
 
 func (s *server) chunkGetHandler(w http.ResponseWriter, r *http.Request) {
 	targets := r.URL.Query().Get("targets")
-	if targets != "" {
-		r = r.WithContext(sctx.SetTargets(r.Context(), targets))
-	}
+
 
 	nameOrHex := mux.Vars(r)["addr"]
 	ctx := r.Context()

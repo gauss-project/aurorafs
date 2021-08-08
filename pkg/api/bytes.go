@@ -5,43 +5,36 @@
 package api
 
 import (
-	"github.com/ethersphere/bee/pkg/jsonhttp"
 	"net/http"
 
-	"github.com/ethersphere/bee/pkg/swarm"
-
-	"github.com/ethersphere/bee/pkg/tracing"
+	"github.com/gauss-project/aurorafs/pkg/boson"
+	"github.com/gauss-project/aurorafs/pkg/file/pipeline/builder"
+	"github.com/gauss-project/aurorafs/pkg/jsonhttp"
+	"github.com/gauss-project/aurorafs/pkg/tracing"
 	"github.com/gorilla/mux"
 )
 
 type bytesPostResponse struct {
-	Reference swarm.Address `json:"reference"`
+	Reference boson.Address `json:"reference"`
 }
 
 // bytesUploadHandler handles upload of raw binary data of arbitrary length.
 func (s *server) bytesUploadHandler(w http.ResponseWriter, r *http.Request) {
-	//logger := tracing.NewLoggerWithTraceID(r.Context(), s.logger)
-
-
+	logger := tracing.NewLoggerWithTraceID(r.Context(), s.logger)
 
 	// Add the tag to the context
 	ctx := r.Context()
 
-
-
-
-
-	p := requestPipelineFn(s.storer, r)
-	address, err := p(ctx, r.Body)
+	pipe := builder.NewPipelineBuilder(ctx, s.storer, requestModePut(r), requestEncrypt(r))
+	address, err := builder.FeedPipeline(ctx, pipe, r.Body, r.ContentLength)
 	if err != nil {
+		logger.Debugf("bytes upload: split write all: %v", err)
+		logger.Error("bytes upload: split write all")
 		jsonhttp.InternalServerError(w, nil)
 		return
 	}
 
-
-
-	w.Header().Set("Access-Control-Expose-Headers", SwarmTagHeader)
-	jsonhttp.Created(w, bytesPostResponse{
+	jsonhttp.OK(w, bytesPostResponse{
 		Reference: address,
 	})
 }

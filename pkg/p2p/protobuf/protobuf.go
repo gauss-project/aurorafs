@@ -9,7 +9,7 @@ import (
 	"errors"
 	"io"
 
-	"github.com/ethersphere/bee/pkg/p2p"
+	"github.com/gauss-project/aurorafs/pkg/p2p"
 	ggio "github.com/gogo/protobuf/io"
 	"github.com/gogo/protobuf/proto"
 )

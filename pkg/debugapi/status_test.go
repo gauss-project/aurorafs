@@ -8,9 +8,9 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/ethersphere/bee"
-	"github.com/ethersphere/bee/pkg/debugapi"
-	"github.com/ethersphere/bee/pkg/jsonhttp/jsonhttptest"
+	"github.com/gauss-project/aurorafs"
+	"github.com/gauss-project/aurorafs/pkg/debugapi"
+	"github.com/gauss-project/aurorafs/pkg/jsonhttp/jsonhttptest"
 )
 
 func TestHealth(t *testing.T) {

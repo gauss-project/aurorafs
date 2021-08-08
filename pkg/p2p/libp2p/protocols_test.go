@@ -12,8 +12,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ethersphere/bee/pkg/p2p"
-	"github.com/ethersphere/bee/pkg/p2p/libp2p"
+	"github.com/gauss-project/aurorafs/pkg/p2p"
 	"github.com/multiformats/go-multistream"
 )
 
@@ -21,87 +20,11 @@ func TestNewStream(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	s1, overlay1 := newService(t, 1, libp2pServiceOpts{libp2pOpts: libp2p.Options{
-		FullNode: true,
-	}})
+	s1, overlay1 := newService(t, 1, libp2pServiceOpts{})
 
 	s2, _ := newService(t, 1, libp2pServiceOpts{})
 
-	if err := s1.AddProtocol(newTestProtocol(func(_ context.Context, p p2p.Peer, _ p2p.Stream) error {
-		return nil
-	})); err != nil {
-		t.Fatal(err)
-	}
-
-	addr := serviceUnderlayAddress(t, s1)
-
-	if _, err := s2.Connect(ctx, addr); err != nil {
-		t.Fatal(err)
-	}
-
-	stream, err := s2.NewStream(ctx, overlay1, nil, testProtocolName, testProtocolVersion, testStreamName)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := stream.Close(); err != nil {
-		t.Fatal(err)
-	}
-}
-
-// TestNewStream_OnlyFull tests that the handler gets the full
-// node information communicated correctly.
-func TestNewStream_OnlyFull(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	s1, overlay1 := newService(t, 1, libp2pServiceOpts{libp2pOpts: libp2p.Options{
-		FullNode: true,
-	}})
-
-	s2, _ := newService(t, 1, libp2pServiceOpts{libp2pOpts: libp2p.Options{
-		FullNode: true,
-	}})
-
-	if err := s1.AddProtocol(newTestProtocol(func(_ context.Context, p p2p.Peer, _ p2p.Stream) error {
-		if !p.FullNode {
-			t.Error("expected full node")
-		}
-		return nil
-	})); err != nil {
-		t.Fatal(err)
-	}
-
-	addr := serviceUnderlayAddress(t, s1)
-
-	if _, err := s2.Connect(ctx, addr); err != nil {
-		t.Fatal(err)
-	}
-
-	stream, err := s2.NewStream(ctx, overlay1, nil, testProtocolName, testProtocolVersion, testStreamName)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := stream.Close(); err != nil {
-		t.Fatal(err)
-	}
-}
-
-// TestNewStream_Mixed tests that the handler gets the full
-// node information communicated correctly for light node
-func TestNewStream_Mixed(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	s1, overlay1 := newService(t, 1, libp2pServiceOpts{libp2pOpts: libp2p.Options{
-		FullNode: true,
-	}})
-
-	s2, _ := newService(t, 1, libp2pServiceOpts{})
-
-	if err := s1.AddProtocol(newTestProtocol(func(_ context.Context, p p2p.Peer, _ p2p.Stream) error {
-		if p.FullNode {
-			t.Error("expected light node")
-		}
+	if err := s1.AddProtocol(newTestProtocol(func(_ context.Context, _ p2p.Peer, _ p2p.Stream) error {
 		return nil
 	})); err != nil {
 		t.Fatal(err)
@@ -129,18 +52,15 @@ func TestNewStreamMulti(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	s1, overlay1 := newService(t, 1, libp2pServiceOpts{libp2pOpts: libp2p.Options{
-		FullNode: true,
-	}})
-
+	s1, overlay1 := newService(t, 1, libp2pServiceOpts{})
 	var (
 		h1calls, h2calls int32
-		h1               = func(_ context.Context, p p2p.Peer, s p2p.Stream) error {
+		h1               = func(_ context.Context, _ p2p.Peer, s p2p.Stream) error {
 			defer s.Close()
 			_ = atomic.AddInt32(&h1calls, 1)
 			return nil
 		}
-		h2 = func(_ context.Context, p p2p.Peer, s p2p.Stream) error {
+		h2 = func(_ context.Context, _ p2p.Peer, s p2p.Stream) error {
 			defer s.Close()
 			_ = atomic.AddInt32(&h2calls, 1)
 			return nil
@@ -177,9 +97,7 @@ func TestNewStream_errNotSupported(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	s1, overlay1 := newService(t, 1, libp2pServiceOpts{libp2pOpts: libp2p.Options{
-		FullNode: true,
-	}})
+	s1, overlay1 := newService(t, 1, libp2pServiceOpts{})
 
 	s2, _ := newService(t, 1, libp2pServiceOpts{})
 
@@ -214,9 +132,7 @@ func TestNewStream_semanticVersioning(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	s1, overlay1 := newService(t, 1, libp2pServiceOpts{libp2pOpts: libp2p.Options{
-		FullNode: true,
-	}})
+	s1, overlay1 := newService(t, 1, libp2pServiceOpts{})
 
 	s2, _ := newService(t, 1, libp2pServiceOpts{})
 
@@ -275,9 +191,7 @@ func TestDisconnectError(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	s1, overlay1 := newService(t, 1, libp2pServiceOpts{libp2pOpts: libp2p.Options{
-		FullNode: true,
-	}})
+	s1, overlay1 := newService(t, 1, libp2pServiceOpts{})
 
 	s2, overlay2 := newService(t, 1, libp2pServiceOpts{})
 
@@ -305,9 +219,7 @@ func TestConnectDisconnectEvents(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	s1, overlay1 := newService(t, 1, libp2pServiceOpts{libp2pOpts: libp2p.Options{
-		FullNode: true,
-	}})
+	s1, overlay1 := newService(t, 1, libp2pServiceOpts{})
 
 	s2, _ := newService(t, 1, libp2pServiceOpts{})
 	testProtocol := newTestProtocol(func(_ context.Context, _ p2p.Peer, _ p2p.Stream) error {

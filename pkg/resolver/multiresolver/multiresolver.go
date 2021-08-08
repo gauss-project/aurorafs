@@ -11,10 +11,10 @@ import (
 	"path"
 	"strings"
 
-	"github.com/ethersphere/bee/pkg/logging"
-	"github.com/ethersphere/bee/pkg/resolver"
-	"github.com/ethersphere/bee/pkg/resolver/client/ens"
-	"github.com/ethersphere/bee/pkg/resolver/multiresolver/multierror"
+	"github.com/gauss-project/aurorafs/pkg/logging"
+	"github.com/gauss-project/aurorafs/pkg/resolver"
+	"github.com/gauss-project/aurorafs/pkg/resolver/client/ens"
+	"github.com/gauss-project/aurorafs/pkg/resolver/multiresolver/multierror"
 )
 
 // Ensure MultiResolver implements Resolver interface.

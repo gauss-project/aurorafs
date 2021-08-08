@@ -6,12 +6,12 @@ package debugapi
 
 import (
 	"errors"
+	"math/big"
 	"net/http"
 
-	"github.com/ethersphere/bee/pkg/accounting"
-	"github.com/ethersphere/bee/pkg/bigint"
-	"github.com/ethersphere/bee/pkg/jsonhttp"
-	"github.com/ethersphere/bee/pkg/swarm"
+	"github.com/gauss-project/aurorafs/pkg/accounting"
+	"github.com/gauss-project/aurorafs/pkg/boson"
+	"github.com/gauss-project/aurorafs/pkg/jsonhttp"
 	"github.com/gorilla/mux"
 )
 
@@ -23,8 +23,8 @@ var (
 )
 
 type balanceResponse struct {
-	Peer    string         `json:"peer"`
-	Balance *bigint.BigInt `json:"balance"`
+	Peer    string   `json:"peer"`
+	Balance *big.Int `json:"balance"`
 }
 
 type balancesResponse struct {
@@ -45,7 +45,7 @@ func (s *Service) balancesHandler(w http.ResponseWriter, r *http.Request) {
 	for k := range balances {
 		balResponses[i] = balanceResponse{
 			Peer:    k,
-			Balance: bigint.Wrap(balances[k]),
+			Balance: balances[k],
 		}
 		i++
 	}
@@ -55,7 +55,7 @@ func (s *Service) balancesHandler(w http.ResponseWriter, r *http.Request) {
 
 func (s *Service) peerBalanceHandler(w http.ResponseWriter, r *http.Request) {
 	addr := mux.Vars(r)["peer"]
-	peer, err := swarm.ParseHexAddress(addr)
+	peer, err := boson.ParseHexAddress(addr)
 	if err != nil {
 		s.logger.Debugf("debug api: balances peer: invalid peer address %s: %v", addr, err)
 		s.logger.Errorf("debug api: balances peer: invalid peer address %s", addr)
@@ -77,7 +77,7 @@ func (s *Service) peerBalanceHandler(w http.ResponseWriter, r *http.Request) {
 
 	jsonhttp.OK(w, balanceResponse{
 		Peer:    peer.String(),
-		Balance: bigint.Wrap(balance),
+		Balance: balance,
 	})
 }
 
@@ -95,7 +95,7 @@ func (s *Service) compensatedBalancesHandler(w http.ResponseWriter, r *http.Requ
 	for k := range balances {
 		balResponses[i] = balanceResponse{
 			Peer:    k,
-			Balance: bigint.Wrap(balances[k]),
+			Balance: balances[k],
 		}
 		i++
 	}
@@ -105,7 +105,7 @@ func (s *Service) compensatedBalancesHandler(w http.ResponseWriter, r *http.Requ
 
 func (s *Service) compensatedPeerBalanceHandler(w http.ResponseWriter, r *http.Request) {
 	addr := mux.Vars(r)["peer"]
-	peer, err := swarm.ParseHexAddress(addr)
+	peer, err := boson.ParseHexAddress(addr)
 	if err != nil {
 		s.logger.Debugf("debug api: compensated balances peer: invalid peer address %s: %v", addr, err)
 		s.logger.Errorf("debug api: compensated balances peer: invalid peer address %s", addr)
@@ -127,6 +127,6 @@ func (s *Service) compensatedPeerBalanceHandler(w http.ResponseWriter, r *http.R
 
 	jsonhttp.OK(w, balanceResponse{
 		Peer:    peer.String(),
-		Balance: bigint.Wrap(balance),
+		Balance: balance,
 	})
 }

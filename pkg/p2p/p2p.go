@@ -11,8 +11,8 @@ import (
 	"io"
 	"time"
 
-	"github.com/ethersphere/bee/pkg/bzz"
-	"github.com/ethersphere/bee/pkg/swarm"
+	"github.com/gauss-project/aurorafs/pkg/aurora"
+	"github.com/gauss-project/aurorafs/pkg/boson"
 	ma "github.com/multiformats/go-multiaddr"
 )
 
@@ -20,37 +20,30 @@ import (
 type Service interface {
 	AddProtocol(ProtocolSpec) error
 	// Connect to a peer but do not notify topology about the established connection.
-	Connect(ctx context.Context, addr ma.Multiaddr) (address *bzz.Address, err error)
+	Connect(ctx context.Context, addr ma.Multiaddr) (address *aurora.Address, err error)
 	Disconnecter
 	Peers() []Peer
 	BlocklistedPeers() ([]Peer, error)
 	Addresses() ([]ma.Multiaddr, error)
 	SetPickyNotifier(PickyNotifier)
-	Halter
 }
 
 type Disconnecter interface {
-	Disconnect(overlay swarm.Address) error
+	Disconnect(overlay boson.Address) error
 	// Blocklist will disconnect a peer and put it on a blocklist (blocking in & out connections) for provided duration
 	// duration 0 is treated as an infinite duration
-	Blocklist(overlay swarm.Address, duration time.Duration) error
+	Blocklist(overlay boson.Address, duration time.Duration) error
 }
 
-type Halter interface {
-	// Halt new incoming connections while shutting down
-	Halt()
-}
-
-// PickyNotifier can decide whether a peer should be picked
+// PickyNotifer can decide whether a peer should be picked
 type PickyNotifier interface {
 	Pick(Peer) bool
 	Notifier
 }
 
 type Notifier interface {
-	Connected(context.Context, Peer, bool) error
+	Connected(context.Context, Peer) error
 	Disconnected(Peer)
-	Announce(context.Context, swarm.Address, bool) error
 }
 
 // DebugService extends the Service with method used for debugging.
@@ -62,7 +55,7 @@ type DebugService interface {
 
 // Streamer is able to create a new Stream.
 type Streamer interface {
-	NewStream(ctx context.Context, address swarm.Address, h Headers, protocol, version, stream string) (Stream, error)
+	NewStream(ctx context.Context, address boson.Address, h Headers, protocol, version, stream string) (Stream, error)
 }
 
 type StreamerDisconnecter interface {
@@ -74,7 +67,6 @@ type StreamerDisconnecter interface {
 type Stream interface {
 	io.ReadWriter
 	io.Closer
-	ResponseHeaders() Headers
 	Headers() Headers
 	FullClose() error
 	Reset() error
@@ -100,9 +92,7 @@ type StreamSpec struct {
 
 // Peer holds information about a Peer.
 type Peer struct {
-	Address         swarm.Address
-	FullNode        bool
-	EthereumAddress []byte
+	Address boson.Address `json:"address"`
 }
 
 // HandlerFunc handles a received Stream from a Peer.
@@ -113,7 +103,7 @@ type HandlerMiddleware func(HandlerFunc) HandlerFunc
 
 // HeadlerFunc is returning response headers based on the received request
 // headers.
-type HeadlerFunc func(Headers, swarm.Address) Headers
+type HeadlerFunc func(Headers) Headers
 
 // Headers represents a collection of p2p header key value pairs.
 type Headers map[string][]byte
@@ -126,5 +116,5 @@ const (
 // NewSwarmStreamName constructs a libp2p compatible stream name out of
 // protocol name and version and stream name.
 func NewSwarmStreamName(protocol, version, stream string) string {
-	return "/swarm/" + protocol + "/" + version + "/" + stream
+	return "/boson/" + protocol + "/" + version + "/" + stream
 }

@@ -7,13 +7,13 @@ package file
 import (
 	"math"
 
-	"github.com/ethersphere/bee/pkg/swarm"
+	"github.com/gauss-project/aurorafs/pkg/boson"
 )
 
 var Spans []int64
 
 func init() {
-	Spans = GenerateSpanSizes(9, swarm.Branches)
+	Spans = GenerateSpanSizes(9, boson.Branches)
 }
 
 // GenerateSpanSizes generates a dictionary of maximum span lengths per level represented by one SectionSize() of data
