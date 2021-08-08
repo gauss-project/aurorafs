@@ -4,33 +4,27 @@
 
 package api
 
-import "github.com/ethersphere/bee/pkg/swarm"
+import "github.com/gauss-project/aurorafs/pkg/boson"
 
 type Server = server
 
 type (
-	BytesPostResponse     = bytesPostResponse
-	ChunkAddressResponse  = chunkAddressResponse
-	SocPostResponse       = socPostResponse
-	FeedReferenceResponse = feedReferenceResponse
-	BzzUploadResponse     = bzzUploadResponse
-	TagResponse           = tagResponse
-	TagRequest            = tagRequest
-	ListTagsResponse      = listTagsResponse
-	PostageCreateResponse = postageCreateResponse
-	PostageStampResponse  = postageStampResponse
-	PostageStampsResponse = postageStampsResponse
+	BytesPostResponse        = bytesPostResponse
+	ChunkAddressResponse     = chunkAddressResponse
+	SocPostResponse          = socPostResponse
+
+	FileUploadResponse       = fileUploadResponse
+
 )
 
 var (
-	InvalidContentType  = errInvalidContentType
-	InvalidRequest      = errInvalidRequest
-	DirectoryStoreError = errDirectoryStore
+	ContentTypeTar = contentTypeTar
 )
 
 var (
-	ContentTypeTar    = contentTypeTar
-	ContentTypeHeader = contentTypeHeader
+	ManifestRootPath                      = manifestRootPath
+	ManifestWebsiteIndexDocumentSuffixKey = manifestWebsiteIndexDocumentSuffixKey
+	ManifestWebsiteErrorDocumentPathKey   = manifestWebsiteErrorDocumentPathKey
 )
 
 var (
@@ -38,13 +32,8 @@ var (
 	ErrInvalidNameOrAddress = errInvalidNameOrAddress
 )
 
-var (
-	FeedMetadataEntryOwner = feedMetadataEntryOwner
-	FeedMetadataEntryTopic = feedMetadataEntryTopic
-	FeedMetadataEntryType  = feedMetadataEntryType
-)
 
-func (s *Server) ResolveNameOrAddress(str string) (swarm.Address, error) {
+func (s *Server) ResolveNameOrAddress(str string) (boson.Address, error) {
 	return s.resolveNameOrAddress(str)
 }
 

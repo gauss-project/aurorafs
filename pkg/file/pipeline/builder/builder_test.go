@@ -13,11 +13,11 @@ import (
 	"strconv"
 	"testing"
 
-	"github.com/ethersphere/bee/pkg/file/pipeline/builder"
-	test "github.com/ethersphere/bee/pkg/file/testing"
-	"github.com/ethersphere/bee/pkg/storage"
-	"github.com/ethersphere/bee/pkg/storage/mock"
-	"github.com/ethersphere/bee/pkg/swarm"
+	"github.com/gauss-project/aurorafs/pkg/file/pipeline/builder"
+	test "github.com/gauss-project/aurorafs/pkg/file/testing"
+	"github.com/gauss-project/aurorafs/pkg/storage"
+	"github.com/gauss-project/aurorafs/pkg/storage/mock"
+	"github.com/gauss-project/aurorafs/pkg/boson"
 )
 
 func TestPartialWrites(t *testing.T) {
@@ -30,7 +30,7 @@ func TestPartialWrites(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	exp := swarm.MustParseHexAddress("92672a471f4419b255d7cb0cf313474a6f5856fb347c5ece85fb706d644b630f")
+	exp := boson.MustParseHexAddress("92672a471f4419b255d7cb0cf313474a6f5856fb347c5ece85fb706d644b630f")
 	if !bytes.Equal(exp.Bytes(), sum) {
 		t.Fatalf("expected %s got %s", exp.String(), hex.EncodeToString(sum))
 	}
@@ -50,7 +50,7 @@ func TestHelloWorld(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	exp := swarm.MustParseHexAddress("92672a471f4419b255d7cb0cf313474a6f5856fb347c5ece85fb706d644b630f")
+	exp := boson.MustParseHexAddress("92672a471f4419b255d7cb0cf313474a6f5856fb347c5ece85fb706d644b630f")
 	if !bytes.Equal(exp.Bytes(), sum) {
 		t.Fatalf("expected %s got %s", exp.String(), hex.EncodeToString(sum))
 	}
@@ -71,7 +71,7 @@ func TestEmpty(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	exp := swarm.MustParseHexAddress("b34ca8c22b9e982354f9c7f50b470d66db428d880c8a904d5fe4ec9713171526")
+	exp := boson.MustParseHexAddress("ffd70157e48063fc33c97a050f7f640233bf646cc98d9524c6b92bcf3ab56f83")
 	if !bytes.Equal(exp.Bytes(), sum) {
 		t.Fatalf("expected %s got %s", exp.String(), hex.EncodeToString(sum))
 	}
@@ -92,7 +92,7 @@ func TestAllVectors(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			a := swarm.NewAddress(sum)
+			a := boson.NewAddress(sum)
 			if !a.Equal(expect) {
 				t.Fatalf("failed run %d, expected address %s but got %s", i, expect.String(), a.String())
 			}
@@ -104,7 +104,7 @@ func TestAllVectors(t *testing.T) {
 go test -v -bench=. -run Bench -benchmem
 goos: linux
 goarch: amd64
-pkg: github.com/ethersphere/bee/pkg/file/pipeline/builder
+pkg: github.com/gauss-project/aurorafs/pkg/file/pipeline/builder
 BenchmarkPipeline
 BenchmarkPipeline/1000-bytes
 BenchmarkPipeline/1000-bytes-4         	   14475	     75170 ns/op	   63611 B/op	     333 allocs/op
@@ -119,7 +119,7 @@ BenchmarkPipeline/10000000-bytes-4     	       4	 304759595 ns/op	175378648 B/op
 BenchmarkPipeline/100000000-bytes
 BenchmarkPipeline/100000000-bytes-4    	       1	3064439098 ns/op	1751509528 B/op	11342736 allocs/op
 PASS
-ok  	github.com/ethersphere/bee/pkg/file/pipeline/builder	17.599s
+ok  	github.com/gauss-project/aurorafs/pkg/file/pipeline/builder	17.599s
 
 */
 func BenchmarkPipeline(b *testing.B) {

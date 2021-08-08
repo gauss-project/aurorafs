@@ -1,7 +1,7 @@
 package oracle
 
 import (
-	"github.com/ethersphere/bee/pkg/swarm"
+	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/ipfs/go-cid"
 	"math/big"
 )
@@ -12,7 +12,7 @@ type ChainResult struct {
 }
 type Price interface {
 	// PeerPrice Get price for specified node
-	PeerPrice(address swarm.Address) uint64
+	PeerPrice(address boson.Address) uint64
 	// Price Get common price from chain
 	Price() uint64
 	// SetPrice set price for this peer
@@ -24,13 +24,13 @@ type Resolver interface {
 	GetCid(aufsUri string) []byte
 
 	// GetNodesFromCid  Get source nodes of specified cid
-	GetNodesFromCid([]byte) []swarm.Address
+	GetNodesFromCid([]byte) []boson.Address
 
 	// GetSourceNodes  Short hand function, get storage nodes from uri
-	GetSourceNodes(aufsUri string) []swarm.Address
+	GetSourceNodes(aufsUri string) []boson.Address
 
 	// OnStoreMatched Notification when new data req matched
-	OnStoreMatched(cid cid.Cid,dataLen uint64, salt uint64,address swarm.Address)
+	OnStoreMatched(cid cid.Cid,dataLen uint64, salt uint64,address boson.Address)
 
 	// DataStoreFinished when data retrieved and saved, use this function to report onchain
 	DataStoreFinished(cid cid.Cid,dataLen uint64, salt uint64,proof []byte,resCh chan ChainResult)
@@ -45,14 +45,14 @@ type AuthInfo interface {
 
 type Balance interface {
 	// GetPeerBalance Get the balance of peer account
-	GetPeerBalance(peer swarm.Address) *big.Int
+	GetPeerBalance(peer boson.Address) *big.Int
 }
 
 type ChequeBook interface {
 	// GetSentAmount Get data traffic amount from this peer to target peer
-	GetSentAmount(peer swarm.Address) *big.Int
+	GetSentAmount(peer boson.Address) *big.Int
 	// GetReceivedAmount Get data traffic amount from target to this peer
-	GetReceivedAmount(peer swarm.Address) *big.Int
+	GetReceivedAmount(peer boson.Address) *big.Int
 	// ReportSignedAmount voucher is singed by counter-part peer, signature including my addr
 	ReportSignedAmount(voucher []byte, signature []byte ,resCh chan ChainResult)
 }

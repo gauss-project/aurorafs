@@ -8,7 +8,7 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/ethersphere/bee/pkg/resolver/multiresolver/multierror"
+	"github.com/gauss-project/aurorafs/pkg/resolver/multiresolver/multierror"
 )
 
 // nestedError implements error and is used for tests.

@@ -17,7 +17,7 @@ import (
 	"strconv"
 	"testing"
 
-	"github.com/ethersphere/bee/pkg/jsonhttp"
+	"github.com/gauss-project/aurorafs/pkg/jsonhttp"
 )
 
 // Request is a testing helper function that makes an HTTP request using

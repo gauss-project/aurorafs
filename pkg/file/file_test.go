@@ -12,13 +12,13 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/ethersphere/bee/pkg/file"
-	"github.com/ethersphere/bee/pkg/file/joiner"
-	"github.com/ethersphere/bee/pkg/file/pipeline/builder"
-	test "github.com/ethersphere/bee/pkg/file/testing"
-	"github.com/ethersphere/bee/pkg/storage"
-	"github.com/ethersphere/bee/pkg/storage/mock"
-	"github.com/ethersphere/bee/pkg/swarm"
+	"github.com/gauss-project/aurorafs/pkg/file"
+	"github.com/gauss-project/aurorafs/pkg/file/joiner"
+	"github.com/gauss-project/aurorafs/pkg/file/pipeline/builder"
+	test "github.com/gauss-project/aurorafs/pkg/file/testing"
+	"github.com/gauss-project/aurorafs/pkg/storage"
+	"github.com/gauss-project/aurorafs/pkg/storage/mock"
+	"github.com/gauss-project/aurorafs/pkg/boson"
 )
 
 var (
@@ -52,7 +52,7 @@ func testSplitThenJoin(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	dataReader := file.NewSimpleReadCloser(data)
-	resultAddress, err := builder.FeedPipeline(ctx, p, dataReader)
+	resultAddress, err := builder.FeedPipeline(ctx, p, dataReader, int64(len(data)))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -68,8 +68,8 @@ func testSplitThenJoin(t *testing.T) {
 
 	// read from joiner
 	var resultData []byte
-	for i := 0; i < len(data); i += swarm.ChunkSize {
-		readData := make([]byte, swarm.ChunkSize)
+	for i := 0; i < len(data); i += boson.ChunkSize {
+		readData := make([]byte, boson.ChunkSize)
 		_, err := r.Read(readData)
 		if err != nil {
 			if err == io.EOF {

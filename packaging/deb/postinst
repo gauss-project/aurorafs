@@ -3,42 +3,41 @@
 if [ "$1" = "configure" ]; then
     if [ -z "$2" ]; then
         # initial installation
-        if [ ! -f /var/lib/bee/keys/libp2p.key ]; then
-            /usr/bin/bee init --config /etc/bee/bee.yaml >/dev/null
-            chown -R bee:bee /var/lib/bee
+        if [ ! -f /var/lib/aurorafs/keys/libp2p.key ]; then
+            /usr/bin/aurorafs init --config /etc/aurorafs/aurorafs.yaml >/dev/null
+            chown -R aurorafs:aurorafs /var/lib/aurorafs/keys
         fi
         echo "
 Logs:   journalctl -f -u bee.service
 Config: /etc/bee/bee.yaml
 
-Bee requires an Ethereum endpoint to function. By default is using ws://localhost:8546 ethereum endpoint.
-If needed obtain a free Infura account and set:
-`swap-endpoint: wss://goerli.infura.io/ws/v3/xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx`
+Bee has SWAP enabled and by default is using slock.it goerli ethereum endpoint.
 It is recommended to use external signer with bee.
 Check documentation for more info:
+- SWAP https://docs.ethswarm.org/docs/installation/manual#swap-bandwidth-incentives
 - External signer https://docs.ethswarm.org/docs/installation/bee-clef
 
 After you finish configuration run 'sudo bee-get-addr'.
         "
     fi
 
-    # allow group members (bee user) to use clef's socket
-    if [ -S /var/lib/bee-clef/clef.ipc ]; then
-        chmod 660 /var/lib/bee-clef/clef.ipc
+    # allow group members (aurorafs user) to use clef's socket
+    if [ -S /var/lib/aurorafs-clef/clef.ipc ]; then
+        chmod 660 /var/lib/aurorafs-clef/clef.ipc
     fi
 
-    deb-systemd-helper unmask bee.service >/dev/null || true
+    deb-systemd-helper unmask aurorafs.service >/dev/null || true
 
-    if deb-systemd-helper --quiet was-enabled bee.service; then
-        deb-systemd-helper enable bee.service >/dev/null || true
+    if deb-systemd-helper --quiet was-enabled aurorafs.service; then
+        deb-systemd-helper enable aurorafs.service >/dev/null || true
     else
-        deb-systemd-helper update-state bee.service >/dev/null || true
+        deb-systemd-helper update-state aurorafs.service >/dev/null || true
     fi
     if [ -d /run/systemd/system ]; then
         systemctl --system daemon-reload >/dev/null || true
         # upgrade
         if [ ! -z "$2" ]; then
-            deb-systemd-invoke start bee.service >/dev/null || true
+            deb-systemd-invoke start aurorafs.service >/dev/null || true
         fi
     fi
 fi

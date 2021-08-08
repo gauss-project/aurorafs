@@ -7,12 +7,11 @@ package addressbook_test
 import (
 	"testing"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethersphere/bee/pkg/addressbook"
-	"github.com/ethersphere/bee/pkg/bzz"
-	"github.com/ethersphere/bee/pkg/crypto"
-	"github.com/ethersphere/bee/pkg/statestore/mock"
-	"github.com/ethersphere/bee/pkg/swarm"
+	"github.com/gauss-project/aurorafs/pkg/addressbook"
+	"github.com/gauss-project/aurorafs/pkg/aurora"
+	"github.com/gauss-project/aurorafs/pkg/crypto"
+	"github.com/gauss-project/aurorafs/pkg/statestore/mock"
+	"github.com/gauss-project/aurorafs/pkg/boson"
 
 	ma "github.com/multiformats/go-multiaddr"
 )
@@ -29,9 +28,8 @@ func TestInMem(t *testing.T) {
 
 func run(t *testing.T, f bookFunc) {
 	store := f(t)
-	addr1 := swarm.NewAddress([]byte{0, 1, 2, 3})
-	addr2 := swarm.NewAddress([]byte{0, 1, 2, 4})
-	trxHash := common.HexToHash("0x1").Bytes()
+	addr1 := boson.NewAddress([]byte{0, 1, 2, 3})
+	addr2 := boson.NewAddress([]byte{0, 1, 2, 4})
 	multiaddr, err := ma.NewMultiaddr("/ip4/1.1.1.1")
 	if err != nil {
 		t.Fatal(err)
@@ -42,7 +40,7 @@ func run(t *testing.T, f bookFunc) {
 		t.Fatal(err)
 	}
 
-	bzzAddr, err := bzz.NewAddress(crypto.NewDefaultSigner(pk), multiaddr, addr1, 1, trxHash)
+	bzzAddr, err := aurora.NewAddress(crypto.NewDefaultSigner(pk), multiaddr, addr1, 1)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -13,14 +13,14 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ethersphere/bee/pkg/swarm"
+	"github.com/gauss-project/aurorafs/pkg/boson"
 
-	"github.com/ethersphere/bee/pkg/logging"
-	"github.com/ethersphere/bee/pkg/p2p"
-	"github.com/ethersphere/bee/pkg/p2p/protobuf"
-	"github.com/ethersphere/bee/pkg/p2p/streamtest"
-	"github.com/ethersphere/bee/pkg/pingpong"
-	"github.com/ethersphere/bee/pkg/pingpong/pb"
+	"github.com/gauss-project/aurorafs/pkg/logging"
+	"github.com/gauss-project/aurorafs/pkg/p2p"
+	"github.com/gauss-project/aurorafs/pkg/p2p/protobuf"
+	"github.com/gauss-project/aurorafs/pkg/p2p/streamtest"
+	"github.com/gauss-project/aurorafs/pkg/pingpong"
+	"github.com/gauss-project/aurorafs/pkg/pingpong/pb"
 )
 
 func TestPing(t *testing.T) {
@@ -47,7 +47,7 @@ func TestPing(t *testing.T) {
 	client := pingpong.New(recorder, logger, nil)
 
 	// ping
-	addr := swarm.MustParseHexAddress("ca1e9f3938cc1425c6061b96ad9eb93e134dfe8734ad490164ef20af9d1cf59c")
+	addr := boson.MustParseHexAddress("ca1e9f3938cc1425c6061b96ad9eb93e134dfe8734ad490164ef20af9d1cf59c")
 	greetings := []string{"hey", "there", "fella"}
 	rtt, err := client.Ping(context.Background(), addr, greetings...)
 	if err != nil {

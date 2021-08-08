@@ -5,20 +5,47 @@
 package debugapi_test
 
 import (
+	"encoding/json"
+	"errors"
 	"net/http"
 	"testing"
 
-	"github.com/ethersphere/bee/pkg/jsonhttp/jsonhttptest"
+	"github.com/gauss-project/aurorafs/pkg/jsonhttp"
+	"github.com/gauss-project/aurorafs/pkg/jsonhttp/jsonhttptest"
+	topmock "github.com/gauss-project/aurorafs/pkg/topology/mock"
 )
 
+type topologyResponse struct {
+	Topology string `json:"topology"`
+}
+
 func TestTopologyOK(t *testing.T) {
-	testServer := newTestServer(t, testServerOptions{})
-
-	var body []byte
-	opts := jsonhttptest.WithPutResponseBody(&body)
-	jsonhttptest.Request(t, testServer.Client, http.MethodGet, "/topology", http.StatusOK, opts)
-
-	if len(body) == 0 {
-		t.Error("empty response")
+	marshalFunc := func() ([]byte, error) {
+		return json.Marshal(topologyResponse{Topology: "abcd"})
 	}
+	testServer := newTestServer(t, testServerOptions{
+		TopologyOpts: []topmock.Option{topmock.WithMarshalJSONFunc(marshalFunc)},
+	})
+
+	jsonhttptest.Request(t, testServer.Client, http.MethodGet, "/topology", http.StatusOK,
+		jsonhttptest.WithExpectedJSONResponse(topologyResponse{
+			Topology: "abcd",
+		}),
+	)
+}
+
+func TestTopologyError(t *testing.T) {
+	marshalFunc := func() ([]byte, error) {
+		return nil, errors.New("error")
+	}
+	testServer := newTestServer(t, testServerOptions{
+		TopologyOpts: []topmock.Option{topmock.WithMarshalJSONFunc(marshalFunc)},
+	})
+
+	jsonhttptest.Request(t, testServer.Client, http.MethodGet, "/topology", http.StatusInternalServerError,
+		jsonhttptest.WithExpectedJSONResponse(jsonhttp.StatusResponse{
+			Message: "error",
+			Code:    http.StatusInternalServerError,
+		}),
+	)
 }

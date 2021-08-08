@@ -6,25 +6,17 @@ package api_test
 
 import (
 	"bytes"
-	"context"
 	"io/ioutil"
 	"net/http"
 	"testing"
 
-	"github.com/ethersphere/bee/pkg/logging"
-	pinning "github.com/ethersphere/bee/pkg/pinning/mock"
-	mockpost "github.com/ethersphere/bee/pkg/postage/mock"
-	statestore "github.com/ethersphere/bee/pkg/statestore/mock"
-
-	"github.com/ethersphere/bee/pkg/tags"
-
-	"github.com/ethersphere/bee/pkg/api"
-	"github.com/ethersphere/bee/pkg/jsonhttp"
-	"github.com/ethersphere/bee/pkg/jsonhttp/jsonhttptest"
-	"github.com/ethersphere/bee/pkg/storage"
-	"github.com/ethersphere/bee/pkg/storage/mock"
-	testingc "github.com/ethersphere/bee/pkg/storage/testing"
-	"github.com/ethersphere/bee/pkg/swarm"
+	"github.com/gauss-project/aurorafs/pkg/api"
+	"github.com/gauss-project/aurorafs/pkg/boson"
+	"github.com/gauss-project/aurorafs/pkg/jsonhttp"
+	"github.com/gauss-project/aurorafs/pkg/jsonhttp/jsonhttptest"
+	"github.com/gauss-project/aurorafs/pkg/storage"
+	"github.com/gauss-project/aurorafs/pkg/storage/mock"
+	testingc "github.com/gauss-project/aurorafs/pkg/storage/testing"
 )
 
 // TestChunkUploadDownload uploads a chunk to an API that verifies the chunk according
@@ -34,25 +26,18 @@ func TestChunkUploadDownload(t *testing.T) {
 	var (
 		targets         = "0x222"
 		chunksEndpoint  = "/chunks"
-		chunksResource  = func(a swarm.Address) string { return "/chunks/" + a.String() }
-		resourceTargets = func(addr swarm.Address) string { return "/chunks/" + addr.String() + "?targets=" + targets }
+		chunksResource  = func(a boson.Address) string { return "/chunks/" + a.String() }
+		resourceTargets = func(addr boson.Address) string { return "/chunks/" + addr.String() + "?targets=" + targets }
 		chunk           = testingc.GenerateTestRandomChunk()
-		statestoreMock  = statestore.NewStateStore()
-		logger          = logging.New(ioutil.Discard, 0)
-		tag             = tags.NewTags(statestoreMock, logger)
-		storerMock      = mock.NewStorer()
-		pinningMock     = pinning.NewServiceMock()
+
+		mockStorer      = mock.NewStorer()
 		client, _, _    = newTestServer(t, testServerOptions{
-			Storer:  storerMock,
-			Pinning: pinningMock,
-			Tags:    tag,
-			Post:    mockpost.New(mockpost.WithAcceptAll()),
+			Storer: mockStorer,
 		})
 	)
 
 	t.Run("empty chunk", func(t *testing.T) {
 		jsonhttptest.Request(t, client, http.MethodPost, chunksEndpoint, http.StatusBadRequest,
-			jsonhttptest.WithRequestHeader(api.SwarmPostageBatchIdHeader, batchOkStr),
 			jsonhttptest.WithExpectedJSONResponse(jsonhttp.StatusResponse{
 				Message: "data length",
 				Code:    http.StatusBadRequest,
@@ -61,8 +46,7 @@ func TestChunkUploadDownload(t *testing.T) {
 	})
 
 	t.Run("ok", func(t *testing.T) {
-		jsonhttptest.Request(t, client, http.MethodPost, chunksEndpoint, http.StatusCreated,
-			jsonhttptest.WithRequestHeader(api.SwarmPostageBatchIdHeader, batchOkStr),
+		jsonhttptest.Request(t, client, http.MethodPost, chunksEndpoint, http.StatusOK,
 			jsonhttptest.WithRequestBody(bytes.NewReader(chunk.Data())),
 			jsonhttptest.WithExpectedJSONResponse(api.ChunkAddressResponse{Reference: chunk.Address()}),
 		)
@@ -80,56 +64,38 @@ func TestChunkUploadDownload(t *testing.T) {
 	})
 
 	t.Run("pin-invalid-value", func(t *testing.T) {
-		jsonhttptest.Request(t, client, http.MethodPost, chunksEndpoint, http.StatusCreated,
-			jsonhttptest.WithRequestHeader(api.SwarmPostageBatchIdHeader, batchOkStr),
+		jsonhttptest.Request(t, client, http.MethodPost, chunksEndpoint, http.StatusOK,
 			jsonhttptest.WithRequestBody(bytes.NewReader(chunk.Data())),
 			jsonhttptest.WithExpectedJSONResponse(api.ChunkAddressResponse{Reference: chunk.Address()}),
-			jsonhttptest.WithRequestHeader(api.SwarmPinHeader, "invalid-pin"),
+
 		)
 
 		// Also check if the chunk is NOT pinned
-		if storerMock.GetModeSet(chunk.Address()) == storage.ModeSetPin {
+		if mockStorer.GetModeSet(chunk.Address()) == storage.ModeSetPin {
 			t.Fatal("chunk should not be pinned")
 		}
 	})
 	t.Run("pin-header-missing", func(t *testing.T) {
-		jsonhttptest.Request(t, client, http.MethodPost, chunksEndpoint, http.StatusCreated,
-			jsonhttptest.WithRequestHeader(api.SwarmPostageBatchIdHeader, batchOkStr),
+		jsonhttptest.Request(t, client, http.MethodPost, chunksEndpoint, http.StatusOK,
 			jsonhttptest.WithRequestBody(bytes.NewReader(chunk.Data())),
 			jsonhttptest.WithExpectedJSONResponse(api.ChunkAddressResponse{Reference: chunk.Address()}),
 		)
 
 		// Also check if the chunk is NOT pinned
-		if storerMock.GetModeSet(chunk.Address()) == storage.ModeSetPin {
+		if mockStorer.GetModeSet(chunk.Address()) == storage.ModeSetPin {
 			t.Fatal("chunk should not be pinned")
 		}
 	})
 	t.Run("pin-ok", func(t *testing.T) {
-		reference := chunk.Address()
-		jsonhttptest.Request(t, client, http.MethodPost, chunksEndpoint, http.StatusCreated,
-			jsonhttptest.WithRequestHeader(api.SwarmPostageBatchIdHeader, batchOkStr),
+		jsonhttptest.Request(t, client, http.MethodPost, chunksEndpoint, http.StatusOK,
 			jsonhttptest.WithRequestBody(bytes.NewReader(chunk.Data())),
-			jsonhttptest.WithExpectedJSONResponse(api.ChunkAddressResponse{Reference: reference}),
-			jsonhttptest.WithRequestHeader(api.SwarmPinHeader, "True"),
+			jsonhttptest.WithExpectedJSONResponse(api.ChunkAddressResponse{Reference: chunk.Address()}),
+
 		)
 
-		has, err := storerMock.Has(context.Background(), reference)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if !has {
-			t.Fatal("storer check root chunk reference: have none; want one")
-		}
-
-		refs, err := pinningMock.Pins()
-		if err != nil {
-			t.Fatal(err)
-		}
-		if have, want := len(refs), 1; have != want {
-			t.Fatalf("root pin count mismatch: have %d; want %d", have, want)
-		}
-		if have, want := refs[0], reference; !have.Equal(want) {
-			t.Fatalf("root pin reference mismatch: have %q; want %q", have, want)
+		// Also check if the chunk is pinned
+		if mockStorer.GetModePut(chunk.Address()) != storage.ModePutUploadPin {
+			t.Fatal("chunk is not pinned")
 		}
 
 	})

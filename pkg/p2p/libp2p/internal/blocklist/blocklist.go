@@ -8,9 +8,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ethersphere/bee/pkg/p2p"
-	"github.com/ethersphere/bee/pkg/storage"
-	"github.com/ethersphere/bee/pkg/swarm"
+	"github.com/gauss-project/aurorafs/pkg/p2p"
+	"github.com/gauss-project/aurorafs/pkg/storage"
+	"github.com/gauss-project/aurorafs/pkg/boson"
 )
 
 var keyPrefix = "blocklist-"
@@ -31,7 +31,7 @@ type entry struct {
 	Duration  string    `json:"duration"` // Duration is string because the time.Duration does not implement MarshalJSON/UnmarshalJSON methods.
 }
 
-func (b *Blocklist) Exists(overlay swarm.Address) (bool, error) {
+func (b *Blocklist) Exists(overlay boson.Address) (bool, error) {
 	key := generateKey(overlay)
 	timestamp, duration, err := b.get(key)
 	if err != nil {
@@ -51,7 +51,7 @@ func (b *Blocklist) Exists(overlay swarm.Address) (bool, error) {
 	return true, nil
 }
 
-func (b *Blocklist) Add(overlay swarm.Address, duration time.Duration) (err error) {
+func (b *Blocklist) Add(overlay boson.Address, duration time.Duration) (err error) {
 	key := generateKey(overlay)
 	_, d, err := b.get(key)
 	if err != nil {
@@ -117,11 +117,11 @@ func (b *Blocklist) get(key string) (timestamp time.Time, duration time.Duration
 	return e.Timestamp, duration, nil
 }
 
-func generateKey(overlay swarm.Address) string {
+func generateKey(overlay boson.Address) string {
 	return keyPrefix + overlay.String()
 }
 
-func unmarshalKey(s string) (swarm.Address, error) {
+func unmarshalKey(s string) (boson.Address, error) {
 	addr := strings.TrimPrefix(s, keyPrefix)
-	return swarm.ParseHexAddress(addr)
+	return boson.ParseHexAddress(addr)
 }

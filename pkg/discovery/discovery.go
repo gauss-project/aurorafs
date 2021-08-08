@@ -9,9 +9,9 @@ package discovery
 import (
 	"context"
 
-	"github.com/ethersphere/bee/pkg/swarm"
+	"github.com/gauss-project/aurorafs/pkg/boson"
 )
 
 type Driver interface {
-	BroadcastPeers(ctx context.Context, addressee swarm.Address, peers ...swarm.Address) error
+	BroadcastPeers(ctx context.Context, addressee boson.Address, peers ...boson.Address) error
 }

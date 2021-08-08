@@ -13,11 +13,11 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/ethersphere/bee/pkg/jsonhttp"
+	"github.com/gauss-project/aurorafs/pkg/jsonhttp"
 )
 
 func TestMethodHandler(t *testing.T) {
-	contentType := "application/swarm"
+	contentType := "application/boson"
 
 	h := jsonhttp.MethodHandler{
 		"POST": http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

@@ -8,9 +8,9 @@ import (
 	"context"
 	"encoding/binary"
 
-	"github.com/ethersphere/bee/pkg/encryption"
-	"github.com/ethersphere/bee/pkg/storage"
-	"github.com/ethersphere/bee/pkg/swarm"
+	"github.com/gauss-project/aurorafs/pkg/encryption"
+	"github.com/gauss-project/aurorafs/pkg/storage"
+	"github.com/gauss-project/aurorafs/pkg/boson"
 	"golang.org/x/crypto/sha3"
 )
 
@@ -22,26 +22,26 @@ func New(s storage.Getter) storage.Getter {
 	return &decryptingStore{s}
 }
 
-func (s *decryptingStore) Get(ctx context.Context, mode storage.ModeGet, addr swarm.Address) (ch swarm.Chunk, err error) {
+func (s *decryptingStore) Get(ctx context.Context, mode storage.ModeGet, addr boson.Address) (ch boson.Chunk, err error) {
 	switch l := len(addr.Bytes()); l {
-	case swarm.HashSize:
+	case boson.HashSize:
 		// normal, unencrypted content
 		return s.Getter.Get(ctx, mode, addr)
 
 	case encryption.ReferenceSize:
 		// encrypted reference
 		ref := addr.Bytes()
-		address := swarm.NewAddress(ref[:swarm.HashSize])
+		address := boson.NewAddress(ref[:boson.HashSize])
 		ch, err := s.Getter.Get(ctx, mode, address)
 		if err != nil {
 			return nil, err
 		}
 
-		d, err := decryptChunkData(ch.Data(), ref[swarm.HashSize:])
+		d, err := decryptChunkData(ch.Data(), ref[boson.HashSize:])
 		if err != nil {
 			return nil, err
 		}
-		return swarm.NewChunk(address, d), nil
+		return boson.NewChunk(address, d), nil
 
 	default:
 		return nil, storage.ErrReferenceLength
@@ -56,10 +56,10 @@ func decryptChunkData(chunkData []byte, encryptionKey encryption.Key) ([]byte, e
 
 	// removing extra bytes which were just added for padding
 	length := binary.LittleEndian.Uint64(decryptedSpan)
-	refSize := int64(swarm.HashSize + encryption.KeyLength)
-	for length > swarm.ChunkSize {
-		length = length + (swarm.ChunkSize - 1)
-		length = length / swarm.ChunkSize
+	refSize := int64(boson.HashSize + encryption.KeyLength)
+	for length > boson.ChunkSize {
+		length = length + (boson.ChunkSize - 1)
+		length = length / boson.ChunkSize
 		length *= uint64(refSize)
 	}
 
@@ -71,11 +71,11 @@ func decryptChunkData(chunkData []byte, encryptionKey encryption.Key) ([]byte, e
 }
 
 func decrypt(chunkData []byte, key encryption.Key) ([]byte, []byte, error) {
-	decryptedSpan, err := newSpanEncryption(key).Decrypt(chunkData[:swarm.SpanSize])
+	decryptedSpan, err := newSpanEncryption(key).Decrypt(chunkData[:boson.SpanSize])
 	if err != nil {
 		return nil, nil, err
 	}
-	decryptedData, err := newDataEncryption(key).Decrypt(chunkData[swarm.SpanSize:])
+	decryptedData, err := newDataEncryption(key).Decrypt(chunkData[boson.SpanSize:])
 	if err != nil {
 		return nil, nil, err
 	}
@@ -83,10 +83,10 @@ func decrypt(chunkData []byte, key encryption.Key) ([]byte, []byte, error) {
 }
 
 func newSpanEncryption(key encryption.Key) encryption.Interface {
-	refSize := int64(swarm.HashSize + encryption.KeyLength)
-	return encryption.New(key, 0, uint32(swarm.ChunkSize/refSize), sha3.NewLegacyKeccak256)
+	refSize := int64(boson.HashSize + encryption.KeyLength)
+	return encryption.New(key, 0, uint32(boson.ChunkSize/refSize), sha3.NewLegacyKeccak256)
 }
 
 func newDataEncryption(key encryption.Key) encryption.Interface {
-	return encryption.New(key, int(swarm.ChunkSize), 0, sha3.NewLegacyKeccak256)
+	return encryption.New(key, int(boson.ChunkSize), 0, sha3.NewLegacyKeccak256)
 }

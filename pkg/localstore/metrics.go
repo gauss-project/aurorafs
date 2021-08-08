@@ -5,7 +5,7 @@
 package localstore
 
 import (
-	m "github.com/ethersphere/bee/pkg/metrics"
+	m "github.com/gauss-project/aurorafs/pkg/metrics"
 	"github.com/prometheus/client_golang/prometheus"
 )
 
@@ -59,11 +59,6 @@ type metrics struct {
 	GCSize                  prometheus.Gauge
 	GCStoreTimeStamps       prometheus.Gauge
 	GCStoreAccessTimeStamps prometheus.Gauge
-
-	ReserveSize              prometheus.Gauge
-	EvictReserveCounter      prometheus.Counter
-	EvictReserveErrorCounter prometheus.Counter
-	TotalTimeEvictReserve    prometheus.Counter
 }
 
 func newMetrics() metrics {
@@ -348,33 +343,9 @@ func newMetrics() metrics {
 			Name:      "gc_access_time_stamp",
 			Help:      "Access timestamp in Garbage collection iteration.",
 		}),
-		ReserveSize: prometheus.NewGauge(prometheus.GaugeOpts{
-			Namespace: m.Namespace,
-			Subsystem: subsystem,
-			Name:      "reserve_size",
-			Help:      "Number of elements in reserve.",
-		}),
-		EvictReserveCounter: prometheus.NewCounter(prometheus.CounterOpts{
-			Namespace: m.Namespace,
-			Subsystem: subsystem,
-			Name:      "evict_reserve_count",
-			Help:      "number of times the evict reserve worker was invoked",
-		}),
-		EvictReserveErrorCounter: prometheus.NewCounter(prometheus.CounterOpts{
-			Namespace: m.Namespace,
-			Subsystem: subsystem,
-			Name:      "evict_reserve_err_count",
-			Help:      "number of times evict reserve got an error",
-		}),
-		TotalTimeEvictReserve: prometheus.NewCounter(prometheus.CounterOpts{
-			Namespace: m.Namespace,
-			Subsystem: subsystem,
-			Name:      "evict_reserve_total_time",
-			Help:      "total time spent evicting from reserve",
-		}),
 	}
 }
 
-func (db *DB) Metrics() []prometheus.Collector {
-	return m.PrometheusCollectorsFromFields(db.metrics)
+func (s *DB) Metrics() []prometheus.Collector {
+	return m.PrometheusCollectorsFromFields(s.metrics)
 }

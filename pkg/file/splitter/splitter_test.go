@@ -12,11 +12,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ethersphere/bee/pkg/file"
-	"github.com/ethersphere/bee/pkg/file/splitter"
-	"github.com/ethersphere/bee/pkg/storage"
-	"github.com/ethersphere/bee/pkg/storage/mock"
-	"github.com/ethersphere/bee/pkg/swarm"
+	"github.com/gauss-project/aurorafs/pkg/file"
+	"github.com/gauss-project/aurorafs/pkg/file/splitter"
+	"github.com/gauss-project/aurorafs/pkg/storage"
+	"github.com/gauss-project/aurorafs/pkg/storage/mock"
+	"github.com/gauss-project/aurorafs/pkg/boson"
 	mockbytes "gitlab.com/nolash/go-mockbytes"
 )
 
@@ -38,7 +38,7 @@ func TestSplitIncomplete(t *testing.T) {
 // that that corresponding chunk exist in the store afterwards.
 func TestSplitSingleChunk(t *testing.T) {
 	g := mockbytes.New(0, mockbytes.MockTypeStandard).WithModulus(255)
-	testData, err := g.SequentialBytes(swarm.ChunkSize)
+	testData, err := g.SequentialBytes(boson.ChunkSize)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -53,7 +53,7 @@ func TestSplitSingleChunk(t *testing.T) {
 	}
 
 	testHashHex := "c10090961e7682a10890c334d759a28426647141213abda93b096b892824d2ef"
-	testHashAddress := swarm.MustParseHexAddress(testHashHex)
+	testHashAddress := boson.MustParseHexAddress(testHashHex)
 	if !testHashAddress.Equal(resultAddress) {
 		t.Fatalf("expected %v, got %v", testHashAddress, resultAddress)
 	}
@@ -70,7 +70,7 @@ func TestSplitSingleChunk(t *testing.T) {
 func TestSplitThreeLevels(t *testing.T) {
 	// edge case selected from internal/job_test.go
 	g := mockbytes.New(0, mockbytes.MockTypeStandard).WithModulus(255)
-	testData, err := g.SequentialBytes(swarm.ChunkSize * 128)
+	testData, err := g.SequentialBytes(boson.ChunkSize * 128)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -85,7 +85,7 @@ func TestSplitThreeLevels(t *testing.T) {
 	}
 
 	testHashHex := "3047d841077898c26bbe6be652a2ec590a5d9bd7cd45d290ea42511b48753c09"
-	testHashAddress := swarm.MustParseHexAddress(testHashHex)
+	testHashAddress := boson.MustParseHexAddress(testHashHex)
 	if !testHashAddress.Equal(resultAddress) {
 		t.Fatalf("expected %v, got %v", testHashAddress, resultAddress)
 	}
@@ -101,9 +101,9 @@ func TestSplitThreeLevels(t *testing.T) {
 	}
 
 	rootData := rootChunk.Data()[8:]
-	for i := 0; i < swarm.ChunkSize; i += swarm.SectionSize {
-		dataAddressBytes := rootData[i : i+swarm.SectionSize]
-		dataAddress := swarm.NewAddress(dataAddressBytes)
+	for i := 0; i < boson.ChunkSize; i += boson.SectionSize {
+		dataAddressBytes := rootData[i : i+boson.SectionSize]
+		dataAddress := boson.NewAddress(dataAddressBytes)
 		_, err := store.Get(context.Background(), storage.ModeGetRequest, dataAddress)
 		if err != nil {
 			t.Fatal(err)
@@ -121,7 +121,7 @@ func TestUnalignedSplit(t *testing.T) {
 
 	// test vector taken from pkg/file/testing/vector.go
 	var (
-		dataLen       int64 = swarm.ChunkSize*2 + 32
+		dataLen       int64 = boson.ChunkSize*2 + 32
 		expectAddrHex       = "61416726988f77b874435bdd89a419edc3861111884fd60e8adf54e2f299efd6"
 		g                   = mockbytes.New(0, mockbytes.MockTypeStandard).WithModulus(255)
 	)
@@ -135,7 +135,7 @@ func TestUnalignedSplit(t *testing.T) {
 	// perform the split in a separate thread
 	sp := splitter.NewSimpleSplitter(storer, storage.ModePutUpload)
 	ctx := context.Background()
-	doneC := make(chan swarm.Address)
+	doneC := make(chan boson.Address)
 	errC := make(chan error)
 	go func() {
 		addr, err := sp.Split(ctx, chunkPipe, dataLen, false)
@@ -149,7 +149,7 @@ func TestUnalignedSplit(t *testing.T) {
 	}()
 
 	// perform the writes in unaligned bursts
-	writeSizes := []int{swarm.ChunkSize - 40, 40 + 32, swarm.ChunkSize}
+	writeSizes := []int{boson.ChunkSize - 40, 40 + 32, boson.ChunkSize}
 	contentBuf := bytes.NewReader(content)
 	cursor := 0
 	for _, writeSize := range writeSizes {
@@ -173,7 +173,7 @@ func TestUnalignedSplit(t *testing.T) {
 	timer := time.NewTimer(time.Millisecond * 100)
 	select {
 	case addr := <-doneC:
-		expectAddr := swarm.MustParseHexAddress(expectAddrHex)
+		expectAddr := boson.MustParseHexAddress(expectAddrHex)
 		if !expectAddr.Equal(addr) {
 			t.Fatalf("addr mismatch, expected %s, got %s", expectAddr, addr)
 		}
@@ -188,7 +188,7 @@ func TestUnalignedSplit(t *testing.T) {
 go test -v -bench=. -run Bench -benchmem
 goos: linux
 goarch: amd64
-pkg: github.com/ethersphere/bee/pkg/file/splitter
+pkg: github.com/gauss-project/aurorafs/pkg/file/splitter
 BenchmarkSplitter
 BenchmarkSplitter/1000-bytes
 BenchmarkSplitter/1000-bytes-4         	   12667	     95965 ns/op	  154870 B/op	     367 allocs/op
@@ -203,7 +203,7 @@ BenchmarkSplitter/10000000-bytes-4     	       4	 295615658 ns/op	186417904 B/op
 BenchmarkSplitter/100000000-bytes
 BenchmarkSplitter/100000000-bytes-4    	       1	2972826021 ns/op	1861374352 B/op	11321235 allocs/op
 PASS
-ok  	github.com/ethersphere/bee/pkg/file/splitter	22.476s
+ok  	github.com/gauss-project/aurorafs/pkg/file/splitter	22.476s
 */
 
 func BenchmarkSplitter(b *testing.B) {

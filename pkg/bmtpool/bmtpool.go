@@ -7,25 +7,24 @@
 package bmtpool
 
 import (
-	"github.com/ethersphere/bee/pkg/bmt"
-	"github.com/ethersphere/bee/pkg/swarm"
+	"github.com/gauss-project/aurorafs/pkg/boson"
+	bmtlegacy "github.com/ethersphere/bmt/legacy"
+	"github.com/ethersphere/bmt/pool"
 )
 
-const Capacity = 32
-
-var instance *bmt.Pool
+var instance pool.Pooler
 
 func init() {
-	instance = bmt.NewPool(bmt.NewConf(swarm.NewHasher, swarm.BmtBranches, Capacity))
+	instance = pool.New(8, boson.BmtBranches)
 }
 
 // Get a bmt Hasher instance.
 // Instances are reset before being returned to the caller.
-func Get() *bmt.Hasher {
+func Get() *bmtlegacy.Hasher {
 	return instance.Get()
 }
 
 // Put a bmt Hasher back into the pool
-func Put(h *bmt.Hasher) {
+func Put(h *bmtlegacy.Hasher) {
 	instance.Put(h)
 }

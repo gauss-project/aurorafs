@@ -15,9 +15,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ethersphere/bee/pkg/p2p"
-	"github.com/ethersphere/bee/pkg/p2p/streamtest"
-	"github.com/ethersphere/bee/pkg/swarm"
+	"github.com/gauss-project/aurorafs/pkg/p2p"
+	"github.com/gauss-project/aurorafs/pkg/p2p/streamtest"
+	"github.com/gauss-project/aurorafs/pkg/boson"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -54,7 +54,7 @@ func TestRecorder(t *testing.T) {
 		),
 	)
 
-	ask := func(ctx context.Context, s p2p.Streamer, address swarm.Address, questions ...string) (answers []string, err error) {
+	ask := func(ctx context.Context, s p2p.Streamer, address boson.Address, questions ...string) (answers []string, err error) {
 		stream, err := s.NewStream(ctx, address, nil, testProtocolName, testProtocolVersion, testStreamName)
 		if err != nil {
 			return nil, fmt.Errorf("new stream: %w", err)
@@ -83,7 +83,7 @@ func TestRecorder(t *testing.T) {
 
 	questions := []string{"What is your name?", "What is your quest?", "What is your favorite color?"}
 
-	aa, err := ask(context.Background(), recorder, swarm.ZeroAddress, questions...)
+	aa, err := ask(context.Background(), recorder, boson.ZeroAddress, questions...)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -94,12 +94,12 @@ func TestRecorder(t *testing.T) {
 		}
 	}
 
-	_, err = recorder.Records(swarm.ZeroAddress, testProtocolName, testProtocolVersion, "invalid stream name")
+	_, err = recorder.Records(boson.ZeroAddress, testProtocolName, testProtocolVersion, "invalid stream name")
 	if err != streamtest.ErrRecordsNotFound {
 		t.Errorf("got error %v, want %v", err, streamtest.ErrRecordsNotFound)
 	}
 
-	records, err := recorder.Records(swarm.ZeroAddress, testProtocolName, testProtocolVersion, testStreamName)
+	records, err := recorder.Records(boson.ZeroAddress, testProtocolName, testProtocolVersion, testStreamName)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -115,7 +115,7 @@ func TestRecorder(t *testing.T) {
 func TestRecorder_errStreamNotSupported(t *testing.T) {
 	r := streamtest.New()
 
-	_, err := r.NewStream(context.Background(), swarm.ZeroAddress, nil, "testing", "messages", "1.0.1")
+	_, err := r.NewStream(context.Background(), boson.ZeroAddress, nil, "testing", "messages", "1.0.1")
 	if !errors.Is(err, streamtest.ErrStreamNotSupported) {
 		t.Fatalf("got error %v, want %v", err, streamtest.ErrStreamNotSupported)
 	}
@@ -132,7 +132,7 @@ func TestRecorder_fullcloseWithRemoteClose(t *testing.T) {
 		),
 	)
 
-	request := func(ctx context.Context, s p2p.Streamer, address swarm.Address) (err error) {
+	request := func(ctx context.Context, s p2p.Streamer, address boson.Address) (err error) {
 		stream, err := s.NewStream(ctx, address, nil, testProtocolName, testProtocolVersion, testStreamName)
 		if err != nil {
 			return fmt.Errorf("new stream: %w", err)
@@ -149,12 +149,12 @@ func TestRecorder_fullcloseWithRemoteClose(t *testing.T) {
 		return stream.FullClose()
 	}
 
-	err := request(context.Background(), recorder, swarm.ZeroAddress)
+	err := request(context.Background(), recorder, boson.ZeroAddress)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	records, err := recorder.Records(swarm.ZeroAddress, testProtocolName, testProtocolVersion, testStreamName)
+	records, err := recorder.Records(boson.ZeroAddress, testProtocolName, testProtocolVersion, testStreamName)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -181,7 +181,7 @@ func TestRecorder_fullcloseWithoutRemoteClose(t *testing.T) {
 		),
 	)
 
-	request := func(ctx context.Context, s p2p.Streamer, address swarm.Address) (err error) {
+	request := func(ctx context.Context, s p2p.Streamer, address boson.Address) (err error) {
 		stream, err := s.NewStream(ctx, address, nil, testProtocolName, testProtocolVersion, testStreamName)
 		if err != nil {
 			return fmt.Errorf("new stream: %w", err)
@@ -198,12 +198,12 @@ func TestRecorder_fullcloseWithoutRemoteClose(t *testing.T) {
 		return stream.FullClose()
 	}
 
-	err := request(context.Background(), recorder, swarm.ZeroAddress)
+	err := request(context.Background(), recorder, boson.ZeroAddress)
 	if err != streamtest.ErrStreamFullcloseTimeout {
 		t.Fatal(err)
 	}
 
-	records, err := recorder.Records(swarm.ZeroAddress, testProtocolName, testProtocolVersion, testStreamName)
+	records, err := recorder.Records(boson.ZeroAddress, testProtocolName, testProtocolVersion, testStreamName)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -236,7 +236,7 @@ func TestRecorder_multipleParallelFullCloseAndClose(t *testing.T) {
 		),
 	)
 
-	request := func(ctx context.Context, s p2p.Streamer, address swarm.Address) (err error) {
+	request := func(ctx context.Context, s p2p.Streamer, address boson.Address) (err error) {
 		stream, err := s.NewStream(ctx, address, nil, testProtocolName, testProtocolVersion, testStreamName)
 		if err != nil {
 			return fmt.Errorf("new stream: %w", err)
@@ -261,12 +261,12 @@ func TestRecorder_multipleParallelFullCloseAndClose(t *testing.T) {
 		return nil
 	}
 
-	err := request(context.Background(), recorder, swarm.ZeroAddress)
+	err := request(context.Background(), recorder, boson.ZeroAddress)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	records, err := recorder.Records(swarm.ZeroAddress, testProtocolName, testProtocolVersion, testStreamName)
+	records, err := recorder.Records(boson.ZeroAddress, testProtocolName, testProtocolVersion, testStreamName)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -290,7 +290,7 @@ func TestRecorder_closeAfterPartialWrite(t *testing.T) {
 		),
 	)
 
-	request := func(ctx context.Context, s p2p.Streamer, address swarm.Address) (err error) {
+	request := func(ctx context.Context, s p2p.Streamer, address boson.Address) (err error) {
 		stream, err := s.NewStream(ctx, address, nil, testProtocolName, testProtocolVersion, testStreamName)
 		if err != nil {
 			return fmt.Errorf("new stream: %w", err)
@@ -326,12 +326,12 @@ func TestRecorder_closeAfterPartialWrite(t *testing.T) {
 		return nil
 	}
 
-	err := request(context.Background(), recorder, swarm.ZeroAddress)
+	err := request(context.Background(), recorder, boson.ZeroAddress)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	records, err := recorder.Records(swarm.ZeroAddress, testProtocolName, testProtocolVersion, testStreamName)
+	records, err := recorder.Records(boson.ZeroAddress, testProtocolName, testProtocolVersion, testStreamName)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -356,7 +356,7 @@ func TestRecorder_resetAfterPartialWrite(t *testing.T) {
 		),
 	)
 
-	request := func(ctx context.Context, s p2p.Streamer, address swarm.Address) (err error) {
+	request := func(ctx context.Context, s p2p.Streamer, address boson.Address) (err error) {
 		stream, err := s.NewStream(ctx, address, nil, testProtocolName, testProtocolVersion, testStreamName)
 		if err != nil {
 			return fmt.Errorf("new stream: %w", err)
@@ -388,12 +388,12 @@ func TestRecorder_resetAfterPartialWrite(t *testing.T) {
 		return nil
 	}
 
-	err := request(context.Background(), recorder, swarm.ZeroAddress)
+	err := request(context.Background(), recorder, boson.ZeroAddress)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	records, err := recorder.Records(swarm.ZeroAddress, testProtocolName, testProtocolVersion, testStreamName)
+	records, err := recorder.Records(boson.ZeroAddress, testProtocolName, testProtocolVersion, testStreamName)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -484,7 +484,7 @@ func TestRecorder_withMiddlewares(t *testing.T) {
 		),
 	)
 
-	request := func(ctx context.Context, s p2p.Streamer, address swarm.Address) error {
+	request := func(ctx context.Context, s p2p.Streamer, address boson.Address) error {
 		stream, err := s.NewStream(ctx, address, nil, testProtocolName, testProtocolVersion, testStreamName)
 		if err != nil {
 			return fmt.Errorf("new stream: %w", err)
@@ -503,12 +503,12 @@ func TestRecorder_withMiddlewares(t *testing.T) {
 		return err
 	}
 
-	err := request(context.Background(), recorder, swarm.ZeroAddress)
+	err := request(context.Background(), recorder, boson.ZeroAddress)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	records, err := recorder.Records(swarm.ZeroAddress, testProtocolName, testProtocolVersion, testStreamName)
+	records, err := recorder.Records(boson.ZeroAddress, testProtocolName, testProtocolVersion, testStreamName)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -546,7 +546,7 @@ func TestRecorder_recordErr(t *testing.T) {
 		),
 	)
 
-	request := func(ctx context.Context, s p2p.Streamer, address swarm.Address) (err error) {
+	request := func(ctx context.Context, s p2p.Streamer, address boson.Address) (err error) {
 		stream, err := s.NewStream(ctx, address, nil, testProtocolName, testProtocolVersion, testStreamName)
 		if err != nil {
 			return fmt.Errorf("new stream: %w", err)
@@ -561,12 +561,12 @@ func TestRecorder_recordErr(t *testing.T) {
 		return err
 	}
 
-	err := request(context.Background(), recorder, swarm.ZeroAddress)
+	err := request(context.Background(), recorder, boson.ZeroAddress)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	records, err := recorder.Records(swarm.ZeroAddress, testProtocolName, testProtocolVersion, testStreamName)
+	records, err := recorder.Records(boson.ZeroAddress, testProtocolName, testProtocolVersion, testStreamName)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -577,185 +577,6 @@ func TestRecorder_recordErr(t *testing.T) {
 			"resp\n",
 		},
 	}, testErr)
-}
-
-func TestRecorder_withPeerProtocols(t *testing.T) {
-	peer1 := swarm.MustParseHexAddress("1000000000000000000000000000000000000000000000000000000000000000")
-	peer2 := swarm.MustParseHexAddress("2000000000000000000000000000000000000000000000000000000000000000")
-	recorder := streamtest.New(
-		streamtest.WithPeerProtocols(map[string]p2p.ProtocolSpec{
-			peer1.String(): newTestProtocol(func(_ context.Context, peer p2p.Peer, stream p2p.Stream) error {
-				rw := bufio.NewReadWriter(bufio.NewReader(stream), bufio.NewWriter(stream))
-
-				if _, err := rw.ReadString('\n'); err != nil {
-					return err
-				}
-				if _, err := rw.WriteString("handler 1\n"); err != nil {
-					return err
-				}
-				if err := rw.Flush(); err != nil {
-					return err
-				}
-
-				return nil
-			}),
-			peer2.String(): newTestProtocol(func(_ context.Context, peer p2p.Peer, stream p2p.Stream) error {
-				rw := bufio.NewReadWriter(bufio.NewReader(stream), bufio.NewWriter(stream))
-
-				if _, err := rw.ReadString('\n'); err != nil {
-					return err
-				}
-				if _, err := rw.WriteString("handler 2\n"); err != nil {
-					return err
-				}
-				if err := rw.Flush(); err != nil {
-					return err
-				}
-
-				return nil
-			}),
-		}),
-	)
-
-	request := func(ctx context.Context, s p2p.Streamer, address swarm.Address) error {
-		stream, err := s.NewStream(ctx, address, nil, testProtocolName, testProtocolVersion, testStreamName)
-		if err != nil {
-			return fmt.Errorf("new stream: %w", err)
-		}
-		defer stream.Close()
-
-		rw := bufio.NewReadWriter(bufio.NewReader(stream), bufio.NewWriter(stream))
-
-		if _, err := rw.WriteString("req\n"); err != nil {
-			return err
-		}
-		if err := rw.Flush(); err != nil {
-			return err
-		}
-		_, err = rw.ReadString('\n')
-		return err
-	}
-
-	err := request(context.Background(), recorder, peer1)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	records, err := recorder.Records(peer1, testProtocolName, testProtocolVersion, testStreamName)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	testRecords(t, records, [][2]string{
-		{
-			"req\n",
-			"handler 1\n",
-		},
-	}, nil)
-
-	err = request(context.Background(), recorder, peer2)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	records, err = recorder.Records(peer2, testProtocolName, testProtocolVersion, testStreamName)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	testRecords(t, records, [][2]string{
-		{
-			"req\n",
-			"handler 2\n",
-		},
-	}, nil)
-}
-
-func TestRecorder_withStreamError(t *testing.T) {
-	peer1 := swarm.MustParseHexAddress("1000000000000000000000000000000000000000000000000000000000000000")
-	peer2 := swarm.MustParseHexAddress("2000000000000000000000000000000000000000000000000000000000000000")
-	testErr := errors.New("dummy stream error")
-	recorder := streamtest.New(
-		streamtest.WithPeerProtocols(map[string]p2p.ProtocolSpec{
-			peer1.String(): newTestProtocol(func(_ context.Context, peer p2p.Peer, stream p2p.Stream) error {
-				rw := bufio.NewReadWriter(bufio.NewReader(stream), bufio.NewWriter(stream))
-
-				if _, err := rw.ReadString('\n'); err != nil {
-					return err
-				}
-				if _, err := rw.WriteString("handler 1\n"); err != nil {
-					return err
-				}
-				if err := rw.Flush(); err != nil {
-					return err
-				}
-
-				return nil
-			}),
-			peer2.String(): newTestProtocol(func(_ context.Context, peer p2p.Peer, stream p2p.Stream) error {
-				rw := bufio.NewReadWriter(bufio.NewReader(stream), bufio.NewWriter(stream))
-
-				if _, err := rw.ReadString('\n'); err != nil {
-					return err
-				}
-				if _, err := rw.WriteString("handler 2\n"); err != nil {
-					return err
-				}
-				if err := rw.Flush(); err != nil {
-					return err
-				}
-
-				return nil
-			}),
-		}),
-		streamtest.WithStreamError(func(addr swarm.Address, _, _, _ string) error {
-			if addr.String() == peer1.String() {
-				return testErr
-			}
-			return nil
-		}),
-	)
-
-	request := func(ctx context.Context, s p2p.Streamer, address swarm.Address) error {
-		stream, err := s.NewStream(ctx, address, nil, testProtocolName, testProtocolVersion, testStreamName)
-		if err != nil {
-			return fmt.Errorf("new stream: %w", err)
-		}
-		defer stream.Close()
-
-		rw := bufio.NewReadWriter(bufio.NewReader(stream), bufio.NewWriter(stream))
-
-		if _, err := rw.WriteString("req\n"); err != nil {
-			return err
-		}
-		if err := rw.Flush(); err != nil {
-			return err
-		}
-		_, err = rw.ReadString('\n')
-		return err
-	}
-
-	err := request(context.Background(), recorder, peer1)
-	if err == nil {
-		t.Fatal("expected error on NewStream for peer")
-	}
-
-	err = request(context.Background(), recorder, peer2)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	records, err := recorder.Records(peer2, testProtocolName, testProtocolVersion, testStreamName)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	testRecords(t, records, [][2]string{
-		{
-			"req\n",
-			"handler 2\n",
-		},
-	}, nil)
 }
 
 const (

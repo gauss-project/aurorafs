@@ -21,10 +21,9 @@ import (
 	"errors"
 	"time"
 
-	"github.com/ethersphere/bee/pkg/postage"
-	"github.com/ethersphere/bee/pkg/shed"
-	"github.com/ethersphere/bee/pkg/storage"
-	"github.com/ethersphere/bee/pkg/swarm"
+	"github.com/gauss-project/aurorafs/pkg/shed"
+	"github.com/gauss-project/aurorafs/pkg/storage"
+	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/syndtr/goleveldb/leveldb"
 )
 
@@ -32,7 +31,7 @@ import (
 // storage.ErrNotFound will be returned. All required indexes will be updated
 // required by the Getter Mode. GetMulti is required to implement chunk.Store
 // interface.
-func (db *DB) GetMulti(ctx context.Context, mode storage.ModeGet, addrs ...swarm.Address) (chunks []swarm.Chunk, err error) {
+func (db *DB) GetMulti(ctx context.Context, mode storage.ModeGet, addrs ...boson.Address) (chunks []boson.Chunk, err error) {
 	db.metrics.ModeGetMulti.Inc()
 	defer totalTimeMetric(db.metrics.TotalTimeGetMulti, time.Now())
 
@@ -49,17 +48,16 @@ func (db *DB) GetMulti(ctx context.Context, mode storage.ModeGet, addrs ...swarm
 		}
 		return nil, err
 	}
-	chunks = make([]swarm.Chunk, len(out))
+	chunks = make([]boson.Chunk, len(out))
 	for i, ch := range out {
-		chunks[i] = swarm.NewChunk(swarm.NewAddress(ch.Address), ch.Data).
-			WithStamp(postage.NewStamp(ch.BatchID, ch.Index, ch.Timestamp, ch.Sig))
+		chunks[i] = boson.NewChunk(boson.NewAddress(ch.Address), ch.Data).WithPinCounter(ch.PinCounter)
 	}
 	return chunks, nil
 }
 
 // getMulti returns Items from the retrieval index
 // and updates other indexes.
-func (db *DB) getMulti(mode storage.ModeGet, addrs ...swarm.Address) (out []shed.Item, err error) {
+func (db *DB) getMulti(mode storage.ModeGet, addrs ...boson.Address) (out []shed.Item, err error) {
 	out = make([]shed.Item, len(addrs))
 	for i, addr := range addrs {
 		out[i].Address = addr.Bytes()

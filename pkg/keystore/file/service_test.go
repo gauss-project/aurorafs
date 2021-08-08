@@ -9,12 +9,12 @@ import (
 	"os"
 	"testing"
 
-	"github.com/ethersphere/bee/pkg/keystore/file"
-	"github.com/ethersphere/bee/pkg/keystore/test"
+	"github.com/gauss-project/aurorafs/pkg/keystore/file"
+	"github.com/gauss-project/aurorafs/pkg/keystore/test"
 )
 
 func TestService(t *testing.T) {
-	dir, err := ioutil.TempDir("", "bzz-keystore-file-")
+	dir, err := ioutil.TempDir("", "aurora-keystore-file-")
 	if err != nil {
 		t.Fatal(err)
 	}

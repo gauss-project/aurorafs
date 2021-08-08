@@ -1,6 +1,6 @@
 // Copyright 2020 The Swarm Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
+// license that can be found in the LICENSE file.package storage
 
 package leveldb_test
 
@@ -9,9 +9,9 @@ import (
 	"os"
 	"testing"
 
-	"github.com/ethersphere/bee/pkg/statestore/leveldb"
-	"github.com/ethersphere/bee/pkg/statestore/test"
-	"github.com/ethersphere/bee/pkg/storage"
+	"github.com/gauss-project/aurorafs/pkg/statestore/leveldb"
+	"github.com/gauss-project/aurorafs/pkg/statestore/test"
+	"github.com/gauss-project/aurorafs/pkg/storage"
 )
 
 func TestPersistentStateStore(t *testing.T) {

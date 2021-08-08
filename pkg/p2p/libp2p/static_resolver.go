@@ -19,7 +19,7 @@ type staticAddressResolver struct {
 	port       string
 }
 
-func newStaticAddressResolver(addr string, lookupIP func(host string) ([]net.IP, error)) (*staticAddressResolver, error) {
+func newStaticAddressResolver(addr string) (*staticAddressResolver, error) {
 	host, port, err := net.SplitHostPort(addr)
 	if err != nil {
 		return nil, err
@@ -27,7 +27,7 @@ func newStaticAddressResolver(addr string, lookupIP func(host string) ([]net.IP,
 
 	var multiProto string
 	if host != "" {
-		multiProto, err = getMultiProto(host, lookupIP)
+		multiProto, err = getMultiProto(host)
 		if err != nil {
 			return nil, err
 		}
@@ -77,7 +77,7 @@ func (r *staticAddressResolver) Resolve(observedAddress ma.Multiaddr) (ma.Multia
 	return buildUnderlayAddress(a, observableAddrInfo.ID)
 }
 
-func getMultiProto(host string, lookupIP func(host string) ([]net.IP, error)) (string, error) {
+func getMultiProto(host string) (string, error) {
 	if host == "" {
 		return "", nil
 	}
@@ -88,7 +88,7 @@ func getMultiProto(host string, lookupIP func(host string) ([]net.IP, error)) (s
 		}
 		return "/ip4/" + ip.String(), nil
 	}
-	ips, err := lookupIP(host)
+	ips, err := net.LookupIP(host)
 	if err != nil {
 		return "", fmt.Errorf("invalid IP or Domain Name %q", host)
 	}

@@ -12,12 +12,12 @@ import (
 	"io"
 	"time"
 
-	"github.com/ethersphere/bee/pkg/logging"
-	"github.com/ethersphere/bee/pkg/p2p"
-	"github.com/ethersphere/bee/pkg/p2p/protobuf"
-	"github.com/ethersphere/bee/pkg/pingpong/pb"
-	"github.com/ethersphere/bee/pkg/swarm"
-	"github.com/ethersphere/bee/pkg/tracing"
+	"github.com/gauss-project/aurorafs/pkg/logging"
+	"github.com/gauss-project/aurorafs/pkg/p2p"
+	"github.com/gauss-project/aurorafs/pkg/p2p/protobuf"
+	"github.com/gauss-project/aurorafs/pkg/pingpong/pb"
+	"github.com/gauss-project/aurorafs/pkg/boson"
+	"github.com/gauss-project/aurorafs/pkg/tracing"
 )
 
 const (
@@ -27,7 +27,7 @@ const (
 )
 
 type Interface interface {
-	Ping(ctx context.Context, address swarm.Address, msgs ...string) (rtt time.Duration, err error)
+	Ping(ctx context.Context, address boson.Address, msgs ...string) (rtt time.Duration, err error)
 }
 
 type Service struct {
@@ -59,7 +59,7 @@ func (s *Service) Protocol() p2p.ProtocolSpec {
 	}
 }
 
-func (s *Service) Ping(ctx context.Context, address swarm.Address, msgs ...string) (rtt time.Duration, err error) {
+func (s *Service) Ping(ctx context.Context, address boson.Address, msgs ...string) (rtt time.Duration, err error) {
 	span, logger, ctx := s.tracer.StartSpanFromContext(ctx, "pingpong-p2p-ping", s.logger)
 	defer span.Finish()
 

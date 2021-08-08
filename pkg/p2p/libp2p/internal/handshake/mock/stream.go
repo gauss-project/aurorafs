@@ -7,7 +7,7 @@ package mock
 import (
 	"bytes"
 
-	"github.com/ethersphere/bee/pkg/p2p"
+	"github.com/gauss-project/aurorafs/pkg/p2p"
 )
 
 type Stream struct {
@@ -53,10 +53,6 @@ func (s *Stream) Write(p []byte) (n int, err error) {
 }
 
 func (s *Stream) Headers() p2p.Headers {
-	return nil
-}
-
-func (s *Stream) ResponseHeaders() p2p.Headers {
 	return nil
 }
 

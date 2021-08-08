@@ -21,9 +21,9 @@ import (
 	"os"
 	"testing"
 
-	"github.com/ethersphere/bee/pkg/statestore/leveldb"
-	"github.com/ethersphere/bee/pkg/statestore/mock"
-	"github.com/ethersphere/bee/pkg/storage"
+	"github.com/gauss-project/aurorafs/pkg/statestore/leveldb"
+	"github.com/gauss-project/aurorafs/pkg/statestore/mock"
+	"github.com/gauss-project/aurorafs/pkg/storage"
 )
 
 // TestInmemoryStore tests basic functionality of InmemoryStore.

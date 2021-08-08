@@ -8,17 +8,17 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"github.com/ethersphere/bee/pkg/jsonhttp"
+	"github.com/gauss-project/aurorafs/pkg/jsonhttp"
 )
 
 const welcomeMessageMaxRequestSize = 512
 
 type welcomeMessageRequest struct {
-	WelcomeMesssage string `json:"welcomeMessage"`
+	WelcomeMesssage string `json:"welcome_message"`
 }
 
 type welcomeMessageResponse struct {
-	WelcomeMesssage string `json:"welcomeMessage"`
+	WelcomeMesssage string `json:"welcome_message"`
 }
 
 func (s *Service) getWelcomeMessageHandler(w http.ResponseWriter, r *http.Request) {

@@ -24,14 +24,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ethersphere/bee/pkg/logging"
-	"github.com/ethersphere/bee/pkg/pinning"
-	"github.com/ethersphere/bee/pkg/postage"
-	"github.com/ethersphere/bee/pkg/postage/batchstore"
-	"github.com/ethersphere/bee/pkg/shed"
-	"github.com/ethersphere/bee/pkg/storage"
-	"github.com/ethersphere/bee/pkg/swarm"
-	"github.com/ethersphere/bee/pkg/tags"
+	"github.com/gauss-project/aurorafs/pkg/boson"
+	"github.com/gauss-project/aurorafs/pkg/logging"
+	"github.com/gauss-project/aurorafs/pkg/shed"
+	"github.com/gauss-project/aurorafs/pkg/storage"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/syndtr/goleveldb/leveldb"
 )
@@ -46,7 +42,7 @@ var (
 
 var (
 	// Default value for Capacity DB option.
-	defaultCacheCapacity uint64 = 1000000
+	defaultCapacity uint64 = 5000000
 	// Limit the number of goroutines created by Getters
 	// that call updateGC function. Value 0 sets no limit.
 	maxParallelUpdateGC = 1000
@@ -61,10 +57,6 @@ var (
 // database related objects.
 type DB struct {
 	shed *shed.DB
-	tags *tags.Tags
-
-	// stateStore is needed to access the pinning Service.Pins() method.
-	stateStore storage.StateStorer
 
 	// schema name of loaded data
 	schemaName shed.StringField
@@ -91,38 +83,21 @@ type DB struct {
 	// garbage collection index
 	gcIndex shed.Index
 
+	// garbage collection exclude index for pinned contents
+	gcExcludeIndex shed.Index
+
 	// pin files Index
 	pinIndex shed.Index
-
-	// postage chunks index
-	postageChunksIndex shed.Index
-
-	// postage radius index
-	postageRadiusIndex shed.Index
-
-	// postage index index
-	postageIndexIndex shed.Index
 
 	// field that stores number of intems in gc index
 	gcSize shed.Uint64Field
 
-	// field that stores the size of the reserve
-	reserveSize shed.Uint64Field
-
 	// garbage collection is triggered when gcSize exceeds
-	// the cacheCapacity value
-	cacheCapacity uint64
-
-	// the size of the reserve in chunks
-	reserveCapacity uint64
-
-	unreserveFunc func(postage.UnreserveIteratorFn) error
+	// the capacity value
+	capacity uint64
 
 	// triggers garbage collection event loop
 	collectGarbageTrigger chan struct{}
-
-	// triggers reserve eviction event loop
-	reserveEvictionTrigger chan struct{}
 
 	// a buffered channel acting as a semaphore
 	// to limit the maximal number of goroutines
@@ -144,7 +119,7 @@ type DB struct {
 
 	// dirtyAddresses are marked while gc is running
 	// in order to avoid the removal of dirty entries.
-	dirtyAddresses []swarm.Address
+	dirtyAddresses []boson.Address
 
 	// this channel is closed when close function is called
 	// to terminate other goroutines
@@ -153,8 +128,7 @@ type DB struct {
 	// protect Close method from exiting before
 	// garbage collection and gc size write workers
 	// are done
-	collectGarbageWorkerDone  chan struct{}
-	reserveEvictionWorkerDone chan struct{}
+	collectGarbageWorkerDone chan struct{}
 
 	// wait for all subscriptions to finish before closing
 	// underlaying leveldb to prevent possible panics from
@@ -171,11 +145,6 @@ type Options struct {
 	// Capacity is a limit that triggers garbage collection when
 	// number of items in gcIndex equals or exceeds it.
 	Capacity uint64
-	// ReserveCapacity is the capacity of the reserve.
-	ReserveCapacity uint64
-	// UnreserveFunc is an iterator needed to facilitate reserve
-	// eviction once ReserveCapacity is reached.
-	UnreserveFunc func(postage.UnreserveIteratorFn) error
 	// OpenFilesLimit defines the upper bound of open files that the
 	// the localstore should maintain at any point of time. It is
 	// passed on to the shed constructor.
@@ -191,50 +160,42 @@ type Options struct {
 
 	// MetricsPrefix defines a prefix for metrics names.
 	MetricsPrefix string
-	Tags          *tags.Tags
 }
 
 // New returns a new DB.  All fields and indexes are initialized
 // and possible conflicts with schema from existing database is checked.
 // One goroutine for writing batches is created.
-func New(path string, baseKey []byte, ss storage.StateStorer, o *Options, logger logging.Logger) (db *DB, err error) {
+func New(path string, baseKey []byte, o *Options, logger logging.Logger) (db *DB, err error) {
 	if o == nil {
 		// default options
 		o = &Options{
-			Capacity:        defaultCacheCapacity,
-			ReserveCapacity: uint64(batchstore.Capacity),
+			Capacity: defaultCapacity,
 		}
 	}
 
 	db = &DB{
-		stateStore:      ss,
-		cacheCapacity:   o.Capacity,
-		reserveCapacity: o.ReserveCapacity,
-		unreserveFunc:   o.UnreserveFunc,
-		baseKey:         baseKey,
-		tags:            o.Tags,
+		capacity: o.Capacity,
+		baseKey:  baseKey,
 		// channel collectGarbageTrigger
 		// needs to be buffered with the size of 1
 		// to signal another event if it
 		// is triggered during already running function
-		collectGarbageTrigger:     make(chan struct{}, 1),
-		reserveEvictionTrigger:    make(chan struct{}, 1),
-		close:                     make(chan struct{}),
-		collectGarbageWorkerDone:  make(chan struct{}),
-		reserveEvictionWorkerDone: make(chan struct{}),
-		metrics:                   newMetrics(),
-		logger:                    logger,
+		collectGarbageTrigger:    make(chan struct{}, 1),
+		close:                    make(chan struct{}),
+		collectGarbageWorkerDone: make(chan struct{}),
+		metrics:                  newMetrics(),
+		logger:                   logger,
 	}
-	if db.cacheCapacity == 0 {
-		db.cacheCapacity = defaultCacheCapacity
+	if db.capacity == 0 {
+		db.capacity = defaultCapacity
 	}
 
-	capacityMB := float64((db.cacheCapacity+uint64(batchstore.Capacity))*swarm.ChunkSize) * 9.5367431640625e-7
+	capacityMB := float64(db.capacity*boson.ChunkSize) * 9.5367431640625e-7
 
 	if capacityMB <= 1000 {
-		db.logger.Infof("database capacity: %d chunks (approximately %fMB)", db.cacheCapacity, capacityMB)
+		db.logger.Infof("database capacity: %d chunks (approximately %fMB)", db.capacity, capacityMB)
 	} else {
-		db.logger.Infof("database capacity: %d chunks (approximately %0.1fGB)", db.cacheCapacity, capacityMB/1000)
+		db.logger.Infof("database capacity: %d chunks (approximately %0.1fGB)", db.capacity, capacityMB/1000)
 	}
 
 	if maxParallelUpdateGC > 0 {
@@ -246,10 +207,6 @@ func New(path string, baseKey []byte, ss storage.StateStorer, o *Options, logger
 		BlockCacheCapacity:     o.BlockCacheCapacity,
 		WriteBufferSize:        o.WriteBufferSize,
 		DisableSeeksCompaction: o.DisableSeeksCompaction,
-	}
-
-	if withinRadiusFn == nil {
-		withinRadiusFn = withinRadius
 	}
 
 	db.shed, err = shed.NewDB(path, shedOpts)
@@ -268,7 +225,7 @@ func New(path string, baseKey []byte, ss storage.StateStorer, o *Options, logger
 	}
 	if schemaName == "" {
 		// initial new localstore run
-		err := db.schemaName.Put(DBSchemaCurrent)
+		err := db.schemaName.Put(DbSchemaCurrent)
 		if err != nil {
 			return nil, err
 		}
@@ -286,15 +243,8 @@ func New(path string, baseKey []byte, ss storage.StateStorer, o *Options, logger
 		return nil, err
 	}
 
-	// reserve size
-	db.reserveSize, err = db.shed.NewUint64Field("reserve-size")
-	if err != nil {
-		return nil, err
-	}
-
 	// Index storing actual chunk address, data and bin id.
-	headerSize := 16 + postage.StampSize
-	db.retrievalDataIndex, err = db.shed.NewIndex("Address->StoreTimestamp|BinID|BatchID|BatchIndex|Sig|Data", shed.IndexFuncs{
+	db.retrievalDataIndex, err = db.shed.NewIndex("Address->StoreTimestamp|BinID|Data", shed.IndexFuncs{
 		EncodeKey: func(fields shed.Item) (key []byte, err error) {
 			return fields.Address, nil
 		},
@@ -303,29 +253,16 @@ func New(path string, baseKey []byte, ss storage.StateStorer, o *Options, logger
 			return e, nil
 		},
 		EncodeValue: func(fields shed.Item) (value []byte, err error) {
-			b := make([]byte, headerSize)
+			b := make([]byte, 16)
 			binary.BigEndian.PutUint64(b[:8], fields.BinID)
 			binary.BigEndian.PutUint64(b[8:16], uint64(fields.StoreTimestamp))
-			stamp, err := postage.NewStamp(fields.BatchID, fields.Index, fields.Timestamp, fields.Sig).MarshalBinary()
-			if err != nil {
-				return nil, err
-			}
-			copy(b[16:], stamp)
 			value = append(b, fields.Data...)
 			return value, nil
 		},
 		DecodeValue: func(keyItem shed.Item, value []byte) (e shed.Item, err error) {
 			e.StoreTimestamp = int64(binary.BigEndian.Uint64(value[8:16]))
 			e.BinID = binary.BigEndian.Uint64(value[:8])
-			stamp := new(postage.Stamp)
-			if err = stamp.UnmarshalBinary(value[16:headerSize]); err != nil {
-				return e, err
-			}
-			e.BatchID = stamp.BatchID()
-			e.Index = stamp.Index()
-			e.Timestamp = stamp.Timestamp()
-			e.Sig = stamp.Sig()
-			e.Data = value[headerSize:]
+			e.Data = value[16:]
 			return e, nil
 		},
 	})
@@ -356,10 +293,10 @@ func New(path string, baseKey []byte, ss storage.StateStorer, o *Options, logger
 		return nil, err
 	}
 	// pull index allows history and live syncing per po bin
-	db.pullIndex, err = db.shed.NewIndex("PO|BinID->Hash", shed.IndexFuncs{
+	db.pullIndex, err = db.shed.NewIndex("PO|BinID->Hash|Tag", shed.IndexFuncs{
 		EncodeKey: func(fields shed.Item) (key []byte, err error) {
-			key = make([]byte, 9)
-			key[0] = db.po(swarm.NewAddress(fields.Address))
+			key = make([]byte, 41)
+			key[0] = db.po(boson.NewAddress(fields.Address))
 			binary.BigEndian.PutUint64(key[1:9], fields.BinID)
 			return key, nil
 		},
@@ -368,14 +305,20 @@ func New(path string, baseKey []byte, ss storage.StateStorer, o *Options, logger
 			return e, nil
 		},
 		EncodeValue: func(fields shed.Item) (value []byte, err error) {
-			value = make([]byte, 64) // 32 bytes address, 32 bytes batch id
+			value = make([]byte, 36) // 32 bytes address, 4 bytes tag
 			copy(value, fields.Address)
-			copy(value[32:], fields.BatchID)
+
+			if fields.Tag != 0 {
+				binary.BigEndian.PutUint32(value[32:], fields.Tag)
+			}
+
 			return value, nil
 		},
 		DecodeValue: func(keyItem shed.Item, value []byte) (e shed.Item, err error) {
 			e.Address = value[:32]
-			e.BatchID = value[32:64]
+			if len(value) > 32 {
+				e.Tag = binary.BigEndian.Uint32(value[32:])
+			}
 			return e, nil
 		},
 	})
@@ -420,7 +363,7 @@ func New(path string, baseKey []byte, ss storage.StateStorer, o *Options, logger
 	// create a push syncing triggers used by SubscribePush function
 	db.pushTriggers = make([]chan<- struct{}, 0)
 	// gc index for removable chunk ordered by ascending last access time
-	db.gcIndex, err = db.shed.NewIndex("AccessTimestamp|BinID|Hash->BatchID|BatchIndex", shed.IndexFuncs{
+	db.gcIndex, err = db.shed.NewIndex("AccessTimestamp|BinID|Hash->nil", shed.IndexFuncs{
 		EncodeKey: func(fields shed.Item) (key []byte, err error) {
 			b := make([]byte, 16, 16+len(fields.Address))
 			binary.BigEndian.PutUint64(b[:8], uint64(fields.AccessTimestamp))
@@ -435,16 +378,9 @@ func New(path string, baseKey []byte, ss storage.StateStorer, o *Options, logger
 			return e, nil
 		},
 		EncodeValue: func(fields shed.Item) (value []byte, err error) {
-			value = make([]byte, 40)
-			copy(value, fields.BatchID)
-			copy(value[32:], fields.Index)
-			return value, nil
+			return nil, nil
 		},
 		DecodeValue: func(keyItem shed.Item, value []byte) (e shed.Item, err error) {
-			e.BatchID = make([]byte, 32)
-			copy(e.BatchID, value[:32])
-			e.Index = make([]byte, postage.IndexSize)
-			copy(e.Index, value[32:])
 			return e, nil
 		},
 	})
@@ -475,17 +411,13 @@ func New(path string, baseKey []byte, ss storage.StateStorer, o *Options, logger
 		return nil, err
 	}
 
-	db.postageChunksIndex, err = db.shed.NewIndex("BatchID|PO|Hash->nil", shed.IndexFuncs{
+	// Create a index structure for excluding pinned chunks from gcIndex
+	db.gcExcludeIndex, err = db.shed.NewIndex("Hash->nil", shed.IndexFuncs{
 		EncodeKey: func(fields shed.Item) (key []byte, err error) {
-			key = make([]byte, 65)
-			copy(key[:32], fields.BatchID)
-			key[32] = db.po(swarm.NewAddress(fields.Address))
-			copy(key[33:], fields.Address)
-			return key, nil
+			return fields.Address, nil
 		},
 		DecodeKey: func(key []byte) (e shed.Item, err error) {
-			e.BatchID = key[:32]
-			e.Address = key[33:65]
+			e.Address = key
 			return e, nil
 		},
 		EncodeValue: func(fields shed.Item) (value []byte, err error) {
@@ -499,59 +431,8 @@ func New(path string, baseKey []byte, ss storage.StateStorer, o *Options, logger
 		return nil, err
 	}
 
-	db.postageRadiusIndex, err = db.shed.NewIndex("BatchID->Radius", shed.IndexFuncs{
-		EncodeKey: func(fields shed.Item) (key []byte, err error) {
-			key = make([]byte, 32)
-			copy(key[:32], fields.BatchID)
-			return key, nil
-		},
-		DecodeKey: func(key []byte) (e shed.Item, err error) {
-			e.BatchID = key[:32]
-			return e, nil
-		},
-		EncodeValue: func(fields shed.Item) (value []byte, err error) {
-			return []byte{fields.Radius}, nil
-		},
-		DecodeValue: func(keyItem shed.Item, value []byte) (e shed.Item, err error) {
-			e.Radius = value[0]
-			return e, nil
-		},
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	db.postageIndexIndex, err = db.shed.NewIndex("BatchID|BatchIndex->Hash|Timestamp", shed.IndexFuncs{
-		EncodeKey: func(fields shed.Item) (key []byte, err error) {
-			key = make([]byte, 40)
-			copy(key[:32], fields.BatchID)
-			copy(key[32:40], fields.Index)
-			return key, nil
-		},
-		DecodeKey: func(key []byte) (e shed.Item, err error) {
-			e.BatchID = key[:32]
-			e.Index = key[32:40]
-			return e, nil
-		},
-		EncodeValue: func(fields shed.Item) (value []byte, err error) {
-			value = make([]byte, 40)
-			copy(value, fields.Address)
-			copy(value[32:], fields.Timestamp)
-			return value, nil
-		},
-		DecodeValue: func(keyItem shed.Item, value []byte) (e shed.Item, err error) {
-			e.Address = value[:32]
-			e.Timestamp = value[32:]
-			return e, nil
-		},
-	})
-	if err != nil {
-		return nil, err
-	}
-
 	// start garbage collection worker
 	go db.collectGarbageWorker()
-	go db.reserveEvictionWorker()
 	return db, nil
 }
 
@@ -567,7 +448,6 @@ func (db *DB) Close() (err error) {
 		// wait for gc worker to
 		// return before closing the shed
 		<-db.collectGarbageWorkerDone
-		<-db.reserveEvictionWorkerDone
 		close(done)
 	}()
 	select {
@@ -587,8 +467,8 @@ func (db *DB) Close() (err error) {
 
 // po computes the proximity order between the address
 // and database base key.
-func (db *DB) po(addr swarm.Address) (bin uint8) {
-	return swarm.Proximity(db.baseKey, addr.Bytes())
+func (db *DB) po(addr boson.Address) (bin uint8) {
+	return boson.Proximity(db.baseKey, addr.Bytes())
 }
 
 // DebugIndices returns the index sizes for all indexes in localstore
@@ -601,9 +481,8 @@ func (db *DB) DebugIndices() (indexInfo map[string]int, err error) {
 		"pushIndex":            db.pushIndex,
 		"pullIndex":            db.pullIndex,
 		"gcIndex":              db.gcIndex,
+		"gcExcludeIndex":       db.gcExcludeIndex,
 		"pinIndex":             db.pinIndex,
-		"postageChunksIndex":   db.postageChunksIndex,
-		"postageRadiusIndex":   db.postageRadiusIndex,
 	} {
 		indexSize, err := v.Count()
 		if err != nil {
@@ -620,35 +499,17 @@ func (db *DB) DebugIndices() (indexInfo map[string]int, err error) {
 	return indexInfo, err
 }
 
-// stateStoreHasPins returns true if the state-store
-// contains any pins, otherwise false is returned.
-func (db *DB) stateStoreHasPins() (bool, error) {
-	pins, err := pinning.NewService(nil, db.stateStore, nil).Pins()
-	if err != nil {
-		return false, err
-	}
-	return len(pins) > 0, nil
-}
-
 // chunkToItem creates new Item with data provided by the Chunk.
-func chunkToItem(ch swarm.Chunk) shed.Item {
+func chunkToItem(ch boson.Chunk) shed.Item {
 	return shed.Item{
-		Address:     ch.Address().Bytes(),
-		Data:        ch.Data(),
-		Tag:         ch.TagID(),
-		BatchID:     ch.Stamp().BatchID(),
-		Index:       ch.Stamp().Index(),
-		Timestamp:   ch.Stamp().Timestamp(),
-		Sig:         ch.Stamp().Sig(),
-		Depth:       ch.Depth(),
-		Radius:      ch.Radius(),
-		BucketDepth: ch.BucketDepth(),
-		Immutable:   ch.Immutable(),
+		Address: ch.Address().Bytes(),
+		Data:    ch.Data(),
+		Tag:     ch.TagID(),
 	}
 }
 
 // addressToItem creates new Item with a provided address.
-func addressToItem(addr swarm.Address) shed.Item {
+func addressToItem(addr boson.Address) shed.Item {
 	return shed.Item{
 		Address: addr.Bytes(),
 	}
@@ -656,7 +517,7 @@ func addressToItem(addr swarm.Address) shed.Item {
 
 // addressesToItems constructs a slice of Items with only
 // addresses set on them.
-func addressesToItems(addrs ...swarm.Address) []shed.Item {
+func addressesToItems(addrs ...boson.Address) []shed.Item {
 	items := make([]shed.Item, len(addrs))
 	for i, addr := range addrs {
 		items[i] = shed.Item{

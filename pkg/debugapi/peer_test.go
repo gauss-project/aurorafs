@@ -10,15 +10,14 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethersphere/bee/pkg/bzz"
-	"github.com/ethersphere/bee/pkg/crypto"
-	"github.com/ethersphere/bee/pkg/debugapi"
-	"github.com/ethersphere/bee/pkg/jsonhttp"
-	"github.com/ethersphere/bee/pkg/jsonhttp/jsonhttptest"
-	"github.com/ethersphere/bee/pkg/p2p"
-	"github.com/ethersphere/bee/pkg/p2p/mock"
-	"github.com/ethersphere/bee/pkg/swarm"
+	"github.com/gauss-project/aurorafs/pkg/aurora"
+	"github.com/gauss-project/aurorafs/pkg/crypto"
+	"github.com/gauss-project/aurorafs/pkg/debugapi"
+	"github.com/gauss-project/aurorafs/pkg/jsonhttp"
+	"github.com/gauss-project/aurorafs/pkg/jsonhttp/jsonhttptest"
+	"github.com/gauss-project/aurorafs/pkg/p2p"
+	"github.com/gauss-project/aurorafs/pkg/p2p/mock"
+	"github.com/gauss-project/aurorafs/pkg/boson"
 	ma "github.com/multiformats/go-multiaddr"
 )
 
@@ -32,9 +31,7 @@ func TestConnect(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	block := common.HexToHash("0x1").Bytes()
-
-	overlay, err := crypto.NewOverlayAddress(privateKey.PublicKey, 0, block)
+	overlay, err := crypto.NewOverlayAddress(privateKey.PublicKey, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -43,13 +40,13 @@ func TestConnect(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	bzzAddress, err := bzz.NewAddress(crypto.NewDefaultSigner(privateKey), underlama, overlay, 0, nil)
+	bzzAddress, err := aurora.NewAddress(crypto.NewDefaultSigner(privateKey), underlama, overlay, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	testServer := newTestServer(t, testServerOptions{
-		P2P: mock.New(mock.WithConnectFunc(func(ctx context.Context, addr ma.Multiaddr) (*bzz.Address, error) {
+		P2P: mock.New(mock.WithConnectFunc(func(ctx context.Context, addr ma.Multiaddr) (*aurora.Address, error) {
 			if addr.String() == errorUnderlay {
 				return nil, testErr
 			}
@@ -85,7 +82,7 @@ func TestConnect(t *testing.T) {
 
 	t.Run("error - add peer", func(t *testing.T) {
 		testServer := newTestServer(t, testServerOptions{
-			P2P: mock.New(mock.WithConnectFunc(func(ctx context.Context, addr ma.Multiaddr) (*bzz.Address, error) {
+			P2P: mock.New(mock.WithConnectFunc(func(ctx context.Context, addr ma.Multiaddr) (*aurora.Address, error) {
 				if addr.String() == errorUnderlay {
 					return nil, testErr
 				}
@@ -103,13 +100,13 @@ func TestConnect(t *testing.T) {
 }
 
 func TestDisconnect(t *testing.T) {
-	address := swarm.MustParseHexAddress("ca1e9f3938cc1425c6061b96ad9eb93e134dfe8734ad490164ef20af9d1cf59c")
-	unknownAdddress := swarm.MustParseHexAddress("ca1e9f3938cc1425c6061b96ad9eb93e134dfe8734ad490164ef20af9d1cf59e")
-	errorAddress := swarm.MustParseHexAddress("ca1e9f3938cc1425c6061b96ad9eb93e134dfe8734ad490164ef20af9d1cf59a")
+	address := boson.MustParseHexAddress("ca1e9f3938cc1425c6061b96ad9eb93e134dfe8734ad490164ef20af9d1cf59c")
+	unknownAdddress := boson.MustParseHexAddress("ca1e9f3938cc1425c6061b96ad9eb93e134dfe8734ad490164ef20af9d1cf59e")
+	errorAddress := boson.MustParseHexAddress("ca1e9f3938cc1425c6061b96ad9eb93e134dfe8734ad490164ef20af9d1cf59a")
 	testErr := errors.New("test error")
 
 	testServer := newTestServer(t, testServerOptions{
-		P2P: mock.New(mock.WithDisconnectFunc(func(addr swarm.Address) error {
+		P2P: mock.New(mock.WithDisconnectFunc(func(addr boson.Address) error {
 			if addr.Equal(address) {
 				return nil
 			}
@@ -160,7 +157,7 @@ func TestDisconnect(t *testing.T) {
 }
 
 func TestPeer(t *testing.T) {
-	overlay := swarm.MustParseHexAddress("ca1e9f3938cc1425c6061b96ad9eb93e134dfe8734ad490164ef20af9d1cf59c")
+	overlay := boson.MustParseHexAddress("ca1e9f3938cc1425c6061b96ad9eb93e134dfe8734ad490164ef20af9d1cf59c")
 	testServer := newTestServer(t, testServerOptions{
 		P2P: mock.New(mock.WithPeersFunc(func() []p2p.Peer {
 			return []p2p.Peer{{Address: overlay}}
@@ -170,7 +167,7 @@ func TestPeer(t *testing.T) {
 	t.Run("ok", func(t *testing.T) {
 		jsonhttptest.Request(t, testServer.Client, http.MethodGet, "/peers", http.StatusOK,
 			jsonhttptest.WithExpectedJSONResponse(debugapi.PeersResponse{
-				Peers: []debugapi.Peer{{Address: overlay}},
+				Peers: []p2p.Peer{{Address: overlay}},
 			}),
 		)
 	})
@@ -186,7 +183,7 @@ func TestPeer(t *testing.T) {
 }
 
 func TestBlocklistedPeers(t *testing.T) {
-	overlay := swarm.MustParseHexAddress("ca1e9f3938cc1425c6061b96ad9eb93e134dfe8734ad490164ef20af9d1cf59c")
+	overlay := boson.MustParseHexAddress("ca1e9f3938cc1425c6061b96ad9eb93e134dfe8734ad490164ef20af9d1cf59c")
 	testServer := newTestServer(t, testServerOptions{
 		P2P: mock.New(mock.WithBlocklistedPeersFunc(func() ([]p2p.Peer, error) {
 			return []p2p.Peer{{Address: overlay}}, nil
@@ -195,13 +192,13 @@ func TestBlocklistedPeers(t *testing.T) {
 
 	jsonhttptest.Request(t, testServer.Client, http.MethodGet, "/blocklist", http.StatusOK,
 		jsonhttptest.WithExpectedJSONResponse(debugapi.PeersResponse{
-			Peers: []debugapi.Peer{{Address: overlay}},
+			Peers: []p2p.Peer{{Address: overlay}},
 		}),
 	)
 }
 
 func TestBlocklistedPeersErr(t *testing.T) {
-	overlay := swarm.MustParseHexAddress("ca1e9f3938cc1425c6061b96ad9eb93e134dfe8734ad490164ef20af9d1cf59c")
+	overlay := boson.MustParseHexAddress("ca1e9f3938cc1425c6061b96ad9eb93e134dfe8734ad490164ef20af9d1cf59c")
 	testServer := newTestServer(t, testServerOptions{
 		P2P: mock.New(mock.WithBlocklistedPeersFunc(func() ([]p2p.Peer, error) {
 			return []p2p.Peer{{Address: overlay}}, errors.New("some error")

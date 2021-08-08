@@ -7,7 +7,7 @@ package retrieval
 import (
 	"github.com/prometheus/client_golang/prometheus"
 
-	m "github.com/ethersphere/bee/pkg/metrics"
+	m "github.com/gauss-project/aurorafs/pkg/metrics"
 )
 
 type metrics struct {

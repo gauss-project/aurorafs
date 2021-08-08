@@ -1,4 +1,4 @@
-// Copyright 2020 The Swarm Authors. All rights reserved.
+// Copyright 2020 The Boson Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
@@ -8,7 +8,6 @@ package api
 
 import (
 	"context"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -20,32 +19,27 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/ethersphere/bee/pkg/crypto"
-
-	"github.com/ethersphere/bee/pkg/file/pipeline/builder"
-	"github.com/ethersphere/bee/pkg/logging"
-	m "github.com/ethersphere/bee/pkg/metrics"
-
-
-	"github.com/ethersphere/bee/pkg/resolver"
-	"github.com/ethersphere/bee/pkg/steward"
-	"github.com/ethersphere/bee/pkg/storage"
-	"github.com/ethersphere/bee/pkg/swarm"
-	"github.com/ethersphere/bee/pkg/oracle"
-	"github.com/ethersphere/bee/pkg/tracing"
-	"github.com/ethersphere/bee/pkg/traversal"
+	"github.com/gauss-project/aurorafs/pkg/file/pipeline/builder"
+	"github.com/gauss-project/aurorafs/pkg/logging"
+	m "github.com/gauss-project/aurorafs/pkg/metrics"
+	
+	"github.com/gauss-project/aurorafs/pkg/resolver"
+	"github.com/gauss-project/aurorafs/pkg/storage"
+	"github.com/gauss-project/aurorafs/pkg/boson"
+	
+	"github.com/gauss-project/aurorafs/pkg/tracing"
+	"github.com/gauss-project/aurorafs/pkg/traversal"
 )
 
 const (
-	SwarmPinHeader            = "Swarm-Pin"
-	SwarmTagHeader            = "Swarm-Tag"
-	SwarmEncryptHeader        = "Swarm-Encrypt"
-	SwarmIndexDocumentHeader  = "Swarm-Index-Document"
-	SwarmErrorDocumentHeader  = "Swarm-Error-Document"
-	SwarmFeedIndexHeader      = "Swarm-Feed-Index"
-	SwarmFeedIndexNextHeader  = "Swarm-Feed-Index-Next"
-	SwarmCollectionHeader     = "Swarm-Collection"
-	SwarmPostageBatchIdHeader = "Swarm-Postage-Batch-Id"
+
+	BosonPinHeader           = "Boson-Pin"
+	BosonTagHeader           = "Boson-Tag"
+	BosonEncryptHeader       = "Boson-Encrypt"
+	BosonIndexDocumentHeader = "Boson-Index-Document"
+	BosonErrorDocumentHeader = "Boson-Error-Document"
+	BosonFeedIndexHeader     = "Boson-Feed-Index"
+	BosonFeedIndexNextHeader = "Boson-Feed-Index-Next"
 )
 
 // The size of buffer used for prefetching content with Langos.
@@ -60,20 +54,9 @@ const (
 	largeBufferFilesizeThreshold = 10 * 1000000 // ten megs
 )
 
-const (
-	contentTypeHeader = "Content-Type"
-	multiPartFormData = "multipart/form-data"
-	contentTypeTar    = "application/x-tar"
-)
-
 var (
-	errInvalidNameOrAddress = errors.New("invalid name or bzz address")
+	errInvalidNameOrAddress = errors.New("invalid name or aurora address")
 	errNoResolver           = errors.New("no resolver connected")
-	errInvalidRequest       = errors.New("could not validate request")
-	errInvalidContentType   = errors.New("invalid content-type")
-	errDirectoryStore       = errors.New("could not store directory")
-	errFileStore            = errors.New("could not store file")
-	errInvalidPostageBatch  = errors.New("invalid postage batch id")
 )
 
 // Service is the API service interface.
@@ -84,14 +67,14 @@ type Service interface {
 }
 
 type server struct {
-	storer          storage.Storer
-	resolver        resolver.Interface
-	traversal       traversal.Traverser
-	steward         steward.Reuploader
-	logger          logging.Logger
-	tracer          *tracing.Tracer
-	signer          crypto.Signer
-	pricer           oracle.Price
+
+	storer      storage.Storer
+	resolver    resolver.Interface
+
+	traversal   traversal.Service
+	logger      logging.Logger
+	tracer      *tracing.Tracer
+
 	Options
 	http.Handler
 	metrics metrics
@@ -108,26 +91,23 @@ type Options struct {
 
 const (
 	// TargetsRecoveryHeader defines the Header for Recovery targets in Global Pinning
-	TargetsRecoveryHeader = "swarm-recovery-targets"
+	TargetsRecoveryHeader = "boson-recovery-targets"
 )
 
 // New will create a and initialize a new API service.
-func New( storer storage.Storer, resolver resolver.Interface,  traversalService traversal.Traverser,  steward steward.Reuploader, signer crypto.Signer,pricer           oracle.Price, logger logging.Logger, tracer *tracing.Tracer, o Options) Service {
+func New(storer storage.Storer, resolver resolver.Interface,  traversalService traversal.Service,  logger logging.Logger, tracer *tracing.Tracer, o Options) Service {
 	s := &server{
 
-		storer:          storer,
-		resolver:        resolver,
+		storer:      storer,
+		resolver:    resolver,
 
-		traversal:       traversalService,
+		traversal:   traversalService,
 
-		pricer: 		 pricer,
-		steward:         steward,
-		signer:          signer,
-		Options:         o,
-		logger:          logger,
-		tracer:          tracer,
-		metrics:         newMetrics(),
-		quit:            make(chan struct{}),
+		Options:     o,
+		logger:      logger,
+		tracer:      tracer,
+		metrics:     newMetrics(),
+		quit:        make(chan struct{}),
 	}
 
 	s.setupRouting()
@@ -148,7 +128,7 @@ func (s *server) Close() error {
 
 	select {
 	case <-done:
-	case <-time.After(1 * time.Second):
+	case <-time.After(5 * time.Second):
 		return errors.New("api shutting down with open websockets")
 	}
 
@@ -156,57 +136,42 @@ func (s *server) Close() error {
 }
 
 
-func (s *server) resolveNameOrAddress(str string) (swarm.Address, error) {
+
+
+func (s *server) resolveNameOrAddress(str string) (boson.Address, error) {
 	log := s.logger
 
-	// Try and parse the name as a bzz address.
-	addr, err := swarm.ParseHexAddress(str)
+	// Try and parse the name as a aurora address.
+	addr, err := boson.ParseHexAddress(str)
 	if err == nil {
-		log.Tracef("name resolve: valid bzz address %q", str)
+		log.Tracef("name resolve: valid aurora address %q", str)
 		return addr, nil
 	}
 
 	// If no resolver is not available, return an error.
 	if s.resolver == nil {
-		return swarm.ZeroAddress, errNoResolver
+		return boson.ZeroAddress, errNoResolver
 	}
 
 	// Try and resolve the name using the provided resolver.
-	log.Debugf("name resolve: attempting to resolve %s to bzz address", str)
+	log.Debugf("name resolve: attempting to resolve %s to aurora address", str)
 	addr, err = s.resolver.Resolve(str)
 	if err == nil {
 		log.Tracef("name resolve: resolved name %s to %s", str, addr)
 		return addr, nil
 	}
 
-	return swarm.ZeroAddress, fmt.Errorf("%w: %v", errInvalidNameOrAddress, err)
+	return boson.ZeroAddress, fmt.Errorf("%w: %v", errInvalidNameOrAddress, err)
 }
 
 // requestModePut returns the desired storage.ModePut for this request based on the request headers.
 func requestModePut(r *http.Request) storage.ModePut {
-	if h := strings.ToLower(r.Header.Get(SwarmPinHeader)); h == "true" {
-		return storage.ModePutUploadPin
-	}
+
 	return storage.ModePutUpload
 }
 
 func requestEncrypt(r *http.Request) bool {
-	return strings.ToLower(r.Header.Get(SwarmEncryptHeader)) == "true"
-}
-
-func requestPostageBatchId(r *http.Request) ([]byte, error) {
-	if h := strings.ToLower(r.Header.Get(SwarmPostageBatchIdHeader)); h != "" {
-		if len(h) != 64 {
-			return nil, errInvalidPostageBatch
-		}
-		b, err := hex.DecodeString(h)
-		if err != nil {
-			return nil, errInvalidPostageBatch
-		}
-		return b, nil
-	}
-
-	return nil, errInvalidPostageBatch
+	return strings.ToLower(r.Header.Get(BosonEncryptHeader)) == "true"
 }
 
 func (s *server) newTracingHandler(spanName string) func(h http.Handler) http.Handler {
@@ -283,29 +248,28 @@ func equalASCIIFold(s, t string) bool {
 	return s == t
 }
 
+type pipelineFunc func(context.Context, io.Reader, int64) (boson.Address, error)
 
-type pipelineFunc func(context.Context, io.Reader) (swarm.Address, error)
-
-func requestPipelineFn(s storage.Putter, r *http.Request) pipelineFunc {
+func requestPipelineFn(s storage.Storer, r *http.Request) pipelineFunc {
 	mode, encrypt := requestModePut(r), requestEncrypt(r)
-	return func(ctx context.Context, r io.Reader) (swarm.Address, error) {
+	return func(ctx context.Context, r io.Reader, l int64) (boson.Address, error) {
 		pipe := builder.NewPipelineBuilder(ctx, s, mode, encrypt)
-		return builder.FeedPipeline(ctx, pipe, r)
+		return builder.FeedPipeline(ctx, pipe, r, l)
 	}
 }
 
 // calculateNumberOfChunks calculates the number of chunks in an arbitrary
 // content length.
 func calculateNumberOfChunks(contentLength int64, isEncrypted bool) int64 {
-	if contentLength <= swarm.ChunkSize {
+	if contentLength <= boson.ChunkSize {
 		return 1
 	}
-	branchingFactor := swarm.Branches
+	branchingFactor := boson.Branches
 	if isEncrypted {
-		branchingFactor = swarm.EncryptedBranches
+		branchingFactor = boson.EncryptedBranches
 	}
 
-	dataChunks := math.Ceil(float64(contentLength) / float64(swarm.ChunkSize))
+	dataChunks := math.Ceil(float64(contentLength) / float64(boson.ChunkSize))
 	totalChunks := dataChunks
 	intermediate := dataChunks / float64(branchingFactor)
 
@@ -322,15 +286,4 @@ func requestCalculateNumberOfChunks(r *http.Request) int64 {
 		return calculateNumberOfChunks(r.ContentLength, requestEncrypt(r))
 	}
 	return 0
-}
-
-// containsChunk returns true if the chunk with a specific address
-// is present in the provided chunk slice.
-func containsChunk(addr swarm.Address, chs ...swarm.Chunk) bool {
-	for _, c := range chs {
-		if addr.Equal(c.Address()) {
-			return true
-		}
-	}
-	return false
 }

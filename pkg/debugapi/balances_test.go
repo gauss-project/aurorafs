@@ -11,13 +11,12 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/ethersphere/bee/pkg/accounting"
-	"github.com/ethersphere/bee/pkg/accounting/mock"
-	"github.com/ethersphere/bee/pkg/bigint"
-	"github.com/ethersphere/bee/pkg/debugapi"
-	"github.com/ethersphere/bee/pkg/jsonhttp"
-	"github.com/ethersphere/bee/pkg/jsonhttp/jsonhttptest"
-	"github.com/ethersphere/bee/pkg/swarm"
+	"github.com/gauss-project/aurorafs/pkg/accounting"
+	"github.com/gauss-project/aurorafs/pkg/accounting/mock"
+	"github.com/gauss-project/aurorafs/pkg/debugapi"
+	"github.com/gauss-project/aurorafs/pkg/jsonhttp"
+	"github.com/gauss-project/aurorafs/pkg/jsonhttp/jsonhttptest"
+	"github.com/gauss-project/aurorafs/pkg/boson"
 )
 
 func TestBalances(t *testing.T) {
@@ -36,15 +35,15 @@ func TestBalances(t *testing.T) {
 		[]debugapi.BalanceResponse{
 			{
 				Peer:    "DEAD",
-				Balance: bigint.Wrap(big.NewInt(1000000000000000000)),
+				Balance: big.NewInt(1000000000000000000),
 			},
 			{
 				Peer:    "BEEF",
-				Balance: bigint.Wrap(big.NewInt(-100000000000000000)),
+				Balance: big.NewInt(-100000000000000000),
 			},
 			{
 				Peer:    "PARTY",
-				Balance: bigint.Wrap(big.NewInt(0)),
+				Balance: big.NewInt(0),
 			},
 		},
 	}
@@ -80,7 +79,7 @@ func TestBalancesError(t *testing.T) {
 
 func TestBalancesPeers(t *testing.T) {
 	peer := "bff2c89e85e78c38bd89fca1acc996afb876c21bf5a8482ad798ce15f1c223fa"
-	compensatedBalanceFunc := func(swarm.Address) (*big.Int, error) {
+	compensatedBalanceFunc := func(boson.Address) (*big.Int, error) {
 		return big.NewInt(100000000000000000), nil
 	}
 	testServer := newTestServer(t, testServerOptions{
@@ -90,7 +89,7 @@ func TestBalancesPeers(t *testing.T) {
 	jsonhttptest.Request(t, testServer.Client, http.MethodGet, "/balances/"+peer, http.StatusOK,
 		jsonhttptest.WithExpectedJSONResponse(debugapi.BalanceResponse{
 			Peer:    peer,
-			Balance: bigint.Wrap(big.NewInt(100000000000000000)),
+			Balance: big.NewInt(100000000000000000),
 		}),
 	)
 }
@@ -98,7 +97,7 @@ func TestBalancesPeers(t *testing.T) {
 func TestBalancesPeersError(t *testing.T) {
 	peer := "bff2c89e85e78c38bd89fca1acc996afb876c21bf5a8482ad798ce15f1c223fa"
 	wantErr := errors.New("Error")
-	compensatedBalanceFunc := func(swarm.Address) (*big.Int, error) {
+	compensatedBalanceFunc := func(boson.Address) (*big.Int, error) {
 		return nil, wantErr
 	}
 	testServer := newTestServer(t, testServerOptions{
@@ -115,7 +114,7 @@ func TestBalancesPeersError(t *testing.T) {
 
 func TestBalancesPeersNoBalance(t *testing.T) {
 	peer := "bff2c89e85e78c38bd89fca1acc996afb876c21bf5a8482ad798ce15f1c223fa"
-	compensatedBalanceFunc := func(swarm.Address) (*big.Int, error) {
+	compensatedBalanceFunc := func(boson.Address) (*big.Int, error) {
 		return nil, accounting.ErrPeerNoBalance
 	}
 	testServer := newTestServer(t, testServerOptions{
@@ -189,15 +188,15 @@ func TestConsumedBalances(t *testing.T) {
 		[]debugapi.BalanceResponse{
 			{
 				Peer:    "DEAD",
-				Balance: bigint.Wrap(big.NewInt(1000000000000000000)),
+				Balance: big.NewInt(1000000000000000000),
 			},
 			{
 				Peer:    "BEEF",
-				Balance: bigint.Wrap(big.NewInt(-100000000000000000)),
+				Balance: big.NewInt(-100000000000000000),
 			},
 			{
 				Peer:    "PARTY",
-				Balance: bigint.Wrap(big.NewInt(0)),
+				Balance: big.NewInt(0),
 			},
 		},
 	}
@@ -233,7 +232,7 @@ func TestConsumedError(t *testing.T) {
 
 func TestConsumedPeers(t *testing.T) {
 	peer := "bff2c89e85e78c38bd89fca1acc996afb876c21bf5a8482ad798ce15f1c223fa"
-	balanceFunc := func(swarm.Address) (*big.Int, error) {
+	balanceFunc := func(boson.Address) (*big.Int, error) {
 		return big.NewInt(1000000000000000000), nil
 	}
 	testServer := newTestServer(t, testServerOptions{
@@ -243,7 +242,7 @@ func TestConsumedPeers(t *testing.T) {
 	jsonhttptest.Request(t, testServer.Client, http.MethodGet, "/consumed/"+peer, http.StatusOK,
 		jsonhttptest.WithExpectedJSONResponse(debugapi.BalanceResponse{
 			Peer:    peer,
-			Balance: bigint.Wrap(big.NewInt(1000000000000000000)),
+			Balance: big.NewInt(1000000000000000000),
 		}),
 	)
 }
@@ -251,7 +250,7 @@ func TestConsumedPeers(t *testing.T) {
 func TestConsumedPeersError(t *testing.T) {
 	peer := "bff2c89e85e78c38bd89fca1acc996afb876c21bf5a8482ad798ce15f1c223fa"
 	wantErr := errors.New("Error")
-	balanceFunc := func(swarm.Address) (*big.Int, error) {
+	balanceFunc := func(boson.Address) (*big.Int, error) {
 		return nil, wantErr
 	}
 	testServer := newTestServer(t, testServerOptions{
@@ -268,7 +267,7 @@ func TestConsumedPeersError(t *testing.T) {
 
 func TestConsumedPeersNoBalance(t *testing.T) {
 	peer := "bff2c89e85e78c38bd89fca1acc996afb876c21bf5a8482ad798ce15f1c223fa"
-	balanceFunc := func(swarm.Address) (*big.Int, error) {
+	balanceFunc := func(boson.Address) (*big.Int, error) {
 		return nil, accounting.ErrPeerNoBalance
 	}
 	testServer := newTestServer(t, testServerOptions{

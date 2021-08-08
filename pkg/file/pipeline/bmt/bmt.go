@@ -7,9 +7,9 @@ package bmt
 import (
 	"errors"
 
-	"github.com/ethersphere/bee/pkg/bmtpool"
-	"github.com/ethersphere/bee/pkg/file/pipeline"
-	"github.com/ethersphere/bee/pkg/swarm"
+	"github.com/gauss-project/aurorafs/pkg/bmtpool"
+	"github.com/gauss-project/aurorafs/pkg/file/pipeline"
+	"github.com/gauss-project/aurorafs/pkg/boson"
 )
 
 var (
@@ -31,21 +31,22 @@ func NewBmtWriter(next pipeline.ChainWriter) pipeline.ChainWriter {
 // ChainWrite writes data in chain. It assumes span has been prepended to the data.
 // The span can be encrypted or unencrypted.
 func (w *bmtWriter) ChainWrite(p *pipeline.PipeWriteArgs) error {
-	if len(p.Data) < swarm.SpanSize {
+	if len(p.Data) < boson.SpanSize {
 		return errInvalidData
 	}
 	hasher := bmtpool.Get()
-	hasher.SetHeader(p.Data[:swarm.SpanSize])
-	_, err := hasher.Write(p.Data[swarm.SpanSize:])
+	err := hasher.SetSpanBytes(p.Data[:boson.SpanSize])
 	if err != nil {
 		bmtpool.Put(hasher)
 		return err
 	}
-	p.Ref, err = hasher.Hash(nil)
-	bmtpool.Put(hasher)
+	_, err = hasher.Write(p.Data[boson.SpanSize:])
 	if err != nil {
+		bmtpool.Put(hasher)
 		return err
 	}
+	p.Ref = hasher.Sum(nil)
+	bmtpool.Put(hasher)
 
 	return w.next.ChainWrite(p)
 }

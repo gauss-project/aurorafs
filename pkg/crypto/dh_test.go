@@ -13,7 +13,7 @@ import (
 	"testing"
 
 	"github.com/btcsuite/btcd/btcec"
-	"github.com/ethersphere/bee/pkg/crypto"
+	"github.com/gauss-project/aurorafs/pkg/crypto"
 )
 
 func TestECDHCorrect(t *testing.T) {
