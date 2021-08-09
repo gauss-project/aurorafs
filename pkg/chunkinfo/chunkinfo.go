@@ -13,7 +13,7 @@ const (
 
 type ChunkInfo struct {
 	// 定时器
-	queues []*Queue
+	queues map[string]*Queue
 	ct     *ChunkInfoTabNeighbor
 	cd     *ChunkInfoDiscover
 	cp     *ChunkPyramid
@@ -27,8 +27,6 @@ type PendingFinderInfo struct {
 
 type Queue struct {
 	sync.RWMutex
-	RootCid string
-	Puller  []string
 	UnPull  []*string
 	Pulling []*string
 	Pulled  []*string
@@ -37,7 +35,7 @@ type Queue struct {
 type ChunkPyramid struct {
 	sync.RWMutex
 	// 切片父id/切片id/切片所在树节点顺序
-	Pyramid map[string]map[string]uint
+	pyramid map[string]map[string]uint
 }
 
 type ChunkInfoTabNeighbor struct {
@@ -61,12 +59,16 @@ type ChunkInfoResp struct {
 }
 
 type ChunkPyramidResp struct {
+	rootCid string
+	pyramid []ChunkPyramidChildResp
+}
+
+type ChunkPyramidChildResp struct {
 	cid   string   // 切片id
 	pCid  string   // 切片父id
 	order uint     // 切片所在树节点顺序
 	nodes []string //cid发现节点
 }
-
 type ChunkPyramidReq struct {
 	rootCid    string
 	createTime int64
@@ -76,20 +78,20 @@ func New() *ChunkInfo {
 	// message new
 	cd := &ChunkInfoDiscover{presence: make(map[string]map[string][]string)}
 	ct := &ChunkInfoTabNeighbor{presence: make(map[string][]string)}
-	cp := &ChunkPyramid{Pyramid: map[string]map[string]uint{}}
+	cp := &ChunkPyramid{pyramid: map[string]map[string]uint{}}
 	cpd := &PendingFinderInfo{finder: make(map[string]struct{})}
-	queues := make([]*Queue, 0)
+	queues := make(map[string]*Queue)
 	return &ChunkInfo{ct: ct, cd: cd, cp: cp, cpd: cpd, queues: queues}
 }
 
-func NewQueue(rootCid string) *Queue {
-	return &Queue{
-		RootCid: rootCid,
-		Puller:  make([]string, 0, PullerMax),
+func (ci *ChunkInfo) newQueue(rootCid string) {
+	q := &Queue{
+		//Puller:  make([]string, 0, PullerMax),
 		UnPull:  make([]*string, 0, PullerMax),
 		Pulling: make([]*string, 0, PullingMax),
 		Pulled:  make([]*string, 0, PullMax),
 	}
+	ci.queues[rootCid] = q
 }
 
 func (ci *ChunkInfo) FindChunkInfo(authInfo []byte, rootCid string, nodes []string) {
@@ -99,13 +101,15 @@ func (ci *ChunkInfo) FindChunkInfo(authInfo []byte, rootCid string, nodes []stri
 			return
 		}
 		//发起doFindChunkInfo
-		ci.cd.doFindChunkInfo(authInfo, rootCid, nodes)
+		for _, n := range nodes {
+			ci.queues[rootCid].push(UnPull, &n)
+		}
+		ci.doFindChunkInfo(authInfo, rootCid)
 	} else {
 		// 根据rootCid生成队列
-		queue := NewQueue(rootCid)
-		ci.queues = append(ci.queues, queue)
+		ci.newQueue(rootCid)
 		// 获取金字塔
-		ci.cp.doFindChunkPyramid(authInfo, rootCid, nodes)
+		ci.doFindChunkPyramid(authInfo, rootCid, nodes)
 	}
 }
 
@@ -126,10 +130,63 @@ func (ci *ChunkInfo) OnChunkTransferred(cid string, rootCid string, node string)
 }
 
 func (ci *ChunkInfo) getQueue(rootCid string) *Queue {
-	for _, queue := range ci.queues {
-		if queue.RootCid == rootCid {
-			return queue
-		}
+	return ci.queues[rootCid]
+}
+
+func (ci *ChunkInfo) doFindChunkInfo(authInfo []byte, rootCid string) {
+	// pull 过程
+	ci.queueProcess(rootCid)
+
+}
+
+func (ci *ChunkInfo) doFindChunkPyramid(authInfo []byte, rootCid string, nodes []string) {
+	// 调用sendDataToNodes
+	cpReq := ci.cp.createChunkPyramidReq(rootCid)
+	for _, node := range nodes {
+		ci.sendDataToNode(cpReq, node)
 	}
-	return nil
+}
+
+// pull 过程
+func (ci *ChunkInfo) queueProcess(rootCid string) {
+	q := ci.getQueue(rootCid)
+	// pulled + pulling >= pullMax
+	if q.len(Pulled)+q.len(Pulling) >= PullMax {
+		return
+	}
+	// 判断正在查是否等于最大查询数
+	pullingLen := q.len(Pulling)
+	if pullingLen >= PullingMax {
+		return
+	}
+	// 最大查询数-当前正在查询数=n
+	n := PullingMax - pullingLen
+	// 放入n个节点到正在查询
+	for i := 0; i < n; i++ {
+		unNode := q.pop(UnPull)
+		q.push(Pulling, unNode)
+		// todo 定时器 对请求超时做处理
+		ciReq := ci.cd.createChunkInfoReq(rootCid)
+		ci.sendDataToNode(ciReq, *unNode)
+	}
+}
+
+func (ci *ChunkInfo) updateQueue(authInfo []byte, rootCid, node string, nodes []string) {
+	q := ci.queues[rootCid]
+	for _, n := range nodes {
+		// 填充到未查询队列, 如果最大拉取数则不在填充到为查询队列中
+		if q.len(UnPull) >= PullerMax {
+			return
+		}
+		// 是否为新节点
+		if q.isExists(Pulled, n) || q.isExists(Pulling, n) || q.isExists(UnPull, n) {
+			continue
+		}
+		q.push(UnPull, &n)
+	}
+	// 节点从正在查转为已查询
+	q.popNode(Pulling, &node)
+	q.push(Pulled, &node)
+	// 触发新节点通知
+	ci.doFindChunkInfo(authInfo, rootCid)
 }

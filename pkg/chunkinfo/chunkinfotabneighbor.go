@@ -31,19 +31,23 @@ func (cn *ChunkInfoTabNeighbor) getNeighborChunkInfo(rootCid string) map[string]
 	return res
 }
 
-func (cn *ChunkInfoTabNeighbor) createChunkInfoResp(rootCid string) ChunkInfoResp {
-	cids := cn.getNeighborChunkInfo(rootCid)
-	return ChunkInfoResp{rootCid: rootCid, presence: cids}
+func (cn *ChunkInfoTabNeighbor) createChunkInfoResp(rootCid string, ctn map[string][]string) ChunkInfoResp {
+	return ChunkInfoResp{rootCid: rootCid, presence: ctn}
 }
 
-func (cn *ChunkInfoTabNeighbor) createChunkPyramidResp(rootCid string) []ChunkPyramidResp {
+func (cn *ChunkInfoTabNeighbor) getChunkPyramid(rootCid string) map[string]map[string]uint {
 	// todo 需要底层提供一个根据rootCid查询金字塔结构的接口
-
-	return nil
+	// 组装成ChunkPyramid
+	return make(map[string]map[string]uint)
 }
 
-func (cn *ChunkInfoTabNeighbor) onChunkInfoReq(authInfo []byte, rootCid string, node string) {
-	// 调用sendDataToNode
-	ciResp := cn.createChunkInfoResp(rootCid)
-	SendDataToNode(ciResp, node)
+func (cn *ChunkInfoTabNeighbor) createChunkPyramidResp(rootCid string, cp map[string]map[string]uint, ctn map[string][]string) ChunkPyramidResp {
+	resp := make([]ChunkPyramidChildResp, 0)
+	for k, v := range cp {
+		for pk, pv := range v {
+			cpr := ChunkPyramidChildResp{pk, k, pv, ctn[pk]}
+			resp = append(resp, cpr)
+		}
+	}
+	return ChunkPyramidResp{rootCid: rootCid, pyramid: resp}
 }

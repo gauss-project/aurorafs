@@ -6,11 +6,11 @@ import (
 
 // todo 验证金字塔结构是否正确
 
-func (cp *ChunkPyramid) UpdateChunkPyramid(pyramids map[string]map[string]uint) {
+func (cp *ChunkPyramid) updateChunkPyramid(pyramids map[string]map[string]uint) {
 	cp.Lock()
 	defer cp.RUnlock()
 	for key, pyramid := range pyramids {
-		cp.Pyramid[key] = pyramid
+		cp.pyramid[key] = pyramid
 	}
 }
 
@@ -23,7 +23,7 @@ func (cp *ChunkPyramid) getChunkPyramid(rootCid string) map[string]map[string]ui
 }
 
 func (cp *ChunkPyramid) getChunkPyramidByPCid(pCid string, pyramids map[string]map[string]uint) map[string]map[string]uint {
-	cids, ok := cp.Pyramid[pCid]
+	cids, ok := cp.pyramid[pCid]
 	if !ok {
 		return pyramids
 	}
@@ -38,12 +38,4 @@ func (cp *ChunkPyramid) getChunkPyramidByPCid(pCid string, pyramids map[string]m
 func (cp *ChunkPyramid) createChunkPyramidReq(rootCid string) ChunkPyramidReq {
 	cpReq := ChunkPyramidReq{rootCid: rootCid, createTime: time.Now().Unix()}
 	return cpReq
-}
-
-func (cp *ChunkPyramid) doFindChunkPyramid(authInfo []byte, rootCid string, nodes []string) {
-	// 调用sendDataToNodes
-	cpReq := cp.createChunkPyramidReq(rootCid)
-	for _, node := range nodes {
-		SendDataToNode(cpReq, node)
-	}
 }
