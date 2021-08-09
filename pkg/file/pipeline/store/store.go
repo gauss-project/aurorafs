@@ -8,11 +8,9 @@ import (
 	"context"
 	"errors"
 
-	"github.com/gauss-project/aurorafs/pkg/file/pipeline"
-	"github.com/gauss-project/aurorafs/pkg/sctx"
-	"github.com/gauss-project/aurorafs/pkg/storage"
 	"github.com/gauss-project/aurorafs/pkg/boson"
-	"github.com/gauss-project/aurorafs/pkg/tags"
+	"github.com/gauss-project/aurorafs/pkg/file/pipeline"
+	"github.com/gauss-project/aurorafs/pkg/storage"
 )
 
 var errInvalidData = errors.New("store: invalid data")
@@ -34,33 +32,13 @@ func (w *storeWriter) ChainWrite(p *pipeline.PipeWriteArgs) error {
 	if p.Ref == nil || p.Data == nil {
 		return errInvalidData
 	}
-	tag := sctx.GetTag(w.ctx)
-	var c boson.Chunk
-	if tag != nil {
-		err := tag.Inc(tags.StateSplit)
-		if err != nil {
-			return err
-		}
-		c = boson.NewChunk(boson.NewAddress(p.Ref), p.Data).WithTagID(tag.Uid)
-	} else {
-		c = boson.NewChunk(boson.NewAddress(p.Ref), p.Data)
-	}
-	seen, err := w.l.Put(w.ctx, w.mode, c)
+
+	c := boson.NewChunk(boson.NewAddress(p.Ref), p.Data)
+	_, err := w.l.Put(w.ctx, w.mode, c)
 	if err != nil {
 		return err
 	}
-	if tag != nil {
-		err := tag.Inc(tags.StateStored)
-		if err != nil {
-			return err
-		}
-		if seen[0] {
-			err := tag.Inc(tags.StateSeen)
-			if err != nil {
-				return err
-			}
-		}
-	}
+
 	if w.next == nil {
 		return nil
 	}

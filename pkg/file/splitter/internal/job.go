@@ -10,12 +10,11 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/cac"
 	"github.com/gauss-project/aurorafs/pkg/encryption"
 	"github.com/gauss-project/aurorafs/pkg/file"
-	"github.com/gauss-project/aurorafs/pkg/sctx"
-	"github.com/gauss-project/aurorafs/pkg/boson"
-	"github.com/gauss-project/aurorafs/pkg/tags"
+
 	"golang.org/x/crypto/sha3"
 )
 
@@ -44,7 +43,7 @@ type SimpleSplitterJob struct {
 	sumCounts  []int  // number of sums performed, indexed per level
 	cursors    []int  // section write position, indexed per level
 	buffer     []byte // keeps data and hashes, indexed by cursors
-	tag        *tags.Tag
+
 	toEncrypt  bool // to encryrpt the chunks or not
 	refSize    int64
 }
@@ -66,7 +65,7 @@ func NewSimpleSplitterJob(ctx context.Context, putter Putter, spanLength int64, 
 		sumCounts:  make([]int, levelBufferLimit),
 		cursors:    make([]int, levelBufferLimit),
 		buffer:     make([]byte, boson.ChunkWithSpanSize*levelBufferLimit*2), // double size as temp workaround for weak calculation of needed buffer space
-		tag:        sctx.GetTag(ctx),
+
 		toEncrypt:  toEncrypt,
 		refSize:    refSize,
 	}
@@ -141,10 +140,7 @@ func (s *SimpleSplitterJob) sumLevel(lvl int) ([]byte, error) {
 	binary.LittleEndian.PutUint64(head, uint64(span))
 	tail := s.buffer[s.cursors[lvl+1]:s.cursors[lvl]]
 	chunkData = append(head, tail...)
-	err := s.incrTag(tags.StateSplit)
-	if err != nil {
-		return nil, err
-	}
+
 	c := chunkData
 	var encryptionKey encryption.Key
 
@@ -161,22 +157,14 @@ func (s *SimpleSplitterJob) sumLevel(lvl int) ([]byte, error) {
 		return nil, err
 	}
 
-	// Add tag to the chunk if tag is valid
-	if s.tag != nil {
-		ch = ch.WithTagID(s.tag.Uid)
-	}
 
-	seen, err := s.putter.Put(s.ctx, ch)
+
+	_, err = s.putter.Put(s.ctx, ch)
 	if err != nil {
 		return nil, err
-	} else if len(seen) > 0 && seen[0] {
-		err = s.incrTag(tags.StateSeen)
-		if err != nil {
-			return nil, err
-		}
 	}
 
-	err = s.incrTag(tags.StateStored)
+	//err = s.incrTag(tags.StateStored)
 	if err != nil {
 		return nil, err
 	}
@@ -298,9 +286,4 @@ func (s *SimpleSplitterJob) newDataEncryption(key encryption.Key) encryption.Int
 	return encryption.New(key, int(boson.ChunkSize), 0, sha3.NewLegacyKeccak256)
 }
 
-func (s *SimpleSplitterJob) incrTag(state tags.State) error {
-	if s.tag != nil {
-		return s.tag.Inc(state)
-	}
-	return nil
-}
+
