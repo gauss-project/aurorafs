@@ -17,13 +17,11 @@ import (
 
 	cmdfile "github.com/gauss-project/aurorafs/cmd/internal/file"
 	"github.com/gauss-project/aurorafs/pkg/api"
+	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/logging"
-	statestore "github.com/gauss-project/aurorafs/pkg/statestore/mock"
 	"github.com/gauss-project/aurorafs/pkg/storage"
 	"github.com/gauss-project/aurorafs/pkg/storage/mock"
 	testingc "github.com/gauss-project/aurorafs/pkg/storage/testing"
-	"github.com/gauss-project/aurorafs/pkg/boson"
-	"github.com/gauss-project/aurorafs/pkg/tags"
 )
 
 const (
@@ -154,8 +152,8 @@ func TestLimitWriter(t *testing.T) {
 func newTestServer(t *testing.T, storer storage.Storer) *url.URL {
 	t.Helper()
 	logger := logging.New(ioutil.Discard, 0)
-	store := statestore.NewStateStore()
-	s := api.New(tags.NewTags(store, logger), storer, nil, nil, nil, nil, logger, nil, api.Options{})
+	//store := statestore.NewStateStore()
+	s := api.New( storer,   nil, nil, logger, nil, api.Options{})
 	ts := httptest.NewServer(s)
 	srvUrl, err := url.Parse(ts.URL)
 	if err != nil {

@@ -1,4 +1,4 @@
-module github.com/gauss-project/aurorafs
+module github.com/ethersphere/bee
 
 go 1.14
 
@@ -21,7 +21,6 @@ require (
 	github.com/gorilla/handlers v1.4.2
 	github.com/gorilla/mux v1.7.4
 	github.com/gorilla/websocket v1.4.2
-	github.com/ipfs/go-cid v0.0.7
 	github.com/kardianos/service v1.2.0
 	github.com/koron/go-ssdp v0.0.2 // indirect
 	github.com/kr/text v0.2.0 // indirect
