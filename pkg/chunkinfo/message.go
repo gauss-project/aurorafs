@@ -1,13 +1,15 @@
 package chunk_info
 
+// sendDataToNode 发送请求
 func (ci *ChunkInfo) sendDataToNode(req interface{}, nodeId string) {
 	// 调用libp2p发送请求
 }
 
+// onChunkInfoHandle 接受请求
 func (ci *ChunkInfo) onChunkInfoHandle(authInfo []byte, cmd, nodeId string, body interface{}) {
 	// todo 请求成功关闭超时监听
 	if cmd == "req/chunkinfo" {
-		ci.onchunkInfoReq(authInfo, nodeId, body)
+		ci.onChunkInfoReq(authInfo, nodeId, body)
 	}
 	if cmd == "resp/chunkinfo" {
 		ci.onChunkInfoResp(authInfo, nodeId, body)
@@ -20,7 +22,8 @@ func (ci *ChunkInfo) onChunkInfoHandle(authInfo []byte, cmd, nodeId string, body
 	}
 }
 
-func (ci *ChunkInfo) onchunkInfoReq(authInfo []byte, nodeId string, body interface{}) {
+// onChunkInfoReq 获取其他节点chunkinfo req请求
+func (ci *ChunkInfo) onChunkInfoReq(authInfo []byte, nodeId string, body interface{}) {
 	// 根据rootcid获取最底一级的cids=>nodes
 	req := body.(chunkInfoReq)
 	ctn := ci.ct.getNeighborChunkInfo(req.rootCid)
@@ -30,11 +33,13 @@ func (ci *ChunkInfo) onchunkInfoReq(authInfo []byte, nodeId string, body interfa
 	ci.sendDataToNode(resp, nodeId)
 }
 
+// onChunkInfoResp 获取其他节点响应请求
 func (ci *ChunkInfo) onChunkInfoResp(authInfo []byte, nodeId string, body interface{}) {
 	resp := body.(chunkInfoResp)
 	ci.onFindChunkInfo(authInfo, resp.rootCid, nodeId, resp.presence)
 }
 
+// onChunkPyramidReq 获取其他节点请求获取金字塔
 func (ci *ChunkInfo) onChunkPyramidReq(authInfo []byte, nodeId string, body interface{}) {
 	// 根据rootCid获取金字塔结构
 	req := body.(chunkPyramidReq)
@@ -45,6 +50,7 @@ func (ci *ChunkInfo) onChunkPyramidReq(authInfo []byte, nodeId string, body inte
 	ci.sendDataToNode(resp, nodeId)
 }
 
+// onChunkPyramidResp 获取其他节点响应的金字塔请求
 func (ci *ChunkInfo) onChunkPyramidResp(authInfo []byte, node string, body interface{}) {
 	resp := body.(chunkPyramidResp)
 	py := make(map[string]map[string]uint, len(resp.pyramid))
@@ -61,6 +67,7 @@ func (ci *ChunkInfo) onChunkPyramidResp(authInfo []byte, node string, body inter
 	ci.onFindChunkPyramid(authInfo, resp.rootCid, node, py, cn)
 }
 
+// onFindChunkPyramid  金字塔请求流程
 func (ci *ChunkInfo) onFindChunkPyramid(authInfo []byte, rootCid, node string, pyramids map[string]map[string]uint, cn map[string][]string) {
 	// 是否已经发现了
 	_, ok := ci.cp.pyramid[rootCid]
@@ -71,6 +78,7 @@ func (ci *ChunkInfo) onFindChunkPyramid(authInfo []byte, rootCid, node string, p
 	ci.onFindChunkInfo(authInfo, rootCid, node, cn)
 }
 
+// onFindChunkInfo chunkinfo 请求流程
 func (ci *ChunkInfo) onFindChunkInfo(authInfo []byte, rootCid, node string, chunkInfo map[string][]string) {
 	// todo 检查是否有新节点是否为轻节点
 	// 更新chunkinfodiscover

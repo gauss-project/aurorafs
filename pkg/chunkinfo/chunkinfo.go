@@ -10,6 +10,7 @@ type ChunkInfo struct {
 	cpd    *pendingFinderInfo    // 是否发现RootCid
 }
 
+// New 创建ChunkInfo
 func New() *ChunkInfo {
 	// message new
 	cd := &chunkInfoDiscover{presence: make(map[string]map[string][]string)}
@@ -20,6 +21,7 @@ func New() *ChunkInfo {
 	return &ChunkInfo{ct: ct, cd: cd, cp: cp, cpd: cpd, queues: queues}
 }
 
+// FindChunkInfo 根据rootCid与nodes开始发现
 func (ci *ChunkInfo) FindChunkInfo(authInfo []byte, rootCid string, nodes []string) {
 	//  如果已经存在rootCid并且未开始发现直接发起doFindChunkInfo
 	if ci.cd.isExists(rootCid) {
@@ -39,32 +41,22 @@ func (ci *ChunkInfo) FindChunkInfo(authInfo []byte, rootCid string, nodes []stri
 	}
 }
 
+// GetChunkInfo 根据瑞rootCid与cid获取nodes
 func (ci *ChunkInfo) GetChunkInfo(rootCid string, cid string) *[]string {
 	return ci.cd.getChunkInfo(rootCid, cid)
 }
 
+// GetChunkPyramid 根据rootCid获取金字塔结构
 func (ci *ChunkInfo) GetChunkPyramid(rootCid string) map[string]map[string]uint {
 	return ci.cp.getChunkPyramid(rootCid)
 }
 
+// CancelFindChunkInfo 根据rootCid取消发现
 func (ci *ChunkInfo) CancelFindChunkInfo(rootCid string) {
 	ci.cpd.cancelPendingFinder(rootCid)
 }
 
+// OnChunkTransferred 哪些node主动获取了cid
 func (ci *ChunkInfo) OnChunkTransferred(cid string, rootCid string, node string) {
 	ci.ct.updateNeighborChunkInfo(cid, rootCid, node)
-}
-
-func (ci *ChunkInfo) doFindChunkInfo(authInfo []byte, rootCid string) {
-	// pull 过程
-	ci.queueProcess(rootCid)
-
-}
-
-func (ci *ChunkInfo) doFindChunkPyramid(authInfo []byte, rootCid string, nodes []string) {
-	// 调用sendDataToNodes
-	cpReq := ci.cp.createChunkPyramidReq(rootCid)
-	for _, node := range nodes {
-		ci.sendDataToNode(cpReq, node)
-	}
 }

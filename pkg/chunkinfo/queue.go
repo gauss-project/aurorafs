@@ -19,16 +19,17 @@ const (
 	PullerMax = 1000
 )
 
+// queue 拉取队列
 type queue struct {
 	sync.RWMutex
-	UnPull  []*string
-	Pulling []*string
-	Pulled  []*string
+	UnPull  []*string // 未拉取队列
+	Pulling []*string // 正在拉取队列
+	Pulled  []*string // 已拉取队列
 }
 
+// newQueue 创建拉取队列
 func (ci *ChunkInfo) newQueue(rootCid string) {
 	q := &queue{
-		//Puller:  make([]string, 0, PullerMax),
 		UnPull:  make([]*string, 0, PullerMax),
 		Pulling: make([]*string, 0, PullingMax),
 		Pulled:  make([]*string, 0, PullMax),
@@ -36,6 +37,7 @@ func (ci *ChunkInfo) newQueue(rootCid string) {
 	ci.queues[rootCid] = q
 }
 
+// len 队列长度
 func (q *queue) len(pull Pull) int {
 	q.RLock()
 	defer q.RUnlock()
@@ -43,6 +45,7 @@ func (q *queue) len(pull Pull) int {
 	return len(qu)
 }
 
+// peek 队列头节点
 func (q *queue) peek(pull Pull) *string {
 	q.RLock()
 	defer q.RUnlock()
@@ -50,7 +53,7 @@ func (q *queue) peek(pull Pull) *string {
 	return qu[0]
 }
 
-// Pop 出队
+// pop 出队
 func (q *queue) pop(pull Pull) *string {
 	q.Lock()
 	defer q.RUnlock()
@@ -61,7 +64,10 @@ func (q *queue) pop(pull Pull) *string {
 	return v
 }
 
+// popNode 指定某一个node出对列
 func (q *queue) popNode(pull Pull, node *string) {
+	q.Lock()
+	defer q.RUnlock()
 	qu := q.getPull(pull)
 	for i, n := range qu {
 		if *n == *node {
@@ -71,7 +77,7 @@ func (q *queue) popNode(pull Pull, node *string) {
 	q.updatePull(pull, qu)
 }
 
-// Push 入对
+// push 入对
 func (q *queue) push(pull Pull, node *string) {
 	q.Lock()
 	defer q.RUnlock()
@@ -80,8 +86,9 @@ func (q *queue) push(pull Pull, node *string) {
 	q.updatePull(pull, qu)
 }
 
+// getPull 根据拉取类型获取队列
 func (q *queue) getPull(pull Pull) []*string {
-	q.Lock()
+	q.RLock()
 	defer q.RUnlock()
 	switch pull {
 	case UnPull:
@@ -94,6 +101,7 @@ func (q *queue) getPull(pull Pull) []*string {
 	return make([]*string, 0)
 }
 
+// updatePull 根据对垒类型修改队列
 func (q *queue) updatePull(pull Pull, queue []*string) {
 	switch pull {
 	case UnPull:
@@ -105,11 +113,15 @@ func (q *queue) updatePull(pull Pull, queue []*string) {
 	}
 }
 
+// getQueue 根据rootCid获取队列
 func (ci *ChunkInfo) getQueue(rootCid string) *queue {
 	return ci.queues[rootCid]
 }
 
+// 根据队列类型判断节点是否存在
 func (q *queue) isExists(pull Pull, node string) bool {
+	q.RLock()
+	defer q.RUnlock()
 	pullNodes := q.getPull(pull)
 	for _, pn := range pullNodes {
 		if *pn == node {
@@ -122,8 +134,14 @@ func (q *queue) isExists(pull Pull, node string) bool {
 // pull 过程
 func (ci *ChunkInfo) queueProcess(rootCid string) {
 	q := ci.getQueue(rootCid)
+	q.Lock()
+	defer q.RUnlock()
 	// pulled + pulling >= pullMax
 	if q.len(Pulled)+q.len(Pulling) >= PullMax {
+		return
+	}
+	// 判断是否取消发现
+	if !ci.cpd.getPendingFinder(rootCid) {
 		return
 	}
 	// 判断正在查是否等于最大查询数
@@ -143,8 +161,9 @@ func (ci *ChunkInfo) queueProcess(rootCid string) {
 	}
 }
 
+// updateQueue 修改队列
 func (ci *ChunkInfo) updateQueue(authInfo []byte, rootCid, node string, nodes []string) {
-	q := ci.queues[rootCid]
+	q := ci.getQueue(rootCid)
 	for _, n := range nodes {
 		// 填充到未查询队列, 如果最大拉取数则不在填充到为查询队列中
 		if q.len(UnPull) >= PullerMax {
