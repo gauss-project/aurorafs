@@ -2,14 +2,14 @@ openapi: 3.0.3
 
 info:
   version: 0.5.3
-  title: Swarm API
+  title: Aurora API
   description: "A list of the currently provided Interfaces to interact with the boson, implementing file operations and sending messages"
 
 security:
   - {}
 
 externalDocs:
-  description: Browse the documentation @ the Swarm Docs
+  description: Browse the documentation @ the Aurora Docs
   url: "https://docs.boson.eth"
 
 servers:
@@ -37,9 +37,9 @@ paths:
       tags:
         - Bytes
       parameters:
-        - $ref: "SwarmCommon.yaml#/components/parameters/SwarmTagParameter"
-        - $ref: "SwarmCommon.yaml#/components/parameters/SwarmPinParameter"
-        - $ref: "SwarmCommon.yaml#/components/parameters/SwarmEncryptParameter"
+        - $ref: "AuroraCommon.yaml#/components/parameters/AuroraTagParameter"
+        - $ref: "AuroraCommon.yaml#/components/parameters/AuroraPinParameter"
+        - $ref: "AuroraCommon.yaml#/components/parameters/AuroraEncryptParameter"
       requestBody:
         content:
           application/octet-stream:
@@ -50,16 +50,16 @@ paths:
         "200":
           description: Ok
           headers:
-            "swarm-tag":
-              $ref: "SwarmCommon.yaml#/components/headers/SwarmTag"
+            "Aurora-tag":
+              $ref: "AuroraCommon.yaml#/components/headers/AuroraTag"
           content:
             application/json:
               schema:
-                $ref: "SwarmCommon.yaml#/components/schemas/ReferenceResponse"
+                $ref: "AuroraCommon.yaml#/components/schemas/ReferenceResponse"
         "403":
-          $ref: "SwarmCommon.yaml#/components/responses/403"
+          $ref: "AuroraCommon.yaml#/components/responses/403"
         "500":
-          $ref: "SwarmCommon.yaml#/components/responses/500"
+          $ref: "AuroraCommon.yaml#/components/responses/500"
         default:
           description: Default response
 
@@ -72,9 +72,9 @@ paths:
         - in: path
           name: reference
           schema:
-            $ref: "SwarmCommon.yaml#/components/schemas/SwarmReference"
+            $ref: "AuroraCommon.yaml#/components/schemas/AuroraReference"
           required: true
-          description: Swarm address reference to content
+          description: Aurora address reference to content
       responses:
         "200":
           description: Retrieved content specified by reference
@@ -84,7 +84,7 @@ paths:
                 type: string
                 format: binary
         "404":
-          $ref: "SwarmCommon.yaml#/components/responses/404"
+          $ref: "AuroraCommon.yaml#/components/responses/404"
         default:
           description: Default response
 
@@ -97,16 +97,16 @@ paths:
         - in: path
           name: reference
           schema:
-            $ref: "SwarmCommon.yaml#/components/schemas/SwarmReference"
+            $ref: "AuroraCommon.yaml#/components/schemas/AuroraReference"
           required: true
-          description: Swarm address of chunk
-        - $ref: "SwarmCommon.yaml#/components/parameters/SwarmRecoveryTargetsParameter"
+          description: Aurora address of chunk
+        - $ref: "AuroraCommon.yaml#/components/parameters/AuroraRecoveryTargetsParameter"
       responses:
         "200":
           description: Retrieved chunk content
           headers:
-            "swarm-recovery-targets":
-              $ref: "SwarmCommon.yaml#/components/headers/SwarmRecoveryTargets"
+            "Aurora-recovery-targets":
+              $ref: "AuroraCommon.yaml#/components/headers/AuroraRecoveryTargets"
           content:
             application/octet-stream:
               schema:
@@ -115,11 +115,11 @@ paths:
         "202":
           description: chunk recovery initiated. retry after sometime.
         "400":
-          $ref: "SwarmCommon.yaml#/components/responses/400"
+          $ref: "AuroraCommon.yaml#/components/responses/400"
         "404":
-          $ref: "SwarmCommon.yaml#/components/responses/404"
+          $ref: "AuroraCommon.yaml#/components/responses/404"
         "500":
-          $ref: "SwarmCommon.yaml#/components/responses/500"
+          $ref: "AuroraCommon.yaml#/components/responses/500"
         default:
           description: Default response
 
@@ -129,8 +129,8 @@ paths:
       tags:
         - Chunk
       parameters:
-        - $ref: "SwarmCommon.yaml#/components/parameters/SwarmTagParameter"
-        - $ref: "SwarmCommon.yaml#/components/parameters/SwarmPinParameter"
+        - $ref: "AuroraCommon.yaml#/components/parameters/AuroraTagParameter"
+        - $ref: "AuroraCommon.yaml#/components/parameters/AuroraPinParameter"
       requestBody:
         content:
           application/octet-stream:
@@ -141,16 +141,16 @@ paths:
         "200":
           description: Ok
           headers:
-            "swarm-tag":
-              $ref: "SwarmCommon.yaml#/components/headers/SwarmTag"
+            "Aurora-tag":
+              $ref: "AuroraCommon.yaml#/components/headers/AuroraTag"
           content:
             application/json:
               schema:
-                $ref: "SwarmCommon.yaml#/components/schemas/Status"
+                $ref: "AuroraCommon.yaml#/components/schemas/Status"
         "400":
-          $ref: "SwarmCommon.yaml#/components/responses/400"
+          $ref: "AuroraCommon.yaml#/components/responses/400"
         "500":
-          $ref: "SwarmCommon.yaml#/components/responses/500"
+          $ref: "AuroraCommon.yaml#/components/responses/500"
         default:
           description: Default response
 
@@ -163,13 +163,13 @@ paths:
         - in: query
           name: name
           schema:
-            $ref: "SwarmCommon.yaml#/components/schemas/FileName"
+            $ref: "AuroraCommon.yaml#/components/schemas/FileName"
           required: false
           description: Filename
-        - $ref: "SwarmCommon.yaml#/components/parameters/SwarmTagParameter"
-        - $ref: "SwarmCommon.yaml#/components/parameters/SwarmPinParameter"
-        - $ref: "SwarmCommon.yaml#/components/parameters/SwarmEncryptParameter"
-        - $ref: "SwarmCommon.yaml#/components/parameters/ContentTypePreserved"
+        - $ref: "AuroraCommon.yaml#/components/parameters/AuroraTagParameter"
+        - $ref: "AuroraCommon.yaml#/components/parameters/AuroraPinParameter"
+        - $ref: "AuroraCommon.yaml#/components/parameters/AuroraEncryptParameter"
+        - $ref: "AuroraCommon.yaml#/components/parameters/ContentTypePreserved"
       requestBody:
         content:
           multipart/form-data:
@@ -188,20 +188,20 @@ paths:
         "200":
           description: Ok
           headers:
-            "swarm-tag":
-              $ref: "SwarmCommon.yaml#/components/headers/SwarmTag"
+            "Aurora-tag":
+              $ref: "AuroraCommon.yaml#/components/headers/AuroraTag"
             "etag":
-              $ref: "SwarmCommon.yaml#/components/headers/ETag" 
+              $ref: "AuroraCommon.yaml#/components/headers/ETag" 
           content:
             application/json:
               schema:
-                $ref: "SwarmCommon.yaml#/components/schemas/ReferenceResponse"
+                $ref: "AuroraCommon.yaml#/components/schemas/ReferenceResponse"
         "400":
-          $ref: "SwarmCommon.yaml#/components/responses/400"
+          $ref: "AuroraCommon.yaml#/components/responses/400"
         "403":
-          $ref: "SwarmCommon.yaml#/components/responses/403"
+          $ref: "AuroraCommon.yaml#/components/responses/403"
         "500":
-          $ref: "SwarmCommon.yaml#/components/responses/500"
+          $ref: "AuroraCommon.yaml#/components/responses/500"
         default:
           description: Default response
 
@@ -214,29 +214,29 @@ paths:
         - in: path
           name: reference
           schema:
-            $ref: "SwarmCommon.yaml#/components/schemas/SwarmReference"
+            $ref: "AuroraCommon.yaml#/components/schemas/AuroraReference"
           required: true
-          description: Swarm address of content
-        - $ref: "SwarmCommon.yaml#/components/parameters/SwarmRecoveryTargetsParameter"
+          description: Aurora address of content
+        - $ref: "AuroraCommon.yaml#/components/parameters/AuroraRecoveryTargetsParameter"
       responses:
         "200":
           description: Ok
           headers:
-            "swarm-recovery-targets":
-              $ref: "SwarmCommon.yaml#/components/headers/SwarmRecoveryTargets"
+            "Aurora-recovery-targets":
+              $ref: "AuroraCommon.yaml#/components/headers/AuroraRecoveryTargets"
             "ETag":
-              $ref: "SwarmCommon.yaml#/components/headers/ETag"
+              $ref: "AuroraCommon.yaml#/components/headers/ETag"
           content:
             application/octet-stream:
               schema:
                 type: string
                 format: binary
         "400":
-          $ref: "SwarmCommon.yaml#/components/responses/400"
+          $ref: "AuroraCommon.yaml#/components/responses/400"
         "404":
-          $ref: "SwarmCommon.yaml#/components/responses/404"
+          $ref: "AuroraCommon.yaml#/components/responses/404"
         "500":
-          $ref: "SwarmCommon.yaml#/components/responses/500"
+          $ref: "AuroraCommon.yaml#/components/responses/500"
         default:
           description: Default response
 
@@ -246,12 +246,12 @@ paths:
       tags:
         - Collection
       parameters:
-        - $ref: "SwarmCommon.yaml#/components/parameters/SwarmTagParameter"
-        - $ref: "SwarmCommon.yaml#/components/parameters/SwarmPinParameter"
-        - $ref: "SwarmCommon.yaml#/components/parameters/SwarmEncryptParameter"
-        - $ref: "SwarmCommon.yaml#/components/parameters/SwarmIndexDocumentParameter"
-        - $ref: "SwarmCommon.yaml#/components/parameters/SwarmErrorDocumentParameter"
-        - $ref: "SwarmCommon.yaml#/components/parameters/ContentTypePreserved"
+        - $ref: "AuroraCommon.yaml#/components/parameters/AuroraTagParameter"
+        - $ref: "AuroraCommon.yaml#/components/parameters/AuroraPinParameter"
+        - $ref: "AuroraCommon.yaml#/components/parameters/AuroraEncryptParameter"
+        - $ref: "AuroraCommon.yaml#/components/parameters/AuroraIndexDocumentParameter"
+        - $ref: "AuroraCommon.yaml#/components/parameters/AuroraErrorDocumentParameter"
+        - $ref: "AuroraCommon.yaml#/components/parameters/ContentTypePreserved"
       requestBody:
         content:
           application/x-tar:
@@ -262,18 +262,18 @@ paths:
         "200":
           description: Ok
           headers:
-            "swarm-tag":
-              $ref: "SwarmCommon.yaml#/components/headers/SwarmTag"
+            "Aurora-tag":
+              $ref: "AuroraCommon.yaml#/components/headers/AuroraTag"
           content:
             application/json:
               schema:
-                $ref: "SwarmCommon.yaml#/components/schemas/ReferenceResponse"
+                $ref: "AuroraCommon.yaml#/components/schemas/ReferenceResponse"
         "400":
-          $ref: "SwarmCommon.yaml#/components/responses/400"
+          $ref: "AuroraCommon.yaml#/components/responses/400"
         "403":
-          $ref: "SwarmCommon.yaml#/components/responses/403"
+          $ref: "AuroraCommon.yaml#/components/responses/403"
         "500":
-          $ref: "SwarmCommon.yaml#/components/responses/500"
+          $ref: "AuroraCommon.yaml#/components/responses/500"
         default:
           description: Default response
 
@@ -286,29 +286,29 @@ paths:
         - in: path
           name: reference
           schema:
-            $ref: "SwarmCommon.yaml#/components/schemas/SwarmReference"
+            $ref: "AuroraCommon.yaml#/components/schemas/AuroraReference"
           required: true
-          description: Swarm address of content
-        - $ref: "SwarmCommon.yaml#/components/parameters/SwarmRecoveryTargetsParameter"
+          description: Aurora address of content
+        - $ref: "AuroraCommon.yaml#/components/parameters/AuroraRecoveryTargetsParameter"
       responses:
         "200":
           description: Ok
           headers:
-            "swarm-recovery-targets":
-              $ref: "SwarmCommon.yaml#/components/headers/SwarmRecoveryTargets"
+            "Aurora-recovery-targets":
+              $ref: "AuroraCommon.yaml#/components/headers/AuroraRecoveryTargets"
           # "boson-feed-index":
-          #   $ref: "SwarmCommon.yaml#/components/headers/SwarmFeedIndex"
+          #   $ref: "AuroraCommon.yaml#/components/headers/AuroraFeedIndex"
           content:
             application/octet-stream:
               schema:
                 type: string
                 format: binary
         "400":
-          $ref: "SwarmCommon.yaml#/components/responses/400"
+          $ref: "AuroraCommon.yaml#/components/responses/400"
         "404":
-          $ref: "SwarmCommon.yaml#/components/responses/404"
+          $ref: "AuroraCommon.yaml#/components/responses/404"
         "500":
-          $ref: "SwarmCommon.yaml#/components/responses/500"
+          $ref: "AuroraCommon.yaml#/components/responses/500"
         default:
           description: Default response
 
@@ -321,22 +321,22 @@ paths:
         - in: path
           name: reference
           schema:
-            $ref: "SwarmCommon.yaml#/components/schemas/SwarmReference"
+            $ref: "AuroraCommon.yaml#/components/schemas/AuroraReference"
           required: true
-          description: Swarm address of content
+          description: Aurora address of content
         - in: path
           name: path
           schema:
             type: string
           required: true
           description: Path to the file in the collection.
-        - $ref: "SwarmCommon.yaml#/components/parameters/SwarmRecoveryTargetsParameter"
+        - $ref: "AuroraCommon.yaml#/components/parameters/AuroraRecoveryTargetsParameter"
       responses:
         "200":
           description: Ok
           headers:
-            "swarm-recovery-targets":
-              $ref: "SwarmCommon.yaml#/components/headers/SwarmRecoveryTargets"
+            "Aurora-recovery-targets":
+              $ref: "AuroraCommon.yaml#/components/headers/AuroraRecoveryTargets"
           content:
             application/octet-stream:
               schema:
@@ -344,11 +344,11 @@ paths:
                 format: binary
 
         "400":
-          $ref: "SwarmCommon.yaml#/components/responses/400"
+          $ref: "AuroraCommon.yaml#/components/responses/400"
         "404":
-          $ref: "SwarmCommon.yaml#/components/responses/404"
+          $ref: "AuroraCommon.yaml#/components/responses/404"
         "500":
-          $ref: "SwarmCommon.yaml#/components/responses/500"
+          $ref: "AuroraCommon.yaml#/components/responses/500"
         default:
           description: Default response
 
@@ -381,11 +381,11 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "SwarmCommon.yaml#/components/schemas/TagsList"
+                $ref: "AuroraCommon.yaml#/components/schemas/TagsList"
         "403":
-          $ref: "SwarmCommon.yaml#/components/responses/403"
+          $ref: "AuroraCommon.yaml#/components/responses/403"
         "500":
-          $ref: "SwarmCommon.yaml#/components/responses/500"
+          $ref: "AuroraCommon.yaml#/components/responses/500"
         default:
           description: Default response
     post:
@@ -397,18 +397,18 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "SwarmCommon.yaml#/components/schemas/NewTagRequest"
+              $ref: "AuroraCommon.yaml#/components/schemas/NewTagRequest"
       responses:
         "201":
           description: New Tag Info
           content:
             application/json:
               schema:
-                $ref: "SwarmCommon.yaml#/components/schemas/NewTagResponse"
+                $ref: "AuroraCommon.yaml#/components/schemas/NewTagResponse"
         "403":
-          $ref: "SwarmCommon.yaml#/components/responses/403"
+          $ref: "AuroraCommon.yaml#/components/responses/403"
         "500":
-          $ref: "SwarmCommon.yaml#/components/responses/500"
+          $ref: "AuroraCommon.yaml#/components/responses/500"
         default:
           description: Default response
 
@@ -421,7 +421,7 @@ paths:
         - in: path
           name: uid
           schema:
-            $ref: "SwarmCommon.yaml#/components/schemas/Uid"
+            $ref: "AuroraCommon.yaml#/components/schemas/Uid"
           required: true
           description: Uid
       responses:
@@ -430,13 +430,13 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "SwarmCommon.yaml#/components/schemas/NewTagResponse"
+                $ref: "AuroraCommon.yaml#/components/schemas/NewTagResponse"
         "400":
-          $ref: "SwarmCommon.yaml#/components/responses/400"
+          $ref: "AuroraCommon.yaml#/components/responses/400"
         "403":
-          $ref: "SwarmCommon.yaml#/components/responses/403"
+          $ref: "AuroraCommon.yaml#/components/responses/403"
         "500":
-          $ref: "SwarmCommon.yaml#/components/responses/500"
+          $ref: "AuroraCommon.yaml#/components/responses/500"
         default:
           description: Default response
     delete:
@@ -447,20 +447,20 @@ paths:
         - in: path
           name: uid
           schema:
-            $ref: "SwarmCommon.yaml#/components/schemas/Uid"
+            $ref: "AuroraCommon.yaml#/components/schemas/Uid"
           required: true
           description: Uid
       responses:
         "204":
-          $ref: "SwarmCommon.yaml#/components/responses/204"
+          $ref: "AuroraCommon.yaml#/components/responses/204"
         "400":
-          $ref: "SwarmCommon.yaml#/components/responses/400"
+          $ref: "AuroraCommon.yaml#/components/responses/400"
         "403":
-          $ref: "SwarmCommon.yaml#/components/responses/403"
+          $ref: "AuroraCommon.yaml#/components/responses/403"
         "404":
-          $ref: "SwarmCommon.yaml#/components/responses/404"
+          $ref: "AuroraCommon.yaml#/components/responses/404"
         "500":
-          $ref: "SwarmCommon.yaml#/components/responses/500"
+          $ref: "AuroraCommon.yaml#/components/responses/500"
         default:
           description: Default response
     patch:
@@ -471,7 +471,7 @@ paths:
         - in: path
           name: uid
           schema:
-            $ref: "SwarmCommon.yaml#/components/schemas/Uid"
+            $ref: "AuroraCommon.yaml#/components/schemas/Uid"
           required: true
           description: Uid
       requestBody:
@@ -480,20 +480,20 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "SwarmCommon.yaml#/components/schemas/Address"
+              $ref: "AuroraCommon.yaml#/components/schemas/Address"
       responses:
         "200":
           description: Ok
           content:
             application/json:
               schema:
-                $ref: "SwarmCommon.yaml#/components/schemas/Status"
+                $ref: "AuroraCommon.yaml#/components/schemas/Status"
         "403":
-          $ref: "SwarmCommon.yaml#/components/responses/403"
+          $ref: "AuroraCommon.yaml#/components/responses/403"
         "404":
-          $ref: "SwarmCommon.yaml#/components/responses/404"
+          $ref: "AuroraCommon.yaml#/components/responses/404"
         "500":
-          $ref: "SwarmCommon.yaml#/components/responses/500"
+          $ref: "AuroraCommon.yaml#/components/responses/500"
         default:
           description: Default response
 
@@ -502,9 +502,9 @@ paths:
       - in: path
         name: address
         schema:
-          $ref: "SwarmCommon.yaml#/components/schemas/SwarmAddress"
+          $ref: "AuroraCommon.yaml#/components/schemas/AuroraAddress"
         required: true
-        description: Swarm address of chunk
+        description: Aurora address of chunk
     post:
       summary: Pin chunk with given address
       tags:
@@ -515,13 +515,13 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "SwarmCommon.yaml#/components/schemas/Response"
+                $ref: "AuroraCommon.yaml#/components/schemas/Response"
         "400":
-          $ref: "SwarmCommon.yaml#/components/responses/400"
+          $ref: "AuroraCommon.yaml#/components/responses/400"
         "403":
-          $ref: "SwarmCommon.yaml#/components/responses/403"
+          $ref: "AuroraCommon.yaml#/components/responses/403"
         "404":
-          $ref: "SwarmCommon.yaml#/components/responses/404"
+          $ref: "AuroraCommon.yaml#/components/responses/404"
         default:
           description: Default response
     delete:
@@ -534,13 +534,13 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "SwarmCommon.yaml#/components/schemas/Response"
+                $ref: "AuroraCommon.yaml#/components/schemas/Response"
         "400":
-          $ref: "SwarmCommon.yaml#/components/responses/400"
+          $ref: "AuroraCommon.yaml#/components/responses/400"
         "403":
-          $ref: "SwarmCommon.yaml#/components/responses/403"
+          $ref: "AuroraCommon.yaml#/components/responses/403"
         "404":
-          $ref: "SwarmCommon.yaml#/components/responses/404"
+          $ref: "AuroraCommon.yaml#/components/responses/404"
         default:
           description: Default response
     get:
@@ -553,11 +553,11 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "SwarmCommon.yaml#/components/schemas/PinningState"
+                $ref: "AuroraCommon.yaml#/components/schemas/PinningState"
         "403":
-          $ref: "SwarmCommon.yaml#/components/responses/403"
+          $ref: "AuroraCommon.yaml#/components/responses/403"
         "500":
-          $ref: "SwarmCommon.yaml#/components/responses/500"
+          $ref: "AuroraCommon.yaml#/components/responses/500"
         default:
           description: Default response
     put:
@@ -570,13 +570,13 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "SwarmCommon.yaml#/components/schemas/PinningState"
+                $ref: "AuroraCommon.yaml#/components/schemas/PinningState"
         "400":
-          $ref: "SwarmCommon.yaml#/components/responses/400"
+          $ref: "AuroraCommon.yaml#/components/responses/400"
         "403":
-          $ref: "SwarmCommon.yaml#/components/responses/403"
+          $ref: "AuroraCommon.yaml#/components/responses/403"
         "404":
-          $ref: "SwarmCommon.yaml#/components/responses/404"
+          $ref: "AuroraCommon.yaml#/components/responses/404"
         default:
           description: Default response
 
@@ -609,11 +609,11 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "SwarmCommon.yaml#/components/schemas/BzzChunksPinned"
+                $ref: "AuroraCommon.yaml#/components/schemas/BzzChunksPinned"
         "403":
-          $ref: "SwarmCommon.yaml#/components/responses/403"
+          $ref: "AuroraCommon.yaml#/components/responses/403"
         "500":
-          $ref: "SwarmCommon.yaml#/components/responses/500"
+          $ref: "AuroraCommon.yaml#/components/responses/500"
         default:
           description: Default response
 
@@ -622,9 +622,9 @@ paths:
       - in: path
         name: address
         schema:
-          $ref: "SwarmCommon.yaml#/components/schemas/SwarmAddress"
+          $ref: "AuroraCommon.yaml#/components/schemas/AuroraAddress"
         required: true
-        description: Swarm address of the bytes
+        description: Aurora address of the bytes
     post:
       summary: Pin bytes with given address
       tags:
@@ -635,13 +635,13 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "SwarmCommon.yaml#/components/schemas/Response"
+                $ref: "AuroraCommon.yaml#/components/schemas/Response"
         "400":
-          $ref: "SwarmCommon.yaml#/components/responses/400"
+          $ref: "AuroraCommon.yaml#/components/responses/400"
         "403":
-          $ref: "SwarmCommon.yaml#/components/responses/403"
+          $ref: "AuroraCommon.yaml#/components/responses/403"
         "404":
-          $ref: "SwarmCommon.yaml#/components/responses/404"
+          $ref: "AuroraCommon.yaml#/components/responses/404"
         default:
           description: Default response
     delete:
@@ -654,13 +654,13 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "SwarmCommon.yaml#/components/schemas/Response"
+                $ref: "AuroraCommon.yaml#/components/schemas/Response"
         "400":
-          $ref: "SwarmCommon.yaml#/components/responses/400"
+          $ref: "AuroraCommon.yaml#/components/responses/400"
         "403":
-          $ref: "SwarmCommon.yaml#/components/responses/403"
+          $ref: "AuroraCommon.yaml#/components/responses/403"
         "404":
-          $ref: "SwarmCommon.yaml#/components/responses/404"
+          $ref: "AuroraCommon.yaml#/components/responses/404"
         default:
           description: Default response
 
@@ -669,9 +669,9 @@ paths:
       - in: path
         name: address
         schema:
-          $ref: "SwarmCommon.yaml#/components/schemas/SwarmAddress"
+          $ref: "AuroraCommon.yaml#/components/schemas/AuroraAddress"
         required: true
-        description: Swarm address of the file
+        description: Aurora address of the file
     post:
       summary: Pin file with given address
       tags:
@@ -682,13 +682,13 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "SwarmCommon.yaml#/components/schemas/Response"
+                $ref: "AuroraCommon.yaml#/components/schemas/Response"
         "400":
-          $ref: "SwarmCommon.yaml#/components/responses/400"
+          $ref: "AuroraCommon.yaml#/components/responses/400"
         "403":
-          $ref: "SwarmCommon.yaml#/components/responses/403"
+          $ref: "AuroraCommon.yaml#/components/responses/403"
         "404":
-          $ref: "SwarmCommon.yaml#/components/responses/404"
+          $ref: "AuroraCommon.yaml#/components/responses/404"
         default:
           description: Default response
     delete:
@@ -701,13 +701,13 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "SwarmCommon.yaml#/components/schemas/Response"
+                $ref: "AuroraCommon.yaml#/components/schemas/Response"
         "400":
-          $ref: "SwarmCommon.yaml#/components/responses/400"
+          $ref: "AuroraCommon.yaml#/components/responses/400"
         "403":
-          $ref: "SwarmCommon.yaml#/components/responses/403"
+          $ref: "AuroraCommon.yaml#/components/responses/403"
         "404":
-          $ref: "SwarmCommon.yaml#/components/responses/404"
+          $ref: "AuroraCommon.yaml#/components/responses/404"
         default:
           description: Default response
 
@@ -716,9 +716,9 @@ paths:
       - in: path
         name: address
         schema:
-          $ref: "SwarmCommon.yaml#/components/schemas/SwarmAddress"
+          $ref: "AuroraCommon.yaml#/components/schemas/AuroraAddress"
         required: true
-        description: Swarm address of the collection
+        description: Aurora address of the collection
     post:
       summary: Pin collection with given address
       tags:
@@ -729,13 +729,13 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "SwarmCommon.yaml#/components/schemas/Response"
+                $ref: "AuroraCommon.yaml#/components/schemas/Response"
         "400":
-          $ref: "SwarmCommon.yaml#/components/responses/400"
+          $ref: "AuroraCommon.yaml#/components/responses/400"
         "403":
-          $ref: "SwarmCommon.yaml#/components/responses/403"
+          $ref: "AuroraCommon.yaml#/components/responses/403"
         "404":
-          $ref: "SwarmCommon.yaml#/components/responses/404"
+          $ref: "AuroraCommon.yaml#/components/responses/404"
         default:
           description: Default response
     delete:
@@ -748,47 +748,47 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "SwarmCommon.yaml#/components/schemas/Response"
+                $ref: "AuroraCommon.yaml#/components/schemas/Response"
         "400":
-          $ref: "SwarmCommon.yaml#/components/responses/400"
+          $ref: "AuroraCommon.yaml#/components/responses/400"
         "403":
-          $ref: "SwarmCommon.yaml#/components/responses/403"
+          $ref: "AuroraCommon.yaml#/components/responses/403"
         "404":
-          $ref: "SwarmCommon.yaml#/components/responses/404"
+          $ref: "AuroraCommon.yaml#/components/responses/404"
         default:
           description: Default response
 
   "/pss/send/{topic}/{targets}":
     post:
-      summary: Send to recipient or target with Postal Service for Swarm
+      summary: Send to recipient or target with Postal Service for Aurora
       tags:
-        - Postal Service for Swarm
+        - Postal Service for Aurora
       parameters:
         - in: path
           name: topic
           schema:
-            $ref: "SwarmCommon.yaml#/components/schemas/PssTopic"
+            $ref: "AuroraCommon.yaml#/components/schemas/PssTopic"
           required: true
           description: Topic name
         - in: path
           name: targets
           schema:
-            $ref: "SwarmCommon.yaml#/components/schemas/PssTargets"
+            $ref: "AuroraCommon.yaml#/components/schemas/PssTargets"
           required: true
           description: Target message address prefix. If multiple targets are specified, only one would be matched.
         - in: query
           name: recipient
           schema:
-            $ref: "SwarmCommon.yaml#/components/schemas/PssRecipient"
+            $ref: "AuroraCommon.yaml#/components/schemas/PssRecipient"
           required: false
           description: Recipient publickey
       responses:
         "200":
           description: Subscribed to topic
         "400":
-          $ref: "SwarmCommon.yaml#/components/responses/400"
+          $ref: "AuroraCommon.yaml#/components/responses/400"
         "500":
-          $ref: "SwarmCommon.yaml#/components/responses/500"
+          $ref: "AuroraCommon.yaml#/components/responses/500"
         default:
           description: Default response
 
@@ -801,14 +801,14 @@ paths:
         - in: path
           name: topic
           schema:
-            $ref: "SwarmCommon.yaml#/components/schemas/PssTopic"
+            $ref: "AuroraCommon.yaml#/components/schemas/PssTopic"
           required: true
           description: Topic name
       responses:
         "200":
           description: Returns a WebSocket with a subscription for incoming message data on the requested topic.
         "500":
-          $ref: "SwarmCommon.yaml#/components/responses/500"
+          $ref: "AuroraCommon.yaml#/components/responses/500"
         default:
           description: Default response
 
@@ -821,35 +821,35 @@ paths:
         - in: path
           name: owner
           schema:
-            $ref: "SwarmCommon.yaml#/components/schemas/EthereumAddress"
+            $ref: "AuroraCommon.yaml#/components/schemas/EthereumAddress"
           required: true
           description: Owner
         - in: path
           name: id
           schema:
-            $ref: "SwarmCommon.yaml#/components/schemas/HexString"
+            $ref: "AuroraCommon.yaml#/components/schemas/HexString"
           required: true
           description: Id
         - in: query
           name: sig
           schema:
-            $ref: "SwarmCommon.yaml#/components/schemas/HexString"
+            $ref: "AuroraCommon.yaml#/components/schemas/HexString"
           required: true
           description: Signature
-        - $ref: "SwarmCommon.yaml#/components/parameters/SwarmPinParameter"
+        - $ref: "AuroraCommon.yaml#/components/parameters/AuroraPinParameter"
       responses:
         "201":
           description: Created
           content:
             application/json:
               schema:
-                $ref: "SwarmCommon.yaml#/components/schemas/ReferenceResponse"
+                $ref: "AuroraCommon.yaml#/components/schemas/ReferenceResponse"
         "400":
-          $ref: "SwarmCommon.yaml#/components/responses/400"
+          $ref: "AuroraCommon.yaml#/components/responses/400"
         "401":
-          $ref: "SwarmCommon.yaml#/components/responses/401"
+          $ref: "AuroraCommon.yaml#/components/responses/401"
         "500":
-          $ref: "SwarmCommon.yaml#/components/responses/500"
+          $ref: "AuroraCommon.yaml#/components/responses/500"
         default:
           description: Default response
 
@@ -862,35 +862,35 @@ paths:
         - in: path
           name: owner
           schema:
-            $ref: "SwarmCommon.yaml#/components/schemas/EthereumAddress"
+            $ref: "AuroraCommon.yaml#/components/schemas/EthereumAddress"
           required: true
           description: Owner
         - in: path
           name: topic
           schema:
-            $ref: "SwarmCommon.yaml#/components/schemas/HexString"
+            $ref: "AuroraCommon.yaml#/components/schemas/HexString"
           required: true
           description: Topic
         - in: query
           name: type
           schema:
-            $ref: "SwarmCommon.yaml#/components/schemas/FeedType"
+            $ref: "AuroraCommon.yaml#/components/schemas/FeedType"
           required: false
           description: "Feed indexing scheme (default: sequence)"
-        - $ref: "SwarmCommon.yaml#/components/parameters/SwarmPinParameter"
+        - $ref: "AuroraCommon.yaml#/components/parameters/AuroraPinParameter"
       responses:
         "201":
           description: Created
           content:
             application/json:
               schema:
-                $ref: "SwarmCommon.yaml#/components/schemas/ReferenceResponse"
+                $ref: "AuroraCommon.yaml#/components/schemas/ReferenceResponse"
         "400":
-          $ref: "SwarmCommon.yaml#/components/responses/400"
+          $ref: "AuroraCommon.yaml#/components/responses/400"
         "401":
-          $ref: "SwarmCommon.yaml#/components/responses/401"
+          $ref: "AuroraCommon.yaml#/components/responses/401"
         "500":
-          $ref: "SwarmCommon.yaml#/components/responses/500"
+          $ref: "AuroraCommon.yaml#/components/responses/500"
         default:
           description: Default response
     get:
@@ -901,13 +901,13 @@ paths:
         - in: path
           name: owner
           schema:
-            $ref: "SwarmCommon.yaml#/components/schemas/EthereumAddress"
+            $ref: "AuroraCommon.yaml#/components/schemas/EthereumAddress"
           required: true
           description: Owner
         - in: path
           name: topic
           schema:
-            $ref: "SwarmCommon.yaml#/components/schemas/HexString"
+            $ref: "AuroraCommon.yaml#/components/schemas/HexString"
           required: true
           description: Topic
         - in: query
@@ -919,26 +919,26 @@ paths:
         - in: query
           name: type
           schema:
-            $ref: "SwarmCommon.yaml#/components/schemas/FeedType"
+            $ref: "AuroraCommon.yaml#/components/schemas/FeedType"
           required: false
           description: "Feed indexing scheme (default: sequence)"
       responses:
         "200":
           description: Latest feed update
           headers:
-            "swarm-feed-index":
-              $ref: "SwarmCommon.yaml#/components/headers/SwarmFeedIndex"
-            "swarm-feed-index-next":
-              $ref: "SwarmCommon.yaml#/components/headers/SwarmFeedIndexNext"
+            "Aurora-feed-index":
+              $ref: "AuroraCommon.yaml#/components/headers/AuroraFeedIndex"
+            "Aurora-feed-index-next":
+              $ref: "AuroraCommon.yaml#/components/headers/AuroraFeedIndexNext"
           content:
             application/json:
               schema:
-                $ref: "SwarmCommon.yaml#/components/schemas/ReferenceResponse"
+                $ref: "AuroraCommon.yaml#/components/schemas/ReferenceResponse"
         "400":
-          $ref: "SwarmCommon.yaml#/components/responses/400"
+          $ref: "AuroraCommon.yaml#/components/responses/400"
         "401":
-          $ref: "SwarmCommon.yaml#/components/responses/401"
+          $ref: "AuroraCommon.yaml#/components/responses/401"
         "500":
-          $ref: "SwarmCommon.yaml#/components/responses/500"
+          $ref: "AuroraCommon.yaml#/components/responses/500"
         default:
           description: Default response

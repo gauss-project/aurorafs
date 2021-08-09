@@ -1,14 +1,14 @@
 [Unit]
 Description=Bee - Ethereum Swarm node
-Documentation=https://docs.ethswarm.org
+Documentation=https://docs.aufs.io
 After=network.target
 
 [Service]
-EnvironmentFile=-/etc/default/bee
+EnvironmentFile=-/etc/default/aufs
 NoNewPrivileges=true
-User=bee
-Group=bee
-ExecStart=/usr/bin/bee start --config /etc/bee/bee.yaml
+User=aurorafs
+Group=aurorafs
+ExecStart=/usr/bin/aurora start --config /etc/aufs/aufs.yaml
 Restart=on-failure
 RestartSec=5s
 

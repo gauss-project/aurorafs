@@ -5,15 +5,15 @@ if [ -d /run/systemd/system ] ; then
 fi
 if [ "$1" = "remove" ]; then
     if [ -x "/usr/bin/deb-systemd-helper" ]; then
-        deb-systemd-helper mask bee.service >/dev/null
+        deb-systemd-helper mask aufs.service >/dev/null
     fi
 fi
 if [ "$1" = "purge" ]; then
     if [ -x "/usr/bin/deb-systemd-helper" ]; then
-        deb-systemd-helper purge bee.service >/dev/null
-        deb-systemd-helper unmask bee.service >/dev/null
+        deb-systemd-helper purge aufs.service >/dev/null
+        deb-systemd-helper unmask aufs.service >/dev/null
     fi
-    userdel -r bee >/dev/null 2>&1 || true
+    userdel -r aufs >/dev/null 2>&1 || true
 fi
 
 
