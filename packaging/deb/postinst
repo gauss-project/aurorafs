@@ -8,16 +8,16 @@ if [ "$1" = "configure" ]; then
             chown -R aurorafs:aurorafs /var/lib/aurorafs/keys
         fi
         echo "
-Logs:   journalctl -f -u bee.service
-Config: /etc/bee/bee.yaml
+Logs:   journalctl -f -u aufs.service
+Config: /etc/aufs/aufs.yaml
 
-Bee has SWAP enabled and by default is using slock.it goerli ethereum endpoint.
-It is recommended to use external signer with bee.
+aufs has SWAP enabled and by default is using slock.it goerli ethereum endpoint.
+It is recommended to use external signer with aufs.
 Check documentation for more info:
 - SWAP https://docs.ethswarm.org/docs/installation/manual#swap-bandwidth-incentives
-- External signer https://docs.ethswarm.org/docs/installation/bee-clef
+- External signer https://docs.ethswarm.org/docs/installation/aufs-clef
 
-After you finish configuration run 'sudo bee-get-addr'.
+After you finish configuration run 'sudo aufs-get-addr'.
         "
     fi
 

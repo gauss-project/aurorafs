@@ -26,7 +26,7 @@ data-dir: ./data
 # global-pinning-enable: false
 ## NAT exposed address
 # nat-addr: ""
-## ID of the Swarm network (default 1)
+## ID of the Boson network (default 1)
 # network-id: 1
 ## P2P listen address (default ":1634")
 # p2p-addr: :1634
