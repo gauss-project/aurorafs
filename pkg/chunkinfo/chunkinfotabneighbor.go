@@ -1,6 +1,18 @@
 package chunk_info
 
-func (cn *ChunkInfoTabNeighbor) updateNeighborChunkInfo(rootCid string, cid string, node string) {
+import "sync"
+
+type chunkInfoTabNeighbor struct {
+	sync.RWMutex
+	presence map[string][]string
+}
+
+type chunkInfoResp struct {
+	rootCid  string              //rootCid
+	presence map[string][]string // cid => nodes
+}
+
+func (cn *chunkInfoTabNeighbor) updateNeighborChunkInfo(rootCid string, cid string, node string) {
 	cn.Lock()
 	defer cn.Unlock()
 	// todo 数据库操作
@@ -17,7 +29,7 @@ func (cn *ChunkInfoTabNeighbor) updateNeighborChunkInfo(rootCid string, cid stri
 	cn.presence[key] = append(cn.presence[key], node)
 }
 
-func (cn *ChunkInfoTabNeighbor) getNeighborChunkInfo(rootCid string) map[string][]string {
+func (cn *chunkInfoTabNeighbor) getNeighborChunkInfo(rootCid string) map[string][]string {
 	cn.RLock()
 	defer cn.RUnlock()
 	var res map[string][]string
@@ -31,23 +43,23 @@ func (cn *ChunkInfoTabNeighbor) getNeighborChunkInfo(rootCid string) map[string]
 	return res
 }
 
-func (cn *ChunkInfoTabNeighbor) createChunkInfoResp(rootCid string, ctn map[string][]string) ChunkInfoResp {
-	return ChunkInfoResp{rootCid: rootCid, presence: ctn}
+func (cn *chunkInfoTabNeighbor) createChunkInfoResp(rootCid string, ctn map[string][]string) chunkInfoResp {
+	return chunkInfoResp{rootCid: rootCid, presence: ctn}
 }
 
-func (cn *ChunkInfoTabNeighbor) getChunkPyramid(rootCid string) map[string]map[string]uint {
+func (cn *chunkInfoTabNeighbor) getChunkPyramid(rootCid string) map[string]map[string]uint {
 	// todo 需要底层提供一个根据rootCid查询金字塔结构的接口
 	// 组装成ChunkPyramid
 	return make(map[string]map[string]uint)
 }
 
-func (cn *ChunkInfoTabNeighbor) createChunkPyramidResp(rootCid string, cp map[string]map[string]uint, ctn map[string][]string) ChunkPyramidResp {
-	resp := make([]ChunkPyramidChildResp, 0)
+func (cn *chunkInfoTabNeighbor) createChunkPyramidResp(rootCid string, cp map[string]map[string]uint, ctn map[string][]string) chunkPyramidResp {
+	resp := make([]chunkPyramidChildResp, 0)
 	for k, v := range cp {
 		for pk, pv := range v {
-			cpr := ChunkPyramidChildResp{pk, k, pv, ctn[pk]}
+			cpr := chunkPyramidChildResp{pk, k, pv, ctn[pk]}
 			resp = append(resp, cpr)
 		}
 	}
-	return ChunkPyramidResp{rootCid: rootCid, pyramid: resp}
+	return chunkPyramidResp{rootCid: rootCid, pyramid: resp}
 }

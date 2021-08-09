@@ -1,5 +1,7 @@
 package chunk_info
 
+import "sync"
+
 type Pull = uint32
 
 const (
@@ -8,14 +10,40 @@ const (
 	Pulled
 )
 
-func (q *Queue) len(pull Pull) int {
+const (
+	//PullMax 最大拉取数 pulling+pulled
+	PullMax = 200
+	//PullingMax 最大并行拉取数
+	PullingMax = 10
+	//PullerMax 为队列拉取最大数
+	PullerMax = 1000
+)
+
+type queue struct {
+	sync.RWMutex
+	UnPull  []*string
+	Pulling []*string
+	Pulled  []*string
+}
+
+func (ci *ChunkInfo) newQueue(rootCid string) {
+	q := &queue{
+		//Puller:  make([]string, 0, PullerMax),
+		UnPull:  make([]*string, 0, PullerMax),
+		Pulling: make([]*string, 0, PullingMax),
+		Pulled:  make([]*string, 0, PullMax),
+	}
+	ci.queues[rootCid] = q
+}
+
+func (q *queue) len(pull Pull) int {
 	q.RLock()
 	defer q.RUnlock()
 	qu := q.getPull(pull)
 	return len(qu)
 }
 
-func (q *Queue) peek(pull Pull) *string {
+func (q *queue) peek(pull Pull) *string {
 	q.RLock()
 	defer q.RUnlock()
 	qu := q.getPull(pull)
@@ -23,7 +51,7 @@ func (q *Queue) peek(pull Pull) *string {
 }
 
 // Pop 出队
-func (q *Queue) pop(pull Pull) *string {
+func (q *queue) pop(pull Pull) *string {
 	q.Lock()
 	defer q.RUnlock()
 	qu := q.getPull(pull)
@@ -33,7 +61,7 @@ func (q *Queue) pop(pull Pull) *string {
 	return v
 }
 
-func (q *Queue) popNode(pull Pull, node *string) {
+func (q *queue) popNode(pull Pull, node *string) {
 	qu := q.getPull(pull)
 	for i, n := range qu {
 		if *n == *node {
@@ -44,7 +72,7 @@ func (q *Queue) popNode(pull Pull, node *string) {
 }
 
 // Push 入对
-func (q *Queue) push(pull Pull, node *string) {
+func (q *queue) push(pull Pull, node *string) {
 	q.Lock()
 	defer q.RUnlock()
 	qu := q.getPull(pull)
@@ -52,7 +80,7 @@ func (q *Queue) push(pull Pull, node *string) {
 	q.updatePull(pull, qu)
 }
 
-func (q *Queue) getPull(pull Pull) []*string {
+func (q *queue) getPull(pull Pull) []*string {
 	q.Lock()
 	defer q.RUnlock()
 	switch pull {
@@ -66,7 +94,7 @@ func (q *Queue) getPull(pull Pull) []*string {
 	return make([]*string, 0)
 }
 
-func (q *Queue) updatePull(pull Pull, queue []*string) {
+func (q *queue) updatePull(pull Pull, queue []*string) {
 	switch pull {
 	case UnPull:
 		q.UnPull = queue
@@ -77,7 +105,11 @@ func (q *Queue) updatePull(pull Pull, queue []*string) {
 	}
 }
 
-func (q *Queue) isExists(pull Pull, node string) bool {
+func (ci *ChunkInfo) getQueue(rootCid string) *queue {
+	return ci.queues[rootCid]
+}
+
+func (q *queue) isExists(pull Pull, node string) bool {
 	pullNodes := q.getPull(pull)
 	for _, pn := range pullNodes {
 		if *pn == node {
@@ -85,4 +117,48 @@ func (q *Queue) isExists(pull Pull, node string) bool {
 		}
 	}
 	return false
+}
+
+// pull 过程
+func (ci *ChunkInfo) queueProcess(rootCid string) {
+	q := ci.getQueue(rootCid)
+	// pulled + pulling >= pullMax
+	if q.len(Pulled)+q.len(Pulling) >= PullMax {
+		return
+	}
+	// 判断正在查是否等于最大查询数
+	pullingLen := q.len(Pulling)
+	if pullingLen >= PullingMax {
+		return
+	}
+	// 最大查询数-当前正在查询数=n
+	n := PullingMax - pullingLen
+	// 放入n个节点到正在查询
+	for i := 0; i < n; i++ {
+		unNode := q.pop(UnPull)
+		q.push(Pulling, unNode)
+		// todo 定时器 对请求超时做处理
+		ciReq := ci.cd.createChunkInfoReq(rootCid)
+		ci.sendDataToNode(ciReq, *unNode)
+	}
+}
+
+func (ci *ChunkInfo) updateQueue(authInfo []byte, rootCid, node string, nodes []string) {
+	q := ci.queues[rootCid]
+	for _, n := range nodes {
+		// 填充到未查询队列, 如果最大拉取数则不在填充到为查询队列中
+		if q.len(UnPull) >= PullerMax {
+			return
+		}
+		// 是否为新节点
+		if q.isExists(Pulled, n) || q.isExists(Pulling, n) || q.isExists(UnPull, n) {
+			continue
+		}
+		q.push(UnPull, &n)
+	}
+	// 节点从正在查转为已查询
+	q.popNode(Pulling, &node)
+	q.push(Pulled, &node)
+	// 触发新节点通知
+	ci.doFindChunkInfo(authInfo, rootCid)
 }

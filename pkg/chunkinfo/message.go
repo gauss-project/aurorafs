@@ -7,7 +7,7 @@ func (ci *ChunkInfo) sendDataToNode(req interface{}, nodeId string) {
 func (ci *ChunkInfo) onChunkInfoHandle(authInfo []byte, cmd, nodeId string, body interface{}) {
 	// todo 请求成功关闭超时监听
 	if cmd == "req/chunkinfo" {
-		ci.onChunkInfoReq(authInfo, nodeId, body)
+		ci.onchunkInfoReq(authInfo, nodeId, body)
 	}
 	if cmd == "resp/chunkinfo" {
 		ci.onChunkInfoResp(authInfo, nodeId, body)
@@ -20,9 +20,9 @@ func (ci *ChunkInfo) onChunkInfoHandle(authInfo []byte, cmd, nodeId string, body
 	}
 }
 
-func (ci *ChunkInfo) onChunkInfoReq(authInfo []byte, nodeId string, body interface{}) {
+func (ci *ChunkInfo) onchunkInfoReq(authInfo []byte, nodeId string, body interface{}) {
 	// 根据rootcid获取最底一级的cids=>nodes
-	req := body.(ChunkInfoReq)
+	req := body.(chunkInfoReq)
 	ctn := ci.ct.getNeighborChunkInfo(req.rootCid)
 	// 调用createChunkInfoResp
 	resp := ci.ct.createChunkInfoResp(req.rootCid, ctn)
@@ -31,13 +31,13 @@ func (ci *ChunkInfo) onChunkInfoReq(authInfo []byte, nodeId string, body interfa
 }
 
 func (ci *ChunkInfo) onChunkInfoResp(authInfo []byte, nodeId string, body interface{}) {
-	resp := body.(ChunkInfoResp)
+	resp := body.(chunkInfoResp)
 	ci.onFindChunkInfo(authInfo, resp.rootCid, nodeId, resp.presence)
 }
 
 func (ci *ChunkInfo) onChunkPyramidReq(authInfo []byte, nodeId string, body interface{}) {
 	// 根据rootCid获取金字塔结构
-	req := body.(ChunkPyramidReq)
+	req := body.(chunkPyramidReq)
 	cp := ci.ct.getChunkPyramid(req.rootCid)
 	// 根据rootCid获取最后一层的节点
 	nci := ci.ct.getNeighborChunkInfo(req.rootCid)
@@ -46,7 +46,7 @@ func (ci *ChunkInfo) onChunkPyramidReq(authInfo []byte, nodeId string, body inte
 }
 
 func (ci *ChunkInfo) onChunkPyramidResp(authInfo []byte, node string, body interface{}) {
-	resp := body.(ChunkPyramidResp)
+	resp := body.(chunkPyramidResp)
 	py := make(map[string]map[string]uint, len(resp.pyramid))
 	pyz := make(map[string]uint, len(resp.pyramid))
 	cn := make(map[string][]string)

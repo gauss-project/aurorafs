@@ -1,12 +1,19 @@
 package chunk_info
 
-func (pfi *PendingFinderInfo) updatePendingFinder(rootCid string) {
+import "sync"
+
+type pendingFinderInfo struct {
+	sync.RWMutex
+	finder map[string]struct{}
+}
+
+func (pfi *pendingFinderInfo) updatePendingFinder(rootCid string) {
 	pfi.Lock()
 	defer pfi.Unlock()
 	pfi.finder[rootCid] = struct{}{}
 }
 
-func (pfi *PendingFinderInfo) cancelPendingFinder(rootCid string) {
+func (pfi *pendingFinderInfo) cancelPendingFinder(rootCid string) {
 	pfi.Lock()
 	defer pfi.Unlock()
 	if len(rootCid) == 0 {
@@ -15,7 +22,7 @@ func (pfi *PendingFinderInfo) cancelPendingFinder(rootCid string) {
 	delete(pfi.finder, rootCid)
 }
 
-func (pfi *PendingFinderInfo) getPendingFinder(rootCid string) bool {
+func (pfi *pendingFinderInfo) getPendingFinder(rootCid string) bool {
 	pfi.RLock()
 	defer pfi.RUnlock()
 	_, ok := pfi.finder[rootCid]
