@@ -73,8 +73,6 @@ func (ci *ChunkInfo) onFindChunkPyramid(authInfo []byte, rootCid, node string, p
 	if !ok {
 		// todo 验证金字塔数据是否正确
 		ci.cp.updateChunkPyramid(pyramids)
-	} else {
-		// 关闭所有节点定时器
 	}
 	ci.onFindChunkInfo(authInfo, rootCid, node, cn)
 }

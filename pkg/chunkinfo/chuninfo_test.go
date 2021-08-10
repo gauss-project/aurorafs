@@ -1,24 +1,40 @@
 package chunk_info
 
-import "testing"
+import (
+	"fmt"
+	"testing"
+)
 
 func TestFindChunkInfo(t *testing.T) {
 	ci := New()
 	ci.FindChunkInfo(nil, "1", []string{"a", "b"})
 	// 模拟树resp
-	go func() {
-		res := make(map[string][]string)
-		res["2"] = []string{"c", "d"}
-		res["3"] = []string{"e"}
-		py := make(map[string]map[string]uint)
-		s := make(map[string]uint)
-		s["2"] = 0
-		s["3"] = 1
-		py["1"] = s
-		resp := ci.ct.createChunkPyramidResp("1", py, res)
-		ci.onChunkInfoHandle(nil, "resp/chunkpyramid", "a", resp)
-	}()
-	// 模拟不停发现resp
+	res := make(map[string][]string)
+	res["2"] = []string{"c", "d", "d"}
+	res["3"] = []string{"e", "d"}
+	py := make(map[string]map[string]uint)
+	s := make(map[string]uint)
+	s["2"] = 0
+	s["3"] = 1
+	py["1"] = s
+	resp := ci.ct.createChunkPyramidResp("1", py, res)
+	ci.onChunkInfoHandle(nil, "resp/chunkpyramid", "a", resp)
+	q := ci.queues["1"]
+	if q.len(Pulling) != 4 {
+		t.Fatal()
+	}
+	pyramid := ci.GetChunkPyramid("1")
+	if pyramid == nil {
+		t.Fatal()
+	}
+	nodes := ci.GetChunkInfo("1", "2")
+	for _, n := range nodes {
+		fmt.Printf("%s \n", n)
+	}
+	if len(nodes) != 2 {
+		t.Fatal()
+	}
+	// 收到req请求处理
 }
 
 func TestGetChunkInfo(t *testing.T) {

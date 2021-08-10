@@ -7,7 +7,7 @@ import (
 )
 
 const (
-	TimeOut = 1000
+	TimeOut = 60
 	Time    = 3
 )
 
@@ -18,6 +18,7 @@ type timeoutTrigger struct {
 	trigger map[string]int64
 }
 
+// updateTimeOutTrigger 新增超时监听
 func (tt *timeoutTrigger) updateTimeOutTrigger(rootCid, nodeId string) {
 	tt.Lock()
 	tt.Unlock()
@@ -25,6 +26,7 @@ func (tt *timeoutTrigger) updateTimeOutTrigger(rootCid, nodeId string) {
 	tt.trigger[key] = time.Now().Unix()
 }
 
+// removeTimeOutTrigger 移除监听
 func (tt *timeoutTrigger) removeTimeOutTrigger(rootCid, nodeId string) {
 	tt.Lock()
 	tt.Unlock()
@@ -32,9 +34,10 @@ func (tt *timeoutTrigger) removeTimeOutTrigger(rootCid, nodeId string) {
 	delete(tt.trigger, key)
 }
 
+// getTimeOutRootCidAndNode 获取超时
 func (tt *timeoutTrigger) getTimeOutRootCidAndNode() (string, string) {
 	for k, t := range tt.trigger {
-		if t+TimeOut >= time.Now().Unix() {
+		if t+TimeOut <= time.Now().Unix() {
 			arr := strings.Split(k, "_")
 			return arr[0], arr[1]
 		}
@@ -42,6 +45,7 @@ func (tt *timeoutTrigger) getTimeOutRootCidAndNode() (string, string) {
 	return "", ""
 }
 
+// triggerTimeOut 监听
 func (ci *ChunkInfo) triggerTimeOut() {
 	timeTrigger := ci.t
 	select {
@@ -50,8 +54,8 @@ func (ci *ChunkInfo) triggerTimeOut() {
 		if rootCid != "" {
 			q := ci.getQueue(rootCid)
 			// 超时从正在执行放入到未执行
-			q.popNode(Pulling, &node)
-			q.push(UnPull, &node)
+			q.popNode(Pulling, node)
+			q.push(UnPull, node)
 		}
 	}
 }

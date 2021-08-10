@@ -30,20 +30,18 @@ func New() *ChunkInfo {
 func (ci *ChunkInfo) FindChunkInfo(authInfo []byte, rootCid string, nodes []string) {
 	//  如果已经存在rootCid并且未开始发现直接发起doFindChunkInfo
 	ci.triggerTimeOut()
+	ci.cpd.updatePendingFinder(rootCid)
 	if ci.cd.isExists(rootCid) {
-		if ci.cpd.getPendingFinder(rootCid) {
-			return
-		}
 		//发起doFindChunkInfo
 		for _, n := range nodes {
-			ci.queues[rootCid].push(UnPull, &n)
+			ci.queues[rootCid].push(Pulling, n)
 		}
 		ci.doFindChunkInfo(authInfo, rootCid)
 	} else {
 		// 根据rootCid生成队列
 		ci.newQueue(rootCid)
 		for _, n := range nodes {
-			ci.getQueue(rootCid).push(UnPull, &n)
+			ci.getQueue(rootCid).push(Pulling, n)
 		}
 		// 获取金字塔
 		ci.doFindChunkPyramid(authInfo, rootCid, nodes)
@@ -51,7 +49,7 @@ func (ci *ChunkInfo) FindChunkInfo(authInfo []byte, rootCid string, nodes []stri
 }
 
 // GetChunkInfo 根据瑞rootCid与cid获取nodes
-func (ci *ChunkInfo) GetChunkInfo(rootCid string, cid string) *[]string {
+func (ci *ChunkInfo) GetChunkInfo(rootCid string, cid string) []string {
 	return ci.cd.getChunkInfo(rootCid, cid)
 }
 

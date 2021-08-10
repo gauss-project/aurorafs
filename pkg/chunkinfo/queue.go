@@ -40,7 +40,7 @@ func (ci *ChunkInfo) newQueue(rootCid string) {
 // len 队列长度
 func (q *queue) len(pull Pull) int {
 	q.RLock()
-	defer q.Unlock()
+	defer q.RUnlock()
 	qu := q.getPull(pull)
 	return len(qu)
 }
@@ -48,7 +48,7 @@ func (q *queue) len(pull Pull) int {
 // peek 队列头节点
 func (q *queue) peek(pull Pull) *string {
 	q.RLock()
-	defer q.Unlock()
+	defer q.RLock()
 	qu := q.getPull(pull)
 	return qu[0]
 }
@@ -65,12 +65,12 @@ func (q *queue) pop(pull Pull) *string {
 }
 
 // popNode 指定某一个node出对列
-func (q *queue) popNode(pull Pull, node *string) {
+func (q *queue) popNode(pull Pull, node string) {
 	q.Lock()
 	defer q.Unlock()
 	qu := q.getPull(pull)
 	for i, n := range qu {
-		if *n == *node {
+		if *n == node {
 			qu = append(qu[:i], qu[i+1:]...)
 		}
 	}
@@ -78,11 +78,11 @@ func (q *queue) popNode(pull Pull, node *string) {
 }
 
 // push 入对
-func (q *queue) push(pull Pull, node *string) {
+func (q *queue) push(pull Pull, node string) {
 	q.Lock()
 	defer q.Unlock()
 	qu := q.getPull(pull)
-	qu = append(qu, node)
+	qu = append(qu, &node)
 	q.updatePull(pull, qu)
 }
 
@@ -119,7 +119,7 @@ func (ci *ChunkInfo) getQueue(rootCid string) *queue {
 // 根据队列类型判断节点是否存在
 func (q *queue) isExists(pull Pull, node string) bool {
 	q.RLock()
-	defer q.Unlock()
+	defer q.RUnlock()
 	pullNodes := q.getPull(pull)
 	for _, pn := range pullNodes {
 		if *pn == node {
@@ -132,8 +132,6 @@ func (q *queue) isExists(pull Pull, node string) bool {
 // pull 过程
 func (ci *ChunkInfo) queueProcess(rootCid string) {
 	q := ci.getQueue(rootCid)
-	q.Lock()
-	defer q.Unlock()
 	// pulled + pulling >= pullMax
 	if q.len(Pulled)+q.len(Pulling) >= PullMax {
 		return
@@ -149,10 +147,13 @@ func (ci *ChunkInfo) queueProcess(rootCid string) {
 	}
 	// 最大查询数-当前正在查询数=n
 	n := PullingMax - pullingLen
+	if n > q.len(UnPull) {
+		n = q.len(UnPull)
+	}
 	// 放入n个节点到正在查询
 	for i := 0; i < n; i++ {
 		unNode := q.pop(UnPull)
-		q.push(Pulling, unNode)
+		q.push(Pulling, *unNode)
 		// todo 定时器 对请求超时做处理
 		ciReq := ci.cd.createChunkInfoReq(rootCid)
 		ci.sendDataToNode(ciReq, *unNode)
@@ -171,11 +172,11 @@ func (ci *ChunkInfo) updateQueue(authInfo []byte, rootCid, node string, nodes []
 		if q.isExists(Pulled, n) || q.isExists(Pulling, n) || q.isExists(UnPull, n) {
 			continue
 		}
-		q.push(UnPull, &n)
+		q.push(UnPull, n)
 	}
 	// 节点从正在查转为已查询
-	q.popNode(Pulling, &node)
-	q.push(Pulled, &node)
+	q.popNode(Pulling, node)
+	q.push(Pulled, node)
 	// 触发新节点通知
 	ci.doFindChunkInfo(authInfo, rootCid)
 }

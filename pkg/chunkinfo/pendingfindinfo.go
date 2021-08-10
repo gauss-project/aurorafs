@@ -29,10 +29,7 @@ func (pfi *pendingFinderInfo) cancelPendingFinder(rootCid string) {
 // getPendingFinder 根据rootCid查看是否继续发现
 func (pfi *pendingFinderInfo) getPendingFinder(rootCid string) bool {
 	pfi.RLock()
-	defer pfi.Unlock()
+	defer pfi.RUnlock()
 	_, ok := pfi.finder[rootCid]
-	if !ok {
-		return false
-	}
-	return true
+	return ok
 }
