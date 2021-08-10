@@ -4,6 +4,7 @@ import (
 	"context"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/gauss-project/aurorafs/pkg/boson"
+	"github.com/gauss-project/aurorafs/pkg/kademlia"
 	"github.com/gauss-project/aurorafs/pkg/logging"
 	"github.com/gauss-project/aurorafs/pkg/p2p"
 	"github.com/gauss-project/aurorafs/pkg/tracing"
@@ -72,8 +73,9 @@ type Service struct {
 	metrics  metrics
 	pendingCalls pendCallResTab
 	routeTable RouteTable
+	kad      *kademlia.Kad
 }
-func NewRouteTab(ctx context.Context,streamer p2p.Streamer, logger logging.Logger, tracer *tracing.Tracer) Service{
+func NewRouteService(ctx context.Context,streamer p2p.Streamer, kad *kademlia.Kad,logger logging.Logger, tracer *tracing.Tracer) Service{
 	//load route table from db only those valid item will be loaded
 
 	service := Service{
