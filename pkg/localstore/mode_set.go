@@ -58,7 +58,7 @@ func (db *DB) set(mode storage.ModeSet, addrs ...boson.Address) (err error) {
 	// variables that provide information for operations
 	// to be done after write batch function successfully executes
 	var gcSizeChange int64                      // number to add or subtract from gcSize
-	triggerPullFeed := make(map[uint8]struct{}) // signal pull feed subscriptions to iterate
+	//triggerPullFeed := make(map[uint8]struct{}) // signal pull feed subscriptions to iterate
 
 	switch mode {
 	case storage.ModeSetSync:
@@ -115,9 +115,9 @@ func (db *DB) set(mode storage.ModeSet, addrs ...boson.Address) (err error) {
 	if err != nil {
 		return err
 	}
-	for po := range triggerPullFeed {
-		db.triggerPullSubscriptions(po)
-	}
+	//for po := range triggerPullFeed {
+	//	db.triggerPullSubscriptions(po)
+	//}
 	return nil
 }
 

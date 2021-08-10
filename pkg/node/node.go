@@ -106,7 +106,7 @@ type Options struct {
 	SwapEnable               bool
 }
 
-func NewBee(addr string, swarmAddress boson.Address, publicKey ecdsa.PublicKey, signer crypto.Signer, networkID uint64, logger logging.Logger, libp2pPrivateKey, pssPrivateKey *ecdsa.PrivateKey, o Options) (b *Bee, err error) {
+func NewBee(addr string, bosonAddress boson.Address, publicKey ecdsa.PublicKey, signer crypto.Signer, networkID uint64, logger logging.Logger, libp2pPrivateKey, pssPrivateKey *ecdsa.PrivateKey, o Options) (b *Bee, err error) {
 	tracer, tracerCloser, err := tracing.NewTracer(&tracing.Options{
 		Enabled:     o.TracingEnabled,
 		Endpoint:    o.TracingEndpoint,
@@ -139,7 +139,7 @@ func NewBee(addr string, swarmAddress boson.Address, publicKey ecdsa.PublicKey, 
 			return nil, fmt.Errorf("eth address: %w", err)
 		}
 		// set up basic debug api endpoints for debugging and /health endpoint
-		debugAPIService = debugapi.New(swarmAddress, publicKey, pssPrivateKey.PublicKey, overlayEthAddress, logger, tracer, o.CORSAllowedOrigins)
+		debugAPIService = debugapi.New(bosonAddress, publicKey, pssPrivateKey.PublicKey, overlayEthAddress, logger, tracer, o.CORSAllowedOrigins)
 
 		debugAPIListener, err := net.Listen("tcp", o.DebugAPIAddr)
 		if err != nil {
@@ -171,7 +171,7 @@ func NewBee(addr string, swarmAddress boson.Address, publicKey ecdsa.PublicKey, 
 	}
 	b.stateStoreCloser = stateStore
 
-	err = CheckOverlayWithStore(swarmAddress, stateStore)
+	err = CheckOverlayWithStore(bosonAddress, stateStore)
 	if err != nil {
 		return nil, err
 	}
@@ -241,7 +241,7 @@ func NewBee(addr string, swarmAddress boson.Address, publicKey ecdsa.PublicKey, 
 		)
 	}
 
-	p2ps, err := libp2p.New(p2pCtx, signer, networkID, swarmAddress, addr, addressbook, stateStore, logger, tracer, libp2p.Options{
+	p2ps, err := libp2p.New(p2pCtx, signer, networkID, bosonAddress, addr, addressbook, stateStore, logger, tracer, libp2p.Options{
 		PrivateKey:     libp2pPrivateKey,
 		NATAddr:        o.NATAddr,
 		EnableWS:       o.EnableWS,
@@ -357,7 +357,7 @@ func NewBee(addr string, swarmAddress boson.Address, publicKey ecdsa.PublicKey, 
 	settlement.SetNotifyPaymentFunc(acc.AsyncNotifyPayment)
 	pricing.SetPaymentThresholdObserver(acc)
 
-	kad := kademlia.New(swarmAddress, addressbook, hive, p2ps, logger, kademlia.Options{Bootnodes: bootnodes, StandaloneMode: o.Standalone, BootnodeMode: o.BootnodeMode})
+	kad := kademlia.New(bosonAddress, addressbook, hive, p2ps, logger, kademlia.Options{Bootnodes: bootnodes, StandaloneMode: o.Standalone, BootnodeMode: o.BootnodeMode})
 	b.topologyCloser = kad
 	hive.SetAddPeersHandler(kad.AddPeers)
 	p2ps.SetPickyNotifier(kad)
@@ -382,13 +382,13 @@ func NewBee(addr string, swarmAddress boson.Address, publicKey ecdsa.PublicKey, 
 		WriteBufferSize:        o.DBWriteBufferSize,
 		DisableSeeksCompaction: o.DBDisableSeeksCompaction,
 	}
-	storer, err := localstore.New(path, swarmAddress.Bytes(), lo, logger)
+	storer, err := localstore.New(path, bosonAddress.Bytes(), lo, logger)
 	if err != nil {
 		return nil, fmt.Errorf("localstore: %w", err)
 	}
 	b.localstoreCloser = storer
 
-	retrieve := retrieval.New(swarmAddress, storer, p2ps, kad, logger, acc, accounting.NewFixedPricer(swarmAddress, 1000000000), tracer)
+	retrieve := retrieval.New(bosonAddress, storer, p2ps, kad, logger, acc, accounting.NewFixedPricer(bosonAddress, 1000000000), tracer)
 
 
 	if err = p2ps.AddProtocol(retrieve.Protocol()); err != nil {
