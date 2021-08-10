@@ -37,7 +37,7 @@ func (cn *chunkInfoTabNeighbor) updateNeighborChunkInfo(rootCid string, cid stri
 func (cn *chunkInfoTabNeighbor) getNeighborChunkInfo(rootCid string) map[string][]string {
 	cn.RLock()
 	defer cn.RUnlock()
-	var res map[string][]string
+	res := make(map[string][]string)
 	cids := cn.presence[rootCid]
 	for _, cid := range cids {
 		key := rootCid + "_" + cid

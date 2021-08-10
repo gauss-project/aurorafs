@@ -37,7 +37,7 @@ type chunkPyramidReq struct {
 // updateChunkPyramid 新增金字塔
 func (cp *chunkPyramid) updateChunkPyramid(pyramids map[string]map[string]uint) {
 	cp.Lock()
-	defer cp.RUnlock()
+	defer cp.Unlock()
 	for key, pyramid := range pyramids {
 		cp.pyramid[key] = pyramid
 	}
@@ -96,6 +96,8 @@ func (ci *ChunkInfo) doFindChunkPyramid(authInfo []byte, rootCid string, nodes [
 	// 调用sendDataToNodes
 	cpReq := ci.cp.createChunkPyramidReq(rootCid)
 	for _, node := range nodes {
+		// 定时任务
+		ci.tt.updateTimeOutTrigger(rootCid, node)
 		ci.sendDataToNode(cpReq, node)
 	}
 }

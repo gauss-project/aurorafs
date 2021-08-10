@@ -40,7 +40,7 @@ func (ci *ChunkInfo) newQueue(rootCid string) {
 // len 队列长度
 func (q *queue) len(pull Pull) int {
 	q.RLock()
-	defer q.RUnlock()
+	defer q.Unlock()
 	qu := q.getPull(pull)
 	return len(qu)
 }
@@ -48,7 +48,7 @@ func (q *queue) len(pull Pull) int {
 // peek 队列头节点
 func (q *queue) peek(pull Pull) *string {
 	q.RLock()
-	defer q.RUnlock()
+	defer q.Unlock()
 	qu := q.getPull(pull)
 	return qu[0]
 }
@@ -56,7 +56,7 @@ func (q *queue) peek(pull Pull) *string {
 // pop 出队
 func (q *queue) pop(pull Pull) *string {
 	q.Lock()
-	defer q.RUnlock()
+	defer q.Unlock()
 	qu := q.getPull(pull)
 	v := qu[0]
 	qu = qu[1:]
@@ -67,7 +67,7 @@ func (q *queue) pop(pull Pull) *string {
 // popNode 指定某一个node出对列
 func (q *queue) popNode(pull Pull, node *string) {
 	q.Lock()
-	defer q.RUnlock()
+	defer q.Unlock()
 	qu := q.getPull(pull)
 	for i, n := range qu {
 		if *n == *node {
@@ -80,7 +80,7 @@ func (q *queue) popNode(pull Pull, node *string) {
 // push 入对
 func (q *queue) push(pull Pull, node *string) {
 	q.Lock()
-	defer q.RUnlock()
+	defer q.Unlock()
 	qu := q.getPull(pull)
 	qu = append(qu, node)
 	q.updatePull(pull, qu)
@@ -88,8 +88,6 @@ func (q *queue) push(pull Pull, node *string) {
 
 // getPull 根据拉取类型获取队列
 func (q *queue) getPull(pull Pull) []*string {
-	q.RLock()
-	defer q.RUnlock()
 	switch pull {
 	case UnPull:
 		return q.UnPull
@@ -121,7 +119,7 @@ func (ci *ChunkInfo) getQueue(rootCid string) *queue {
 // 根据队列类型判断节点是否存在
 func (q *queue) isExists(pull Pull, node string) bool {
 	q.RLock()
-	defer q.RUnlock()
+	defer q.Unlock()
 	pullNodes := q.getPull(pull)
 	for _, pn := range pullNodes {
 		if *pn == node {
@@ -135,7 +133,7 @@ func (q *queue) isExists(pull Pull, node string) bool {
 func (ci *ChunkInfo) queueProcess(rootCid string) {
 	q := ci.getQueue(rootCid)
 	q.Lock()
-	defer q.RUnlock()
+	defer q.Unlock()
 	// pulled + pulling >= pullMax
 	if q.len(Pulled)+q.len(Pulling) >= PullMax {
 		return

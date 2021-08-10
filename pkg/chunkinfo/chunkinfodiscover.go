@@ -37,7 +37,7 @@ func (cd *chunkInfoDiscover) getChunkInfo(rootCid string, cid string) *[]string 
 // updateChunkInfos 根据rootCid新增 cid对应节点
 func (cd *chunkInfoDiscover) updateChunkInfos(rootCid string, pyramids map[string][]string) {
 	cd.Lock()
-	defer cd.RUnlock()
+	defer cd.Unlock()
 	for k, v := range pyramids {
 		cd.updateChunkInfo(rootCid, k, v)
 	}

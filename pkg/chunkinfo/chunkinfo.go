@@ -1,8 +1,11 @@
 package chunk_info
 
+import "time"
+
 // ChunkInfo 主要属性
 type ChunkInfo struct {
-	// todo 定时器
+	t      *time.Timer           //  定时器
+	tt     *timeoutTrigger       // 定时触发器
 	queues map[string]*queue     // 队列
 	ct     *chunkInfoTabNeighbor // 哪些节点主动获取过当前节点Chunk记录
 	cd     *chunkInfoDiscover    // 当前节点知道哪些chunk在哪些节点上
@@ -17,13 +20,16 @@ func New() *ChunkInfo {
 	ct := &chunkInfoTabNeighbor{presence: make(map[string][]string)}
 	cp := &chunkPyramid{pyramid: map[string]map[string]uint{}}
 	cpd := &pendingFinderInfo{finder: make(map[string]struct{})}
+	tt := &timeoutTrigger{trigger: make(map[string]int64)}
 	queues := make(map[string]*queue)
-	return &ChunkInfo{ct: ct, cd: cd, cp: cp, cpd: cpd, queues: queues}
+	t := time.NewTimer(Time * time.Second)
+	return &ChunkInfo{ct: ct, cd: cd, cp: cp, cpd: cpd, queues: queues, t: t, tt: tt}
 }
 
 // FindChunkInfo 根据rootCid与nodes开始发现
 func (ci *ChunkInfo) FindChunkInfo(authInfo []byte, rootCid string, nodes []string) {
 	//  如果已经存在rootCid并且未开始发现直接发起doFindChunkInfo
+	ci.triggerTimeOut()
 	if ci.cd.isExists(rootCid) {
 		if ci.cpd.getPendingFinder(rootCid) {
 			return
@@ -36,6 +42,9 @@ func (ci *ChunkInfo) FindChunkInfo(authInfo []byte, rootCid string, nodes []stri
 	} else {
 		// 根据rootCid生成队列
 		ci.newQueue(rootCid)
+		for _, n := range nodes {
+			ci.getQueue(rootCid).push(UnPull, &n)
+		}
 		// 获取金字塔
 		ci.doFindChunkPyramid(authInfo, rootCid, nodes)
 	}

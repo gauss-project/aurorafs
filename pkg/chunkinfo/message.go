@@ -7,7 +7,6 @@ func (ci *ChunkInfo) sendDataToNode(req interface{}, nodeId string) {
 
 // onChunkInfoHandle 接受请求
 func (ci *ChunkInfo) onChunkInfoHandle(authInfo []byte, cmd, nodeId string, body interface{}) {
-	// todo 请求成功关闭超时监听
 	if cmd == "req/chunkinfo" {
 		ci.onChunkInfoReq(authInfo, nodeId, body)
 	}
@@ -74,12 +73,16 @@ func (ci *ChunkInfo) onFindChunkPyramid(authInfo []byte, rootCid, node string, p
 	if !ok {
 		// todo 验证金字塔数据是否正确
 		ci.cp.updateChunkPyramid(pyramids)
+	} else {
+		// 关闭所有节点定时器
 	}
 	ci.onFindChunkInfo(authInfo, rootCid, node, cn)
 }
 
 // onFindChunkInfo chunkinfo 请求流程
 func (ci *ChunkInfo) onFindChunkInfo(authInfo []byte, rootCid, node string, chunkInfo map[string][]string) {
+	// 请求成功关闭超时监听
+	ci.tt.removeTimeOutTrigger(rootCid, node)
 	// todo 检查是否有新节点是否为轻节点
 	// 更新chunkinfodiscover
 	nodes := make([]string, 0)
