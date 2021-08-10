@@ -21,9 +21,9 @@ import (
 	"errors"
 	"time"
 
+	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/shed"
 	"github.com/gauss-project/aurorafs/pkg/storage"
-	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/syndtr/goleveldb/leveldb"
 )
 
@@ -66,8 +66,8 @@ func (db *DB) put(mode storage.ModePut, chs ...boson.Chunk) (exist []bool, err e
 	// variables that provide information for operations
 	// to be done after write batch function successfully executes
 	var gcSizeChange int64                      // number to add or subtract from gcSize
-	var triggerPushFeed bool                    // signal push feed subscriptions to iterate
-	triggerPullFeed := make(map[uint8]struct{}) // signal pull feed subscriptions to iterate
+	//var triggerPushFeed bool                    // signal push feed subscriptions to iterate
+	//triggerPullFeed := make(map[uint8]struct{}) // signal pull feed subscriptions to iterate
 
 	exist = make([]bool, len(chs))
 
@@ -110,12 +110,12 @@ func (db *DB) put(mode storage.ModePut, chs ...boson.Chunk) (exist []bool, err e
 				return nil, err
 			}
 			exist[i] = exists
-			if !exists {
-				// chunk is new so, trigger subscription feeds
-				// after the batch is successfully written
-				triggerPullFeed[db.po(ch.Address())] = struct{}{}
-				triggerPushFeed = true
-			}
+			//if !exists {
+			//	// chunk is new so, trigger subscription feeds
+			//	// after the batch is successfully written
+			//	triggerPullFeed[db.po(ch.Address())] = struct{}{}
+			//	triggerPushFeed = true
+			//}
 			gcSizeChange += c
 			if mode == storage.ModePutUploadPin {
 				err = db.setPin(batch, ch.Address())
@@ -136,11 +136,11 @@ func (db *DB) put(mode storage.ModePut, chs ...boson.Chunk) (exist []bool, err e
 				return nil, err
 			}
 			exist[i] = exists
-			if !exists {
-				// chunk is new so, trigger pull subscription feed
-				// after the batch is successfully written
-				triggerPullFeed[db.po(ch.Address())] = struct{}{}
-			}
+			//if !exists {
+			//	// chunk is new so, trigger pull subscription feed
+			//	// after the batch is successfully written
+			//	triggerPullFeed[db.po(ch.Address())] = struct{}{}
+			//}
 			gcSizeChange += c
 		}
 
@@ -162,12 +162,12 @@ func (db *DB) put(mode storage.ModePut, chs ...boson.Chunk) (exist []bool, err e
 		return nil, err
 	}
 
-	for po := range triggerPullFeed {
-		db.triggerPullSubscriptions(po)
-	}
-	if triggerPushFeed {
-		db.triggerPushSubscriptions()
-	}
+	//for po := range triggerPullFeed {
+	//	db.triggerPullSubscriptions(po)
+	//}
+	//if triggerPushFeed {
+	//	db.triggerPushSubscriptions()
+	//}
 	return exist, nil
 }
 
