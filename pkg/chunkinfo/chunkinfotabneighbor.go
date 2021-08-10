@@ -22,12 +22,12 @@ func (cn *chunkInfoTabNeighbor) updateNeighborChunkInfo(rootCid string, cid stri
 	// todo 数据库操作
 	_, ok := cn.presence[rootCid]
 	if !ok {
-		cn.presence[rootCid] = make([]string, 1)
+		cn.presence[rootCid] = make([]string, 0, 1)
 	}
 	key := rootCid + "_" + cid
 	_, pok := cn.presence[key]
 	if !pok {
-		cn.presence[key] = make([]string, 1)
+		cn.presence[key] = make([]string, 0, 1)
 		cn.presence[rootCid] = append(cn.presence[rootCid], cid)
 	}
 	cn.presence[key] = append(cn.presence[key], node)

@@ -7,8 +7,9 @@ import (
 
 func TestFindChunkInfo(t *testing.T) {
 	ci := New()
+	// 发起金字塔req
 	ci.FindChunkInfo(nil, "1", []string{"a", "b"})
-	// 模拟树resp
+	// 模拟金字塔resp
 	res := make(map[string][]string)
 	res["2"] = []string{"c", "d", "d"}
 	res["3"] = []string{"e", "d"}
@@ -35,6 +36,10 @@ func TestFindChunkInfo(t *testing.T) {
 		t.Fatal()
 	}
 	// 收到req请求处理
+	ci.OnChunkTransferred("2", "1", "c")
+	req := ci.cd.createChunkInfoReq("1")
+	ci.onChunkInfoHandle(nil, "req/chunkinfo", "a", req)
+	// req请求金字塔 金字塔获取为提供无法测试
 }
 
 func TestGetChunkInfo(t *testing.T) {

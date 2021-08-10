@@ -65,5 +65,5 @@ func (ci *ChunkInfo) CancelFindChunkInfo(rootCid string) {
 
 // OnChunkTransferred 哪些node主动获取了cid
 func (ci *ChunkInfo) OnChunkTransferred(cid string, rootCid string, node string) {
-	ci.ct.updateNeighborChunkInfo(cid, rootCid, node)
+	ci.ct.updateNeighborChunkInfo(rootCid, cid, node)
 }
