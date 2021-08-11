@@ -19,9 +19,12 @@ const (
 	SpanSize                = 8
 	SectionSize             = 32
 	Branches                = 128
+	BigBranches             = Branches * 64 // only applied for file upload
 	EncryptedBranches       = Branches / 2
 	BmtBranches             = 128
+	BigBmtBranches          = BmtBranches * 64 // sectionSize * branches determines the maximum chunk size hashed using the tree
 	ChunkSize               = SectionSize * Branches
+	BigChunkSize            = SectionSize * BigBranches // enlarge a minimal chunk size to 256k
 	HashSize                = 32
 	MaxPO             uint8 = 15
 	ExtendedPO        uint8 = MaxPO + 5
