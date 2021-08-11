@@ -19,6 +19,17 @@ type chunkPyramidResp struct {
 	pyramid []chunkPyramidChildResp
 }
 
+func (resp *chunkPyramidResp) Reset() {
+	*resp = chunkPyramidResp{}
+}
+
+func (resp *chunkPyramidResp) String() string {
+	return proto.CompactTextString(resp)
+}
+
+func (*chunkPyramidResp) ProtoMessage() {
+}
+
 // chunkPyramidChildResp
 type chunkPyramidChildResp struct {
 	cid   string
@@ -28,20 +39,20 @@ type chunkPyramidChildResp struct {
 }
 
 // ChunkPyramidReq
-type ChunkPyramidReq struct {
+type chunkPyramidReq struct {
 	RootCid    string `protobuf:"bytes,1,opt,name=RootCid,proto3" json:"RootCid,omitempty"`
 	CreateTime int64  `protobuf:"bytes,1,opt,name=CreateTime,proto3" json:"CreateTime,omitempty"`
 }
 
-func (req *ChunkPyramidReq) Reset() {
-	*req = ChunkPyramidReq{}
+func (req *chunkPyramidReq) Reset() {
+	*req = chunkPyramidReq{}
 }
 
-func (req *ChunkPyramidReq) String() string {
+func (req *chunkPyramidReq) String() string {
 	return proto.CompactTextString(req)
 }
 
-func (*ChunkPyramidReq) ProtoMessage() {}
+func (*chunkPyramidReq) ProtoMessage() {}
 
 // todo validate pyramid
 
@@ -70,16 +81,15 @@ func (cp *chunkPyramid) getChunkPyramidByPCid(pCid string, pyramids map[string]m
 		return pyramids
 	}
 	pyramids[pCid] = cids
-	for cid, _ := range cids {
-		//  tree
+	for cid := range cids {
 		return cp.getChunkPyramidByPCid(cid, pyramids)
 	}
 	return pyramids
 }
 
 // createChunkPyramidReq
-func (cp *chunkPyramid) createChunkPyramidReq(rootCid string) ChunkPyramidReq {
-	cpReq := ChunkPyramidReq{RootCid: rootCid, CreateTime: time.Now().Unix()}
+func (cp *chunkPyramid) createChunkPyramidReq(rootCid string) chunkPyramidReq {
+	cpReq := chunkPyramidReq{RootCid: rootCid, CreateTime: time.Now().Unix()}
 	return cpReq
 }
 

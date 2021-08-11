@@ -1,6 +1,9 @@
 package chunkinfo
 
-import "sync"
+import (
+	proto "github.com/gogo/protobuf/proto"
+	"sync"
+)
 
 // chunkInfoTabNeighbor
 type chunkInfoTabNeighbor struct {
@@ -13,6 +16,17 @@ type chunkInfoTabNeighbor struct {
 type chunkInfoResp struct {
 	rootCid  string
 	presence map[string][]string
+}
+
+func (resp *chunkInfoResp) Reset() {
+	*resp = chunkInfoResp{}
+}
+
+func (resp *chunkInfoResp) String() string {
+	return proto.CompactTextString(resp)
+}
+
+func (*chunkInfoResp) ProtoMessage() {
 }
 
 // updateNeighborChunkInfo

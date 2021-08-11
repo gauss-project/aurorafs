@@ -25,7 +25,7 @@ func TestChunkPyramid(t *testing.T) {
 		py["1"] = s
 		py["2"] = s1
 		resp := ci.ct.createChunkPyramidResp("1", py, res)
-		ci.onChunkInfoHandle(nil, "chunkpyramid/resp", "a", resp)
+		ci.onChunkPyramidResp(nil, "a", resp)
 	}()
 	time.Sleep(5 * time.Second)
 	q := ci.queues["1"]
@@ -50,5 +50,5 @@ func TestChunkInfo(t *testing.T) {
 	// handle chunkinfo req
 	ci.OnChunkTransferred("2", "1", "c")
 	req := ci.cd.createChunkInfoReq("1")
-	ci.onChunkInfoHandle(nil, "chunkinfo/req", "a", req)
+	ci.onChunkInfoReq(nil, "a", req)
 }

@@ -1,6 +1,7 @@
 package chunkinfo
 
 import (
+	proto "github.com/gogo/protobuf/proto"
 	"sync"
 	"time"
 )
@@ -16,6 +17,17 @@ type chunkInfoDiscover struct {
 type chunkInfoReq struct {
 	rootCid    string
 	createTime int64
+}
+
+func (req *chunkInfoReq) Reset() {
+	*req = chunkInfoReq{}
+}
+
+func (req *chunkInfoReq) String() string {
+	return proto.CompactTextString(req)
+}
+
+func (*chunkInfoReq) ProtoMessage() {
 }
 
 // isExists
