@@ -60,6 +60,9 @@ func (ci *ChunkInfo) onChunkPyramidResp(authInfo []byte, node string, body inter
 		if cpr.nodes != nil && len(cpr.nodes) > 0 {
 			cn[cpr.cid] = cpr.nodes
 		}
+		if py[cpr.pCid] == nil {
+			pyz = make(map[string]uint, len(resp.pyramid))
+		}
 		pyz[cpr.cid] = cpr.order
 		py[cpr.pCid] = pyz
 	}
@@ -85,6 +88,7 @@ func (ci *ChunkInfo) onFindChunkInfo(authInfo []byte, rootCid, node string, chun
 	// 更新chunkinfodiscover
 	nodes := make([]string, 0)
 	for _, n := range chunkInfo {
+		// todo 验证rootCid与cid关系
 		nodes = append(nodes, n...)
 	}
 	ci.cd.updateChunkInfos(rootCid, chunkInfo)

@@ -7,7 +7,7 @@ import (
 )
 
 const (
-	TimeOut = 60
+	TimeOut = 5
 	Time    = 3
 )
 

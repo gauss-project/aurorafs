@@ -154,7 +154,8 @@ func (ci *ChunkInfo) queueProcess(rootCid string) {
 	for i := 0; i < n; i++ {
 		unNode := q.pop(UnPull)
 		q.push(Pulling, *unNode)
-		// todo 定时器 对请求超时做处理
+		// 定时器 对请求超时做处理
+		ci.tt.updateTimeOutTrigger(rootCid, *unNode)
 		ciReq := ci.cd.createChunkInfoReq(rootCid)
 		ci.sendDataToNode(ciReq, *unNode)
 	}

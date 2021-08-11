@@ -60,7 +60,7 @@ func (cp *chunkPyramid) getChunkPyramidByPCid(pCid string, pyramids map[string]m
 	}
 	pyramids[pCid] = cids
 	for cid, _ := range cids {
-		// todo tree
+		//  tree
 		return cp.getChunkPyramidByPCid(cid, pyramids)
 	}
 	return pyramids
