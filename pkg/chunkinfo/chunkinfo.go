@@ -2,8 +2,22 @@ package chunk_info
 
 import "time"
 
+type ChunkInfoInterface interface {
+	FindChunkInfo(authInfo []byte, rootCid string, nodes []string)
+
+	GetChunkInfo(rootCid string, cid string) []string
+
+	GetChunkPyramid(rootCid string) map[string]map[string]uint
+
+	CancelFindChunkInfo(rootCid string)
+
+	OnChunkTransferred(cid string, rootCid string, node string)
+}
+
 // ChunkInfo 主要属性
 type ChunkInfo struct {
+	// p2p
+	// store
 	t      *time.Timer           //  定时器
 	tt     *timeoutTrigger       // 定时触发器
 	queues map[string]*queue     // 队列
