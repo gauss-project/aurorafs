@@ -1,6 +1,7 @@
 package chunkinfo
 
 import (
+	proto "github.com/gogo/protobuf/proto"
 	"sync"
 	"time"
 )
@@ -26,11 +27,21 @@ type chunkPyramidChildResp struct {
 	nodes []string
 }
 
-// chunkPyramidReq
-type chunkPyramidReq struct {
-	rootCid    string
-	createTime int64
+// ChunkPyramidReq
+type ChunkPyramidReq struct {
+	RootCid    string `protobuf:"bytes,1,opt,name=RootCid,proto3" json:"RootCid,omitempty"`
+	CreateTime int64  `protobuf:"bytes,1,opt,name=CreateTime,proto3" json:"CreateTime,omitempty"`
 }
+
+func (req *ChunkPyramidReq) Reset() {
+	*req = ChunkPyramidReq{}
+}
+
+func (req *ChunkPyramidReq) String() string {
+	return proto.CompactTextString(req)
+}
+
+func (*ChunkPyramidReq) ProtoMessage() {}
 
 // todo validate pyramid
 
@@ -67,8 +78,8 @@ func (cp *chunkPyramid) getChunkPyramidByPCid(pCid string, pyramids map[string]m
 }
 
 // createChunkPyramidReq
-func (cp *chunkPyramid) createChunkPyramidReq(rootCid string) chunkPyramidReq {
-	cpReq := chunkPyramidReq{rootCid: rootCid, createTime: time.Now().Unix()}
+func (cp *chunkPyramid) createChunkPyramidReq(rootCid string) ChunkPyramidReq {
+	cpReq := ChunkPyramidReq{RootCid: rootCid, CreateTime: time.Now().Unix()}
 	return cpReq
 }
 

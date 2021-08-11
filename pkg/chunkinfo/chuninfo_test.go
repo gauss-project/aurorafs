@@ -6,8 +6,8 @@ import (
 	"time"
 )
 
-func TestFindChunkInfo(t *testing.T) {
-	ci := New()
+func TestChunkPyramid(t *testing.T) {
+	ci := New(nil, nil, nil)
 	// mock pyramid req
 	ci.FindChunkInfo(nil, "1", []string{"a", "b"})
 	ci.CancelFindChunkInfo("1")
@@ -25,7 +25,7 @@ func TestFindChunkInfo(t *testing.T) {
 		py["1"] = s
 		py["2"] = s1
 		resp := ci.ct.createChunkPyramidResp("1", py, res)
-		ci.onChunkInfoHandle(nil, "resp/chunkpyramid", "a", resp)
+		ci.onChunkInfoHandle(nil, "chunkpyramid/resp", "a", resp)
 	}()
 	time.Sleep(5 * time.Second)
 	q := ci.queues["1"]
@@ -43,9 +43,12 @@ func TestFindChunkInfo(t *testing.T) {
 	if len(nodes) != 2 {
 		t.Fatal()
 	}
+}
+
+func TestChunkInfo(t *testing.T) {
+	ci := New(nil, nil, nil)
 	// handle chunkinfo req
 	ci.OnChunkTransferred("2", "1", "c")
 	req := ci.cd.createChunkInfoReq("1")
-	ci.onChunkInfoHandle(nil, "req/chunkinfo", "a", req)
-	// todo  pyramid req
+	ci.onChunkInfoHandle(nil, "chunkinfo/req", "a", req)
 }

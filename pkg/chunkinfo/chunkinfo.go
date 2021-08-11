@@ -1,6 +1,11 @@
 package chunkinfo
 
-import "time"
+import (
+	"github.com/gauss-project/aurorafs/pkg/logging"
+	"github.com/gauss-project/aurorafs/pkg/p2p"
+	"github.com/gauss-project/aurorafs/pkg/tracing"
+	"time"
+)
 
 type Interface interface {
 	FindChunkInfo(authInfo []byte, rootCid string, nodes []string)
@@ -16,19 +21,21 @@ type Interface interface {
 
 // ChunkInfo
 type ChunkInfo struct {
-	// p2p
 	// store
-	t      *time.Timer
-	tt     *timeoutTrigger
-	queues map[string]*queue
-	ct     *chunkInfoTabNeighbor
-	cd     *chunkInfoDiscover
-	cp     *chunkPyramid
-	cpd    *pendingFinderInfo
+	streamer p2p.Streamer
+	tracer   *tracing.Tracer
+	logger   logging.Logger
+	t        *time.Timer
+	tt       *timeoutTrigger
+	queues   map[string]*queue
+	ct       *chunkInfoTabNeighbor
+	cd       *chunkInfoDiscover
+	cp       *chunkPyramid
+	cpd      *pendingFinderInfo
 }
 
 // New
-func New() *ChunkInfo {
+func New(streamer p2p.Streamer, logger logging.Logger, tracer *tracing.Tracer) *ChunkInfo {
 	// message new
 	cd := &chunkInfoDiscover{presence: make(map[string]map[string][]string)}
 	ct := &chunkInfoTabNeighbor{presence: make(map[string][]string)}
@@ -37,7 +44,17 @@ func New() *ChunkInfo {
 	tt := &timeoutTrigger{trigger: make(map[string]int64)}
 	queues := make(map[string]*queue)
 	t := time.NewTimer(Time * time.Second)
-	return &ChunkInfo{ct: ct, cd: cd, cp: cp, cpd: cpd, queues: queues, t: t, tt: tt}
+	return &ChunkInfo{ct: ct,
+		cd:       cd,
+		cp:       cp,
+		cpd:      cpd,
+		queues:   queues,
+		t:        t,
+		tt:       tt,
+		streamer: streamer,
+		logger:   logger,
+		tracer:   tracer,
+	}
 }
 
 // FindChunkInfo
