@@ -1,24 +1,24 @@
-package chunk_info
+package chunkinfo
 
 import (
 	"sync"
 	"time"
 )
 
-// chunkInfoDiscover 发现chunk
+// chunkInfoDiscover
 type chunkInfoDiscover struct {
 	sync.RWMutex
-	// rootCid-> cid -> nodes
+	// rootCid:cid:nodes
 	presence map[string]map[string][]string
 }
 
-// chunkInfoReq 请求体
+// chunkInfoReq
 type chunkInfoReq struct {
 	rootCid    string
 	createTime int64
 }
 
-// isExists 判断rootCid是否存在
+// isExists
 func (cd *chunkInfoDiscover) isExists(rootCid string) bool {
 	cd.RLock()
 	defer cd.RUnlock()
@@ -26,7 +26,7 @@ func (cd *chunkInfoDiscover) isExists(rootCid string) bool {
 	return ok
 }
 
-// getChunkInfo 根据rootCid与cid获取nodes
+// getChunkInfo
 func (cd *chunkInfoDiscover) getChunkInfo(rootCid string, cid string) []string {
 	cd.RLock()
 	defer cd.RUnlock()
@@ -34,7 +34,7 @@ func (cd *chunkInfoDiscover) getChunkInfo(rootCid string, cid string) []string {
 	return v
 }
 
-// updateChunkInfos 根据rootCid新增 cid对应节点
+// updateChunkInfos
 func (cd *chunkInfoDiscover) updateChunkInfos(rootCid string, pyramids map[string][]string) {
 	cd.Lock()
 	defer cd.Unlock()
@@ -43,7 +43,7 @@ func (cd *chunkInfoDiscover) updateChunkInfos(rootCid string, pyramids map[strin
 	}
 }
 
-// updateChunkInfo  根据rootCid与cid新增nodes
+// updateChunkInfo
 func (cd *chunkInfoDiscover) updateChunkInfo(rootCid string, cid string, nodes []string) {
 	// todo 考虑持久化，做数据恢复
 	mn := make(map[string]struct{}, len(nodes))
@@ -72,15 +72,13 @@ func (cd *chunkInfoDiscover) updateChunkInfo(rootCid string, cid string, nodes [
 	}
 }
 
-// createChunkInfoReq 创建chunkInfo请求
+// createChunkInfoReq
 func (cd *chunkInfoDiscover) createChunkInfoReq(rootCid string) chunkInfoReq {
 	ciReq := chunkInfoReq{rootCid: rootCid, createTime: time.Now().Unix()}
 	return ciReq
 }
 
-// doFindChunkInfo 发现过程
+// doFindChunkInfo
 func (ci *ChunkInfo) doFindChunkInfo(authInfo []byte, rootCid string) {
-	// pull 过程
 	ci.queueProcess(rootCid)
-
 }

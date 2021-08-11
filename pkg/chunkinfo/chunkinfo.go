@@ -1,8 +1,8 @@
-package chunk_info
+package chunkinfo
 
 import "time"
 
-type ChunkInfoInterface interface {
+type Interface interface {
 	FindChunkInfo(authInfo []byte, rootCid string, nodes []string)
 
 	GetChunkInfo(rootCid string, cid string) []string
@@ -14,20 +14,20 @@ type ChunkInfoInterface interface {
 	OnChunkTransferred(cid string, rootCid string, node string)
 }
 
-// ChunkInfo 主要属性
+// ChunkInfo
 type ChunkInfo struct {
 	// p2p
 	// store
-	t      *time.Timer           //  定时器
-	tt     *timeoutTrigger       // 定时触发器
-	queues map[string]*queue     // 队列
-	ct     *chunkInfoTabNeighbor // 哪些节点主动获取过当前节点Chunk记录
-	cd     *chunkInfoDiscover    // 当前节点知道哪些chunk在哪些节点上
-	cp     *chunkPyramid         // 金字塔结构
-	cpd    *pendingFinderInfo    // 是否发现RootCid
+	t      *time.Timer
+	tt     *timeoutTrigger
+	queues map[string]*queue
+	ct     *chunkInfoTabNeighbor
+	cd     *chunkInfoDiscover
+	cp     *chunkPyramid
+	cpd    *pendingFinderInfo
 }
 
-// New 创建ChunkInfo
+// New
 func New() *ChunkInfo {
 	// message new
 	cd := &chunkInfoDiscover{presence: make(map[string]map[string][]string)}
@@ -40,44 +40,40 @@ func New() *ChunkInfo {
 	return &ChunkInfo{ct: ct, cd: cd, cp: cp, cpd: cpd, queues: queues, t: t, tt: tt}
 }
 
-// FindChunkInfo 根据rootCid与nodes开始发现
+// FindChunkInfo
 func (ci *ChunkInfo) FindChunkInfo(authInfo []byte, rootCid string, nodes []string) {
-	//  如果已经存在rootCid并且未开始发现直接发起doFindChunkInfo
 	go ci.triggerTimeOut()
 	ci.cpd.updatePendingFinder(rootCid)
 	if ci.cd.isExists(rootCid) {
-		//发起doFindChunkInfo
 		for _, n := range nodes {
 			ci.queues[rootCid].push(Pulling, n)
 		}
 		ci.doFindChunkInfo(authInfo, rootCid)
 	} else {
-		// 根据rootCid生成队列
 		ci.newQueue(rootCid)
 		for _, n := range nodes {
 			ci.getQueue(rootCid).push(Pulling, n)
 		}
-		// 获取金字塔
 		ci.doFindChunkPyramid(authInfo, rootCid, nodes)
 	}
 }
 
-// GetChunkInfo 根据瑞rootCid与cid获取nodes
+// GetChunkInfo
 func (ci *ChunkInfo) GetChunkInfo(rootCid string, cid string) []string {
 	return ci.cd.getChunkInfo(rootCid, cid)
 }
 
-// GetChunkPyramid 根据rootCid获取金字塔结构
+// GetChunkPyramid
 func (ci *ChunkInfo) GetChunkPyramid(rootCid string) map[string]map[string]uint {
 	return ci.cp.getChunkPyramid(rootCid)
 }
 
-// CancelFindChunkInfo 根据rootCid取消发现
+// CancelFindChunkInfo
 func (ci *ChunkInfo) CancelFindChunkInfo(rootCid string) {
 	ci.cpd.cancelPendingFinder(rootCid)
 }
 
-// OnChunkTransferred 哪些node主动获取了cid
+// OnChunkTransferred
 func (ci *ChunkInfo) OnChunkTransferred(cid string, rootCid string, node string) {
 	ci.ct.updateNeighborChunkInfo(rootCid, cid, node)
 }

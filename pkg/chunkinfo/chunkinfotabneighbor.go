@@ -1,25 +1,25 @@
-package chunk_info
+package chunkinfo
 
 import "sync"
 
-// chunkInfoTabNeighbor 哪些节点主动获取过当前节点Chunk记录
+// chunkInfoTabNeighbor
 type chunkInfoTabNeighbor struct {
 	sync.RWMutex
-	// 1. cid 对应节点 2. rootCid对应cid
+	// rootCid:cids or cid:nodes
 	presence map[string][]string
 }
 
-// chunkInfoResp chunkInfo 响应体
+// chunkInfoResp
 type chunkInfoResp struct {
-	rootCid  string              //rootCid
-	presence map[string][]string // cid => nodes
+	rootCid  string
+	presence map[string][]string
 }
 
-// updateNeighborChunkInfo 新增NeighborChunkInfo
+// updateNeighborChunkInfo
 func (cn *chunkInfoTabNeighbor) updateNeighborChunkInfo(rootCid string, cid string, node string) {
 	cn.Lock()
 	defer cn.Unlock()
-	// todo 数据库操作
+	// todo levelDB
 	_, ok := cn.presence[rootCid]
 	if !ok {
 		cn.presence[rootCid] = make([]string, 0, 1)
@@ -33,7 +33,7 @@ func (cn *chunkInfoTabNeighbor) updateNeighborChunkInfo(rootCid string, cid stri
 	cn.presence[key] = append(cn.presence[key], node)
 }
 
-// getNeighborChunkInfo 根据rootCid 获取下面所有所有cid对应nodes
+// getNeighborChunkInfo
 func (cn *chunkInfoTabNeighbor) getNeighborChunkInfo(rootCid string) map[string][]string {
 	cn.RLock()
 	defer cn.RUnlock()
@@ -41,14 +41,14 @@ func (cn *chunkInfoTabNeighbor) getNeighborChunkInfo(rootCid string) map[string]
 	cids := cn.presence[rootCid]
 	for _, cid := range cids {
 		key := rootCid + "_" + cid
-		// todo 数据库操作
+		// todo levelDB
 		nodes := cn.presence[key]
 		res[cid] = nodes
 	}
 	return res
 }
 
-// createChunkInfoResp 创建chunkinfo 响应体
+// createChunkInfoResp
 func (cn *chunkInfoTabNeighbor) createChunkInfoResp(rootCid string, ctn map[string][]string) chunkInfoResp {
 	return chunkInfoResp{rootCid: rootCid, presence: ctn}
 }

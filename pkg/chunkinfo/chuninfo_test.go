@@ -1,4 +1,4 @@
-package chunk_info
+package chunkinfo
 
 import (
 	"fmt"
@@ -8,10 +8,10 @@ import (
 
 func TestFindChunkInfo(t *testing.T) {
 	ci := New()
-	// 发起金字塔req
+	// mock pyramid req
 	ci.FindChunkInfo(nil, "1", []string{"a", "b"})
 	ci.CancelFindChunkInfo("1")
-	// 模拟金字塔resp
+	// mock pyramid resp
 	go func() {
 		res := make(map[string][]string)
 		res["4"] = []string{"c", "d", "d"}
@@ -43,9 +43,9 @@ func TestFindChunkInfo(t *testing.T) {
 	if len(nodes) != 2 {
 		t.Fatal()
 	}
-	// 收到req请求处理
+	// handle chunkinfo req
 	ci.OnChunkTransferred("2", "1", "c")
 	req := ci.cd.createChunkInfoReq("1")
 	ci.onChunkInfoHandle(nil, "req/chunkinfo", "a", req)
-	// req请求金字塔 金字塔获取为提供无法测试
+	// todo  pyramid req
 }

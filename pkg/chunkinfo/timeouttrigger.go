@@ -1,4 +1,4 @@
-package chunk_info
+package chunkinfo
 
 import (
 	"strings"
@@ -11,14 +11,14 @@ const (
 	Time    = 3
 )
 
-// timeoutTrigger 超时触发器
+// timeoutTrigger
 type timeoutTrigger struct {
 	sync.RWMutex
-	// rootCid_node : 时间戳
+	// rootCid_node : Timestamp
 	trigger map[string]int64
 }
 
-// updateTimeOutTrigger 新增超时监听
+// updateTimeOutTrigger
 func (tt *timeoutTrigger) updateTimeOutTrigger(rootCid, nodeId string) {
 	tt.Lock()
 	tt.Unlock()
@@ -26,7 +26,7 @@ func (tt *timeoutTrigger) updateTimeOutTrigger(rootCid, nodeId string) {
 	tt.trigger[key] = time.Now().Unix()
 }
 
-// removeTimeOutTrigger 移除监听
+// removeTimeOutTrigger
 func (tt *timeoutTrigger) removeTimeOutTrigger(rootCid, nodeId string) {
 	tt.Lock()
 	tt.Unlock()
@@ -34,7 +34,7 @@ func (tt *timeoutTrigger) removeTimeOutTrigger(rootCid, nodeId string) {
 	delete(tt.trigger, key)
 }
 
-// getTimeOutRootCidAndNode 获取超时
+// getTimeOutRootCidAndNode
 func (tt *timeoutTrigger) getTimeOutRootCidAndNode() (string, string) {
 	for k, t := range tt.trigger {
 		if t+TimeOut <= time.Now().Unix() {
@@ -45,7 +45,7 @@ func (tt *timeoutTrigger) getTimeOutRootCidAndNode() (string, string) {
 	return "", ""
 }
 
-// triggerTimeOut 监听
+// triggerTimeOut
 func (ci *ChunkInfo) triggerTimeOut() {
 	timeTrigger := ci.t
 	select {

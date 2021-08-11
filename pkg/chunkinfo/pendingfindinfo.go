@@ -1,22 +1,22 @@
-package chunk_info
+package chunkinfo
 
 import "sync"
 
-// pendingFinderInfo 是否发现rootCid
+// pendingFinderInfo
 type pendingFinderInfo struct {
 	sync.RWMutex
 	// rootCid
 	finder map[string]struct{}
 }
 
-// updatePendingFinder 新增rootCid发现
+// updatePendingFinder
 func (pfi *pendingFinderInfo) updatePendingFinder(rootCid string) {
 	pfi.Lock()
 	defer pfi.Unlock()
 	pfi.finder[rootCid] = struct{}{}
 }
 
-// cancelPendingFinder 根据rootCid取消发现
+// cancelPendingFinder
 func (pfi *pendingFinderInfo) cancelPendingFinder(rootCid string) {
 	pfi.Lock()
 	defer pfi.Unlock()
@@ -26,7 +26,7 @@ func (pfi *pendingFinderInfo) cancelPendingFinder(rootCid string) {
 	delete(pfi.finder, rootCid)
 }
 
-// getPendingFinder 根据rootCid查看是否继续发现
+// getPendingFinder
 func (pfi *pendingFinderInfo) getPendingFinder(rootCid string) bool {
 	pfi.RLock()
 	defer pfi.RUnlock()
