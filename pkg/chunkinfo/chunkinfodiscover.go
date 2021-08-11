@@ -45,7 +45,7 @@ func (cd *chunkInfoDiscover) updateChunkInfos(rootCid string, pyramids map[strin
 
 // updateChunkInfo
 func (cd *chunkInfoDiscover) updateChunkInfo(rootCid string, cid string, nodes []string) {
-	// todo 考虑持久化，做数据恢复
+	// todo leveDb
 	mn := make(map[string]struct{}, len(nodes))
 	// 去重
 	for _, n := range nodes {
