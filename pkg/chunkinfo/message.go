@@ -3,6 +3,7 @@ package chunkinfo
 import (
 	"context"
 	"fmt"
+	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/p2p"
 	"github.com/gauss-project/aurorafs/pkg/p2p/protobuf"
 	"io"
@@ -40,31 +41,75 @@ func (ci *ChunkInfo) Protocol() p2p.ProtocolSpec {
 	}
 }
 
+func (ci *ChunkInfo) sendData(ctx context.Context, address boson.Address, streamName string, msg interface{}) error {
+	span, logger, ctx := ci.tracer.StartSpanFromContext(ctx, "pingpong-p2p-ping", ci.logger)
+	defer span.Finish()
+
+	stream, err := ci.streamer.NewStream(ctx, address, nil, protocolName, protocolVersion, streamName)
+	if err != nil {
+		return fmt.Errorf("new stream: %w", err)
+	}
+	defer func() {
+		go stream.FullClose()
+	}()
+
+	w, _ := protobuf.NewWriterAndReader(stream)
+	if err := w.WriteMsgWithContext(ctx, &chunkInfoReq{rootCid: ""}); err != nil {
+		return fmt.Errorf("write message: %w", err)
+	}
+	logger.Tracef("got chunkinfo req %q", msg)
+	return nil
+}
+
 // sendDataToNode
 func (ci *ChunkInfo) sendDataToNode(req interface{}, nodeId string) {
-	// todo libp2p
+	//  todo libp2p
 }
 
 func (ci *ChunkInfo) handlerChunkInfoReq(ctx context.Context, p p2p.Peer, stream p2p.Stream) error {
-	//_, r := protobuf.NewWriterAndReader(stream)
+	_, r := protobuf.NewWriterAndReader(stream)
 	defer stream.FullClose()
-
+	span, logger, ctx := ci.tracer.StartSpanFromContext(ctx, "chunkinfo-p2p-handler", ci.logger)
+	defer span.Finish()
+	var req chunkInfoReq
+	for {
+		if err := r.ReadMsgWithContext(ctx, &req); err != nil {
+			if err == io.EOF {
+				break
+			}
+			return fmt.Errorf("read chunkinfo req message: %w", err)
+		}
+		logger.Tracef("got chunkinfo req: %q", req)
+		ci.onChunkInfoReq(nil, "", req)
+	}
 	return nil
 }
 
 func (ci *ChunkInfo) handlerChunkInfoResp(ctx context.Context, p p2p.Peer, stream p2p.Stream) error {
-	//_, r := protobuf.NewWriterAndReader(stream)
+	_, r := protobuf.NewWriterAndReader(stream)
 	defer stream.FullClose()
-
+	span, logger, ctx := ci.tracer.StartSpanFromContext(ctx, "chunkinfo-p2p-handler", ci.logger)
+	defer span.Finish()
+	var resp chunkInfoResp
+	for {
+		if err := r.ReadMsgWithContext(ctx, &resp); err != nil {
+			if err == io.EOF {
+				break
+			}
+			return fmt.Errorf("read message: %w", err)
+		}
+		logger.Tracef("got chunkinfo resp: %q", resp)
+		ci.onChunkInfoResp(nil, "", resp)
+	}
 	return nil
 }
 
 func (ci *ChunkInfo) handlerPyramidReq(ctx context.Context, p p2p.Peer, stream p2p.Stream) error {
 	_, r := protobuf.NewWriterAndReader(stream)
 	defer stream.FullClose()
-	span, logger, ctx := ci.tracer.StartSpanFromContext(ctx, "pingpong-p2p-handler", ci.logger)
+	span, logger, ctx := ci.tracer.StartSpanFromContext(ctx, "chunkinfo-p2p-handler", ci.logger)
 	defer span.Finish()
-	var req ChunkPyramidReq
+	var req chunkPyramidReq
 	for {
 		if err := r.ReadMsgWithContext(ctx, &req); err != nil {
 			if err == io.EOF {
@@ -72,33 +117,30 @@ func (ci *ChunkInfo) handlerPyramidReq(ctx context.Context, p p2p.Peer, stream p
 			}
 			return fmt.Errorf("read message: %w", err)
 		}
-		logger.Tracef("got pyramid: %q", req)
+		logger.Tracef("got pyramid req: %q", req)
 		// todo  onChunkPyramidReq
+		ci.onChunkPyramidReq(nil, "", req)
 	}
 	return nil
 }
 
 func (ci *ChunkInfo) handlerPyramidResp(ctx context.Context, p p2p.Peer, stream p2p.Stream) error {
-	//_, r := protobuf.NewWriterAndReader(stream)
+	_, r := protobuf.NewWriterAndReader(stream)
 	defer stream.FullClose()
-
+	span, logger, ctx := ci.tracer.StartSpanFromContext(ctx, "chunkinfo-p2p-handler", ci.logger)
+	defer span.Finish()
+	var resp chunkPyramidResp
+	for {
+		if err := r.ReadMsgWithContext(ctx, &resp); err != nil {
+			if err == io.EOF {
+				break
+			}
+			return fmt.Errorf("read message: %w", err)
+		}
+		logger.Tracef("got pyramid resp: %q", resp)
+		ci.onChunkPyramidResp(nil, "", resp)
+	}
 	return nil
-}
-
-// onChunkInfoHandle
-func (ci *ChunkInfo) onChunkInfoHandle(authInfo []byte, cmd, nodeId string, body interface{}) {
-	if cmd == "chunkinfo/req" {
-		ci.onChunkInfoReq(authInfo, nodeId, body)
-	}
-	if cmd == "chunkinfo/resp" {
-		ci.onChunkInfoResp(authInfo, nodeId, body)
-	}
-	if cmd == "chunkpyramid/req" {
-		ci.onChunkPyramidReq(authInfo, nodeId, body)
-	}
-	if cmd == "chunkpyramid/resp" {
-		ci.onChunkPyramidResp(authInfo, nodeId, body)
-	}
 }
 
 // onChunkInfoReq
@@ -116,8 +158,7 @@ func (ci *ChunkInfo) onChunkInfoResp(authInfo []byte, nodeId string, body interf
 }
 
 // onChunkPyramidReq
-func (ci *ChunkInfo) onChunkPyramidReq(authInfo []byte, nodeId string, body interface{}) {
-	req := body.(ChunkPyramidReq)
+func (ci *ChunkInfo) onChunkPyramidReq(authInfo []byte, nodeId string, req chunkPyramidReq) {
 	cp := ci.ct.getChunkPyramid(req.RootCid)
 	nci := ci.ct.getNeighborChunkInfo(req.RootCid)
 	resp := ci.ct.createChunkPyramidResp(req.RootCid, cp, nci)
