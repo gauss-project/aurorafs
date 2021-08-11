@@ -29,7 +29,7 @@ func New() *ChunkInfo {
 // FindChunkInfo 根据rootCid与nodes开始发现
 func (ci *ChunkInfo) FindChunkInfo(authInfo []byte, rootCid string, nodes []string) {
 	//  如果已经存在rootCid并且未开始发现直接发起doFindChunkInfo
-	ci.triggerTimeOut()
+	go ci.triggerTimeOut()
 	ci.cpd.updatePendingFinder(rootCid)
 	if ci.cd.isExists(rootCid) {
 		//发起doFindChunkInfo
