@@ -13,19 +13,22 @@ import (
 	"sync"
 	"sync/atomic"
 
+	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/encryption/store"
 	"github.com/gauss-project/aurorafs/pkg/file"
 	"github.com/gauss-project/aurorafs/pkg/storage"
-	"github.com/gauss-project/aurorafs/pkg/boson"
 	"golang.org/x/sync/errgroup"
 )
 
 type joiner struct {
-	addr     boson.Address
-	rootData []byte
+	addr      boson.Address
+	rootData  []byte
 	span      int64
 	off       int64
 	refLength int
+
+	dataChunks       [][]byte
+	isSaveDataChunks bool
 
 	ctx    context.Context
 	getter storage.Getter
@@ -54,6 +57,19 @@ func New(ctx context.Context, getter storage.Getter, address boson.Address) (fil
 	}
 
 	return j, span, nil
+}
+
+func (j *joiner) GetRootData() []byte {
+	return j.rootData
+}
+
+func (j *joiner) SetSaveDataChunks() {
+	j.dataChunks = make([][]byte, 0)
+	j.isSaveDataChunks = true
+}
+
+func (j *joiner) GetDataChunks() [][]byte {
+	return j.dataChunks
 }
 
 // Read is called by the consumer to retrieve the joined data.
@@ -247,6 +263,9 @@ func (j *joiner) processChunkAddresses(ctx context.Context, fn boson.AddressIter
 
 		sec := subtrieSection(data, cursor, j.refLength, subTrieSize)
 		if sec <= 4096 {
+			if j.isSaveDataChunks {
+				j.dataChunks = append(j.dataChunks, address.Bytes())
+			}
 			continue
 		}
 

@@ -24,6 +24,12 @@ type Joiner interface {
 	IterateChunkAddresses(boson.AddressIterFunc) error
 	// Size returns the span of the hash trie represented by the joiner's root hash.
 	Size() int64
+
+	GetRootData() []byte
+	// GetDataChunks order by the file data chunks of reference.
+	GetDataChunks() [][]byte
+	// SetSaveDataChunks
+	SetSaveDataChunks()
 }
 
 // Splitter starts a new file splitting job.
