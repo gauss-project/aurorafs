@@ -7,7 +7,7 @@ package mock
 import (
 	"errors"
 
-	"github.com/ethersphere/bee/pkg/encryption"
+	"github.com/gauss-project/aurorafs/pkg/encryption"
 )
 
 var _ encryption.Interface = (*Encryptor)(nil)

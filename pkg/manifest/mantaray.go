@@ -9,15 +9,15 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/ethersphere/bee/pkg/file"
-	"github.com/ethersphere/bee/pkg/manifest/mantaray"
-	"github.com/ethersphere/bee/pkg/swarm"
+	"github.com/gauss-project/aurorafs/pkg/file"
+	"github.com/gauss-project/aurorafs/pkg/boson"
+	"github.com/ethersphere/manifest/mantaray"
 )
 
 const (
 	// ManifestMantarayContentType represents content type used for noting that
 	// specific file should be processed as mantaray manifest.
-	ManifestMantarayContentType = "application/bzz-manifest-mantaray+octet-stream"
+	ManifestMantarayContentType = "application/aurora-manifest-mantaray+octet-stream"
 )
 
 type mantarayManifest struct {
@@ -45,7 +45,7 @@ func NewMantarayManifest(
 
 // NewMantarayManifestReference loads existing mantaray-based manifest.
 func NewMantarayManifestReference(
-	reference swarm.Address,
+	reference boson.Address,
 	ls file.LoadSaver,
 ) (Interface, error) {
 	return &mantarayManifest{
@@ -94,7 +94,7 @@ func (m *mantarayManifest) Lookup(ctx context.Context, path string) (Entry, erro
 		return nil, ErrNotFound
 	}
 
-	address := swarm.NewAddress(node.Entry())
+	address := boson.NewAddress(node.Entry())
 	entry := NewEntry(address, node.Metadata())
 
 	return entry, nil
@@ -106,7 +106,7 @@ func (m *mantarayManifest) HasPrefix(ctx context.Context, prefix string) (bool, 
 	return m.trie.HasPrefix(ctx, p, m.ls)
 }
 
-func (m *mantarayManifest) Store(ctx context.Context, storeSizeFn ...StoreSizeFunc) (swarm.Address, error) {
+func (m *mantarayManifest) Store(ctx context.Context, storeSizeFn ...StoreSizeFunc) (boson.Address, error) {
 	var ls mantaray.LoadSaver
 	if len(storeSizeFn) > 0 {
 		ls = &mantarayLoadSaver{
@@ -119,22 +119,21 @@ func (m *mantarayManifest) Store(ctx context.Context, storeSizeFn ...StoreSizeFu
 
 	err := m.trie.Save(ctx, ls)
 	if err != nil {
-		return swarm.ZeroAddress, fmt.Errorf("manifest save error: %w", err)
+		return boson.ZeroAddress, fmt.Errorf("manifest save error: %w", err)
 	}
 
-	address := swarm.NewAddress(m.trie.Reference())
+	address := boson.NewAddress(m.trie.Reference())
 
 	return address, nil
 }
 
-func (m *mantarayManifest) IterateAddresses(ctx context.Context, fn swarm.AddressIterFunc) error {
-	reference := swarm.NewAddress(m.trie.Reference())
+func (m *mantarayManifest) IterateAddresses(ctx context.Context, fn boson.AddressIterFunc) error {
+	reference := boson.NewAddress(m.trie.Reference())
 
-	if swarm.ZeroAddress.Equal(reference) {
+	if boson.ZeroAddress.Equal(reference) {
 		return ErrMissingReference
 	}
 
-	emptyAddr := swarm.NewAddress([]byte{31: 0})
 	walker := func(path []byte, node *mantaray.Node, err error) error {
 		if err != nil {
 			return err
@@ -142,7 +141,7 @@ func (m *mantarayManifest) IterateAddresses(ctx context.Context, fn swarm.Addres
 
 		if node != nil {
 			if node.Reference() != nil {
-				ref := swarm.NewAddress(node.Reference())
+				ref := boson.NewAddress(node.Reference())
 
 				err = fn(ref)
 				if err != nil {
@@ -150,19 +149,10 @@ func (m *mantarayManifest) IterateAddresses(ctx context.Context, fn swarm.Addres
 				}
 			}
 
-			if node.IsValueType() && len(node.Entry()) > 0 {
-				entry := swarm.NewAddress(node.Entry())
-				// The following comparison to the emptyAddr is
-				// a dirty hack which prevents the walker to
-				// fail when it encounters an empty address
-				// (e.g.: during the unpin traversal operation
-				// for manifest). This workaround should be
-				// removed after the manifest serialization bug
-				// is fixed.
-				if entry.Equal(emptyAddr) {
-					return nil
-				}
-				if err := fn(entry); err != nil {
+			if node.IsValueType() && node.Entry() != nil {
+				entry := boson.NewAddress(node.Entry())
+				err = fn(entry)
+				if err != nil {
 					return err
 				}
 			}

@@ -1,0 +1,38 @@
+#!/bin/sh
+
+if [ ! `id -u` -eq 0 ] ; then
+    echo "
+This script requires root priviledges, use sudo.
+"
+    exit 1
+fi
+
+RESP=$(/usr/bin/aurorafs init --config /etc/aurorafs/aurorafs.yaml 2>&1)
+case "$RESP" in
+    Error*|*'No such file'*)
+        echo "
+The aufs node has returned an error, probably because the aufs-clef external signer is enabled, but the node couldn't connect to it.
+
+Check https://docs.aufs.io/ for more info.
+
+Fix the configuration and try again.
+
+The node's output was:
+        "
+        echo "$RESP"
+        ;;
+    *)
+        GAC_ADDRESS=$(echo "$RESP" | grep gauss | cut -d' ' -f6 | tr -d '"')
+        echo "
+Please make sure there is sufficient GAC and AFS available on the node's Ethereum address: $ETH_ADDRESS.
+
+You can get both GAC and AFS via the Faucet at https://
+
+Or you can join us on Discord (at https://discord.gg/ykCupZMuww) and ask our bot for a sprinkle in the #faucet-request channel.
+
+Once the node's wallet has received the funds it will begin joining the Boson network.
+
+See the docs for more at https://docs.aufs.io.
+        "
+        ;;
+esac

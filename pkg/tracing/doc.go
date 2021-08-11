@@ -16,7 +16,7 @@ To use the tracing package a Tracer instance must be created:
 	tracer, tracerCloser, err := tracing.NewTracer(&tracing.Options{
 		Enabled:     true,
 		Endpoint:    "127.0.0.1:6831",
-		ServiceName: "bee",
+		ServiceName: "aurorafs",
 	})
 	if err != nil {
 		// handle error

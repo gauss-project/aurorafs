@@ -2,8 +2,8 @@ package oracle
 
 import (
 	"context"
-	"github.com/ethersphere/bee/pkg/logging"
-	"github.com/ethersphere/bee/pkg/swarm"
+	"github.com/gauss-project/aurorafs/pkg/logging"
+	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/ipfs/go-cid"
 	"math/big"
 	"time"
@@ -27,7 +27,7 @@ func Init(p2pCtx  context.Context,logger logging.Logger,endpoint string,pollingI
 	},nil
 }
 
-func (ora *ChainOracle) PeerPrice(address swarm.Address) uint64{
+func (ora *ChainOracle) PeerPrice(address boson.Address) uint64{
 	return 1
 }
 func (ora *ChainOracle)  Price() uint64{
@@ -42,16 +42,16 @@ func (ora *ChainOracle)GetCid(aufsUri string) []byte {
 	return nil
 }
 
-func (ora *ChainOracle)GetNodesFromCid([]byte) []swarm.Address{
+func (ora *ChainOracle)GetNodesFromCid([]byte) []boson.Address{
 	return nil
 }
 
-func (ora *ChainOracle)GetSourceNodes(aufsUri string) []swarm.Address{
+func (ora *ChainOracle)GetSourceNodes(aufsUri string) []boson.Address{
 
 	return nil
 }
 
-func (ora *ChainOracle)OnStoreMatched(cid cid.Cid,dataLen uint64, salt uint64,address swarm.Address){
+func (ora *ChainOracle)OnStoreMatched(cid cid.Cid,dataLen uint64, salt uint64,address boson.Address){
 
 }
 
@@ -67,16 +67,16 @@ func (ora *ChainOracle)ReportInvalidAuthInfo([]byte,chan ChainResult){
 
 }
 
-func (ora *ChainOracle) GetPeerBalance(peer swarm.Address) *big.Int{
+func (ora *ChainOracle) GetPeerBalance(peer boson.Address) *big.Int{
 
 	return big.NewInt(1000000)
 }
 
-func (ora *ChainOracle) GetSentAmount(peer swarm.Address) *big.Int{
+func (ora *ChainOracle) GetSentAmount(peer boson.Address) *big.Int{
 	return big.NewInt(0)
 }
 
-func (ora *ChainOracle) GetReceivedAmount(peer swarm.Address) *big.Int{
+func (ora *ChainOracle) GetReceivedAmount(peer boson.Address) *big.Int{
 	return big.NewInt(0)
 }
 

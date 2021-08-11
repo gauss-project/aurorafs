@@ -11,22 +11,22 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ethersphere/bee/pkg/debugapi"
-	"github.com/ethersphere/bee/pkg/jsonhttp"
-	"github.com/ethersphere/bee/pkg/jsonhttp/jsonhttptest"
-	"github.com/ethersphere/bee/pkg/p2p"
-	pingpongmock "github.com/ethersphere/bee/pkg/pingpong/mock"
-	"github.com/ethersphere/bee/pkg/swarm"
+	"github.com/gauss-project/aurorafs/pkg/debugapi"
+	"github.com/gauss-project/aurorafs/pkg/jsonhttp"
+	"github.com/gauss-project/aurorafs/pkg/jsonhttp/jsonhttptest"
+	"github.com/gauss-project/aurorafs/pkg/p2p"
+	pingpongmock "github.com/gauss-project/aurorafs/pkg/pingpong/mock"
+	"github.com/gauss-project/aurorafs/pkg/boson"
 )
 
 func TestPingpong(t *testing.T) {
 	rtt := time.Minute
-	peerID := swarm.MustParseHexAddress("ca1e9f3938cc1425c6061b96ad9eb93e134dfe8734ad490164ef20af9d1cf59c")
-	unknownPeerID := swarm.MustParseHexAddress("ca1e9f3938cc1425c6061b96ad9eb93e134dfe8734ad490164ef20af9d1cf59e")
-	errorPeerID := swarm.MustParseHexAddress("ca1e9f3938cc1425c6061b96ad9eb93e134dfe8734ad490164ef20af9d1cf59a")
+	peerID := boson.MustParseHexAddress("ca1e9f3938cc1425c6061b96ad9eb93e134dfe8734ad490164ef20af9d1cf59c")
+	unknownPeerID := boson.MustParseHexAddress("ca1e9f3938cc1425c6061b96ad9eb93e134dfe8734ad490164ef20af9d1cf59e")
+	errorPeerID := boson.MustParseHexAddress("ca1e9f3938cc1425c6061b96ad9eb93e134dfe8734ad490164ef20af9d1cf59a")
 	testErr := errors.New("test error")
 
-	pingpongService := pingpongmock.New(func(ctx context.Context, address swarm.Address, msgs ...string) (time.Duration, error) {
+	pingpongService := pingpongmock.New(func(ctx context.Context, address boson.Address, msgs ...string) (time.Duration, error) {
 		if address.Equal(errorPeerID) {
 			return 0, testErr
 		}

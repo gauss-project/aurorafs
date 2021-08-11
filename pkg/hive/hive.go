@@ -12,21 +12,16 @@ package hive
 
 import (
 	"context"
-	"errors"
 	"fmt"
-	"sync"
 	"time"
 
-	"github.com/ethersphere/bee/pkg/addressbook"
-	"github.com/ethersphere/bee/pkg/bzz"
-	"github.com/ethersphere/bee/pkg/hive/pb"
-	"github.com/ethersphere/bee/pkg/logging"
-	"github.com/ethersphere/bee/pkg/p2p"
-	"github.com/ethersphere/bee/pkg/p2p/protobuf"
-	"github.com/ethersphere/bee/pkg/swarm"
-	ma "github.com/multiformats/go-multiaddr"
-
-	"golang.org/x/time/rate"
+	"github.com/gauss-project/aurorafs/pkg/addressbook"
+	"github.com/gauss-project/aurorafs/pkg/aurora"
+	"github.com/gauss-project/aurorafs/pkg/hive/pb"
+	"github.com/gauss-project/aurorafs/pkg/logging"
+	"github.com/gauss-project/aurorafs/pkg/p2p"
+	"github.com/gauss-project/aurorafs/pkg/p2p/protobuf"
+	"github.com/gauss-project/aurorafs/pkg/boson"
 )
 
 const (
@@ -37,22 +32,13 @@ const (
 	maxBatchSize    = 30
 )
 
-var (
-	ErrRateLimitExceeded = errors.New("rate limit exceeded")
-	limitBurst           = 4 * int(swarm.MaxBins)
-	limitRate            = rate.Every(time.Minute)
-)
-
 type Service struct {
 	streamer        p2p.Streamer
 	addressBook     addressbook.GetPutter
-	addPeersHandler func(...swarm.Address)
+	addPeersHandler func(context.Context, ...boson.Address) error
 	networkID       uint64
 	logger          logging.Logger
 	metrics         metrics
-	limiter         map[string]*rate.Limiter
-	limiterLock     sync.Mutex
-	backoff 		Backoff
 }
 
 func New(streamer p2p.Streamer, addressbook addressbook.GetPutter, networkID uint64, logger logging.Logger) *Service {
@@ -62,8 +48,6 @@ func New(streamer p2p.Streamer, addressbook addressbook.GetPutter, networkID uin
 		addressBook: addressbook,
 		networkID:   networkID,
 		metrics:     newMetrics(),
-		limiter:     make(map[string]*rate.Limiter),
-		backoff: 	NewBackoff(),
 	}
 }
 
@@ -77,12 +61,10 @@ func (s *Service) Protocol() p2p.ProtocolSpec {
 				Handler: s.peersHandler,
 			},
 		},
-		DisconnectIn:  s.disconnect,
-		DisconnectOut: s.disconnect,
 	}
 }
 
-func (s *Service) BroadcastPeers(ctx context.Context, addressee swarm.Address, peers ...swarm.Address) error {
+func (s *Service) BroadcastPeers(ctx context.Context, addressee boson.Address, peers ...boson.Address) error {
 	max := maxBatchSize
 	s.metrics.BroadcastPeers.Inc()
 	s.metrics.BroadcastPeersPeers.Add(float64(len(peers)))
@@ -101,11 +83,11 @@ func (s *Service) BroadcastPeers(ctx context.Context, addressee swarm.Address, p
 	return nil
 }
 
-func (s *Service) SetAddPeersHandler(h func(addr ...swarm.Address)) {
+func (s *Service) SetAddPeersHandler(h func(ctx context.Context, addr ...boson.Address) error) {
 	s.addPeersHandler = h
 }
 
-func (s *Service) sendPeers(ctx context.Context, peer swarm.Address, peers []swarm.Address) (err error) {
+func (s *Service) sendPeers(ctx context.Context, peer boson.Address, peers []boson.Address) (err error) {
 	s.metrics.BroadcastPeersSends.Inc()
 	stream, err := s.streamer.NewStream(ctx, peer, nil, protocolName, protocolVersion, peersStreamName)
 	if err != nil {
@@ -115,9 +97,7 @@ func (s *Service) sendPeers(ctx context.Context, peer swarm.Address, peers []swa
 		if err != nil {
 			_ = stream.Reset()
 		} else {
-			// added this because Recorder (unit test) emits an unnecessary EOF when Close is called
-			time.Sleep(time.Millisecond * 50)
-			_ = stream.Close()
+			_ = stream.FullClose()
 		}
 	}()
 	w, _ := protobuf.NewWriterAndReader(stream)
@@ -133,10 +113,9 @@ func (s *Service) sendPeers(ctx context.Context, peer swarm.Address, peers []swa
 		}
 
 		peersRequest.Peers = append(peersRequest.Peers, &pb.BzzAddress{
-			Overlay:     addr.Overlay.Bytes(),
-			Underlay:    addr.Underlay.Bytes(),
-			Signature:   addr.Signature,
-			Transaction: addr.Transaction,
+			Overlay:   addr.Overlay.Bytes(),
+			Underlay:  addr.Underlay.Bytes(),
+			Signature: addr.Signature,
 		})
 	}
 
@@ -160,39 +139,20 @@ func (s *Service) peersHandler(ctx context.Context, peer p2p.Peer, stream p2p.St
 
 	s.metrics.PeersHandlerPeers.Add(float64(len(peersReq.Peers)))
 
-	if err := s.rateLimitPeer(peer.Address, len(peersReq.Peers)); err != nil {
-		_ = stream.Reset()
-		return err
-	}
-
-	if s.backoff.updateAddr(peer.Address) {
-		_ = stream.Reset()
-		s.logger.Debugf("avoid to connect :%s",peer.Address)
-		return errors.New("block to connect")
-	}
-
 	// close the stream before processing in order to unblock the sending side
 	// fullclose is called async because there is no need to wait for confirmation,
 	// but we still want to handle not closed stream from the other side to avoid zombie stream
 	go stream.FullClose()
 
-	var peers []swarm.Address
+	var peers []boson.Address
 	for _, newPeer := range peersReq.Peers {
-
-		multiUnderlay, err := ma.NewMultiaddrBytes(newPeer.Underlay)
+		bzzAddress, err := aurora.ParseAddress(newPeer.Underlay, newPeer.Overlay, newPeer.Signature, s.networkID)
 		if err != nil {
-			s.logger.Errorf("hive: multi address underlay err: %v", err)
+			s.logger.Warningf("skipping peer in response %s: %v", newPeer.String(), err)
 			continue
 		}
 
-		bzzAddress := bzz.Address{
-			Overlay:     swarm.NewAddress(newPeer.Overlay),
-			Underlay:    multiUnderlay,
-			Signature:   newPeer.Signature,
-			Transaction: newPeer.Transaction,
-		}
-
-		err = s.addressBook.Put(bzzAddress.Overlay, bzzAddress)
+		err = s.addressBook.Put(bzzAddress.Overlay, *bzzAddress)
 		if err != nil {
 			s.logger.Warningf("skipping peer in response %s: %v", newPeer.String(), err)
 			continue
@@ -202,37 +162,10 @@ func (s *Service) peersHandler(ctx context.Context, peer p2p.Peer, stream p2p.St
 	}
 
 	if s.addPeersHandler != nil {
-		s.addPeersHandler(peers...)
+		if err := s.addPeersHandler(ctx, peers...); err != nil {
+			return err
+		}
 	}
-
-	return nil
-}
-
-func (s *Service) rateLimitPeer(peer swarm.Address, count int) error {
-
-	s.limiterLock.Lock()
-	defer s.limiterLock.Unlock()
-
-	addr := peer.ByteString()
-
-	limiter, ok := s.limiter[addr]
-	if !ok {
-		limiter = rate.NewLimiter(limitRate, limitBurst)
-		s.limiter[addr] = limiter
-	}
-
-	if limiter.AllowN(time.Now(), count) {
-		return nil
-	}
-
-	return ErrRateLimitExceeded
-}
-
-func (s *Service) disconnect(peer p2p.Peer) error {
-	s.limiterLock.Lock()
-	defer s.limiterLock.Unlock()
-
-	delete(s.limiter, peer.Address.String())
 
 	return nil
 }

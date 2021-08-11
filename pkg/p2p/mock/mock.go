@@ -9,24 +9,24 @@ import (
 	"errors"
 	"time"
 
-	"github.com/ethersphere/bee/pkg/bzz"
-	"github.com/ethersphere/bee/pkg/p2p"
-	"github.com/ethersphere/bee/pkg/swarm"
+	"github.com/gauss-project/aurorafs/pkg/aurora"
+	"github.com/gauss-project/aurorafs/pkg/p2p"
+	"github.com/gauss-project/aurorafs/pkg/boson"
 	ma "github.com/multiformats/go-multiaddr"
 )
 
 // Service is the mock of a P2P Service
 type Service struct {
 	addProtocolFunc       func(p2p.ProtocolSpec) error
-	connectFunc           func(ctx context.Context, addr ma.Multiaddr) (address *bzz.Address, err error)
-	disconnectFunc        func(overlay swarm.Address) error
+	connectFunc           func(ctx context.Context, addr ma.Multiaddr) (address *aurora.Address, err error)
+	disconnectFunc        func(overlay boson.Address) error
 	peersFunc             func() []p2p.Peer
 	blocklistedPeersFunc  func() ([]p2p.Peer, error)
 	addressesFunc         func() ([]ma.Multiaddr, error)
 	setNotifierFunc       func(p2p.PickyNotifier)
 	setWelcomeMessageFunc func(string) error
 	getWelcomeMessageFunc func() string
-	blocklistFunc         func(swarm.Address, time.Duration) error
+	blocklistFunc         func(boson.Address, time.Duration) error
 	welcomeMessage        string
 }
 
@@ -45,14 +45,14 @@ func WithSetPickyNotifierFunc(f func(p2p.PickyNotifier)) Option {
 }
 
 // WithConnectFunc sets the mock implementation of the Connect function
-func WithConnectFunc(f func(ctx context.Context, addr ma.Multiaddr) (address *bzz.Address, err error)) Option {
+func WithConnectFunc(f func(ctx context.Context, addr ma.Multiaddr) (address *aurora.Address, err error)) Option {
 	return optionFunc(func(s *Service) {
 		s.connectFunc = f
 	})
 }
 
 // WithDisconnectFunc sets the mock implementation of the Disconnect function
-func WithDisconnectFunc(f func(overlay swarm.Address) error) Option {
+func WithDisconnectFunc(f func(overlay boson.Address) error) Option {
 	return optionFunc(func(s *Service) {
 		s.disconnectFunc = f
 	})
@@ -93,7 +93,7 @@ func WithSetWelcomeMessageFunc(f func(string) error) Option {
 	})
 }
 
-func WithBlocklistFunc(f func(swarm.Address, time.Duration) error) Option {
+func WithBlocklistFunc(f func(boson.Address, time.Duration) error) Option {
 	return optionFunc(func(s *Service) {
 		s.blocklistFunc = f
 	})
@@ -115,14 +115,14 @@ func (s *Service) AddProtocol(spec p2p.ProtocolSpec) error {
 	return s.addProtocolFunc(spec)
 }
 
-func (s *Service) Connect(ctx context.Context, addr ma.Multiaddr) (address *bzz.Address, err error) {
+func (s *Service) Connect(ctx context.Context, addr ma.Multiaddr) (address *aurora.Address, err error) {
 	if s.connectFunc == nil {
 		return nil, errors.New("function Connect not configured")
 	}
 	return s.connectFunc(ctx, addr)
 }
 
-func (s *Service) Disconnect(overlay swarm.Address) error {
+func (s *Service) Disconnect(overlay boson.Address) error {
 	if s.disconnectFunc == nil {
 		return errors.New("function Disconnect not configured")
 	}
@@ -166,9 +166,7 @@ func (s *Service) GetWelcomeMessage() string {
 	return s.welcomeMessage
 }
 
-func (s *Service) Halt() {}
-
-func (s *Service) Blocklist(overlay swarm.Address, duration time.Duration) error {
+func (s *Service) Blocklist(overlay boson.Address, duration time.Duration) error {
 	if s.blocklistFunc == nil {
 		return errors.New("function blocklist not configured")
 	}

@@ -10,15 +10,18 @@ import (
 	"io"
 	"net/http"
 
-	"github.com/ethersphere/bee/pkg/jsonhttp"
+	"github.com/gauss-project/aurorafs/pkg/jsonhttp"
 )
 
 func (s *Service) topologyHandler(w http.ResponseWriter, r *http.Request) {
-	params := s.topologyDriver.Snapshot()
+	ms, ok := s.topologyDriver.(json.Marshaler)
+	if !ok {
+		s.logger.Error("topology driver cast to json marshaler")
+		jsonhttp.InternalServerError(w, "topology json marshal interface error")
+		return
+	}
 
-	params.LightNodes = s.lightNodes.PeerInfo()
-
-	b, err := json.Marshal(params)
+	b, err := ms.MarshalJSON()
 	if err != nil {
 		s.logger.Errorf("topology marshal to json: %v", err)
 		jsonhttp.InternalServerError(w, err)

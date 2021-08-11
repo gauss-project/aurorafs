@@ -15,8 +15,8 @@ import (
 	"github.com/sirupsen/logrus"
 	"resenje.org/web"
 
-	"github.com/ethersphere/bee/pkg/jsonhttp"
-	"github.com/ethersphere/bee/pkg/logging/httpaccess"
+	"github.com/gauss-project/aurorafs/pkg/jsonhttp"
+	"github.com/gauss-project/aurorafs/pkg/logging/httpaccess"
 )
 
 // newBasicRouter constructs only the routes that do not depend on the injected dependencies:
@@ -77,22 +77,8 @@ func (s *Service) newRouter() *mux.Router {
 		"POST": http.HandlerFunc(s.pingpongHandler),
 	})
 
-	router.Handle("/reservestate", jsonhttp.MethodHandler{
-		"GET": http.HandlerFunc(s.reserveStateHandler),
-	})
-
-	router.Handle("/chainstate", jsonhttp.MethodHandler{
-		"GET": http.HandlerFunc(s.chainStateHandler),
-	})
-
 	router.Handle("/connect/{multi-address:.+}", jsonhttp.MethodHandler{
 		"POST": http.HandlerFunc(s.peerConnectHandler),
-	})
-	router.Handle("/disconnect_half", jsonhttp.MethodHandler{
-		"POST": http.HandlerFunc(s.peerDisconnectHalfHandler),
-	})
-	router.Handle("/pay/{address}/{amount}", jsonhttp.MethodHandler{
-		"POST": http.HandlerFunc(s.settlementsHandlerPseudoPay),
 	})
 	router.Handle("/peers", jsonhttp.MethodHandler{
 		"GET": http.HandlerFunc(s.peersHandler),
@@ -135,59 +121,14 @@ func (s *Service) newRouter() *mux.Router {
 		"GET": http.HandlerFunc(s.peerBalanceHandler),
 	})
 
-	router.Handle("/timesettlements", jsonhttp.MethodHandler{
-		"GET": http.HandlerFunc(s.settlementsHandlerPseudosettle),
+	router.Handle("/settlements", jsonhttp.MethodHandler{
+		"GET": http.HandlerFunc(s.settlementsHandler),
 	})
 
-	if s.chequebookEnabled {
-		router.Handle("/settlements", jsonhttp.MethodHandler{
-			"GET": http.HandlerFunc(s.settlementsHandler),
-		})
-		router.Handle("/settlements/{peer}", jsonhttp.MethodHandler{
-			"GET": http.HandlerFunc(s.peerSettlementsHandler),
-		})
-
-		router.Handle("/chequebook/balance", jsonhttp.MethodHandler{
-			"GET": http.HandlerFunc(s.chequebookBalanceHandler),
-		})
-
-		router.Handle("/chequebook/address", jsonhttp.MethodHandler{
-			"GET": http.HandlerFunc(s.chequebookAddressHandler),
-		})
-
-		router.Handle("/chequebook/deposit", jsonhttp.MethodHandler{
-			"POST": http.HandlerFunc(s.chequebookDepositHandler),
-		})
-
-		router.Handle("/chequebook/withdraw", jsonhttp.MethodHandler{
-			"POST": http.HandlerFunc(s.chequebookWithdrawHandler),
-		})
-
-		router.Handle("/chequebook/cheque/{peer}", jsonhttp.MethodHandler{
-			"GET": http.HandlerFunc(s.chequebookLastPeerHandler),
-		})
-
-		router.Handle("/chequebook/cheque", jsonhttp.MethodHandler{
-			"GET": http.HandlerFunc(s.chequebookAllLastHandler),
-		})
-
-		router.Handle("/chequebook/cashout/{peer}", jsonhttp.MethodHandler{
-			"GET":  http.HandlerFunc(s.swapCashoutStatusHandler),
-			"POST": http.HandlerFunc(s.swapCashoutHandler),
-		})
-
-		router.Handle("/transactions", jsonhttp.MethodHandler{
-			"GET": http.HandlerFunc(s.transactionListHandler),
-		})
-		router.Handle("/transactions/{hash}", jsonhttp.MethodHandler{
-			"GET":  http.HandlerFunc(s.transactionDetailHandler),
-			"POST": http.HandlerFunc(s.transactionResendHandler),
-		})
-	}
-
-	router.Handle("/tags/{id}", jsonhttp.MethodHandler{
-		"GET": http.HandlerFunc(s.getTagHandler),
+	router.Handle("/settlements/{peer}", jsonhttp.MethodHandler{
+		"GET": http.HandlerFunc(s.peerSettlementsHandler),
 	})
+
 
 	return router
 }

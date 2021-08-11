@@ -5,7 +5,7 @@
 package libp2p
 
 import (
-	m "github.com/ethersphere/bee/pkg/metrics"
+	m "github.com/gauss-project/aurorafs/pkg/metrics"
 	"github.com/prometheus/client_golang/prometheus"
 )
 
@@ -13,16 +13,14 @@ type metrics struct {
 	// all metrics fields must be exported
 	// to be able to return them by Metrics()
 	// using reflection
-	CreatedConnectionCount     prometheus.Counter
-	HandledConnectionCount     prometheus.Counter
-	CreatedStreamCount         prometheus.Counter
-	HandledStreamCount         prometheus.Counter
-	BlocklistedPeerCount       prometheus.Counter
-	BlocklistedPeerErrCount    prometheus.Counter
-	DisconnectCount            prometheus.Counter
-	ConnectBreakerCount        prometheus.Counter
-	UnexpectedProtocolReqCount prometheus.Counter
-	KickedOutPeersCount        prometheus.Counter
+	CreatedConnectionCount  prometheus.Counter
+	HandledConnectionCount  prometheus.Counter
+	CreatedStreamCount      prometheus.Counter
+	HandledStreamCount      prometheus.Counter
+	BlocklistedPeerCount    prometheus.Counter
+	BlocklistedPeerErrCount prometheus.Counter
+	DisconnectCount         prometheus.Counter
+	ConnectBreakerCount     prometheus.Counter
 }
 
 func newMetrics() metrics {
@@ -76,18 +74,6 @@ func newMetrics() metrics {
 			Subsystem: subsystem,
 			Name:      "connect_breaker_count",
 			Help:      "Number of times we got a closed breaker while connecting to another peer.",
-		}),
-		UnexpectedProtocolReqCount: prometheus.NewCounter(prometheus.CounterOpts{
-			Namespace: m.Namespace,
-			Subsystem: subsystem,
-			Name:      "unexpected_protocol_request_count",
-			Help:      "Number of requests the peer is not expecting.",
-		}),
-		KickedOutPeersCount: prometheus.NewCounter(prometheus.CounterOpts{
-			Namespace: m.Namespace,
-			Subsystem: subsystem,
-			Name:      "kickedout_peers_count",
-			Help:      "Number of total kicked-out peers.",
 		}),
 	}
 }

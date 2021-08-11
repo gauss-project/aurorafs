@@ -11,12 +11,12 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethersphere/bee/pkg/crypto"
-	"github.com/ethersphere/bee/pkg/debugapi"
-	"github.com/ethersphere/bee/pkg/jsonhttp"
-	"github.com/ethersphere/bee/pkg/jsonhttp/jsonhttptest"
-	"github.com/ethersphere/bee/pkg/p2p/mock"
-	"github.com/ethersphere/bee/pkg/swarm"
+	"github.com/gauss-project/aurorafs/pkg/crypto"
+	"github.com/gauss-project/aurorafs/pkg/debugapi"
+	"github.com/gauss-project/aurorafs/pkg/jsonhttp"
+	"github.com/gauss-project/aurorafs/pkg/jsonhttp/jsonhttptest"
+	"github.com/gauss-project/aurorafs/pkg/p2p/mock"
+	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/multiformats/go-multiaddr"
 )
 
@@ -29,7 +29,7 @@ func TestAddresses(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	overlay := swarm.MustParseHexAddress("ca1e9f3938cc1425c6061b96ad9eb93e134dfe8734ad490164ef20af9d1cf59c")
+	overlay := boson.MustParseHexAddress("ca1e9f3938cc1425c6061b96ad9eb93e134dfe8734ad490164ef20af9d1cf59c")
 	addresses := []multiaddr.Multiaddr{
 		mustMultiaddr(t, "/ip4/127.0.0.1/tcp/7071/p2p/16Uiu2HAmTBuJT9LvNmBiQiNoTsxE5mtNy6YG3paw79m94CRa9sRb"),
 		mustMultiaddr(t, "/ip4/192.168.0.101/tcp/7071/p2p/16Uiu2HAmTBuJT9LvNmBiQiNoTsxE5mtNy6YG3paw79m94CRa9sRb"),
@@ -51,7 +51,7 @@ func TestAddresses(t *testing.T) {
 	t.Run("ok", func(t *testing.T) {
 		jsonhttptest.Request(t, testServer.Client, http.MethodGet, "/addresses", http.StatusOK,
 			jsonhttptest.WithExpectedJSONResponse(debugapi.AddressesResponse{
-				Overlay:      &overlay,
+				Overlay:      overlay,
 				Underlay:     addresses,
 				Ethereum:     ethereumAddress,
 				PublicKey:    hex.EncodeToString(crypto.EncodeSecp256k1PublicKey(&privateKey.PublicKey)),

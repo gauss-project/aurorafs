@@ -5,19 +5,19 @@ import (
 	"context"
 	"testing"
 
-	"github.com/ethersphere/bee/pkg/storage"
-	"github.com/ethersphere/bee/pkg/storage/mock"
-	"github.com/ethersphere/bee/pkg/swarm"
+	"github.com/gauss-project/aurorafs/pkg/storage"
+	"github.com/gauss-project/aurorafs/pkg/storage/mock"
+	"github.com/gauss-project/aurorafs/pkg/boson"
 )
 
 func TestMockStorer(t *testing.T) {
 	s := mock.NewStorer()
 
-	keyFound, err := swarm.ParseHexAddress("aabbcc")
+	keyFound, err := boson.ParseHexAddress("aabbcc")
 	if err != nil {
 		t.Fatal(err)
 	}
-	keyNotFound, err := swarm.ParseHexAddress("bbccdd")
+	keyNotFound, err := boson.ParseHexAddress("bbccdd")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -33,7 +33,7 @@ func TestMockStorer(t *testing.T) {
 		t.Fatalf("expected ErrNotFound, got %v", err)
 	}
 
-	if _, err := s.Put(ctx, storage.ModePutUpload, swarm.NewChunk(keyFound, valueFound)); err != nil {
+	if _, err := s.Put(ctx, storage.ModePutUpload, boson.NewChunk(keyFound, valueFound)); err != nil {
 		t.Fatalf("expected not error but got: %v", err)
 	}
 

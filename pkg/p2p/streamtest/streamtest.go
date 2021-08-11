@@ -12,8 +12,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ethersphere/bee/pkg/p2p"
-	"github.com/ethersphere/bee/pkg/swarm"
+	"github.com/gauss-project/aurorafs/pkg/p2p"
+	"github.com/gauss-project/aurorafs/pkg/boson"
 )
 
 var (
@@ -30,25 +30,16 @@ var (
 )
 
 type Recorder struct {
-	base               swarm.Address
-	fullNode           bool
-	records            map[string][]*Record
-	recordsMu          sync.Mutex
-	protocols          []p2p.ProtocolSpec
-	middlewares        []p2p.HandlerMiddleware
-	streamErr          func(swarm.Address, string, string, string) error
-	protocolsWithPeers map[string]p2p.ProtocolSpec
+	base    boson.Address
+	records map[string][]*Record
+	recordsMu   sync.Mutex
+	protocols   []p2p.ProtocolSpec
+	middlewares []p2p.HandlerMiddleware
 }
 
 func WithProtocols(protocols ...p2p.ProtocolSpec) Option {
 	return optionFunc(func(r *Recorder) {
 		r.protocols = append(r.protocols, protocols...)
-	})
-}
-
-func WithPeerProtocols(protocolsWithPeers map[string]p2p.ProtocolSpec) Option {
-	return optionFunc(func(r *Recorder) {
-		r.protocolsWithPeers = protocolsWithPeers
 	})
 }
 
@@ -58,28 +49,15 @@ func WithMiddlewares(middlewares ...p2p.HandlerMiddleware) Option {
 	})
 }
 
-func WithBaseAddr(a swarm.Address) Option {
+func WithBaseAddr(a boson.Address) Option {
 	return optionFunc(func(r *Recorder) {
 		r.base = a
 	})
 }
 
-func WithLightNode() Option {
-	return optionFunc(func(r *Recorder) {
-		r.fullNode = false
-	})
-}
-
-func WithStreamError(streamErr func(swarm.Address, string, string, string) error) Option {
-	return optionFunc(func(r *Recorder) {
-		r.streamErr = streamErr
-	})
-}
-
 func New(opts ...Option) *Recorder {
 	r := &Recorder{
-		records:  make(map[string][]*Record),
-		fullNode: true,
+		records: make(map[string][]*Record),
 	}
 
 	r.middlewares = append(r.middlewares, noopMiddleware)
@@ -94,13 +72,7 @@ func (r *Recorder) SetProtocols(protocols ...p2p.ProtocolSpec) {
 	r.protocols = append(r.protocols, protocols...)
 }
 
-func (r *Recorder) NewStream(ctx context.Context, addr swarm.Address, h p2p.Headers, protocolName, protocolVersion, streamName string) (p2p.Stream, error) {
-	if r.streamErr != nil {
-		err := r.streamErr(addr, protocolName, protocolVersion, streamName)
-		if err != nil {
-			return nil, err
-		}
-	}
+func (r *Recorder) NewStream(ctx context.Context, addr boson.Address, h p2p.Headers, protocolName, protocolVersion, streamName string) (p2p.Stream, error) {
 	recordIn := newRecord()
 	recordOut := newRecord()
 	streamOut := newStream(recordIn, recordOut)
@@ -108,18 +80,14 @@ func (r *Recorder) NewStream(ctx context.Context, addr swarm.Address, h p2p.Head
 
 	var handler p2p.HandlerFunc
 	var headler p2p.HeadlerFunc
-	peerHandlers, ok := r.protocolsWithPeers[addr.String()]
-	if !ok {
-		for _, p := range r.protocols {
-			if p.Name == protocolName && p.Version == protocolVersion {
-				peerHandlers = p
+	for _, p := range r.protocols {
+		if p.Name == protocolName && p.Version == protocolVersion {
+			for _, s := range p.StreamSpecs {
+				if s.Name == streamName {
+					handler = s.Handler
+					headler = s.Headler
+				}
 			}
-		}
-	}
-	for _, s := range peerHandlers.StreamSpecs {
-		if s.Name == streamName {
-			handler = s.Handler
-			headler = s.Headler
 		}
 	}
 	if handler == nil {
@@ -129,16 +97,15 @@ func (r *Recorder) NewStream(ctx context.Context, addr swarm.Address, h p2p.Head
 		handler = r.middlewares[i](handler)
 	}
 	if headler != nil {
-		streamOut.headers = headler(h, addr)
+		streamOut.headers = headler(h)
 	}
 	record := &Record{in: recordIn, out: recordOut, done: make(chan struct{})}
 	go func() {
 		defer close(record.done)
 
 		// pass a new context to handler,
-		streamIn.responseHeaders = streamOut.headers
 		// do not cancel it with the client stream context
-		err := handler(context.Background(), p2p.Peer{Address: r.base, FullNode: r.fullNode}, streamIn)
+		err := handler(context.Background(), p2p.Peer{Address: r.base}, streamIn)
 		if err != nil && err != io.EOF {
 			record.setErr(err)
 		}
@@ -153,7 +120,7 @@ func (r *Recorder) NewStream(ctx context.Context, addr swarm.Address, h p2p.Head
 	return streamOut, nil
 }
 
-func (r *Recorder) Records(addr swarm.Address, protocolName, protocolVersio, streamName string) ([]*Record, error) {
+func (r *Recorder) Records(addr boson.Address, protocolName, protocolVersio, streamName string) ([]*Record, error) {
 	id := addr.String() + p2p.NewSwarmStreamName(protocolName, protocolVersio, streamName)
 
 	r.recordsMu.Lock()
@@ -172,7 +139,7 @@ func (r *Recorder) Records(addr swarm.Address, protocolName, protocolVersio, str
 
 // WaitRecords waits for some time for records to come into the recorder. If msgs is 0, the timeoutSec period is waited to verify
 // that _no_ messages arrive during this time period.
-func (r *Recorder) WaitRecords(t *testing.T, addr swarm.Address, proto, version, stream string, msgs, timeoutSec int) []*Record {
+func (r *Recorder) WaitRecords(t *testing.T, addr boson.Address, proto, version, stream string, msgs, timeoutSec int) []*Record {
 	t.Helper()
 	wait := 10 * time.Millisecond
 	iters := int((time.Duration(timeoutSec) * time.Second) / wait)
@@ -227,10 +194,9 @@ func (r *Record) setErr(err error) {
 }
 
 type stream struct {
-	in              *record
-	out             *record
-	headers         p2p.Headers
-	responseHeaders p2p.Headers
+	in      *record
+	out     *record
+	headers p2p.Headers
 }
 
 func newStream(in, out *record) *stream {
@@ -247,10 +213,6 @@ func (s *stream) Write(p []byte) (int, error) {
 
 func (s *stream) Headers() p2p.Headers {
 	return s.headers
-}
-
-func (s *stream) ResponseHeaders() p2p.Headers {
-	return s.responseHeaders
 }
 
 func (s *stream) Close() error {
@@ -384,7 +346,7 @@ func NewRecorderDisconnecter(r *Recorder) *RecorderDisconnecter {
 	}
 }
 
-func (r *RecorderDisconnecter) Disconnect(overlay swarm.Address) error {
+func (r *RecorderDisconnecter) Disconnect(overlay boson.Address) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
@@ -392,7 +354,7 @@ func (r *RecorderDisconnecter) Disconnect(overlay swarm.Address) error {
 	return nil
 }
 
-func (r *RecorderDisconnecter) Blocklist(overlay swarm.Address, d time.Duration) error {
+func (r *RecorderDisconnecter) Blocklist(overlay boson.Address, d time.Duration) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
@@ -400,7 +362,7 @@ func (r *RecorderDisconnecter) Blocklist(overlay swarm.Address, d time.Duration)
 	return nil
 }
 
-func (r *RecorderDisconnecter) IsDisconnected(overlay swarm.Address) bool {
+func (r *RecorderDisconnecter) IsDisconnected(overlay boson.Address) bool {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
@@ -408,7 +370,7 @@ func (r *RecorderDisconnecter) IsDisconnected(overlay swarm.Address) bool {
 	return yes
 }
 
-func (r *RecorderDisconnecter) IsBlocklisted(overlay swarm.Address) (bool, time.Duration) {
+func (r *RecorderDisconnecter) IsBlocklisted(overlay boson.Address) (bool, time.Duration) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 

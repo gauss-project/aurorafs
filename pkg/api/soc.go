@@ -7,20 +7,20 @@ package api
 import (
 	"encoding/hex"
 	"errors"
-	"github.com/ethersphere/bee/pkg/cac"
-	"github.com/ethersphere/bee/pkg/jsonhttp"
 	"io/ioutil"
 	"net/http"
 
-	"github.com/ethersphere/bee/pkg/soc"
-	"github.com/ethersphere/bee/pkg/swarm"
+	"github.com/gauss-project/aurorafs/pkg/cac"
+	"github.com/gauss-project/aurorafs/pkg/jsonhttp"
+	"github.com/gauss-project/aurorafs/pkg/soc"
+	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gorilla/mux"
 )
 
 var errBadRequestParams = errors.New("owner, id or span is not well formed")
 
 type socPostResponse struct {
-	Reference swarm.Address `json:"reference"`
+	Reference boson.Address `json:"reference"`
 }
 
 func (s *server) socUploadHandler(w http.ResponseWriter, r *http.Request) {
@@ -66,15 +66,15 @@ func (s *server) socUploadHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if len(data) < swarm.SpanSize {
+	if len(data) < boson.SpanSize {
 		s.logger.Debugf("soc upload: chunk data too short")
 		s.logger.Error("soc upload: %v", errBadRequestParams)
 		jsonhttp.BadRequest(w, "short chunk data")
 		return
 	}
 
-	if len(data) > swarm.ChunkSize+swarm.SpanSize {
-		s.logger.Debugf("soc upload: chunk data exceeds %d bytes", swarm.ChunkSize+swarm.SpanSize)
+	if len(data) > boson.ChunkSize+boson.SpanSize {
+		s.logger.Debugf("soc upload: chunk data exceeds %d bytes", boson.ChunkSize+boson.SpanSize)
 		s.logger.Error("soc upload: chunk data error")
 		jsonhttp.RequestEntityTooLarge(w, "payload too large")
 		return
@@ -109,6 +109,7 @@ func (s *server) socUploadHandler(w http.ResponseWriter, r *http.Request) {
 		s.logger.Error("soc upload: invalid chunk")
 		jsonhttp.Unauthorized(w, "invalid chunk")
 		return
+
 	}
 
 	ctx := r.Context()
@@ -133,7 +134,6 @@ func (s *server) socUploadHandler(w http.ResponseWriter, r *http.Request) {
 		jsonhttp.BadRequest(w, "chunk write error")
 		return
 	}
-
 
 	jsonhttp.Created(w, chunkAddressResponse{Reference: sch.Address()})
 }

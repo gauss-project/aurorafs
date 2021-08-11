@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/ethersphere/bee/pkg/metrics"
+	"github.com/gauss-project/aurorafs/pkg/metrics"
 	"github.com/prometheus/client_golang/prometheus"
 )
 

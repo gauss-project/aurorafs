@@ -5,8 +5,8 @@
 package mock
 
 import (
-	"github.com/ethersphere/bee/pkg/resolver/client"
-	"github.com/ethersphere/bee/pkg/swarm"
+	"github.com/gauss-project/aurorafs/pkg/resolver/client"
+	"github.com/gauss-project/aurorafs/pkg/boson"
 )
 
 // Ensure mock Client implements the Client interface.
@@ -16,8 +16,8 @@ var _ client.Interface = (*Client)(nil)
 type Client struct {
 	isConnected    bool
 	endpoint       string
-	defaultAddress swarm.Address
-	resolveFn      func(string) (swarm.Address, error)
+	defaultAddress boson.Address
+	resolveFn      func(string) (boson.Address, error)
 }
 
 // Option is a function that applies an option to a Client.
@@ -43,14 +43,14 @@ func WithEndpoint(endpoint string) Option {
 }
 
 // WitResolveAddress will set the address returned by Resolve.
-func WitResolveAddress(addr swarm.Address) Option {
+func WitResolveAddress(addr boson.Address) Option {
 	return func(cl *Client) {
 		cl.defaultAddress = addr
 	}
 }
 
 // WithResolveFunc will set the Resolve function implementation.
-func WithResolveFunc(fn func(string) (swarm.Address, error)) Option {
+func WithResolveFunc(fn func(string) (boson.Address, error)) Option {
 	return func(cl *Client) {
 		cl.resolveFn = fn
 	}
@@ -67,7 +67,7 @@ func (cl *Client) Endpoint() string {
 }
 
 // Resolve is the mock Resolve implementation
-func (cl *Client) Resolve(name string) (swarm.Address, error) {
+func (cl *Client) Resolve(name string) (boson.Address, error) {
 	if cl.resolveFn == nil {
 		return cl.defaultAddress, nil
 	}

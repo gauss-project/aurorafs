@@ -6,19 +6,20 @@ package mock
 
 import (
 	"context"
+	"errors"
 	"sync"
 
-	"github.com/ethersphere/bee/pkg/storage"
-	"github.com/ethersphere/bee/pkg/swarm"
+	"github.com/gauss-project/aurorafs/pkg/storage"
+	"github.com/gauss-project/aurorafs/pkg/boson"
 )
 
 var _ storage.Storer = (*MockStorer)(nil)
 
 type MockStorer struct {
-	store           map[string]swarm.Chunk
+	store           map[string][]byte
 	modePut         map[string]storage.ModePut
 	modeSet         map[string]storage.ModeSet
-	pinnedAddress   []swarm.Address // Stores the pinned address
+	pinnedAddress   []boson.Address // Stores the pinned address
 	pinnedCounter   []uint64        // and its respective counter. These are stored as slices to preserve the order.
 	subpull         []storage.Descriptor
 	partialInterval bool
@@ -27,7 +28,6 @@ type MockStorer struct {
 	quit            chan struct{}
 	baseAddress     []byte
 	bins            []uint64
-	subPullCalls    int
 }
 
 func WithSubscribePullChunks(chs ...storage.Descriptor) Option {
@@ -39,7 +39,7 @@ func WithSubscribePullChunks(chs ...storage.Descriptor) Option {
 	})
 }
 
-func WithBaseAddress(a swarm.Address) Option {
+func WithBaseAddress(a boson.Address) Option {
 	return optionFunc(func(m *MockStorer) {
 		m.baseAddress = a.Bytes()
 	})
@@ -53,12 +53,12 @@ func WithPartialInterval(v bool) Option {
 
 func NewStorer(opts ...Option) *MockStorer {
 	s := &MockStorer{
-		store:    make(map[string]swarm.Chunk),
+		store:    make(map[string][]byte),
 		modePut:  make(map[string]storage.ModePut),
 		modeSet:  make(map[string]storage.ModeSet),
 		morePull: make(chan struct{}),
 		quit:     make(chan struct{}),
-		bins:     make([]uint64, swarm.MaxBins),
+		bins:     make([]uint64, boson.MaxBins),
 	}
 
 	for _, v := range opts {
@@ -68,7 +68,7 @@ func NewStorer(opts ...Option) *MockStorer {
 	return s
 }
 
-func (m *MockStorer) Get(_ context.Context, _ storage.ModeGet, addr swarm.Address) (ch swarm.Chunk, err error) {
+func (m *MockStorer) Get(_ context.Context, _ storage.ModeGet, addr boson.Address) (ch boson.Chunk, err error) {
 	m.mtx.Lock()
 	defer m.mtx.Unlock()
 
@@ -76,10 +76,10 @@ func (m *MockStorer) Get(_ context.Context, _ storage.ModeGet, addr swarm.Addres
 	if !has {
 		return nil, storage.ErrNotFound
 	}
-	return v, nil
+	return boson.NewChunk(addr, v), nil
 }
 
-func (m *MockStorer) Put(ctx context.Context, mode storage.ModePut, chs ...swarm.Chunk) (exist []bool, err error) {
+func (m *MockStorer) Put(ctx context.Context, mode storage.ModePut, chs ...boson.Chunk) (exist []bool, err error) {
 	m.mtx.Lock()
 	defer m.mtx.Unlock()
 
@@ -90,7 +90,7 @@ func (m *MockStorer) Put(ctx context.Context, mode storage.ModePut, chs ...swarm
 			return exist, err
 		}
 		if !exist[i] {
-			po := swarm.Proximity(ch.Address().Bytes(), m.baseAddress)
+			po := boson.Proximity(ch.Address().Bytes(), m.baseAddress)
 			m.bins[po]++
 		}
 		// this is needed since the chunk feeder shares memory across calls
@@ -99,9 +99,7 @@ func (m *MockStorer) Put(ctx context.Context, mode storage.ModePut, chs ...swarm
 		// and copies the data from the call into the in-memory store
 		b := make([]byte, len(ch.Data()))
 		copy(b, ch.Data())
-		addr := swarm.NewAddress(ch.Address().Bytes())
-		stamp := ch.Stamp()
-		m.store[ch.Address().String()] = swarm.NewChunk(addr, b).WithStamp(stamp)
+		m.store[ch.Address().String()] = b
 		m.modePut[ch.Address().String()] = mode
 
 		// pin chunks if needed
@@ -126,26 +124,26 @@ func (m *MockStorer) Put(ctx context.Context, mode storage.ModePut, chs ...swarm
 	return exist, nil
 }
 
-func (m *MockStorer) GetMulti(ctx context.Context, mode storage.ModeGet, addrs ...swarm.Address) (ch []swarm.Chunk, err error) {
+func (m *MockStorer) GetMulti(ctx context.Context, mode storage.ModeGet, addrs ...boson.Address) (ch []boson.Chunk, err error) {
 	panic("not implemented") // TODO: Implement
 }
 
-func (m *MockStorer) has(ctx context.Context, addr swarm.Address) (yes bool, err error) {
+func (m *MockStorer) has(ctx context.Context, addr boson.Address) (yes bool, err error) {
 	_, has := m.store[addr.String()]
 	return has, nil
 }
 
-func (m *MockStorer) Has(ctx context.Context, addr swarm.Address) (yes bool, err error) {
+func (m *MockStorer) Has(ctx context.Context, addr boson.Address) (yes bool, err error) {
 	m.mtx.Lock()
 	defer m.mtx.Unlock()
 	return m.has(ctx, addr)
 }
 
-func (m *MockStorer) HasMulti(ctx context.Context, addrs ...swarm.Address) (yes []bool, err error) {
+func (m *MockStorer) HasMulti(ctx context.Context, addrs ...boson.Address) (yes []bool, err error) {
 	panic("not implemented") // TODO: Implement
 }
 
-func (m *MockStorer) Set(ctx context.Context, mode storage.ModeSet, addrs ...swarm.Address) (err error) {
+func (m *MockStorer) Set(ctx context.Context, mode storage.ModeSet, addrs ...boson.Address) (err error) {
 	m.mtx.Lock()
 	defer m.mtx.Unlock()
 	for _, addr := range addrs {
@@ -182,7 +180,7 @@ func (m *MockStorer) Set(ctx context.Context, mode storage.ModeSet, addrs ...swa
 					m.pinnedCounter[i] = m.pinnedCounter[i] - 1
 					if m.pinnedCounter[i] == 0 {
 						copy(m.pinnedAddress[i:], m.pinnedAddress[i+1:])
-						m.pinnedAddress[len(m.pinnedAddress)-1] = swarm.NewAddress([]byte{0})
+						m.pinnedAddress[len(m.pinnedAddress)-1] = boson.NewAddress([]byte{0})
 						m.pinnedAddress = m.pinnedAddress[:len(m.pinnedAddress)-1]
 
 						copy(m.pinnedCounter[i:], m.pinnedCounter[i+1:])
@@ -198,7 +196,7 @@ func (m *MockStorer) Set(ctx context.Context, mode storage.ModeSet, addrs ...swa
 	}
 	return nil
 }
-func (m *MockStorer) GetModePut(addr swarm.Address) (mode storage.ModePut) {
+func (m *MockStorer) GetModePut(addr boson.Address) (mode storage.ModePut) {
 	m.mtx.Lock()
 	defer m.mtx.Unlock()
 	if mode, ok := m.modePut[addr.String()]; ok {
@@ -207,7 +205,7 @@ func (m *MockStorer) GetModePut(addr swarm.Address) (mode storage.ModePut) {
 	return mode
 }
 
-func (m *MockStorer) GetModeSet(addr swarm.Address) (mode storage.ModeSet) {
+func (m *MockStorer) GetModeSet(addr boson.Address) (mode storage.ModeSet) {
 	m.mtx.Lock()
 	defer m.mtx.Unlock()
 	if mode, ok := m.modeSet[addr.String()]; ok {
@@ -221,10 +219,6 @@ func (m *MockStorer) LastPullSubscriptionBinID(bin uint8) (id uint64, err error)
 }
 
 func (m *MockStorer) SubscribePull(ctx context.Context, bin uint8, since, until uint64) (<-chan storage.Descriptor, <-chan struct{}, func()) {
-	m.mtx.Lock()
-	m.subPullCalls++
-	m.mtx.Unlock()
-
 	c := make(chan storage.Descriptor)
 	done := make(chan struct{})
 	stop := func() {
@@ -292,14 +286,38 @@ func (m *MockStorer) MorePull(d ...storage.Descriptor) {
 	close(m.morePull)
 }
 
-func (m *MockStorer) SubscribePullCalls() int {
-	m.mtx.Lock()
-	defer m.mtx.Unlock()
-	return m.subPullCalls
+func (m *MockStorer) SubscribePush(ctx context.Context) (c <-chan boson.Chunk, stop func()) {
+	panic("not implemented") // TODO: Implement
 }
 
-func (m *MockStorer) SubscribePush(ctx context.Context) (c <-chan swarm.Chunk, stop func()) {
-	panic("not implemented") // TODO: Implement
+func (m *MockStorer) PinnedChunks(ctx context.Context, offset, cursor int) (pinnedChunks []*storage.Pinner, err error) {
+	m.mtx.Lock()
+	defer m.mtx.Unlock()
+	if len(m.pinnedAddress) == 0 {
+		return pinnedChunks, nil
+	}
+	for i, addr := range m.pinnedAddress {
+		pi := &storage.Pinner{
+			Address:    boson.NewAddress(addr.Bytes()),
+			PinCounter: m.pinnedCounter[i],
+		}
+		pinnedChunks = append(pinnedChunks, pi)
+	}
+	if pinnedChunks == nil {
+		return pinnedChunks, errors.New("pin chunks: leveldb: not found")
+	}
+	return pinnedChunks, nil
+}
+
+func (m *MockStorer) PinCounter(address boson.Address) (uint64, error) {
+	m.mtx.Lock()
+	defer m.mtx.Unlock()
+	for i, addr := range m.pinnedAddress {
+		if addr.String() == address.String() {
+			return m.pinnedCounter[i], nil
+		}
+	}
+	return 0, storage.ErrNotFound
 }
 
 func (m *MockStorer) Close() error {

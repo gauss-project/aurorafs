@@ -11,17 +11,17 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/ethersphere/bee/pkg/logging"
-	"github.com/ethersphere/bee/pkg/resolver"
-	"github.com/ethersphere/bee/pkg/resolver/mock"
-	"github.com/ethersphere/bee/pkg/resolver/multiresolver"
-	"github.com/ethersphere/bee/pkg/swarm"
+	"github.com/gauss-project/aurorafs/pkg/logging"
+	"github.com/gauss-project/aurorafs/pkg/resolver"
+	"github.com/gauss-project/aurorafs/pkg/resolver/mock"
+	"github.com/gauss-project/aurorafs/pkg/resolver/multiresolver"
+	"github.com/gauss-project/aurorafs/pkg/boson"
 )
 
-type Address = swarm.Address
+type Address = boson.Address
 
 func newAddr(s string) Address {
-	return swarm.NewAddress([]byte(s))
+	return boson.NewAddress([]byte(s))
 }
 
 func TestMultiresolverOpts(t *testing.T) {
@@ -121,14 +121,14 @@ func TestResolve(t *testing.T) {
 	newErrResolver := func() resolver.Interface {
 		return mock.NewResolver(
 			mock.WithResolveFunc(func(name string) (Address, error) {
-				return swarm.ZeroAddress, errResolutionFailed
+				return boson.ZeroAddress, errResolutionFailed
 			}),
 		)
 	}
 	newUnregisteredNameResolver := func() resolver.Interface {
 		return mock.NewResolver(
 			mock.WithResolveFunc(func(name string) (Address, error) {
-				return swarm.ZeroAddress, errUnregisteredName
+				return boson.ZeroAddress, errUnregisteredName
 			}),
 		)
 	}
@@ -217,7 +217,7 @@ func TestResolve(t *testing.T) {
 		},
 		{
 			name:    "iam.unregistered",
-			wantAdr: swarm.ZeroAddress,
+			wantAdr: boson.ZeroAddress,
 			wantErr: errUnregisteredName,
 		},
 	}

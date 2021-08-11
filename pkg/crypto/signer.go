@@ -13,7 +13,7 @@ import (
 	"github.com/btcsuite/btcd/btcec"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethersphere/bee/pkg/crypto/eip712"
+	"github.com/gauss-project/aurorafs/pkg/crypto/eip712"
 )
 
 var (

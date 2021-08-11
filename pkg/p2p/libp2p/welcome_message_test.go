@@ -6,8 +6,8 @@ package libp2p_test
 import (
 	"testing"
 
-	"github.com/ethersphere/bee/pkg/p2p/libp2p"
-	"github.com/ethersphere/bee/pkg/p2p/libp2p/internal/handshake"
+	"github.com/gauss-project/aurorafs/pkg/p2p/libp2p"
+	"github.com/gauss-project/aurorafs/pkg/p2p/libp2p/internal/handshake"
 )
 
 func TestDynamicWelcomeMessage(t *testing.T) {

@@ -9,7 +9,7 @@ import (
 	"errors"
 	"math/big"
 
-	"github.com/ethersphere/bee/pkg/swarm"
+	"github.com/gauss-project/aurorafs/pkg/boson"
 )
 
 var (
@@ -18,23 +18,20 @@ var (
 
 // Interface is the interface used by Accounting to trigger settlement
 type Interface interface {
+	// Pay initiates a payment to the given peer
+	// It should return without error it is likely that the payment worked
+	Pay(ctx context.Context, peer boson.Address, amount *big.Int) error
 	// TotalSent returns the total amount sent to a peer
-	TotalSent(peer swarm.Address) (totalSent *big.Int, err error)
+	TotalSent(peer boson.Address) (totalSent *big.Int, err error)
 	// TotalReceived returns the total amount received from a peer
-	TotalReceived(peer swarm.Address) (totalSent *big.Int, err error)
+	TotalReceived(peer boson.Address) (totalSent *big.Int, err error)
 	// SettlementsSent returns sent settlements for each individual known peer
 	SettlementsSent() (map[string]*big.Int, error)
 	// SettlementsReceived returns received settlements for each individual known peer
 	SettlementsReceived() (map[string]*big.Int, error)
-	PseudoPay(ctx context.Context, peer swarm.Address, amount *big.Int, checkAllowance *big.Int)(*big.Int, int64, error)
+	// SetNotifyPaymentFunc sets the NotifyPaymentFunc to notify
+	SetNotifyPaymentFunc(notifyPaymentFunc NotifyPaymentFunc)
 }
 
-type Accounting interface {
-	PeerDebt(peer swarm.Address) (*big.Int, error)
-	NotifyPaymentReceived(peer swarm.Address, amount *big.Int) error
-	NotifyPaymentSent(peer swarm.Address, amount *big.Int, receivedError error)
-	NotifyRefreshmentReceived(peer swarm.Address, amount *big.Int) error
-	Connect(peer swarm.Address)
-	Disconnect(peer swarm.Address)
-	SetWaitGroup()
-}
+// NotifyPaymentFunc is called when a payment from peer was successfully received
+type NotifyPaymentFunc func(peer boson.Address, amount *big.Int) error

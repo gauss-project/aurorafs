@@ -7,7 +7,7 @@ package retrieval
 import (
 	"context"
 
-	"github.com/ethersphere/bee/pkg/p2p"
+	"github.com/gauss-project/aurorafs/pkg/p2p"
 )
 
 func (s *Service) Handler(ctx context.Context, p p2p.Peer, stream p2p.Stream) error {

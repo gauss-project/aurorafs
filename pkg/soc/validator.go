@@ -5,11 +5,11 @@
 package soc
 
 import (
-	"github.com/ethersphere/bee/pkg/swarm"
+	"github.com/gauss-project/aurorafs/pkg/boson"
 )
 
 // Valid checks if the chunk is a valid single-owner chunk.
-func Valid(ch swarm.Chunk) bool {
+func Valid(ch boson.Chunk) bool {
 	s, err := FromChunk(ch)
 	if err != nil {
 		return false

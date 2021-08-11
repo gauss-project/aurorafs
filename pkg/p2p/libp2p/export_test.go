@@ -7,7 +7,7 @@ package libp2p
 import (
 	"context"
 
-	handshake "github.com/ethersphere/bee/pkg/p2p/libp2p/internal/handshake"
+	handshake "github.com/gauss-project/aurorafs/pkg/p2p/libp2p/internal/handshake"
 	"github.com/libp2p/go-libp2p-core/network"
 	libp2ppeer "github.com/libp2p/go-libp2p-core/peer"
 )

@@ -6,143 +6,154 @@ package api
 
 import (
 	"archive/tar"
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"mime"
-	"mime/multipart"
 	"net/http"
 	"path/filepath"
 	"runtime"
-	"strconv"
 	"strings"
 
-	"github.com/ethersphere/bee/pkg/file"
-	"github.com/ethersphere/bee/pkg/file/loadsave"
-	"github.com/ethersphere/bee/pkg/jsonhttp"
-	"github.com/ethersphere/bee/pkg/logging"
-	"github.com/ethersphere/bee/pkg/manifest"
+	"github.com/gauss-project/aurorafs/pkg/boson"
+	"github.com/gauss-project/aurorafs/pkg/collection/entry"
+	"github.com/gauss-project/aurorafs/pkg/file"
+	"github.com/gauss-project/aurorafs/pkg/file/loadsave"
+	"github.com/gauss-project/aurorafs/pkg/jsonhttp"
+	"github.com/gauss-project/aurorafs/pkg/logging"
+	"github.com/gauss-project/aurorafs/pkg/manifest"
+	"github.com/gauss-project/aurorafs/pkg/tracing"
+)
 
-	//"github.com/ethersphere/bee/pkg/sctx"
-	"github.com/ethersphere/bee/pkg/storage"
-	"github.com/ethersphere/bee/pkg/swarm"
+const (
+	contentTypeHeader = "Content-Type"
+	contentTypeTar    = "application/x-tar"
+)
 
-	"github.com/ethersphere/bee/pkg/tracing"
+const (
+	manifestRootPath                      = "/"
+	manifestWebsiteIndexDocumentSuffixKey = "website-index-document"
+	manifestWebsiteErrorDocumentPathKey   = "website-error-document"
 )
 
 // dirUploadHandler uploads a directory supplied as a tar in an HTTP request
-func (s *server) dirUploadHandler(w http.ResponseWriter, r *http.Request, storer storage.Storer) {
+func (s *server) dirUploadHandler(w http.ResponseWriter, r *http.Request) {
 	logger := tracing.NewLoggerWithTraceID(r.Context(), s.logger)
-	if r.Body == http.NoBody {
-		logger.Error("bzz upload dir: request has no body")
-		jsonhttp.BadRequest(w, errInvalidRequest)
-		return
-	}
-	contentType := r.Header.Get(contentTypeHeader)
-	mediaType, params, err := mime.ParseMediaType(contentType)
+	err := validateRequest(r)
 	if err != nil {
-		logger.Errorf("bzz upload dir: invalid content-type")
-		logger.Debugf("bzz upload dir: invalid content-type err: %v", err)
-		jsonhttp.BadRequest(w, errInvalidContentType)
+		logger.Errorf("dir upload, validate request")
+		logger.Debugf("dir upload, validate request err: %v", err)
+		jsonhttp.BadRequest(w, "could not validate request")
 		return
 	}
 
-	var dReader dirReader
-	switch mediaType {
-	case contentTypeTar:
-		dReader = &tarReader{r: tar.NewReader(r.Body), logger: s.logger}
-	case multiPartFormData:
-		dReader = &multipartReader{r: multipart.NewReader(r.Body, params["boundary"])}
-	default:
-		logger.Error("bzz upload dir: invalid content-type for directory upload")
-		jsonhttp.BadRequest(w, errInvalidContentType)
-		return
-	}
-	defer r.Body.Close()
 
 
 	// Add the tag to the context
 	ctx := r.Context()
-
-	reference, err := storeDir(
-		ctx,
-		requestEncrypt(r),
-		dReader,
-		s.logger,
-		requestPipelineFn(storer, r),
-		loadsave.New(storer, requestModePut(r), requestEncrypt(r)),
-		r.Header.Get(SwarmIndexDocumentHeader),
-		r.Header.Get(SwarmErrorDocumentHeader),
-	)
+	p := requestPipelineFn(s.storer, r)
+	encrypt := requestEncrypt(r)
+	l := loadsave.New(s.storer, requestModePut(r), encrypt)
+	reference, err := storeDir(ctx, encrypt, r.Body, s.logger, p, l, r.Header.Get(BosonIndexDocumentHeader), r.Header.Get(BosonErrorDocumentHeader))
 	if err != nil {
-		logger.Debugf("bzz upload dir: store dir err: %v", err)
-		logger.Errorf("bzz upload dir: store dir")
-		jsonhttp.InternalServerError(w, errDirectoryStore)
+		logger.Debugf("dir upload: store dir err: %v", err)
+		logger.Errorf("dir upload: store dir")
+		jsonhttp.InternalServerError(w, "could not store dir")
 		return
 	}
 
-
-
-	jsonhttp.Created(w, bzzUploadResponse{
+	jsonhttp.OK(w, fileUploadResponse{
 		Reference: reference,
 	})
 }
 
-// storeDir stores all files recursively contained in the directory given as a tar/multipart
+// validateRequest validates an HTTP request for a directory to be uploaded
+func validateRequest(r *http.Request) error {
+	if r.Body == http.NoBody {
+		return errors.New("request has no body")
+	}
+	contentType := r.Header.Get(contentTypeHeader)
+	mediaType, _, err := mime.ParseMediaType(contentType)
+	if err != nil {
+		return err
+	}
+	if mediaType != contentTypeTar {
+		return errors.New("content-type not set to tar")
+	}
+	return nil
+}
+
+// storeDir stores all files recursively contained in the directory given as a tar
 // it returns the hash for the uploaded manifest corresponding to the uploaded dir
-func storeDir(
-	ctx context.Context,
-	encrypt bool,
-	reader dirReader,
-	log logging.Logger,
-	p pipelineFunc,
-	ls file.LoadSaver,
-	indexFilename,
-	errorFilename string,
-) (swarm.Address, error) {
+func storeDir(ctx context.Context, encrypt bool, reader io.ReadCloser, log logging.Logger, p pipelineFunc, ls file.LoadSaver, indexFilename string, errorFilename string) (boson.Address, error) {
 	logger := tracing.NewLoggerWithTraceID(ctx, log)
 
 	dirManifest, err := manifest.NewDefaultManifest(ls, encrypt)
 	if err != nil {
-		return swarm.ZeroAddress, err
+		return boson.ZeroAddress, err
 	}
 
 	if indexFilename != "" && strings.ContainsRune(indexFilename, '/') {
-		return swarm.ZeroAddress, fmt.Errorf("index document suffix must not include slash character")
+		return boson.ZeroAddress, fmt.Errorf("index document suffix must not include slash character")
 	}
+
+	// set up HTTP body reader
+	tarReader := tar.NewReader(reader)
+	defer reader.Close()
 
 	filesAdded := 0
 
 	// iterate through the files in the supplied tar
 	for {
-		fileInfo, err := reader.Next()
+		fileHeader, err := tarReader.Next()
 		if err == io.EOF {
 			break
 		} else if err != nil {
-			return swarm.ZeroAddress, fmt.Errorf("read tar stream: %w", err)
+			return boson.ZeroAddress, fmt.Errorf("read tar stream: %w", err)
 		}
 
-		if estimatedTotalChunks := calculateNumberOfChunks(fileInfo.Size, encrypt); estimatedTotalChunks > 0 {
-			if err != nil {
-				return swarm.ZeroAddress, fmt.Errorf("increment tag: %w", err)
-			}
+		filePath := filepath.Clean(fileHeader.Name)
+
+		if filePath == "." {
+			logger.Warning("skipping file upload empty path")
+			continue
 		}
 
-		fileReference, err := p(ctx, fileInfo.Reader)
+		if runtime.GOOS == "windows" {
+			// always use Unix path separator
+			filePath = filepath.ToSlash(filePath)
+		}
+
+		// only store regular files
+		if !fileHeader.FileInfo().Mode().IsRegular() {
+			logger.Warningf("skipping file upload for %s as it is not a regular file", filePath)
+			continue
+		}
+
+		fileName := fileHeader.FileInfo().Name()
+		contentType := mime.TypeByExtension(filepath.Ext(fileHeader.Name))
+
+		// upload file
+		fileInfo := &fileUploadInfo{
+			name:        fileName,
+			size:        fileHeader.FileInfo().Size(),
+			contentType: contentType,
+			reader:      tarReader,
+		}
+
+		fileReference, err := storeFile(ctx, fileInfo, p, encrypt)
 		if err != nil {
-			return swarm.ZeroAddress, fmt.Errorf("store dir file: %w", err)
+			return boson.ZeroAddress, fmt.Errorf("store dir file: %w", err)
 		}
-		logger.Tracef("uploaded dir file %v with reference %v", fileInfo.Path, fileReference)
+		logger.Tracef("uploaded dir file %v with reference %v", filePath, fileReference)
 
-		fileMtdt := map[string]string{
-			manifest.EntryMetadataContentTypeKey: fileInfo.ContentType,
-			manifest.EntryMetadataFilenameKey:    fileInfo.Name,
-		}
 		// add file entry to dir manifest
-		err = dirManifest.Add(ctx, fileInfo.Path, manifest.NewEntry(fileReference, fileMtdt))
+		err = dirManifest.Add(ctx, filePath, manifest.NewEntry(fileReference, nil))
 		if err != nil {
-			return swarm.ZeroAddress, fmt.Errorf("add to manifest: %w", err)
+			return boson.ZeroAddress, fmt.Errorf("add to manifest: %w", err)
 		}
 
 		filesAdded++
@@ -150,144 +161,100 @@ func storeDir(
 
 	// check if files were uploaded through the manifest
 	if filesAdded == 0 {
-		return swarm.ZeroAddress, fmt.Errorf("no files in tar")
+		return boson.ZeroAddress, fmt.Errorf("no files in tar")
 	}
 
 	// store website information
 	if indexFilename != "" || errorFilename != "" {
 		metadata := map[string]string{}
 		if indexFilename != "" {
-			metadata[manifest.WebsiteIndexDocumentSuffixKey] = indexFilename
+			metadata[manifestWebsiteIndexDocumentSuffixKey] = indexFilename
 		}
 		if errorFilename != "" {
-			metadata[manifest.WebsiteErrorDocumentPathKey] = errorFilename
+			metadata[manifestWebsiteErrorDocumentPathKey] = errorFilename
 		}
-		rootManifestEntry := manifest.NewEntry(swarm.ZeroAddress, metadata)
-		err = dirManifest.Add(ctx, manifest.RootPath, rootManifestEntry)
+		rootManifestEntry := manifest.NewEntry(boson.ZeroAddress, metadata)
+		err = dirManifest.Add(ctx, manifestRootPath, rootManifestEntry)
 		if err != nil {
-			return swarm.ZeroAddress, fmt.Errorf("add to manifest: %w", err)
+			return boson.ZeroAddress, fmt.Errorf("add to manifest: %w", err)
 		}
 	}
 
 	storeSizeFn := []manifest.StoreSizeFunc{}
-	// only in the case when tag is sent via header (i.e. not created by this request)
-	// each content that is saved for manifest
-	storeSizeFn = append(storeSizeFn, func(dataSize int64) error {
-		if estimatedTotalChunks := calculateNumberOfChunks(dataSize, encrypt); estimatedTotalChunks > 0 {
-
-			if err != nil {
-				return fmt.Errorf("increment tag: %w", err)
-			}
-		}
-		return nil
-	})
 
 	// save manifest
-	manifestReference, err := dirManifest.Store(ctx, storeSizeFn...)
+	manifestBytesReference, err := dirManifest.Store(ctx, storeSizeFn...)
 	if err != nil {
-		return swarm.ZeroAddress, fmt.Errorf("store manifest: %w", err)
+		return boson.ZeroAddress, fmt.Errorf("store manifest: %w", err)
 	}
-	logger.Tracef("finished uploaded dir with reference %v", manifestReference)
 
-	return manifestReference, nil
-}
-
-type FileInfo struct {
-	Path        string
-	Name        string
-	ContentType string
-	Size        int64
-	Reader      io.Reader
-}
-
-type dirReader interface {
-	Next() (*FileInfo, error)
-}
-
-type tarReader struct {
-	r      *tar.Reader
-	logger logging.Logger
-}
-
-func (t *tarReader) Next() (*FileInfo, error) {
-	for {
-		fileHeader, err := t.r.Next()
-		if err != nil {
-			return nil, err
-		}
-
-		fileName := fileHeader.FileInfo().Name()
-		contentType := mime.TypeByExtension(filepath.Ext(fileHeader.Name))
-		fileSize := fileHeader.FileInfo().Size()
-		filePath := filepath.Clean(fileHeader.Name)
-
-		if filePath == "." {
-			t.logger.Warning("skipping file upload empty path")
-			continue
-		}
-		if runtime.GOOS == "windows" {
-			// always use Unix path separator
-			filePath = filepath.ToSlash(filePath)
-		}
-		// only store regular files
-		if !fileHeader.FileInfo().Mode().IsRegular() {
-			t.logger.Warningf("skipping file upload for %s as it is not a regular file", filePath)
-			continue
-		}
-
-		return &FileInfo{
-			Path:        filePath,
-			Name:        fileName,
-			ContentType: contentType,
-			Size:        fileSize,
-			Reader:      t.r,
-		}, nil
-	}
-}
-
-// multipart reader returns files added as a multipart form. We will ensure all the
-// part headers are passed correctly
-type multipartReader struct {
-	r *multipart.Reader
-}
-
-func (m *multipartReader) Next() (*FileInfo, error) {
-	part, err := m.r.NextPart()
+	// store the manifest metadata and get its reference
+	m := entry.NewMetadata(manifestBytesReference.String())
+	m.MimeType = dirManifest.Type()
+	metadataBytes, err := json.Marshal(m)
 	if err != nil {
-		return nil, err
+		return boson.ZeroAddress, fmt.Errorf("metadata marshal: %w", err)
 	}
 
-	fileName := part.FileName()
-	if fileName == "" {
-		fileName = part.FormName()
-	}
-	if fileName == "" {
-		return nil, errors.New("filename missing")
-	}
 
-	contentType := part.Header.Get(contentTypeHeader)
-	if contentType == "" {
-		return nil, errors.New("content-type missing")
-	}
-
-	contentLength := part.Header.Get("Content-Length")
-	if contentLength == "" {
-		return nil, errors.New("content-length missing")
-	}
-	fileSize, err := strconv.ParseInt(contentLength, 10, 64)
+	mr, err := p(ctx, bytes.NewReader(metadataBytes), int64(len(metadataBytes)))
 	if err != nil {
-		return nil, errors.New("invalid file size")
+		return boson.ZeroAddress, fmt.Errorf("split metadata: %w", err)
 	}
 
-	if filepath.Dir(fileName) != "." {
-		return nil, errors.New("multipart upload supports only single directory")
+	// now join both references (fr, mr) to create an entry and store it
+	e := entry.New(manifestBytesReference, mr)
+	fileEntryBytes, err := e.MarshalBinary()
+	if err != nil {
+		return boson.ZeroAddress, fmt.Errorf("entry marshal: %w", err)
 	}
 
-	return &FileInfo{
-		Path:        fileName,
-		Name:        fileName,
-		ContentType: contentType,
-		Size:        fileSize,
-		Reader:      part,
-	}, nil
+	manifestFileReference, err := p(ctx, bytes.NewReader(fileEntryBytes), int64(len(fileEntryBytes)))
+	if err != nil {
+		return boson.ZeroAddress, fmt.Errorf("split entry: %w", err)
+	}
+
+	return manifestFileReference, nil
+}
+
+// storeFile uploads the given file and returns its reference
+// this function was extracted from `fileUploadHandler` and should eventually replace its current code
+func storeFile(ctx context.Context, fileInfo *fileUploadInfo, p pipelineFunc, encrypt bool) (boson.Address, error) {
+	// first store the file and get its reference
+	fr, err := p(ctx, fileInfo.reader, fileInfo.size)
+	if err != nil {
+		return boson.ZeroAddress, fmt.Errorf("split file: %w", err)
+	}
+
+	// if filename is still empty, use the file hash as the filename
+	if fileInfo.name == "" {
+		fileInfo.name = fr.String()
+	}
+
+	// then store the metadata and get its reference
+	m := entry.NewMetadata(fileInfo.name)
+	m.MimeType = fileInfo.contentType
+	metadataBytes, err := json.Marshal(m)
+	if err != nil {
+		return boson.ZeroAddress, fmt.Errorf("metadata marshal: %w", err)
+	}
+
+
+	mr, err := p(ctx, bytes.NewReader(metadataBytes), int64(len(metadataBytes)))
+	if err != nil {
+		return boson.ZeroAddress, fmt.Errorf("split metadata: %w", err)
+	}
+
+	// now join both references (mr, fr) to create an entry and store it
+	e := entry.New(fr, mr)
+	fileEntryBytes, err := e.MarshalBinary()
+	if err != nil {
+		return boson.ZeroAddress, fmt.Errorf("entry marshal: %w", err)
+	}
+	ref, err := p(ctx, bytes.NewReader(fileEntryBytes), int64(len(fileEntryBytes)))
+	if err != nil {
+		return boson.ZeroAddress, fmt.Errorf("split entry: %w", err)
+	}
+
+	return ref, nil
 }

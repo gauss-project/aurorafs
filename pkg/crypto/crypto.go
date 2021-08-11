@@ -13,42 +13,33 @@ import (
 	"fmt"
 
 	"github.com/btcsuite/btcd/btcec"
-	"github.com/ethersphere/bee/pkg/swarm"
+	"github.com/gauss-project/aurorafs/pkg/boson"
 	"golang.org/x/crypto/sha3"
 )
 
 // RecoverFunc is a function to recover the public key from a signature
 type RecoverFunc func(signature, data []byte) (*ecdsa.PublicKey, error)
 
-var ErrBadHashLength = errors.New("wrong block hash length")
-
 const (
 	AddressSize = 20
 )
 
 // NewOverlayAddress constructs a Swarm Address from ECDSA public key.
-func NewOverlayAddress(p ecdsa.PublicKey, networkID uint64, blockHash []byte) (swarm.Address, error) {
-
+func NewOverlayAddress(p ecdsa.PublicKey, networkID uint64) (boson.Address, error) {
 	ethAddr, err := NewEthereumAddress(p)
 	if err != nil {
-		return swarm.ZeroAddress, err
+		return boson.ZeroAddress, err
 	}
-
-	if len(blockHash) != 32 {
-		return swarm.ZeroAddress, ErrBadHashLength
-	}
-
-	return NewOverlayFromEthereumAddress(ethAddr, networkID, blockHash), nil
+	return NewOverlayFromEthereumAddress(ethAddr, networkID), nil
 }
 
 // NewOverlayFromEthereumAddress constructs a Swarm Address for an Ethereum address.
-func NewOverlayFromEthereumAddress(ethAddr []byte, networkID uint64, blockHash []byte) swarm.Address {
+func NewOverlayFromEthereumAddress(ethAddr []byte, networkID uint64) boson.Address {
 	netIDBytes := make([]byte, 8)
 	binary.LittleEndian.PutUint64(netIDBytes, networkID)
-	data := append(ethAddr, netIDBytes...)
-	data = append(data, blockHash...)
-	h := sha3.Sum256(data)
-	return swarm.NewAddress(h[:])
+	//h := sha3.Sum256(append(ethAddr, netIDBytes...))
+	h := append(ethAddr, netIDBytes...)
+	return boson.NewAddress(h[:])
 }
 
 // GenerateSecp256k1Key generates an ECDSA private key using

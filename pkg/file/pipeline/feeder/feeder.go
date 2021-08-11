@@ -7,11 +7,11 @@ package feeder
 import (
 	"encoding/binary"
 
-	"github.com/ethersphere/bee/pkg/file/pipeline"
-	"github.com/ethersphere/bee/pkg/swarm"
+	"github.com/gauss-project/aurorafs/pkg/file/pipeline"
+	"github.com/gauss-project/aurorafs/pkg/boson"
 )
 
-const span = swarm.SpanSize
+const span = boson.SpanSize
 
 type chunkFeeder struct {
 	size      int

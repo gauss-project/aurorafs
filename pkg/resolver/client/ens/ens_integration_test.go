@@ -10,22 +10,22 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/ethersphere/bee/pkg/resolver/client/ens"
-	"github.com/ethersphere/bee/pkg/swarm"
+	"github.com/gauss-project/aurorafs/pkg/resolver/client/ens"
+	"github.com/gauss-project/aurorafs/pkg/boson"
 )
 
 func TestENSntegration(t *testing.T) {
 	// TODO: consider using a stable gateway instead of INFURA.
 	defaultEndpoint := "https://goerli.infura.io/v3/59d83a5a4be74f86b9851190c802297b"
-	defaultAddr := swarm.MustParseHexAddress("00cb23598c2e520b6a6aae3ddc94fed4435a2909690bdd709bf9d9e7c2aadfad")
+	defaultAddr := boson.MustParseHexAddress("00cb23598c2e520b6a6aae3ddc94fed4435a2909690bdd709bf9d9e7c2aadfad")
 
 	testCases := []struct {
 		desc            string
 		endpoint        string
 		contractAddress string
-		name            string
-		wantAdr         swarm.Address
-		wantErr         error
+		name    string
+		wantAdr boson.Address
+		wantErr error
 	}{
 		// TODO: add a test targeting a resolver with an invalid contenthash
 		// record.
@@ -46,23 +46,23 @@ func TestENSntegration(t *testing.T) {
 		},
 		{
 			desc:    "not registered",
-			name:    "unused.test.swarm.eth",
+			name:    "unused.test.boson.eth",
 			wantErr: ens.ErrResolveFailed,
 		},
 		{
 			desc:    "no content hash",
-			name:    "nocontent.resolver.test.swarm.eth",
+			name:    "nocontent.resolver.test.boson.eth",
 			wantErr: ens.ErrResolveFailed,
 		},
 		{
 			desc:            "invalid contract address",
 			contractAddress: "0xFFFFFFFF",
-			name:            "example.resolver.test.swarm.eth",
+			name:            "example.resolver.test.boson.eth",
 			wantErr:         ens.ErrFailedToConnect,
 		},
 		{
 			desc:    "ok",
-			name:    "example.resolver.test.swarm.eth",
+			name:    "example.resolver.test.boson.eth",
 			wantAdr: defaultAddr,
 		},
 	}

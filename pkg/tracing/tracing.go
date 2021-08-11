@@ -13,8 +13,8 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/ethersphere/bee/pkg/logging"
-	"github.com/ethersphere/bee/pkg/p2p"
+	"github.com/gauss-project/aurorafs/pkg/logging"
+	"github.com/gauss-project/aurorafs/pkg/p2p"
 	"github.com/opentracing/opentracing-go"
 	"github.com/sirupsen/logrus"
 	"github.com/uber/jaeger-client-go"
@@ -38,7 +38,7 @@ const LogField = "traceid"
 
 const (
 	// TraceContextHeaderName is the http header name used to propagate tracing context.
-	TraceContextHeaderName = "swarm-trace-id"
+	TraceContextHeaderName = "boson-trace-id"
 
 	// TraceBaggageHeaderPrefix is the prefix for http headers used to propagate baggage.
 	TraceBaggageHeaderPrefix = "swarmctx-"
@@ -186,7 +186,11 @@ func (t *Tracer) AddContextHTTPHeader(ctx context.Context, headers http.Header) 
 	}
 
 	carrier := opentracing.HTTPHeadersCarrier(headers)
-	return t.tracer.Inject(c, opentracing.HTTPHeaders, carrier)
+	if err := t.tracer.Inject(c, opentracing.HTTPHeaders, carrier); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 // FromHTTPHeaders returns tracing span context from HTTP headers. If the tracing

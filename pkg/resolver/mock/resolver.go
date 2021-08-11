@@ -8,7 +8,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/ethersphere/bee/pkg/resolver"
+	"github.com/gauss-project/aurorafs/pkg/resolver"
 )
 
 // Assure mock Resolver implements the Resolver interface.

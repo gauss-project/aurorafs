@@ -3,26 +3,19 @@
 // license that can be found in the LICENSE file.
 
 // Package manifest contains the abstractions needed for
-// collection representation in Swarm.
+// collection representation in Swarm. It uses implementations
+// in ethersphere/manifest repo under the hood.
 package manifest
 
 import (
 	"context"
 	"errors"
 
-	"github.com/ethersphere/bee/pkg/file"
-	"github.com/ethersphere/bee/pkg/swarm"
+	"github.com/gauss-project/aurorafs/pkg/file"
+	"github.com/gauss-project/aurorafs/pkg/boson"
 )
 
 const DefaultManifestType = ManifestMantarayContentType
-
-const (
-	RootPath                      = "/"
-	WebsiteIndexDocumentSuffixKey = "website-index-document"
-	WebsiteErrorDocumentPathKey   = "website-error-document"
-	EntryMetadataContentTypeKey   = "Content-Type"
-	EntryMetadataFilenameKey      = "Filename"
-)
 
 var (
 	// ErrNotFound is returned when an Entry is not found in the manifest.
@@ -54,16 +47,16 @@ type Interface interface {
 	// HasPrefix tests whether the specified prefix path exists.
 	HasPrefix(context.Context, string) (bool, error)
 	// Store stores the manifest, returning the resulting address.
-	Store(context.Context, ...StoreSizeFunc) (swarm.Address, error)
+	Store(context.Context, ...StoreSizeFunc) (boson.Address, error)
 	// IterateAddresses is used to iterate over chunks addresses for
 	// the manifest.
-	IterateAddresses(context.Context, swarm.AddressIterFunc) error
+	IterateAddresses(context.Context, boson.AddressIterFunc) error
 }
 
 // Entry represents a single manifest entry.
 type Entry interface {
 	// Reference returns the address of the file.
-	Reference() swarm.Address
+	Reference() boson.Address
 	// Metadata returns the metadata of the file.
 	Metadata() map[string]string
 }
@@ -74,14 +67,6 @@ func NewDefaultManifest(
 	encrypted bool,
 ) (Interface, error) {
 	return NewManifest(DefaultManifestType, ls, encrypted)
-}
-
-// NewDefaultManifestReference creates a new manifest with default type.
-func NewDefaultManifestReference(
-	reference swarm.Address,
-	ls file.LoadSaver,
-) (Interface, error) {
-	return NewManifestReference(DefaultManifestType, reference, ls)
 }
 
 // NewManifest creates a new manifest.
@@ -103,7 +88,7 @@ func NewManifest(
 // NewManifestReference loads existing manifest.
 func NewManifestReference(
 	manifestType string,
-	reference swarm.Address,
+	reference boson.Address,
 	ls file.LoadSaver,
 ) (Interface, error) {
 	switch manifestType {
@@ -117,19 +102,19 @@ func NewManifestReference(
 }
 
 type manifestEntry struct {
-	reference swarm.Address
+	reference boson.Address
 	metadata  map[string]string
 }
 
 // NewEntry creates a new manifest entry.
-func NewEntry(reference swarm.Address, metadata map[string]string) Entry {
+func NewEntry(reference boson.Address, metadata map[string]string) Entry {
 	return &manifestEntry{
 		reference: reference,
 		metadata:  metadata,
 	}
 }
 
-func (e *manifestEntry) Reference() swarm.Address {
+func (e *manifestEntry) Reference() boson.Address {
 	return e.reference
 }
 

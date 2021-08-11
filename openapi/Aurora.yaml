@@ -1,0 +1,944 @@
+openapi: 3.0.3
+
+info:
+  version: 0.5.3
+  title: Aurora API
+  description: "A list of the currently provided Interfaces to interact with the boson, implementing file operations and sending messages"
+
+security:
+  - {}
+
+externalDocs:
+  description: Browse the documentation @ the Aurora Docs
+  url: "https://docs.boson.eth"
+
+servers:
+  - url: "http://{apiRoot}:{port}/v1"
+    variables:
+      apiRoot:
+        default: "localhost"
+        description: Base address of the local aurorafs node main API
+      port:
+        default: 1633
+        description: Service port provided in aurorafs node config
+  - url: "http://{apiRoot}:{port}"
+    variables:
+      apiRoot:
+        default: "localhost"
+        description: Base address of the local aurorafs node main API
+      port:
+        default: 1633
+        description: Service port provided in aurorafs node config
+
+paths:
+  "/bytes":
+    post:
+      summary: "Upload data"
+      tags:
+        - Bytes
+      parameters:
+        - $ref: "AuroraCommon.yaml#/components/parameters/AuroraTagParameter"
+        - $ref: "AuroraCommon.yaml#/components/parameters/AuroraPinParameter"
+        - $ref: "AuroraCommon.yaml#/components/parameters/AuroraEncryptParameter"
+      requestBody:
+        content:
+          application/octet-stream:
+            schema:
+              type: string
+              format: binary
+      responses:
+        "200":
+          description: Ok
+          headers:
+            "Aurora-tag":
+              $ref: "AuroraCommon.yaml#/components/headers/AuroraTag"
+          content:
+            application/json:
+              schema:
+                $ref: "AuroraCommon.yaml#/components/schemas/ReferenceResponse"
+        "403":
+          $ref: "AuroraCommon.yaml#/components/responses/403"
+        "500":
+          $ref: "AuroraCommon.yaml#/components/responses/500"
+        default:
+          description: Default response
+
+  "/bytes/{reference}":
+    get:
+      summary: "Get referenced data"
+      tags:
+        - Bytes
+      parameters:
+        - in: path
+          name: reference
+          schema:
+            $ref: "AuroraCommon.yaml#/components/schemas/AuroraReference"
+          required: true
+          description: Aurora address reference to content
+      responses:
+        "200":
+          description: Retrieved content specified by reference
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        "404":
+          $ref: "AuroraCommon.yaml#/components/responses/404"
+        default:
+          description: Default response
+
+  "/chunks/{reference}":
+    get:
+      summary: "Get Chunk"
+      tags:
+        - Chunk
+      parameters:
+        - in: path
+          name: reference
+          schema:
+            $ref: "AuroraCommon.yaml#/components/schemas/AuroraReference"
+          required: true
+          description: Aurora address of chunk
+        - $ref: "AuroraCommon.yaml#/components/parameters/AuroraRecoveryTargetsParameter"
+      responses:
+        "200":
+          description: Retrieved chunk content
+          headers:
+            "Aurora-recovery-targets":
+              $ref: "AuroraCommon.yaml#/components/headers/AuroraRecoveryTargets"
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        "202":
+          description: chunk recovery initiated. retry after sometime.
+        "400":
+          $ref: "AuroraCommon.yaml#/components/responses/400"
+        "404":
+          $ref: "AuroraCommon.yaml#/components/responses/404"
+        "500":
+          $ref: "AuroraCommon.yaml#/components/responses/500"
+        default:
+          description: Default response
+
+  "/chunks":
+    post:
+      summary: "Upload Chunk"
+      tags:
+        - Chunk
+      parameters:
+        - $ref: "AuroraCommon.yaml#/components/parameters/AuroraTagParameter"
+        - $ref: "AuroraCommon.yaml#/components/parameters/AuroraPinParameter"
+      requestBody:
+        content:
+          application/octet-stream:
+            schema:
+              type: string
+              format: binary
+      responses:
+        "200":
+          description: Ok
+          headers:
+            "Aurora-tag":
+              $ref: "AuroraCommon.yaml#/components/headers/AuroraTag"
+          content:
+            application/json:
+              schema:
+                $ref: "AuroraCommon.yaml#/components/schemas/Status"
+        "400":
+          $ref: "AuroraCommon.yaml#/components/responses/400"
+        "500":
+          $ref: "AuroraCommon.yaml#/components/responses/500"
+        default:
+          description: Default response
+
+  "/files":
+    post:
+      summary: "Upload file"
+      tags:
+        - File
+      parameters:
+        - in: query
+          name: name
+          schema:
+            $ref: "AuroraCommon.yaml#/components/schemas/FileName"
+          required: false
+          description: Filename
+        - $ref: "AuroraCommon.yaml#/components/parameters/AuroraTagParameter"
+        - $ref: "AuroraCommon.yaml#/components/parameters/AuroraPinParameter"
+        - $ref: "AuroraCommon.yaml#/components/parameters/AuroraEncryptParameter"
+        - $ref: "AuroraCommon.yaml#/components/parameters/ContentTypePreserved"
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              properties:
+                file:
+                  type: array
+                  items:
+                    type: string
+                    format: binary
+          application/octet-stream:
+            schema:
+              type: string
+              format: binary
+      responses:
+        "200":
+          description: Ok
+          headers:
+            "Aurora-tag":
+              $ref: "AuroraCommon.yaml#/components/headers/AuroraTag"
+            "etag":
+              $ref: "AuroraCommon.yaml#/components/headers/ETag" 
+          content:
+            application/json:
+              schema:
+                $ref: "AuroraCommon.yaml#/components/schemas/ReferenceResponse"
+        "400":
+          $ref: "AuroraCommon.yaml#/components/responses/400"
+        "403":
+          $ref: "AuroraCommon.yaml#/components/responses/403"
+        "500":
+          $ref: "AuroraCommon.yaml#/components/responses/500"
+        default:
+          description: Default response
+
+  "/files/{reference}":
+    get:
+      summary: "Get referenced file"
+      tags:
+        - File
+      parameters:
+        - in: path
+          name: reference
+          schema:
+            $ref: "AuroraCommon.yaml#/components/schemas/AuroraReference"
+          required: true
+          description: Aurora address of content
+        - $ref: "AuroraCommon.yaml#/components/parameters/AuroraRecoveryTargetsParameter"
+      responses:
+        "200":
+          description: Ok
+          headers:
+            "Aurora-recovery-targets":
+              $ref: "AuroraCommon.yaml#/components/headers/AuroraRecoveryTargets"
+            "ETag":
+              $ref: "AuroraCommon.yaml#/components/headers/ETag"
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        "400":
+          $ref: "AuroraCommon.yaml#/components/responses/400"
+        "404":
+          $ref: "AuroraCommon.yaml#/components/responses/404"
+        "500":
+          $ref: "AuroraCommon.yaml#/components/responses/500"
+        default:
+          description: Default response
+
+  "/dirs":
+    post:
+      summary: "Upload a collection"
+      tags:
+        - Collection
+      parameters:
+        - $ref: "AuroraCommon.yaml#/components/parameters/AuroraTagParameter"
+        - $ref: "AuroraCommon.yaml#/components/parameters/AuroraPinParameter"
+        - $ref: "AuroraCommon.yaml#/components/parameters/AuroraEncryptParameter"
+        - $ref: "AuroraCommon.yaml#/components/parameters/AuroraIndexDocumentParameter"
+        - $ref: "AuroraCommon.yaml#/components/parameters/AuroraErrorDocumentParameter"
+        - $ref: "AuroraCommon.yaml#/components/parameters/ContentTypePreserved"
+      requestBody:
+        content:
+          application/x-tar:
+            schema:
+              type: string
+              format: binary
+      responses:
+        "200":
+          description: Ok
+          headers:
+            "Aurora-tag":
+              $ref: "AuroraCommon.yaml#/components/headers/AuroraTag"
+          content:
+            application/json:
+              schema:
+                $ref: "AuroraCommon.yaml#/components/schemas/ReferenceResponse"
+        "400":
+          $ref: "AuroraCommon.yaml#/components/responses/400"
+        "403":
+          $ref: "AuroraCommon.yaml#/components/responses/403"
+        "500":
+          $ref: "AuroraCommon.yaml#/components/responses/500"
+        default:
+          description: Default response
+
+  "/bzz/{reference}":
+    get:
+      summary: "Get index document from a collection of files"
+      tags:
+        - Collection
+      parameters:
+        - in: path
+          name: reference
+          schema:
+            $ref: "AuroraCommon.yaml#/components/schemas/AuroraReference"
+          required: true
+          description: Aurora address of content
+        - $ref: "AuroraCommon.yaml#/components/parameters/AuroraRecoveryTargetsParameter"
+      responses:
+        "200":
+          description: Ok
+          headers:
+            "Aurora-recovery-targets":
+              $ref: "AuroraCommon.yaml#/components/headers/AuroraRecoveryTargets"
+          # "boson-feed-index":
+          #   $ref: "AuroraCommon.yaml#/components/headers/AuroraFeedIndex"
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        "400":
+          $ref: "AuroraCommon.yaml#/components/responses/400"
+        "404":
+          $ref: "AuroraCommon.yaml#/components/responses/404"
+        "500":
+          $ref: "AuroraCommon.yaml#/components/responses/500"
+        default:
+          description: Default response
+
+  "/bzz/{reference}/{path}":
+    get:
+      summary: "Get referenced file from a collection of files"
+      tags:
+        - Collection
+      parameters:
+        - in: path
+          name: reference
+          schema:
+            $ref: "AuroraCommon.yaml#/components/schemas/AuroraReference"
+          required: true
+          description: Aurora address of content
+        - in: path
+          name: path
+          schema:
+            type: string
+          required: true
+          description: Path to the file in the collection.
+        - $ref: "AuroraCommon.yaml#/components/parameters/AuroraRecoveryTargetsParameter"
+      responses:
+        "200":
+          description: Ok
+          headers:
+            "Aurora-recovery-targets":
+              $ref: "AuroraCommon.yaml#/components/headers/AuroraRecoveryTargets"
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+
+        "400":
+          $ref: "AuroraCommon.yaml#/components/responses/400"
+        "404":
+          $ref: "AuroraCommon.yaml#/components/responses/404"
+        "500":
+          $ref: "AuroraCommon.yaml#/components/responses/500"
+        default:
+          description: Default response
+
+  "/tags":
+    get:
+      summary: Get list of tags
+      tags:
+        - Tag
+      parameters:
+        - in: query
+          name: offset
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+          required: false
+          description: The number of items to skip before starting to collect the result set.
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 1000
+            default: 100
+          required: false
+          description: The numbers of items to return.
+      responses:
+        "200":
+          description: List of tags
+          content:
+            application/json:
+              schema:
+                $ref: "AuroraCommon.yaml#/components/schemas/TagsList"
+        "403":
+          $ref: "AuroraCommon.yaml#/components/responses/403"
+        "500":
+          $ref: "AuroraCommon.yaml#/components/responses/500"
+        default:
+          description: Default response
+    post:
+      summary: "Create Tag"
+      tags:
+        - Tag
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "AuroraCommon.yaml#/components/schemas/NewTagRequest"
+      responses:
+        "201":
+          description: New Tag Info
+          content:
+            application/json:
+              schema:
+                $ref: "AuroraCommon.yaml#/components/schemas/NewTagResponse"
+        "403":
+          $ref: "AuroraCommon.yaml#/components/responses/403"
+        "500":
+          $ref: "AuroraCommon.yaml#/components/responses/500"
+        default:
+          description: Default response
+
+  "/tags/{uid}":
+    get:
+      summary: "Get Tag information using Uid"
+      tags:
+        - Tag
+      parameters:
+        - in: path
+          name: uid
+          schema:
+            $ref: "AuroraCommon.yaml#/components/schemas/Uid"
+          required: true
+          description: Uid
+      responses:
+        "200":
+          description: Tag info
+          content:
+            application/json:
+              schema:
+                $ref: "AuroraCommon.yaml#/components/schemas/NewTagResponse"
+        "400":
+          $ref: "AuroraCommon.yaml#/components/responses/400"
+        "403":
+          $ref: "AuroraCommon.yaml#/components/responses/403"
+        "500":
+          $ref: "AuroraCommon.yaml#/components/responses/500"
+        default:
+          description: Default response
+    delete:
+      summary: "Delete Tag information using Uid"
+      tags:
+        - Tag
+      parameters:
+        - in: path
+          name: uid
+          schema:
+            $ref: "AuroraCommon.yaml#/components/schemas/Uid"
+          required: true
+          description: Uid
+      responses:
+        "204":
+          $ref: "AuroraCommon.yaml#/components/responses/204"
+        "400":
+          $ref: "AuroraCommon.yaml#/components/responses/400"
+        "403":
+          $ref: "AuroraCommon.yaml#/components/responses/403"
+        "404":
+          $ref: "AuroraCommon.yaml#/components/responses/404"
+        "500":
+          $ref: "AuroraCommon.yaml#/components/responses/500"
+        default:
+          description: Default response
+    patch:
+      summary: "Update Total Count and boson hash for a tag of an input stream of unknown size using Uid"
+      tags:
+        - Tag
+      parameters:
+        - in: path
+          name: uid
+          schema:
+            $ref: "AuroraCommon.yaml#/components/schemas/Uid"
+          required: true
+          description: Uid
+      requestBody:
+        description: Can contain boson hash to use for the tag
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "AuroraCommon.yaml#/components/schemas/Address"
+      responses:
+        "200":
+          description: Ok
+          content:
+            application/json:
+              schema:
+                $ref: "AuroraCommon.yaml#/components/schemas/Status"
+        "403":
+          $ref: "AuroraCommon.yaml#/components/responses/403"
+        "404":
+          $ref: "AuroraCommon.yaml#/components/responses/404"
+        "500":
+          $ref: "AuroraCommon.yaml#/components/responses/500"
+        default:
+          description: Default response
+
+  "/pin/chunks/{address}":
+    parameters:
+      - in: path
+        name: address
+        schema:
+          $ref: "AuroraCommon.yaml#/components/schemas/AuroraAddress"
+        required: true
+        description: Aurora address of chunk
+    post:
+      summary: Pin chunk with given address
+      tags:
+        - Chunk pinning
+      responses:
+        "200":
+          description: Pinning chunk with address
+          content:
+            application/json:
+              schema:
+                $ref: "AuroraCommon.yaml#/components/schemas/Response"
+        "400":
+          $ref: "AuroraCommon.yaml#/components/responses/400"
+        "403":
+          $ref: "AuroraCommon.yaml#/components/responses/403"
+        "404":
+          $ref: "AuroraCommon.yaml#/components/responses/404"
+        default:
+          description: Default response
+    delete:
+      summary: Unpin chunk with given address
+      tags:
+        - Chunk pinning
+      responses:
+        "200":
+          description: Unpinning chunk with address
+          content:
+            application/json:
+              schema:
+                $ref: "AuroraCommon.yaml#/components/schemas/Response"
+        "400":
+          $ref: "AuroraCommon.yaml#/components/responses/400"
+        "403":
+          $ref: "AuroraCommon.yaml#/components/responses/403"
+        "404":
+          $ref: "AuroraCommon.yaml#/components/responses/404"
+        default:
+          description: Default response
+    get:
+      summary: Get pinning status of chunk with given address
+      tags:
+        - Chunk pinning
+      responses:
+        "200":
+          description: Pinning state of chunk with address
+          content:
+            application/json:
+              schema:
+                $ref: "AuroraCommon.yaml#/components/schemas/PinningState"
+        "403":
+          $ref: "AuroraCommon.yaml#/components/responses/403"
+        "500":
+          $ref: "AuroraCommon.yaml#/components/responses/500"
+        default:
+          description: Default response
+    put:
+      summary: Update chunk pin counter
+      tags:
+        - Chunk pinning
+      responses:
+        "200":
+          description: Pinning state of chunk with address
+          content:
+            application/json:
+              schema:
+                $ref: "AuroraCommon.yaml#/components/schemas/PinningState"
+        "400":
+          $ref: "AuroraCommon.yaml#/components/responses/400"
+        "403":
+          $ref: "AuroraCommon.yaml#/components/responses/403"
+        "404":
+          $ref: "AuroraCommon.yaml#/components/responses/404"
+        default:
+          description: Default response
+
+  "/pin/chunks":
+    get:
+      summary: Get list of pinned chunks
+      tags:
+        - Chunk pinning
+      parameters:
+        - in: query
+          name: offset
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+          required: false
+          description: The number of items to skip before starting to collect the result set.
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 1000
+            default: 100
+          required: false
+          description: The numbers of items to return.
+      responses:
+        "200":
+          description: List of pinned chunks
+          content:
+            application/json:
+              schema:
+                $ref: "AuroraCommon.yaml#/components/schemas/BzzChunksPinned"
+        "403":
+          $ref: "AuroraCommon.yaml#/components/responses/403"
+        "500":
+          $ref: "AuroraCommon.yaml#/components/responses/500"
+        default:
+          description: Default response
+
+  "/pin/bytes/{address}":
+    parameters:
+      - in: path
+        name: address
+        schema:
+          $ref: "AuroraCommon.yaml#/components/schemas/AuroraAddress"
+        required: true
+        description: Aurora address of the bytes
+    post:
+      summary: Pin bytes with given address
+      tags:
+        - Bytes pinning
+      responses:
+        "200":
+          description: Pinning bytes chunks with address
+          content:
+            application/json:
+              schema:
+                $ref: "AuroraCommon.yaml#/components/schemas/Response"
+        "400":
+          $ref: "AuroraCommon.yaml#/components/responses/400"
+        "403":
+          $ref: "AuroraCommon.yaml#/components/responses/403"
+        "404":
+          $ref: "AuroraCommon.yaml#/components/responses/404"
+        default:
+          description: Default response
+    delete:
+      summary: Unpin bytes chunks with given address
+      tags:
+        - Bytes pinning
+      responses:
+        "200":
+          description: Unpinning chunk with address
+          content:
+            application/json:
+              schema:
+                $ref: "AuroraCommon.yaml#/components/schemas/Response"
+        "400":
+          $ref: "AuroraCommon.yaml#/components/responses/400"
+        "403":
+          $ref: "AuroraCommon.yaml#/components/responses/403"
+        "404":
+          $ref: "AuroraCommon.yaml#/components/responses/404"
+        default:
+          description: Default response
+
+  "/pin/files/{address}":
+    parameters:
+      - in: path
+        name: address
+        schema:
+          $ref: "AuroraCommon.yaml#/components/schemas/AuroraAddress"
+        required: true
+        description: Aurora address of the file
+    post:
+      summary: Pin file with given address
+      tags:
+        - File pinning
+      responses:
+        "200":
+          description: Pinning file chunks with address
+          content:
+            application/json:
+              schema:
+                $ref: "AuroraCommon.yaml#/components/schemas/Response"
+        "400":
+          $ref: "AuroraCommon.yaml#/components/responses/400"
+        "403":
+          $ref: "AuroraCommon.yaml#/components/responses/403"
+        "404":
+          $ref: "AuroraCommon.yaml#/components/responses/404"
+        default:
+          description: Default response
+    delete:
+      summary: Unpin file chunks with given address
+      tags:
+        - File pinning
+      responses:
+        "200":
+          description: Unpinning file chunks with address
+          content:
+            application/json:
+              schema:
+                $ref: "AuroraCommon.yaml#/components/schemas/Response"
+        "400":
+          $ref: "AuroraCommon.yaml#/components/responses/400"
+        "403":
+          $ref: "AuroraCommon.yaml#/components/responses/403"
+        "404":
+          $ref: "AuroraCommon.yaml#/components/responses/404"
+        default:
+          description: Default response
+
+  "/pin/bzz/{address}":
+    parameters:
+      - in: path
+        name: address
+        schema:
+          $ref: "AuroraCommon.yaml#/components/schemas/AuroraAddress"
+        required: true
+        description: Aurora address of the collection
+    post:
+      summary: Pin collection with given address
+      tags:
+        - Collection pinning
+      responses:
+        "200":
+          description: Pinning collection chunks (and all referenced files) with address
+          content:
+            application/json:
+              schema:
+                $ref: "AuroraCommon.yaml#/components/schemas/Response"
+        "400":
+          $ref: "AuroraCommon.yaml#/components/responses/400"
+        "403":
+          $ref: "AuroraCommon.yaml#/components/responses/403"
+        "404":
+          $ref: "AuroraCommon.yaml#/components/responses/404"
+        default:
+          description: Default response
+    delete:
+      summary: Unpin file chunks with given address
+      tags:
+        - Collection pinning
+      responses:
+        "200":
+          description: Unpinning collection chunks (and all referenced files) with address
+          content:
+            application/json:
+              schema:
+                $ref: "AuroraCommon.yaml#/components/schemas/Response"
+        "400":
+          $ref: "AuroraCommon.yaml#/components/responses/400"
+        "403":
+          $ref: "AuroraCommon.yaml#/components/responses/403"
+        "404":
+          $ref: "AuroraCommon.yaml#/components/responses/404"
+        default:
+          description: Default response
+
+  "/pss/send/{topic}/{targets}":
+    post:
+      summary: Send to recipient or target with Postal Service for Aurora
+      tags:
+        - Postal Service for Aurora
+      parameters:
+        - in: path
+          name: topic
+          schema:
+            $ref: "AuroraCommon.yaml#/components/schemas/PssTopic"
+          required: true
+          description: Topic name
+        - in: path
+          name: targets
+          schema:
+            $ref: "AuroraCommon.yaml#/components/schemas/PssTargets"
+          required: true
+          description: Target message address prefix. If multiple targets are specified, only one would be matched.
+        - in: query
+          name: recipient
+          schema:
+            $ref: "AuroraCommon.yaml#/components/schemas/PssRecipient"
+          required: false
+          description: Recipient publickey
+      responses:
+        "200":
+          description: Subscribed to topic
+        "400":
+          $ref: "AuroraCommon.yaml#/components/responses/400"
+        "500":
+          $ref: "AuroraCommon.yaml#/components/responses/500"
+        default:
+          description: Default response
+
+  "/pss/subscribe/{topic}":
+    get:
+      summary: Subscribe for messages on the given topic.
+      tags:
+        - Pss subscribe
+      parameters:
+        - in: path
+          name: topic
+          schema:
+            $ref: "AuroraCommon.yaml#/components/schemas/PssTopic"
+          required: true
+          description: Topic name
+      responses:
+        "200":
+          description: Returns a WebSocket with a subscription for incoming message data on the requested topic.
+        "500":
+          $ref: "AuroraCommon.yaml#/components/responses/500"
+        default:
+          description: Default response
+
+  "/soc/{owner}/{id}":
+    post:
+      summary: Upload single owner chunk
+      tags:
+        - Single owner chunk
+      parameters:
+        - in: path
+          name: owner
+          schema:
+            $ref: "AuroraCommon.yaml#/components/schemas/EthereumAddress"
+          required: true
+          description: Owner
+        - in: path
+          name: id
+          schema:
+            $ref: "AuroraCommon.yaml#/components/schemas/HexString"
+          required: true
+          description: Id
+        - in: query
+          name: sig
+          schema:
+            $ref: "AuroraCommon.yaml#/components/schemas/HexString"
+          required: true
+          description: Signature
+        - $ref: "AuroraCommon.yaml#/components/parameters/AuroraPinParameter"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "AuroraCommon.yaml#/components/schemas/ReferenceResponse"
+        "400":
+          $ref: "AuroraCommon.yaml#/components/responses/400"
+        "401":
+          $ref: "AuroraCommon.yaml#/components/responses/401"
+        "500":
+          $ref: "AuroraCommon.yaml#/components/responses/500"
+        default:
+          description: Default response
+
+  "/feeds/{owner}/{topic}":
+    post:
+      summary: Create an initial feed root manifest
+      tags:
+        - Feed
+      parameters:
+        - in: path
+          name: owner
+          schema:
+            $ref: "AuroraCommon.yaml#/components/schemas/EthereumAddress"
+          required: true
+          description: Owner
+        - in: path
+          name: topic
+          schema:
+            $ref: "AuroraCommon.yaml#/components/schemas/HexString"
+          required: true
+          description: Topic
+        - in: query
+          name: type
+          schema:
+            $ref: "AuroraCommon.yaml#/components/schemas/FeedType"
+          required: false
+          description: "Feed indexing scheme (default: sequence)"
+        - $ref: "AuroraCommon.yaml#/components/parameters/AuroraPinParameter"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "AuroraCommon.yaml#/components/schemas/ReferenceResponse"
+        "400":
+          $ref: "AuroraCommon.yaml#/components/responses/400"
+        "401":
+          $ref: "AuroraCommon.yaml#/components/responses/401"
+        "500":
+          $ref: "AuroraCommon.yaml#/components/responses/500"
+        default:
+          description: Default response
+    get:
+      summary: Find feed update
+      tags:
+        - Feed
+      parameters:
+        - in: path
+          name: owner
+          schema:
+            $ref: "AuroraCommon.yaml#/components/schemas/EthereumAddress"
+          required: true
+          description: Owner
+        - in: path
+          name: topic
+          schema:
+            $ref: "AuroraCommon.yaml#/components/schemas/HexString"
+          required: true
+          description: Topic
+        - in: query
+          name: at
+          schema:
+            type: integer
+          required: false
+          description: "Timestamp of the update (default: now)"
+        - in: query
+          name: type
+          schema:
+            $ref: "AuroraCommon.yaml#/components/schemas/FeedType"
+          required: false
+          description: "Feed indexing scheme (default: sequence)"
+      responses:
+        "200":
+          description: Latest feed update
+          headers:
+            "Aurora-feed-index":
+              $ref: "AuroraCommon.yaml#/components/headers/AuroraFeedIndex"
+            "Aurora-feed-index-next":
+              $ref: "AuroraCommon.yaml#/components/headers/AuroraFeedIndexNext"
+          content:
+            application/json:
+              schema:
+                $ref: "AuroraCommon.yaml#/components/schemas/ReferenceResponse"
+        "400":
+          $ref: "AuroraCommon.yaml#/components/responses/400"
+        "401":
+          $ref: "AuroraCommon.yaml#/components/responses/401"
+        "500":
+          $ref: "AuroraCommon.yaml#/components/responses/500"
+        default:
+          description: Default response

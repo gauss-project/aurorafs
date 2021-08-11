@@ -5,172 +5,33 @@
 package api
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
-	"mime"
+	"github.com/gorilla/mux"
 	"net/http"
 	"path"
 	"strings"
-	"time"
 
-
-	"github.com/gorilla/mux"
-
-
-	"github.com/ethersphere/bee/pkg/file/joiner"
-	"github.com/ethersphere/bee/pkg/file/loadsave"
-	"github.com/ethersphere/bee/pkg/jsonhttp"
-	"github.com/ethersphere/bee/pkg/manifest"
-	"github.com/ethersphere/bee/pkg/sctx"
-	"github.com/ethersphere/bee/pkg/storage"
-	"github.com/ethersphere/bee/pkg/swarm"
-
-	"github.com/ethersphere/bee/pkg/tracing"
-	"github.com/ethersphere/langos"
+	"github.com/gauss-project/aurorafs/pkg/boson"
+	"github.com/gauss-project/aurorafs/pkg/collection/entry"
+	"github.com/gauss-project/aurorafs/pkg/file"
+	"github.com/gauss-project/aurorafs/pkg/file/joiner"
+	"github.com/gauss-project/aurorafs/pkg/file/loadsave"
+	"github.com/gauss-project/aurorafs/pkg/jsonhttp"
+	"github.com/gauss-project/aurorafs/pkg/manifest"
+	"github.com/gauss-project/aurorafs/pkg/storage"
+	"github.com/gauss-project/aurorafs/pkg/tracing"
 )
-
-func (s *server) bzzUploadHandler(w http.ResponseWriter, r *http.Request) {
-	logger := tracing.NewLoggerWithTraceID(r.Context(), s.logger)
-
-	contentType := r.Header.Get(contentTypeHeader)
-	mediaType, _, err := mime.ParseMediaType(contentType)
-	if err != nil {
-		logger.Debugf("bzz upload: parse content type header %q: %v", contentType, err)
-		logger.Errorf("bzz upload: parse content type header %q", contentType)
-		jsonhttp.BadRequest(w, errInvalidContentType)
-		return
-	}
-
-	isDir := r.Header.Get(SwarmCollectionHeader)
-	if strings.ToLower(isDir) == "true" || mediaType == multiPartFormData {
-		s.dirUploadHandler(w, r, s.storer)
-		return
-	}
-	s.fileUploadHandler(w, r, s.storer)
-}
-
-// fileUploadResponse is returned when an HTTP request to upload a file is successful
-type bzzUploadResponse struct {
-	Reference swarm.Address `json:"reference"`
-}
-
-// fileUploadHandler uploads the file and its metadata supplied in the file body and
-// the headers
-func (s *server) fileUploadHandler(w http.ResponseWriter, r *http.Request, storer storage.Storer) {
-	logger := tracing.NewLoggerWithTraceID(r.Context(), s.logger)
-	var (
-		reader   io.Reader
-		fileName string
-	)
-
-	// Content-Type has already been validated by this time
-	contentType := r.Header.Get(contentTypeHeader)
-
-		// Add the tag to the context
-	ctx := r.Context()
-
-	fileName = r.URL.Query().Get("name")
-	reader = r.Body
-
-	p := requestPipelineFn(storer, r)
-
-	// first store the file and get its reference
-	fr, err := p(ctx, reader)
-	if err != nil {
-		logger.Debugf("bzz upload file: file store, file %q: %v", fileName, err)
-		logger.Errorf("bzz upload file: file store, file %q", fileName)
-		jsonhttp.InternalServerError(w, errFileStore)
-		return
-	}
-
-	// If filename is still empty, use the file hash as the filename
-	if fileName == "" {
-		fileName = fr.String()
-	}
-
-	encrypt := requestEncrypt(r)
-	l := loadsave.New(storer, requestModePut(r), encrypt)
-
-	m, err := manifest.NewDefaultManifest(l, encrypt)
-	if err != nil {
-		logger.Debugf("bzz upload file: create manifest, file %q: %v", fileName, err)
-		logger.Errorf("bzz upload file: create manifest, file %q", fileName)
-		jsonhttp.InternalServerError(w, nil)
-		return
-	}
-
-	rootMetadata := map[string]string{
-		manifest.WebsiteIndexDocumentSuffixKey: fileName,
-	}
-
-	err = m.Add(ctx, manifest.RootPath, manifest.NewEntry(swarm.ZeroAddress, rootMetadata))
-	if err != nil {
-		logger.Debugf("bzz upload file: adding metadata to manifest, file %q: %v", fileName, err)
-		logger.Errorf("bzz upload file: adding metadata to manifest, file %q", fileName)
-		jsonhttp.InternalServerError(w, nil)
-		return
-	}
-
-	fileMtdt := map[string]string{
-		manifest.EntryMetadataContentTypeKey: contentType,
-		manifest.EntryMetadataFilenameKey:    fileName,
-	}
-
-	err = m.Add(ctx, fileName, manifest.NewEntry(fr, fileMtdt))
-	if err != nil {
-		logger.Debugf("bzz upload file: adding file to manifest, file %q: %v", fileName, err)
-		logger.Errorf("bzz upload file: adding file to manifest, file %q", fileName)
-		jsonhttp.InternalServerError(w, nil)
-		return
-	}
-
-	logger.Debugf("Uploading file Encrypt: %v Filename: %s Filehash: %s FileMtdt: %v",
-		encrypt, fileName, fr.String(), fileMtdt)
-
-	storeSizeFn := []manifest.StoreSizeFunc{}
-	// only in the case when tag is sent via header (i.e. not created by this request)
-	// each content that is saved for manifest
-	storeSizeFn = append(storeSizeFn, func(dataSize int64) error {
-		if estimatedTotalChunks := calculateNumberOfChunks(dataSize, encrypt); estimatedTotalChunks > 0 {
-
-			if err != nil {
-				return fmt.Errorf("increment tag: %w", err)
-			}
-		}
-		return nil
-	})
-
-	manifestReference, err := m.Store(ctx, storeSizeFn...)
-	if err != nil {
-		logger.Debugf("bzz upload file: manifest store, file %q: %v", fileName, err)
-		logger.Errorf("bzz upload file: manifest store, file %q", fileName)
-		jsonhttp.InternalServerError(w, nil)
-		return
-	}
-	logger.Debugf("Manifest Reference: %s", manifestReference.String())
-
-
-
-
-	w.Header().Set("ETag", fmt.Sprintf("%q", manifestReference.String()))
-
-	w.Header().Set("Access-Control-Expose-Headers", SwarmTagHeader)
-	jsonhttp.Created(w, bzzUploadResponse{
-		Reference: manifestReference,
-	})
-}
 
 func (s *server) bzzDownloadHandler(w http.ResponseWriter, r *http.Request) {
 	logger := tracing.NewLoggerWithTraceID(r.Context(), s.logger)
 	ls := loadsave.New(s.storer, storage.ModePutRequest, false)
 	feedDereferenced := false
 
-	targets := r.URL.Query().Get("targets")
-	if targets != "" {
-		r = r.WithContext(sctx.SetTargets(r.Context(), targets))
-	}
+
 	ctx := r.Context()
 
 	nameOrHex := mux.Vars(r)["address"]
@@ -183,37 +44,91 @@ func (s *server) bzzDownloadHandler(w http.ResponseWriter, r *http.Request) {
 
 	address, err := s.resolveNameOrAddress(nameOrHex)
 	if err != nil {
-		logger.Debugf("bzz download: parse address %s: %v", nameOrHex, err)
-		logger.Error("bzz download: parse address")
+		logger.Debugf("aurora download: parse address %s: %v", nameOrHex, err)
+		logger.Error("aurora download: parse address")
 		jsonhttp.NotFound(w, nil)
 		return
 	}
 
 
 	// read manifest entry
-	m, err := manifest.NewDefaultManifestReference(
-		address,
-		ls,
-	)
+	j, _, err := joiner.New(ctx, s.storer, address)
 	if err != nil {
-		logger.Debugf("bzz download: not manifest %s: %v", address, err)
-		logger.Error("bzz download: not manifest")
+		logger.Debugf("aurora download: joiner manifest entry %s: %v", address, err)
+		logger.Errorf("aurora download: joiner %s", address)
 		jsonhttp.NotFound(w, nil)
 		return
 	}
 
+	buf := bytes.NewBuffer(nil)
+	_, err = file.JoinReadAll(ctx, j, buf)
+	if err != nil {
+		logger.Debugf("aurora download: read entry %s: %v", address, err)
+		logger.Errorf("aurora download: read entry %s", address)
+		jsonhttp.NotFound(w, nil)
+		return
+	}
+
+	e := &entry.Entry{}
+	err = e.UnmarshalBinary(buf.Bytes())
+	if err != nil {
+		logger.Debugf("aurora download: unmarshal entry %s: %v", address, err)
+		logger.Errorf("aurora download: unmarshal entry %s", address)
+		jsonhttp.NotFound(w, nil)
+		return
+	}
+
+	// read metadata
+	j, _, err = joiner.New(ctx, s.storer, e.Metadata())
+	if err != nil {
+		logger.Debugf("aurora download: joiner metadata %s: %v", address, err)
+		logger.Errorf("aurora download: joiner %s", address)
+		jsonhttp.NotFound(w, nil)
+		return
+	}
+
+	// read metadata
+	buf = bytes.NewBuffer(nil)
+	_, err = file.JoinReadAll(ctx, j, buf)
+	if err != nil {
+		logger.Debugf("aurora download: read metadata %s: %v", address, err)
+		logger.Errorf("aurora download: read metadata %s", address)
+		jsonhttp.NotFound(w, nil)
+		return
+	}
+	manifestMetadata := &entry.Metadata{}
+	err = json.Unmarshal(buf.Bytes(), manifestMetadata)
+	if err != nil {
+		logger.Debugf("aurora download: unmarshal metadata %s: %v", address, err)
+		logger.Errorf("aurora download: unmarshal metadata %s", address)
+		jsonhttp.NotFound(w, nil)
+		return
+	}
+
+	// we are expecting manifest Mime type here
+	m, err := manifest.NewManifestReference(
+		manifestMetadata.MimeType,
+		e.Reference(),
+		ls,
+	)
+	if err != nil {
+		logger.Debugf("aurora download: not manifest %s: %v", address, err)
+		logger.Error("aurora download: not manifest")
+		jsonhttp.NotFound(w, nil)
+		return
+	}
 
 	if pathVar == "" {
-		logger.Tracef("bzz download: handle empty path %s", address)
+		logger.Tracef("aurora download: handle empty path %s", address)
 
-		if indexDocumentSuffixKey, ok := manifestMetadataLoad(ctx, m, manifest.RootPath, manifest.WebsiteIndexDocumentSuffixKey); ok {
+		if indexDocumentSuffixKey, ok := manifestMetadataLoad(ctx, m, manifestRootPath, manifestWebsiteIndexDocumentSuffixKey); ok {
 			pathWithIndex := path.Join(pathVar, indexDocumentSuffixKey)
 			indexDocumentManifestEntry, err := m.Lookup(ctx, pathWithIndex)
 			if err == nil {
 				// index document exists
-				logger.Debugf("bzz download: serving path: %s", pathWithIndex)
+				logger.Debugf("aurora download: serving path: %s", pathWithIndex)
 
-				s.serveManifestEntry(w, r, address, indexDocumentManifestEntry, !feedDereferenced)
+				s.serveManifestEntry(w, r, address, indexDocumentManifestEntry.Reference(), !feedDereferenced)
 				return
 			}
 		}
@@ -221,8 +136,8 @@ func (s *server) bzzDownloadHandler(w http.ResponseWriter, r *http.Request) {
 
 	me, err := m.Lookup(ctx, pathVar)
 	if err != nil {
-		logger.Debugf("bzz download: invalid path %s/%s: %v", address, pathVar, err)
-		logger.Error("bzz download: invalid path")
+		logger.Debugf("aurora download: invalid path %s/%s: %v", address, pathVar, err)
+		logger.Error("aurora download: invalid path")
 
 		if errors.Is(err, manifest.ErrNotFound) {
 
@@ -236,7 +151,7 @@ func (s *server) bzzDownloadHandler(w http.ResponseWriter, r *http.Request) {
 					u.Path += "/"
 					redirectURL := u.String()
 
-					logger.Debugf("bzz download: redirecting to %s: %v", redirectURL, err)
+					logger.Debugf("aurora download: redirecting to %s: %v", redirectURL, err)
 
 					http.Redirect(w, r, redirectURL, http.StatusPermanentRedirect)
 					return
@@ -244,30 +159,30 @@ func (s *server) bzzDownloadHandler(w http.ResponseWriter, r *http.Request) {
 			}
 
 			// check index suffix path
-			if indexDocumentSuffixKey, ok := manifestMetadataLoad(ctx, m, manifest.RootPath, manifest.WebsiteIndexDocumentSuffixKey); ok {
+			if indexDocumentSuffixKey, ok := manifestMetadataLoad(ctx, m, manifestRootPath, manifestWebsiteIndexDocumentSuffixKey); ok {
 				if !strings.HasSuffix(pathVar, indexDocumentSuffixKey) {
 					// check if path is directory with index
 					pathWithIndex := path.Join(pathVar, indexDocumentSuffixKey)
 					indexDocumentManifestEntry, err := m.Lookup(ctx, pathWithIndex)
 					if err == nil {
 						// index document exists
-						logger.Debugf("bzz download: serving path: %s", pathWithIndex)
+						logger.Debugf("aurora download: serving path: %s", pathWithIndex)
 
-						s.serveManifestEntry(w, r, address, indexDocumentManifestEntry, !feedDereferenced)
+						s.serveManifestEntry(w, r, address, indexDocumentManifestEntry.Reference(), !feedDereferenced)
 						return
 					}
 				}
 			}
 
 			// check if error document is to be shown
-			if errorDocumentPath, ok := manifestMetadataLoad(ctx, m, manifest.RootPath, manifest.WebsiteErrorDocumentPathKey); ok {
+			if errorDocumentPath, ok := manifestMetadataLoad(ctx, m, manifestRootPath, manifestWebsiteErrorDocumentPathKey); ok {
 				if pathVar != errorDocumentPath {
 					errorDocumentManifestEntry, err := m.Lookup(ctx, errorDocumentPath)
 					if err == nil {
 						// error document exists
-						logger.Debugf("bzz download: serving path: %s", errorDocumentPath)
+						logger.Debugf("aurora download: serving path: %s", errorDocumentPath)
 
-						s.serveManifestEntry(w, r, address, errorDocumentManifestEntry, !feedDereferenced)
+						s.serveManifestEntry(w, r, address, errorDocumentManifestEntry.Reference(), !feedDereferenced)
 						return
 					}
 				}
@@ -281,76 +196,81 @@ func (s *server) bzzDownloadHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// serve requested path
-	s.serveManifestEntry(w, r, address, me, !feedDereferenced)
+	s.serveManifestEntry(w, r, address, me.Reference(), !feedDereferenced)
 }
 
-func (s *server) serveManifestEntry(
-	w http.ResponseWriter,
-	r *http.Request,
-	address swarm.Address,
-	manifestEntry manifest.Entry,
-	etag bool,
-) {
+func (s *server) serveManifestEntry(w http.ResponseWriter, r *http.Request, address, manifestEntryAddress boson.Address, etag bool) {
+	var (
+		logger = tracing.NewLoggerWithTraceID(r.Context(), s.logger)
+		ctx    = r.Context()
+		buf    = bytes.NewBuffer(nil)
+	)
 
-	additionalHeaders := http.Header{}
-	mtdt := manifestEntry.Metadata()
-	if fname, ok := mtdt[manifest.EntryMetadataFilenameKey]; ok {
-		additionalHeaders["Content-Disposition"] =
-			[]string{fmt.Sprintf("inline; filename=\"%s\"", fname)}
-	}
-	if mimeType, ok := mtdt[manifest.EntryMetadataContentTypeKey]; ok {
-		additionalHeaders["Content-Type"] = []string{mimeType}
-	}
-
-	s.downloadHandler(w, r, manifestEntry.Reference(), additionalHeaders, etag)
-}
-
-// downloadHandler contains common logic for dowloading Swarm file from API
-func (s *server) downloadHandler(w http.ResponseWriter, r *http.Request, reference swarm.Address, additionalHeaders http.Header, etag bool) {
-	logger := tracing.NewLoggerWithTraceID(r.Context(), s.logger)
-	targets := r.URL.Query().Get("targets")
-	if targets != "" {
-		r = r.WithContext(sctx.SetTargets(r.Context(), targets))
-	}
-
-	reader, l, err := joiner.New(r.Context(), s.storer, reference)
+	// read file entry
+	j, _, err := joiner.New(ctx, s.storer, manifestEntryAddress)
 	if err != nil {
-		if errors.Is(err, storage.ErrNotFound) {
-			logger.Debugf("api download: not found %s: %v", reference, err)
-			logger.Error("api download: not found")
-			jsonhttp.NotFound(w, nil)
-			return
-		}
-		logger.Debugf("api download: unexpected error %s: %v", reference, err)
-		logger.Error("api download: unexpected error")
-		jsonhttp.InternalServerError(w, nil)
+		logger.Debugf("aurora download: joiner read file entry %s: %v", address, err)
+		logger.Errorf("aurora download: joiner read file entry %s", address)
+		jsonhttp.NotFound(w, nil)
 		return
 	}
 
-	// include additional headers
-	for name, values := range additionalHeaders {
-		w.Header().Set(name, strings.Join(values, "; "))
+	_, err = file.JoinReadAll(ctx, j, buf)
+	if err != nil {
+		logger.Debugf("aurora download: read file entry %s: %v", address, err)
+		logger.Errorf("aurora download: read file entry %s", address)
+		jsonhttp.NotFound(w, nil)
+		return
 	}
-	if etag {
-		w.Header().Set("ETag", fmt.Sprintf("%q", reference))
+	fe := &entry.Entry{}
+	err = fe.UnmarshalBinary(buf.Bytes())
+	if err != nil {
+		logger.Debugf("aurora download: unmarshal file entry %s: %v", address, err)
+		logger.Errorf("aurora download: unmarshal file entry %s", address)
+		jsonhttp.NotFound(w, nil)
+		return
 	}
-	w.Header().Set("Content-Length", fmt.Sprintf("%d", l))
-	w.Header().Set("Decompressed-Content-Length", fmt.Sprintf("%d", l))
-	w.Header().Set("Access-Control-Expose-Headers", "Content-Disposition")
-	if targets != "" {
-		w.Header().Set(TargetsRecoveryHeader, targets)
+
+	// read file metadata
+	j, _, err = joiner.New(ctx, s.storer, fe.Metadata())
+	if err != nil {
+		logger.Debugf("aurora download: joiner read file entry %s: %v", address, err)
+		logger.Errorf("aurora download: joiner read file entry %s", address)
+		jsonhttp.NotFound(w, nil)
+		return
 	}
-	http.ServeContent(w, r, "", time.Now(), langos.NewBufferedLangos(reader, lookaheadBufferSize(l)))
+
+	buf = bytes.NewBuffer(nil)
+	_, err = file.JoinReadAll(ctx, j, buf)
+	if err != nil {
+		logger.Debugf("aurora download: read file metadata %s: %v", address, err)
+		logger.Errorf("aurora download: read file metadata %s", address)
+		jsonhttp.NotFound(w, nil)
+		return
+	}
+	fileMetadata := &entry.Metadata{}
+	err = json.Unmarshal(buf.Bytes(), fileMetadata)
+	if err != nil {
+		logger.Debugf("aurora download: unmarshal metadata %s: %v", address, err)
+		logger.Errorf("aurora download: unmarshal metadata %s", address)
+		jsonhttp.NotFound(w, nil)
+		return
+	}
+
+	additionalHeaders := http.Header{
+		"Content-Disposition": {fmt.Sprintf("inline; filename=\"%s\"", fileMetadata.Filename)},
+		"Content-Type":        {fileMetadata.MimeType},
+	}
+
+	fileEntryAddress := fe.Reference()
+
+	s.downloadHandler(w, r, fileEntryAddress, additionalHeaders, etag)
 }
 
 // manifestMetadataLoad returns the value for a key stored in the metadata of
 // manifest path, or empty string if no value is present.
 // The ok result indicates whether value was found in the metadata.
-func manifestMetadataLoad(
-	ctx context.Context,
-	manifest manifest.Interface,
-	path, metadataKey string,
-) (string, bool) {
+func manifestMetadataLoad(ctx context.Context, manifest manifest.Interface, path, metadataKey string) (string, bool) {
 	me, err := manifest.Lookup(ctx, path)
 	if err != nil {
 		return "", false
@@ -365,22 +285,3 @@ func manifestMetadataLoad(
 }
 
 
-
-func (s *server) bzzPatchHandler(w http.ResponseWriter, r *http.Request) {
-	nameOrHex := mux.Vars(r)["address"]
-	address, err := s.resolveNameOrAddress(nameOrHex)
-	if err != nil {
-		s.logger.Debugf("bzz patch: parse address %s: %v", nameOrHex, err)
-		s.logger.Error("bzz patch: parse address")
-		jsonhttp.NotFound(w, nil)
-		return
-	}
-	err = s.steward.Reupload(r.Context(), address)
-	if err != nil {
-		s.logger.Debugf("bzz patch: reupload %s: %v", address.String(), err)
-		s.logger.Error("bzz patch: reupload")
-		jsonhttp.InternalServerError(w, nil)
-		return
-	}
-	jsonhttp.OK(w, nil)
-}

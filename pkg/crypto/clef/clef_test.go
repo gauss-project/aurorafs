@@ -15,9 +15,9 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethersphere/bee/pkg/crypto"
-	"github.com/ethersphere/bee/pkg/crypto/clef"
-	"github.com/ethersphere/bee/pkg/crypto/eip712"
+	"github.com/gauss-project/aurorafs/pkg/crypto"
+	"github.com/gauss-project/aurorafs/pkg/crypto/clef"
+	"github.com/gauss-project/aurorafs/pkg/crypto/eip712"
 )
 
 type mockClef struct {

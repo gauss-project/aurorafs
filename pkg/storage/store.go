@@ -1,6 +1,6 @@
 // Copyright 2020 The Swarm Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
+// license that can be found in the LICENSE file.package storage
 
 // Package storage provides implementation contracts and notions
 // used across storage-aware components in Bee.
@@ -12,8 +12,7 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/ethersphere/bee/pkg/swarm"
-	"github.com/syndtr/goleveldb/leveldb"
+	"github.com/gauss-project/aurorafs/pkg/boson"
 )
 
 var (
@@ -35,8 +34,6 @@ func (m ModeGet) String() string {
 		return "Lookup"
 	case ModeGetPin:
 		return "PinLookup"
-	case ModeGetRequestPin:
-		return "RequestPin"
 	default:
 		return "Unknown"
 	}
@@ -52,8 +49,6 @@ const (
 	ModeGetLookup
 	// ModeGetPin: used when a pinned chunk is accessed
 	ModeGetPin
-	// ModeGetRequestPin represents request for retrieval of pinned chunk.
-	ModeGetRequestPin
 )
 
 // ModePut enumerates different Putter modes.
@@ -69,10 +64,6 @@ func (m ModePut) String() string {
 		return "Upload"
 	case ModePutUploadPin:
 		return "UploadPin"
-	case ModePutRequestPin:
-		return "RequestPin"
-	case ModePutRequestCache:
-		return "RequestCache"
 	default:
 		return "Unknown"
 	}
@@ -90,8 +81,6 @@ const (
 	ModePutUploadPin
 	// ModePutRequestPin: the same as ModePutRequest but also pin the chunk with the put
 	ModePutRequestPin
-	// ModePutRequestCache forces a retrieved chunk to be stored in the cache
-	ModePutRequestCache
 )
 
 // ModeSet enumerates different Setter modes.
@@ -127,8 +116,14 @@ const (
 // Descriptor holds information required for Pull syncing. This struct
 // is provided by subscribing to pull index.
 type Descriptor struct {
-	Address swarm.Address
+	Address boson.Address
 	BinID   uint64
+}
+
+// Pinner holds the required information for pinning
+type Pinner struct {
+	Address    boson.Address
+	PinCounter uint64
 }
 
 func (d *Descriptor) String() string {
@@ -141,47 +136,45 @@ func (d *Descriptor) String() string {
 type Storer interface {
 	Getter
 	Putter
-	GetMulti(ctx context.Context, mode ModeGet, addrs ...swarm.Address) (ch []swarm.Chunk, err error)
+	GetMulti(ctx context.Context, mode ModeGet, addrs ...boson.Address) (ch []boson.Chunk, err error)
 	Hasser
 	Setter
-	LastPullSubscriptionBinID(bin uint8) (id uint64, err error)
-	PullSubscriber
-	SubscribePush(ctx context.Context) (c <-chan swarm.Chunk, stop func())
+	//LastPullSubscriptionBinID(bin uint8) (id uint64, err error)
+	//PullSubscriber
+	//SubscribePush(ctx context.Context) (c <-chan boson.Chunk, stop func())
+	//PinnedChunks(ctx context.Context, offset, limit int) (pinnedChunks []*Pinner, err error)
+	//PinCounter(address boson.Address) (uint64, error)
 	io.Closer
 }
 
 type Putter interface {
-	Put(ctx context.Context, mode ModePut, chs ...swarm.Chunk) (exist []bool, err error)
+	Put(ctx context.Context, mode ModePut, chs ...boson.Chunk) (exist []bool, err error)
 }
 
 type Getter interface {
-	Get(ctx context.Context, mode ModeGet, addr swarm.Address) (ch swarm.Chunk, err error)
+	Get(ctx context.Context, mode ModeGet, addr boson.Address) (ch boson.Chunk, err error)
 }
 
 type Setter interface {
-	Set(ctx context.Context, mode ModeSet, addrs ...swarm.Address) (err error)
+	Set(ctx context.Context, mode ModeSet, addrs ...boson.Address) (err error)
 }
 
 type Hasser interface {
-	Has(ctx context.Context, addr swarm.Address) (yes bool, err error)
-	HasMulti(ctx context.Context, addrs ...swarm.Address) (yes []bool, err error)
+	Has(ctx context.Context, addr boson.Address) (yes bool, err error)
+	HasMulti(ctx context.Context, addrs ...boson.Address) (yes []bool, err error)
 }
 
-type PullSubscriber interface {
-	SubscribePull(ctx context.Context, bin uint8, since, until uint64) (c <-chan Descriptor, closed <-chan struct{}, stop func())
-}
+//type PullSubscriber interface {
+//	SubscribePull(ctx context.Context, bin uint8, since, until uint64) (c <-chan Descriptor, closed <-chan struct{}, stop func())
+//}
 
 // StateStorer defines methods required to get, set, delete values for different keys
 // and close the underlying resources.
 type StateStorer interface {
 	Get(key string, i interface{}) (err error)
 	Put(key string, i interface{}) (err error)
-	GetLimited(key string, i interface{}) (err error)
-	PutLimited(key string, i interface{}) (err error)
 	Delete(key string) (err error)
 	Iterate(prefix string, iterFunc StateIterFunc) (err error)
-	// DB returns the underlying DB storage.
-	DB() *leveldb.DB
 	io.Closer
 }
 

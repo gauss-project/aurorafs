@@ -10,17 +10,17 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/ethersphere/bee/pkg/file"
-	"github.com/ethersphere/bee/pkg/file/splitter/internal"
-	"github.com/ethersphere/bee/pkg/storage"
-	"github.com/ethersphere/bee/pkg/swarm"
+	"github.com/gauss-project/aurorafs/pkg/file"
+	"github.com/gauss-project/aurorafs/pkg/file/splitter/internal"
+	"github.com/gauss-project/aurorafs/pkg/storage"
+	"github.com/gauss-project/aurorafs/pkg/boson"
 )
 
 type putWrapper struct {
-	putter func(context.Context, swarm.Chunk) ([]bool, error)
+	putter func(context.Context, boson.Chunk) ([]bool, error)
 }
 
-func (p putWrapper) Put(ctx context.Context, ch swarm.Chunk) ([]bool, error) {
+func (p putWrapper) Put(ctx context.Context, ch boson.Chunk) ([]bool, error) {
 	return p.putter(ctx, ch)
 }
 
@@ -33,7 +33,7 @@ type simpleSplitter struct {
 func NewSimpleSplitter(storePutter storage.Putter, mode storage.ModePut) file.Splitter {
 	return &simpleSplitter{
 		putter: putWrapper{
-			putter: func(ctx context.Context, ch swarm.Chunk) ([]bool, error) {
+			putter: func(ctx context.Context, ch boson.Chunk) ([]bool, error) {
 				return storePutter.Put(ctx, mode, ch)
 			},
 		},
@@ -46,10 +46,10 @@ func NewSimpleSplitter(storePutter storage.Putter, mode storage.ModePut) file.Sp
 // multiple levels of hashing when building the file hash tree.
 //
 // It returns the Swarmhash of the data.
-func (s *simpleSplitter) Split(ctx context.Context, r io.ReadCloser, dataLength int64, toEncrypt bool) (addr swarm.Address, err error) {
+func (s *simpleSplitter) Split(ctx context.Context, r io.ReadCloser, dataLength int64, toEncrypt bool) (addr boson.Address, err error) {
 	j := internal.NewSimpleSplitterJob(ctx, s.putter, dataLength, toEncrypt)
 	var total int64
-	data := make([]byte, swarm.ChunkSize)
+	data := make([]byte, boson.ChunkSize)
 	var eof bool
 	for !eof {
 		c, err := r.Read(data)
@@ -57,24 +57,24 @@ func (s *simpleSplitter) Split(ctx context.Context, r io.ReadCloser, dataLength 
 		if err != nil {
 			if err == io.EOF {
 				if total < dataLength {
-					return swarm.ZeroAddress, fmt.Errorf("splitter only received %d bytes of data, expected %d bytes", total+int64(c), dataLength)
+					return boson.ZeroAddress, fmt.Errorf("splitter only received %d bytes of data, expected %d bytes", total+int64(c), dataLength)
 				}
 				eof = true
 				continue
 			} else {
-				return swarm.ZeroAddress, err
+				return boson.ZeroAddress, err
 			}
 		}
 		cc, err := j.Write(data[:c])
 		if err != nil {
-			return swarm.ZeroAddress, err
+			return boson.ZeroAddress, err
 		}
 		if cc < c {
-			return swarm.ZeroAddress, fmt.Errorf("write count to file hasher component %d does not match read count %d", cc, c)
+			return boson.ZeroAddress, fmt.Errorf("write count to file hasher component %d does not match read count %d", cc, c)
 		}
 	}
 
 	sum := j.Sum(nil)
-	newAddress := swarm.NewAddress(sum)
+	newAddress := boson.NewAddress(sum)
 	return newAddress, nil
 }

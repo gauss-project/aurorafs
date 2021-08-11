@@ -11,10 +11,10 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/ethersphere/bee/pkg/debugapi"
-	"github.com/ethersphere/bee/pkg/jsonhttp"
-	"github.com/ethersphere/bee/pkg/jsonhttp/jsonhttptest"
-	"github.com/ethersphere/bee/pkg/p2p/mock"
+	"github.com/gauss-project/aurorafs/pkg/debugapi"
+	"github.com/gauss-project/aurorafs/pkg/jsonhttp"
+	"github.com/gauss-project/aurorafs/pkg/jsonhttp/jsonhttptest"
+	"github.com/gauss-project/aurorafs/pkg/p2p/mock"
 )
 
 func TestGetWelcomeMessage(t *testing.T) {

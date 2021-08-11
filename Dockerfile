@@ -8,7 +8,7 @@ COPY . ./
 
 RUN make binary
 
-FROM debian:10.9-slim
+FROM debian:10.2-slim
 
 ENV DEBIAN_FRONTEND noninteractive
 
@@ -16,11 +16,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         ca-certificates; \
     apt-get clean; \
     rm -rf /var/lib/apt/lists/*; \
-    groupadd -r bee --gid 999; \
-    useradd -r -g bee --uid 999 --no-log-init -m bee;
+    groupadd -r aurorafs --gid 999; \
+    useradd -r -g aurorafs --uid 999 --no-log-init -m aurorafs;
 
 # make sure mounted volumes have correct permissions
-RUN mkdir -p /home/bee/.bee && chown 999:999 /home/bee/.bee
+RUN mkdir -p /home/aurorafs/.aurorafs && chown 999:999 /home/aurorafs/.aurorafs
 
 COPY --from=build /src/dist/bee /usr/local/bin/bee
 

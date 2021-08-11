@@ -22,7 +22,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/ethersphere/bee/pkg/storage"
+	"github.com/gauss-project/aurorafs/pkg/storage"
 )
 
 // TestModeGetMulti stores chunks and validates that GetMulti
@@ -53,7 +53,7 @@ func TestModeGetMulti(t *testing.T) {
 					if err != nil {
 						t.Fatal(err)
 					}
-					chunks[i] = ch
+					chunks[i] = ch.WithPinCounter(1)
 				}
 			}
 
