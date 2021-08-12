@@ -30,6 +30,9 @@ type joiner struct {
 	dataChunks       [][]byte
 	isSaveDataChunks bool
 
+	intermediateChunks map[string][]byte
+	isSaveIntChunks bool
+
 	ctx    context.Context
 	getter storage.Getter
 }
@@ -66,6 +69,11 @@ func (j *joiner) GetRootData() []byte {
 func (j *joiner) SetSaveDataChunks() {
 	j.dataChunks = make([][]byte, 0)
 	j.isSaveDataChunks = true
+}
+
+func (j *joiner) SetSaveIntChunks(data map[string][]byte) {
+	j.intermediateChunks = data
+	j.isSaveIntChunks = true
 }
 
 func (j *joiner) GetDataChunks() [][]byte {
@@ -240,6 +248,9 @@ func (j *joiner) IterateChunkAddresses(fn boson.AddressIterFunc) error {
 func (j *joiner) processChunkAddresses(ctx context.Context, fn boson.AddressIterFunc, data []byte, subTrieSize int64) error {
 	// we are at a leaf data chunk
 	if subTrieSize <= int64(len(data)) {
+		if j.isSaveDataChunks {
+			j.dataChunks = append(j.dataChunks, j.addr.Bytes())
+		}
 		return nil
 	}
 
@@ -262,7 +273,7 @@ func (j *joiner) processChunkAddresses(ctx context.Context, fn boson.AddressIter
 		}
 
 		sec := subtrieSection(data, cursor, j.refLength, subTrieSize)
-		if sec <= 4096 {
+		if sec <= boson.BigChunkSize {
 			if j.isSaveDataChunks {
 				j.dataChunks = append(j.dataChunks, address.Bytes())
 			}
@@ -282,6 +293,10 @@ func (j *joiner) processChunkAddresses(ctx context.Context, fn boson.AddressIter
 
 				chunkData := ch.Data()[8:]
 				subtrieSpan := int64(chunkToSpan(ch.Data()))
+
+				if j.isSaveIntChunks && subtrieSpan > int64(len(chunkData)) {
+					j.intermediateChunks[address.String()] = ch.Data()
+				}
 
 				return j.processChunkAddresses(ectx, fn, chunkData, subtrieSpan)
 			})

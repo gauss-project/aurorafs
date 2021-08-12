@@ -30,6 +30,9 @@ type Joiner interface {
 	GetDataChunks() [][]byte
 	// SetSaveDataChunks
 	SetSaveDataChunks()
+
+	// SetSaveIntChunks
+	SetSaveIntChunks(data map[string][]byte)
 }
 
 // Splitter starts a new file splitting job.

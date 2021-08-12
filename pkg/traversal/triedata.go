@@ -3,6 +3,7 @@ package traversal
 import (
 	"bytes"
 	"context"
+	"encoding/binary"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -90,17 +91,30 @@ func (s *traversalService) getDataChunks(
 	return
 }
 
+func dataWithSpan(data []byte, size uint64) []byte {
+	spanData := make([]byte, len(data)+8)
+	if size == 0 {
+		size = uint64(len(data))
+	}
+	binary.LittleEndian.PutUint64(spanData[:8], size)
+	copy(spanData[8:], data)
+	return spanData
+}
+
 func (s *traversalService) getChunkBytes(
 	ctx context.Context,
 	reference boson.Address,
 	trieData map[string][]byte,
 ) error {
-	j, _, err := joiner.New(ctx, s.storer, reference)
+	j, span, err := joiner.New(ctx, s.storer, reference)
 	if err != nil {
 		return fmt.Errorf("traversal: joiner: %s: %w", reference, err)
 	}
 
-	trieData[reference.String()] = j.GetRootData()
+	trieData[reference.String()] = dataWithSpan(j.GetRootData(), uint64(span))
+
+	j.SetSaveIntChunks(trieData)
+	j.IterateChunkAddresses(func(addr boson.Address) error {return nil})
 
 	return nil
 }
@@ -168,7 +182,6 @@ func (s *traversalService) getChunkAsFile(
 	}
 
 	maybeIsFile := entry.CanUnmarshal(span)
-
 	if maybeIsFile {
 		buf := bytes.NewBuffer(nil)
 		_, err = file.JoinReadAll(ctx, j, buf)
@@ -177,7 +190,8 @@ func (s *traversalService) getChunkAsFile(
 			return
 		}
 
-		trieData[reference.String()] = buf.Bytes()
+		// ref hash -> intermediate chunk data
+		trieData[reference.String()] = dataWithSpan(buf.Bytes(), uint64(span))
 
 		e = &entry.Entry{}
 		err = e.UnmarshalBinary(buf.Bytes())

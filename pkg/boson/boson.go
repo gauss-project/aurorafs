@@ -30,6 +30,7 @@ const (
 	ExtendedPO        uint8 = MaxPO + 5
 	MaxBins                 = MaxPO + 1
 	ChunkWithSpanSize       = ChunkSize + SpanSize
+	BigChunkWithSpanSize    = BigChunkSize + SpanSize
 )
 
 var (
