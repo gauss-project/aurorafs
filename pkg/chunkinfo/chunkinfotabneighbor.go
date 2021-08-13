@@ -1,68 +1,55 @@
 package chunkinfo
 
 import (
-	proto "github.com/gogo/protobuf/proto"
+	"github.com/gauss-project/aurorafs/pkg/boson"
+	"github.com/gauss-project/aurorafs/pkg/chunkinfo/pb"
 	"sync"
 )
 
 // chunkInfoTabNeighbor
 type chunkInfoTabNeighbor struct {
 	sync.RWMutex
-	// rootCid:cids or cid:nodes
-	presence map[string][]string
-}
-
-// chunkInfoResp
-type chunkInfoResp struct {
-	rootCid  string
-	presence map[string][]string
-}
-
-func (resp *chunkInfoResp) Reset() {
-	*resp = chunkInfoResp{}
-}
-
-func (resp *chunkInfoResp) String() string {
-	return proto.CompactTextString(resp)
-}
-
-func (*chunkInfoResp) ProtoMessage() {
+	// rootCid:cids or cid:overlay
+	presence map[string][][]byte
 }
 
 // updateNeighborChunkInfo
-func (cn *chunkInfoTabNeighbor) updateNeighborChunkInfo(rootCid string, cid string, node string) {
+func (cn *chunkInfoTabNeighbor) updateNeighborChunkInfo(rootCid, cid boson.Address, overlay boson.Address) {
 	cn.Lock()
 	defer cn.Unlock()
 	// todo levelDB
-	_, ok := cn.presence[rootCid]
+	rc := rootCid.ByteString()
+	_, ok := cn.presence[rc]
 	if !ok {
-		cn.presence[rootCid] = make([]string, 0, 1)
+		cn.presence[rc] = make([][]byte, 0, 1)
 	}
-	key := rootCid + "_" + cid
+	key := rc + "_" + cid.ByteString()
 	_, pok := cn.presence[key]
 	if !pok {
-		cn.presence[key] = make([]string, 0, 1)
-		cn.presence[rootCid] = append(cn.presence[rootCid], cid)
+		cn.presence[key] = make([][]byte, 0, 1)
+		cn.presence[rc] = append(cn.presence[rc], cid.Bytes())
 	}
-	cn.presence[key] = append(cn.presence[key], node)
+	cn.presence[key] = append(cn.presence[key], overlay.Bytes())
 }
 
 // getNeighborChunkInfo
-func (cn *chunkInfoTabNeighbor) getNeighborChunkInfo(rootCid string) map[string][]string {
+func (cn *chunkInfoTabNeighbor) getNeighborChunkInfo(rootCid boson.Address) map[string]*pb.Overlays {
 	cn.RLock()
 	defer cn.RUnlock()
-	res := make(map[string][]string)
-	cids := cn.presence[rootCid]
+	res := make(map[string]*pb.Overlays)
+	rc := rootCid.ByteString()
+	cids := cn.presence[rc]
 	for _, cid := range cids {
-		key := rootCid + "_" + cid
+		c := string(cid)
+		key := rc + "_" + c
 		// todo levelDB
-		nodes := cn.presence[key]
-		res[cid] = nodes
+		overlays := cn.presence[key]
+		res[c] = &pb.Overlays{V: overlays}
 	}
 	return res
 }
 
 // createChunkInfoResp
-func (cn *chunkInfoTabNeighbor) createChunkInfoResp(rootCid string, ctn map[string][]string) chunkInfoResp {
-	return chunkInfoResp{rootCid: rootCid, presence: ctn}
+func (cn *chunkInfoTabNeighbor) createChunkInfoResp(rootCid boson.Address, ctn map[string]*pb.Overlays) pb.ChunkInfoResp {
+	return pb.ChunkInfoResp{RootCid: rootCid.Bytes(), Presence: ctn}
 }

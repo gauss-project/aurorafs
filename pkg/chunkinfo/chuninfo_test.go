@@ -1,54 +1,32 @@
 package chunkinfo
 
 import (
+	"context"
 	"fmt"
+	"github.com/gauss-project/aurorafs/pkg/boson"
+	"github.com/gauss-project/aurorafs/pkg/logging"
+	"github.com/gauss-project/aurorafs/pkg/p2p/streamtest"
+	"io/ioutil"
 	"testing"
-	"time"
 )
 
 func TestChunkPyramid(t *testing.T) {
-	ci := New(nil, nil, nil)
-	// mock pyramid req
-	ci.FindChunkInfo(nil, "1", []string{"a", "b"})
-	ci.CancelFindChunkInfo("1")
-	// mock pyramid resp
-	go func() {
-		res := make(map[string][]string)
-		res["4"] = []string{"c", "d", "d"}
-		res["3"] = []string{"e", "d"}
-		py := make(map[string]map[string]uint)
-		s := make(map[string]uint)
-		s1 := make(map[string]uint)
-		s["2"] = 0
-		s["3"] = 1
-		s1["4"] = 0
-		py["1"] = s
-		py["2"] = s1
-		resp := ci.ct.createChunkPyramidResp("1", py, res)
-		ci.onChunkPyramidResp(nil, "a", resp)
-	}()
-	time.Sleep(5 * time.Second)
-	q := ci.queues["1"]
-	if q.len(UnPull) != 3 {
-		t.Fatal()
-	}
-	pyramid := ci.GetChunkPyramid("1")
-	if pyramid == nil {
-		t.Fatal()
-	}
-	nodes := ci.GetChunkInfo("1", "4")
-	for _, n := range nodes {
-		fmt.Printf("%s \n", n)
-	}
-	if len(nodes) != 2 {
-		t.Fatal()
-	}
-}
+	logger := logging.New(ioutil.Discard, 0)
 
-func TestChunkInfo(t *testing.T) {
-	ci := New(nil, nil, nil)
-	// handle chunkinfo req
-	ci.OnChunkTransferred("2", "1", "c")
-	req := ci.cd.createChunkInfoReq("1")
-	ci.onChunkInfoReq(nil, "a", req)
+	server := New(nil, logger)
+	addr := boson.MustParseHexAddress("126140bb0a33d62c4efb0523db2c26be849fcf458504618de785e2a219bad374")
+	recorder := streamtest.New(
+		streamtest.WithProtocols(server.Protocol()),
+	)
+	rootCid := boson.NewAddress([]byte("rootCid"))
+	cid := boson.NewAddress([]byte("cid"))
+	server.OnChunkTransferred(cid, rootCid, addr)
+	client := New(recorder, logger)
+	client.FindChunkInfo(context.Background(), nil, rootCid, []boson.Address{addr})
+	for s := range server.cp.pyramid {
+		fmt.Printf(s)
+	}
+	for s := range client.cp.pyramid {
+		fmt.Printf(s)
+	}
 }

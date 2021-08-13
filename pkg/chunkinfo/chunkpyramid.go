@@ -1,7 +1,9 @@
 package chunkinfo
 
 import (
-	proto "github.com/gogo/protobuf/proto"
+	"context"
+	"github.com/gauss-project/aurorafs/pkg/boson"
+	"github.com/gauss-project/aurorafs/pkg/chunkinfo/pb"
 	"sync"
 	"time"
 )
@@ -9,55 +11,14 @@ import (
 // chunkPyramid Pyramid
 type chunkPyramid struct {
 	sync.RWMutex
-	// pCid:cid:order
-	pyramid map[string]map[string]uint
+	// rootCid:cid
+	pyramid map[string][][]byte
 }
-
-// chunkPyramidResp
-type chunkPyramidResp struct {
-	rootCid string
-	pyramid []chunkPyramidChildResp
-}
-
-func (resp *chunkPyramidResp) Reset() {
-	*resp = chunkPyramidResp{}
-}
-
-func (resp *chunkPyramidResp) String() string {
-	return proto.CompactTextString(resp)
-}
-
-func (*chunkPyramidResp) ProtoMessage() {
-}
-
-// chunkPyramidChildResp
-type chunkPyramidChildResp struct {
-	cid   string
-	pCid  string
-	order uint
-	nodes []string
-}
-
-// ChunkPyramidReq
-type chunkPyramidReq struct {
-	RootCid    string `protobuf:"bytes,1,opt,name=RootCid,proto3" json:"RootCid,omitempty"`
-	CreateTime int64  `protobuf:"bytes,1,opt,name=CreateTime,proto3" json:"CreateTime,omitempty"`
-}
-
-func (req *chunkPyramidReq) Reset() {
-	*req = chunkPyramidReq{}
-}
-
-func (req *chunkPyramidReq) String() string {
-	return proto.CompactTextString(req)
-}
-
-func (*chunkPyramidReq) ProtoMessage() {}
 
 // todo validate pyramid
 
 // updateChunkPyramid
-func (cp *chunkPyramid) updateChunkPyramid(pyramids map[string]map[string]uint) {
+func (cp *chunkPyramid) updateChunkPyramid(pyramids map[string][][]byte) {
 	cp.Lock()
 	defer cp.Unlock()
 	for key, pyramid := range pyramids {
@@ -65,57 +26,28 @@ func (cp *chunkPyramid) updateChunkPyramid(pyramids map[string]map[string]uint) 
 	}
 }
 
-// getChunkPyramid
-func (cp *chunkPyramid) getChunkPyramid(rootCid string) map[string]map[string]uint {
-	cp.RLock()
-	defer cp.RUnlock()
-	ps := make(map[string]map[string]uint)
-	cp.getChunkPyramidByPCid(rootCid, ps)
-	return ps
-}
-
-// getChunkPyramidByPCid
-func (cp *chunkPyramid) getChunkPyramidByPCid(pCid string, pyramids map[string]map[string]uint) map[string]map[string]uint {
-	cids, ok := cp.pyramid[pCid]
-	if !ok {
-		return pyramids
-	}
-	pyramids[pCid] = cids
-	for cid := range cids {
-		return cp.getChunkPyramidByPCid(cid, pyramids)
-	}
-	return pyramids
-}
-
 // createChunkPyramidReq
-func (cp *chunkPyramid) createChunkPyramidReq(rootCid string) chunkPyramidReq {
-	cpReq := chunkPyramidReq{RootCid: rootCid, CreateTime: time.Now().Unix()}
+func (cp *chunkPyramid) createChunkPyramidReq(rootCid boson.Address) pb.ChunkPyramidReq {
+	cpReq := pb.ChunkPyramidReq{RootCid: rootCid.Bytes(), CreateTime: time.Now().Unix()}
 	return cpReq
 }
 
 // getChunkPyramid
-func (cn *chunkInfoTabNeighbor) getChunkPyramid(rootCid string) map[string]map[string]uint {
+func (cn *chunkInfoTabNeighbor) getChunkPyramid(rootCid boson.Address) map[string][]byte {
 	// todo getChunkPyramid
-	return make(map[string]map[string]uint)
+	return make(map[string][]byte)
 }
 
 // createChunkPyramidResp
-func (cn *chunkInfoTabNeighbor) createChunkPyramidResp(rootCid string, cp map[string]map[string]uint, ctn map[string][]string) chunkPyramidResp {
-	resp := make([]chunkPyramidChildResp, 0)
-	for k, v := range cp {
-		for pk, pv := range v {
-			cpr := chunkPyramidChildResp{pk, k, pv, ctn[pk]}
-			resp = append(resp, cpr)
-		}
-	}
-	return chunkPyramidResp{rootCid: rootCid, pyramid: resp}
+func (cn *chunkInfoTabNeighbor) createChunkPyramidResp(rootCid boson.Address, cp map[string][]byte, ctn map[string]*pb.Overlays) pb.ChunkPyramidResp {
+	return pb.ChunkPyramidResp{RootCid: rootCid.Bytes(), Pyramid: cp, Ctn: ctn}
 }
 
 // doFindChunkPyramid
-func (ci *ChunkInfo) doFindChunkPyramid(authInfo []byte, rootCid string, nodes []string) {
+func (ci *ChunkInfo) doFindChunkPyramid(ctx context.Context, authInfo []byte, rootCid boson.Address, overlays []boson.Address) {
 	cpReq := ci.cp.createChunkPyramidReq(rootCid)
-	for _, node := range nodes {
-		ci.tt.updateTimeOutTrigger(rootCid, node)
-		ci.sendDataToNode(cpReq, node)
+	for _, overlay := range overlays {
+		ci.tt.updateTimeOutTrigger(rootCid.Bytes(), overlay.Bytes())
+		ci.sendData(ctx, overlay, streamPyramidReqName, cpReq)
 	}
 }

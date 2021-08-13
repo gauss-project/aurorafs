@@ -1,6 +1,9 @@
 package chunkinfo
 
-import "sync"
+import (
+	"github.com/gauss-project/aurorafs/pkg/boson"
+	"sync"
+)
 
 // pendingFinderInfo
 type pendingFinderInfo struct {
@@ -10,26 +13,23 @@ type pendingFinderInfo struct {
 }
 
 // updatePendingFinder
-func (pfi *pendingFinderInfo) updatePendingFinder(rootCid string) {
+func (pfi *pendingFinderInfo) updatePendingFinder(rootCid boson.Address) {
 	pfi.Lock()
 	defer pfi.Unlock()
-	pfi.finder[rootCid] = struct{}{}
+	pfi.finder[rootCid.ByteString()] = struct{}{}
 }
 
 // cancelPendingFinder
-func (pfi *pendingFinderInfo) cancelPendingFinder(rootCid string) {
+func (pfi *pendingFinderInfo) cancelPendingFinder(rootCid boson.Address) {
 	pfi.Lock()
 	defer pfi.Unlock()
-	if len(rootCid) == 0 {
-		return
-	}
-	delete(pfi.finder, rootCid)
+	delete(pfi.finder, rootCid.ByteString())
 }
 
 // getPendingFinder
-func (pfi *pendingFinderInfo) getPendingFinder(rootCid string) bool {
+func (pfi *pendingFinderInfo) getPendingFinder(rootCid boson.Address) bool {
 	pfi.RLock()
 	defer pfi.RUnlock()
-	_, ok := pfi.finder[rootCid]
+	_, ok := pfi.finder[rootCid.ByteString()]
 	return ok
 }

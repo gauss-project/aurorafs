@@ -1,6 +1,11 @@
 package chunkinfo
 
-import "sync"
+import (
+	"bytes"
+	"context"
+	"github.com/gauss-project/aurorafs/pkg/boson"
+	"sync"
+)
 
 type Pull = uint32
 
@@ -19,17 +24,17 @@ const (
 // queue
 type queue struct {
 	sync.RWMutex
-	UnPull  []*string
-	Pulling []*string
-	Pulled  []*string
+	UnPull  []*[]byte
+	Pulling []*[]byte
+	Pulled  []*[]byte
 }
 
 // newQueue
 func (ci *ChunkInfo) newQueue(rootCid string) {
 	q := &queue{
-		UnPull:  make([]*string, 0, PullerMax),
-		Pulling: make([]*string, 0, PullingMax),
-		Pulled:  make([]*string, 0, PullMax),
+		UnPull:  make([]*[]byte, 0, PullerMax),
+		Pulling: make([]*[]byte, 0, PullingMax),
+		Pulled:  make([]*[]byte, 0, PullMax),
 	}
 	ci.queues[rootCid] = q
 }
@@ -43,7 +48,7 @@ func (q *queue) len(pull Pull) int {
 }
 
 // peek
-func (q *queue) peek(pull Pull) *string {
+func (q *queue) peek(pull Pull) *[]byte {
 	q.RLock()
 	defer q.RLock()
 	qu := q.getPull(pull)
@@ -51,7 +56,7 @@ func (q *queue) peek(pull Pull) *string {
 }
 
 // pop
-func (q *queue) pop(pull Pull) *string {
+func (q *queue) pop(pull Pull) *[]byte {
 	q.Lock()
 	defer q.Unlock()
 	qu := q.getPull(pull)
@@ -62,12 +67,13 @@ func (q *queue) pop(pull Pull) *string {
 }
 
 // popNode
-func (q *queue) popNode(pull Pull, node string) {
+func (q *queue) popNode(pull Pull, overlay []byte) {
 	q.Lock()
 	defer q.Unlock()
 	qu := q.getPull(pull)
 	for i, n := range qu {
-		if *n == node {
+		f := *n
+		if bytes.Equal(f, overlay) {
 			qu = append(qu[:i], qu[i+1:]...)
 		}
 	}
@@ -75,16 +81,16 @@ func (q *queue) popNode(pull Pull, node string) {
 }
 
 // push
-func (q *queue) push(pull Pull, node string) {
+func (q *queue) push(pull Pull, overlay []byte) {
 	q.Lock()
 	defer q.Unlock()
 	qu := q.getPull(pull)
-	qu = append(qu, &node)
+	qu = append(qu, &overlay)
 	q.updatePull(pull, qu)
 }
 
 // getPull
-func (q *queue) getPull(pull Pull) []*string {
+func (q *queue) getPull(pull Pull) []*[]byte {
 	switch pull {
 	case UnPull:
 		return q.UnPull
@@ -93,11 +99,11 @@ func (q *queue) getPull(pull Pull) []*string {
 	case Pulled:
 		return q.Pulled
 	}
-	return make([]*string, 0)
+	return make([]*[]byte, 0)
 }
 
 // updatePull
-func (q *queue) updatePull(pull Pull, queue []*string) {
+func (q *queue) updatePull(pull Pull, queue []*[]byte) {
 	switch pull {
 	case UnPull:
 		q.UnPull = queue
@@ -114,12 +120,13 @@ func (ci *ChunkInfo) getQueue(rootCid string) *queue {
 }
 
 // isExists
-func (q *queue) isExists(pull Pull, node string) bool {
+func (q *queue) isExists(pull Pull, overlay []byte) bool {
 	q.RLock()
 	defer q.RUnlock()
 	pullNodes := q.getPull(pull)
 	for _, pn := range pullNodes {
-		if *pn == node {
+		f := *pn
+		if bytes.Equal(f, overlay) {
 			return true
 		}
 	}
@@ -127,8 +134,8 @@ func (q *queue) isExists(pull Pull, node string) bool {
 }
 
 // queueProcess
-func (ci *ChunkInfo) queueProcess(rootCid string) {
-	q := ci.getQueue(rootCid)
+func (ci *ChunkInfo) queueProcess(ctx context.Context, rootCid boson.Address) {
+	q := ci.getQueue(rootCid.ByteString())
 	// pulled + pulling >= pullMax
 	if q.len(Pulled)+q.len(Pulling) >= PullMax {
 		return
@@ -147,16 +154,16 @@ func (ci *ChunkInfo) queueProcess(rootCid string) {
 	for i := 0; i < n; i++ {
 		unNode := q.pop(UnPull)
 		q.push(Pulling, *unNode)
-		ci.tt.updateTimeOutTrigger(rootCid, *unNode)
+		ci.tt.updateTimeOutTrigger(rootCid.Bytes(), *unNode)
 		ciReq := ci.cd.createChunkInfoReq(rootCid)
-		ci.sendDataToNode(ciReq, *unNode)
+		ci.sendData(ctx, boson.NewAddress(*unNode), streamChunkInfoReqName, ciReq)
 	}
 }
 
 // updateQueue
-func (ci *ChunkInfo) updateQueue(authInfo []byte, rootCid, node string, nodes []string) {
-	q := ci.getQueue(rootCid)
-	for _, n := range nodes {
+func (ci *ChunkInfo) updateQueue(ctx context.Context, authInfo []byte, rootCid, overlay boson.Address, overlays [][]byte) {
+	q := ci.getQueue(rootCid.ByteString())
+	for _, n := range overlays {
 		if q.len(UnPull) >= PullerMax {
 			return
 		}
@@ -165,7 +172,7 @@ func (ci *ChunkInfo) updateQueue(authInfo []byte, rootCid, node string, nodes []
 		}
 		q.push(UnPull, n)
 	}
-	q.popNode(Pulling, node)
-	q.push(Pulled, node)
-	ci.doFindChunkInfo(authInfo, rootCid)
+	q.popNode(Pulling, overlay.Bytes())
+	q.push(Pulled, overlay.Bytes())
+	ci.doFindChunkInfo(ctx, authInfo, rootCid)
 }

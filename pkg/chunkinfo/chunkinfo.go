@@ -1,29 +1,27 @@
 package chunkinfo
 
 import (
+	"context"
+	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/logging"
 	"github.com/gauss-project/aurorafs/pkg/p2p"
-	"github.com/gauss-project/aurorafs/pkg/tracing"
 	"time"
 )
 
 type Interface interface {
-	FindChunkInfo(authInfo []byte, rootCid string, nodes []string)
+	FindChunkInfo(ctx context.Context, authInfo []byte, rootCid boson.Address, overlays []boson.Address)
 
-	GetChunkInfo(rootCid string, cid string) []string
+	GetChunkInfo(rootCid boson.Address, cid boson.Address) [][]byte
 
-	GetChunkPyramid(rootCid string) map[string]map[string]uint
+	CancelFindChunkInfo(rootCid boson.Address)
 
-	CancelFindChunkInfo(rootCid string)
-
-	OnChunkTransferred(cid string, rootCid string, node string)
+	OnChunkTransferred(cid boson.Address, rootCid boson.Address, overlays boson.Address)
 }
 
 // ChunkInfo
 type ChunkInfo struct {
 	// store
 	streamer p2p.Streamer
-	tracer   *tracing.Tracer
 	logger   logging.Logger
 	t        *time.Timer
 	tt       *timeoutTrigger
@@ -35,11 +33,11 @@ type ChunkInfo struct {
 }
 
 // New
-func New(streamer p2p.Streamer, logger logging.Logger, tracer *tracing.Tracer) *ChunkInfo {
+func New(streamer p2p.Streamer, logger logging.Logger) *ChunkInfo {
 	// message new
-	cd := &chunkInfoDiscover{presence: make(map[string]map[string][]string)}
-	ct := &chunkInfoTabNeighbor{presence: make(map[string][]string)}
-	cp := &chunkPyramid{pyramid: map[string]map[string]uint{}}
+	cd := &chunkInfoDiscover{presence: make(map[string]map[string][][]byte)}
+	ct := &chunkInfoTabNeighbor{presence: make(map[string][][]byte)}
+	cp := &chunkPyramid{pyramid: make(map[string][][]byte)}
 	cpd := &pendingFinderInfo{finder: make(map[string]struct{})}
 	tt := &timeoutTrigger{trigger: make(map[string]int64)}
 	queues := make(map[string]*queue)
@@ -53,44 +51,38 @@ func New(streamer p2p.Streamer, logger logging.Logger, tracer *tracing.Tracer) *
 		tt:       tt,
 		streamer: streamer,
 		logger:   logger,
-		tracer:   tracer,
 	}
 }
 
 // FindChunkInfo
-func (ci *ChunkInfo) FindChunkInfo(authInfo []byte, rootCid string, nodes []string) {
+func (ci *ChunkInfo) FindChunkInfo(ctx context.Context, authInfo []byte, rootCid boson.Address, overlays []boson.Address) {
 	go ci.triggerTimeOut()
 	ci.cpd.updatePendingFinder(rootCid)
 	if ci.cd.isExists(rootCid) {
-		for _, n := range nodes {
-			ci.queues[rootCid].push(Pulling, n)
+		for _, overlay := range overlays {
+			ci.queues[rootCid.ByteString()].push(Pulling, overlay.Bytes())
 		}
-		ci.doFindChunkInfo(authInfo, rootCid)
+		ci.doFindChunkInfo(ctx, authInfo, rootCid)
 	} else {
-		ci.newQueue(rootCid)
-		for _, n := range nodes {
-			ci.getQueue(rootCid).push(Pulling, n)
+		ci.newQueue(rootCid.ByteString())
+		for _, overlay := range overlays {
+			ci.getQueue(rootCid.ByteString()).push(Pulling, overlay.Bytes())
 		}
-		ci.doFindChunkPyramid(authInfo, rootCid, nodes)
+		ci.doFindChunkPyramid(ctx, authInfo, rootCid, overlays)
 	}
 }
 
 // GetChunkInfo
-func (ci *ChunkInfo) GetChunkInfo(rootCid string, cid string) []string {
+func (ci *ChunkInfo) GetChunkInfo(rootCid boson.Address, cid boson.Address) [][]byte {
 	return ci.cd.getChunkInfo(rootCid, cid)
 }
 
-// GetChunkPyramid
-func (ci *ChunkInfo) GetChunkPyramid(rootCid string) map[string]map[string]uint {
-	return ci.cp.getChunkPyramid(rootCid)
-}
-
 // CancelFindChunkInfo
-func (ci *ChunkInfo) CancelFindChunkInfo(rootCid string) {
+func (ci *ChunkInfo) CancelFindChunkInfo(rootCid boson.Address) {
 	ci.cpd.cancelPendingFinder(rootCid)
 }
 
 // OnChunkTransferred
-func (ci *ChunkInfo) OnChunkTransferred(cid string, rootCid string, node string) {
-	ci.ct.updateNeighborChunkInfo(rootCid, cid, node)
+func (ci *ChunkInfo) OnChunkTransferred(cid, rootCid boson.Address, overlay boson.Address) {
+	ci.ct.updateNeighborChunkInfo(rootCid, cid, overlay)
 }

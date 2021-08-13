@@ -1,7 +1,9 @@
 package chunkinfo
 
 import (
-	proto "github.com/gogo/protobuf/proto"
+	"context"
+	"github.com/gauss-project/aurorafs/pkg/boson"
+	"github.com/gauss-project/aurorafs/pkg/chunkinfo/pb"
 	"sync"
 	"time"
 )
@@ -9,88 +11,71 @@ import (
 // chunkInfoDiscover
 type chunkInfoDiscover struct {
 	sync.RWMutex
-	// rootCid:cid:nodes
-	presence map[string]map[string][]string
-}
-
-// chunkInfoReq
-type chunkInfoReq struct {
-	rootCid    string
-	createTime int64
-}
-
-func (req *chunkInfoReq) Reset() {
-	*req = chunkInfoReq{}
-}
-
-func (req *chunkInfoReq) String() string {
-	return proto.CompactTextString(req)
-}
-
-func (*chunkInfoReq) ProtoMessage() {
+	// rootCid:cid:overlays
+	presence map[string]map[string][][]byte
 }
 
 // isExists
-func (cd *chunkInfoDiscover) isExists(rootCid string) bool {
+func (cd *chunkInfoDiscover) isExists(rootCid boson.Address) bool {
 	cd.RLock()
 	defer cd.RUnlock()
-	_, ok := cd.presence[rootCid]
+	_, ok := cd.presence[rootCid.ByteString()]
 	return ok
 }
 
 // getChunkInfo
-func (cd *chunkInfoDiscover) getChunkInfo(rootCid string, cid string) []string {
+func (cd *chunkInfoDiscover) getChunkInfo(rootCid, cid boson.Address) [][]byte {
 	cd.RLock()
 	defer cd.RUnlock()
-	v, _ := cd.presence[rootCid][cid]
+	v, _ := cd.presence[rootCid.ByteString()][cid.ByteString()]
 	return v
 }
 
 // updateChunkInfos
-func (cd *chunkInfoDiscover) updateChunkInfos(rootCid string, pyramids map[string][]string) {
+func (cd *chunkInfoDiscover) updateChunkInfos(rootCid boson.Address, pyramids map[string]*pb.Overlays) {
 	cd.Lock()
 	defer cd.Unlock()
 	for k, v := range pyramids {
-		cd.updateChunkInfo(rootCid, k, v)
+		cd.updateChunkInfo(rootCid.ByteString(), k, v.V)
 	}
 }
 
 // updateChunkInfo
-func (cd *chunkInfoDiscover) updateChunkInfo(rootCid string, cid string, nodes []string) {
+func (cd *chunkInfoDiscover) updateChunkInfo(rootCid, cid string, overlays [][]byte) {
 	// todo leveDb
-	mn := make(map[string]struct{}, len(nodes))
+	mn := make(map[string]struct{}, len(overlays))
 	// 去重
-	for _, n := range nodes {
-		mn[n] = struct{}{}
+	for _, n := range overlays {
+		mn[string(n)] = struct{}{}
 	}
 	if cd.presence[rootCid] == nil {
-		m := make(map[string][]string)
-		nodes = make([]string, 0, len(mn))
+		m := make(map[string][][]byte)
+		overlays = make([][]byte, 0, len(mn))
 		for n, _ := range mn {
-			nodes = append(nodes, n)
+			overlays = append(overlays, []byte(n))
 		}
-		m[cid] = nodes
+		m[cid] = overlays
 		cd.presence[rootCid] = m
 	} else {
 		for _, n := range cd.presence[rootCid][cid] {
-			_, ok := mn[n]
+			_, ok := mn[string(n)]
 			if ok {
-				delete(mn, n)
+				delete(mn, string(n))
 			}
 		}
 		for k, _ := range mn {
-			cd.presence[rootCid][cid] = append(cd.presence[rootCid][cid], k)
+			cd.presence[rootCid][cid] = append(cd.presence[rootCid][cid], []byte(k))
 		}
 	}
 }
 
 // createChunkInfoReq
-func (cd *chunkInfoDiscover) createChunkInfoReq(rootCid string) chunkInfoReq {
-	ciReq := chunkInfoReq{rootCid: rootCid, createTime: time.Now().Unix()}
+func (cd *chunkInfoDiscover) createChunkInfoReq(rootCid boson.Address) pb.ChunkInfoReq {
+	ciReq := pb.ChunkInfoReq{RootCid: rootCid.Bytes(), CreateTime: time.Now().Unix()}
 	return ciReq
 }
 
 // doFindChunkInfo
-func (ci *ChunkInfo) doFindChunkInfo(authInfo []byte, rootCid string) {
-	ci.queueProcess(rootCid)
+func (ci *ChunkInfo) doFindChunkInfo(ctx context.Context, authInfo []byte, rootCid boson.Address) {
+	ci.queueProcess(ctx, rootCid)
 }
