@@ -50,9 +50,9 @@ func JoinReadAll(ctx context.Context, j Joiner, outFile io.Writer) (int64, error
 	l := j.Size()
 
 	// join, rinse, repeat until done
-	data := make([]byte, boson.ChunkSize)
+	data := make([]byte, boson.BigChunkSize)
 	var total int64
-	for i := int64(0); i < l; i += boson.ChunkSize {
+	for i := int64(0); i < l; i += boson.BigChunkSize {
 		cr, err := j.Read(data)
 		if err != nil {
 			return total, err

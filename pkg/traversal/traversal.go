@@ -14,14 +14,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-
+	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/collection/entry"
 	"github.com/gauss-project/aurorafs/pkg/file"
 	"github.com/gauss-project/aurorafs/pkg/file/joiner"
 	"github.com/gauss-project/aurorafs/pkg/file/loadsave"
 	"github.com/gauss-project/aurorafs/pkg/manifest"
 	"github.com/gauss-project/aurorafs/pkg/storage"
-	"github.com/gauss-project/aurorafs/pkg/boson"
 )
 
 var (
@@ -42,6 +41,10 @@ type Service interface {
 	// TraverseManifestAddresses iterates through each address of a manifest,
 	// as well as each entry found in it.
 	TraverseManifestAddresses(context.Context, boson.Address, boson.AddressIterFunc) error
+
+	GetTrieData(context.Context, boson.Address) (map[string][]byte, error)
+
+	CheckTrieData(context.Context, boson.Address, map[string][]byte) ([][][]byte, error)
 }
 
 type traversalService struct {
