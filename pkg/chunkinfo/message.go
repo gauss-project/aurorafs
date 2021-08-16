@@ -154,7 +154,7 @@ func (ci *ChunkInfo) onChunkInfoResp(ctx context.Context, authInfo []byte, overl
 // onChunkPyramidReq
 func (ci *ChunkInfo) onChunkPyramidReq(ctx context.Context, authInfo []byte, overlay boson.Address, req pb.ChunkPyramidReq) {
 	rootCid := boson.NewAddress(req.RootCid)
-	cp := ci.ct.getChunkPyramid(rootCid)
+	cp, _ := ci.getChunkPyramid(ctx, rootCid)
 	nci := ci.ct.getNeighborChunkInfo(rootCid)
 	resp := ci.ct.createChunkPyramidResp(rootCid, cp, nci)
 	ci.sendData(ctx, overlay, streamPyramidRespName, resp)
@@ -169,8 +169,9 @@ func (ci *ChunkInfo) onChunkPyramidResp(ctx context.Context, authInfo []byte, ov
 func (ci *ChunkInfo) onFindChunkPyramid(ctx context.Context, authInfo []byte, rootCid, overlay boson.Address, pyramid map[string][]byte, cn map[string]*pb.Overlays) {
 	_, ok := ci.cp.pyramid[rootCid.ByteString()]
 	if !ok {
-		// todo validate pyramid
-		//ci.cp.updateChunkPyramid(pyramids)
+		// validate pyramid
+		v, _ := ci.traversal.CheckTrieData(ctx, rootCid, pyramid)
+		ci.cp.updateChunkPyramid(rootCid, v)
 	}
 	ci.onFindChunkInfo(ctx, authInfo, rootCid, overlay, cn)
 }
@@ -180,9 +181,13 @@ func (ci *ChunkInfo) onFindChunkInfo(ctx context.Context, authInfo []byte, rootC
 	ci.tt.removeTimeOutTrigger(rootCid, overlay)
 	overlays := make([][]byte, 0)
 	for _, n := range chunkInfo {
-		// todo validate rootCid:cid
+		//  validate rootCid:cid
 		s := n.V
-		overlays = append(overlays, s...)
+		for _, v := range s {
+			if ci.cp.checkPyramid(rootCid, v) {
+				overlays = append(overlays, v)
+			}
+		}
 	}
 	ci.cd.updateChunkInfos(rootCid, chunkInfo)
 	ci.updateQueue(ctx, authInfo, rootCid, overlay, overlays)

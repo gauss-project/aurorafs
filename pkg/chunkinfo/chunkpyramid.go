@@ -12,18 +12,29 @@ import (
 type chunkPyramid struct {
 	sync.RWMutex
 	// rootCid:cid
-	pyramid map[string][][]byte
+	pyramid map[string]map[string]bool
 }
 
-// todo validate pyramid
+func (cp *chunkPyramid) checkPyramid(rootCid boson.Address, cid []byte) bool {
+	cp.RLock()
+	defer cp.RUnlock()
+	if cp.pyramid[rootCid.ByteString()] != nil {
+		return cp.pyramid[rootCid.ByteString()][string(cid)]
+	}
+	return false
+}
 
 // updateChunkPyramid
-func (cp *chunkPyramid) updateChunkPyramid(pyramids map[string][][]byte) {
+func (cp *chunkPyramid) updateChunkPyramid(rootCid boson.Address, pyramids [][][]byte) {
 	cp.Lock()
 	defer cp.Unlock()
-	for key, pyramid := range pyramids {
-		cp.pyramid[key] = pyramid
+	py := make(map[string]bool)
+	for _, p := range pyramids {
+		for _, x := range p {
+			py[string(x)] = true
+		}
 	}
+	cp.pyramid[rootCid.ByteString()] = py
 }
 
 // createChunkPyramidReq
@@ -33,9 +44,12 @@ func (cp *chunkPyramid) createChunkPyramidReq(rootCid boson.Address) pb.ChunkPyr
 }
 
 // getChunkPyramid
-func (cn *chunkInfoTabNeighbor) getChunkPyramid(rootCid boson.Address) map[string][]byte {
-	// todo getChunkPyramid
-	return make(map[string][]byte)
+func (ci *ChunkInfo) getChunkPyramid(cxt context.Context, rootCid boson.Address) (map[string][]byte, error) {
+	v, err := ci.traversal.GetTrieData(cxt, rootCid)
+	if err != nil {
+		return nil, err
+	}
+	return v, nil
 }
 
 // createChunkPyramidResp

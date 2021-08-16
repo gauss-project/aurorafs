@@ -5,6 +5,7 @@ import (
 	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/logging"
 	"github.com/gauss-project/aurorafs/pkg/p2p"
+	traversal "github.com/gauss-project/aurorafs/pkg/traversal"
 	"time"
 )
 
@@ -21,36 +22,38 @@ type Interface interface {
 // ChunkInfo
 type ChunkInfo struct {
 	// store
-	streamer p2p.Streamer
-	logger   logging.Logger
-	t        *time.Timer
-	tt       *timeoutTrigger
-	queues   map[string]*queue
-	ct       *chunkInfoTabNeighbor
-	cd       *chunkInfoDiscover
-	cp       *chunkPyramid
-	cpd      *pendingFinderInfo
+	traversal traversal.Service
+	streamer  p2p.Streamer
+	logger    logging.Logger
+	t         *time.Timer
+	tt        *timeoutTrigger
+	queues    map[string]*queue
+	ct        *chunkInfoTabNeighbor
+	cd        *chunkInfoDiscover
+	cp        *chunkPyramid
+	cpd       *pendingFinderInfo
 }
 
 // New
-func New(streamer p2p.Streamer, logger logging.Logger) *ChunkInfo {
+func New(streamer p2p.Streamer, logger logging.Logger, traversal traversal.Service) *ChunkInfo {
 	// message new
 	cd := &chunkInfoDiscover{presence: make(map[string]map[string][][]byte)}
 	ct := &chunkInfoTabNeighbor{presence: make(map[string][][]byte)}
-	cp := &chunkPyramid{pyramid: make(map[string][][]byte)}
+	cp := &chunkPyramid{pyramid: make(map[string]map[string]bool)}
 	cpd := &pendingFinderInfo{finder: make(map[string]struct{})}
 	tt := &timeoutTrigger{trigger: make(map[string]int64)}
 	queues := make(map[string]*queue)
 	t := time.NewTimer(Time * time.Second)
 	return &ChunkInfo{ct: ct,
-		cd:       cd,
-		cp:       cp,
-		cpd:      cpd,
-		queues:   queues,
-		t:        t,
-		tt:       tt,
-		streamer: streamer,
-		logger:   logger,
+		cd:        cd,
+		cp:        cp,
+		cpd:       cpd,
+		queues:    queues,
+		t:         t,
+		tt:        tt,
+		streamer:  streamer,
+		logger:    logger,
+		traversal: traversal,
 	}
 }
 
