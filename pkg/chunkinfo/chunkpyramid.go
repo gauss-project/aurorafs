@@ -15,6 +15,10 @@ type chunkPyramid struct {
 	pyramid map[string]map[string]bool
 }
 
+func newChunkPyramid() *chunkPyramid {
+	return &chunkPyramid{pyramid: make(map[string]map[string]bool)}
+}
+
 func (cp *chunkPyramid) checkPyramid(rootCid boson.Address, cid []byte) bool {
 	cp.RLock()
 	defer cp.RUnlock()

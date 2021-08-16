@@ -15,6 +15,10 @@ type chunkInfoDiscover struct {
 	presence map[string]map[string][][]byte
 }
 
+func newChunkInfoDiscover() *chunkInfoDiscover {
+	return &chunkInfoDiscover{presence: make(map[string]map[string][][]byte)}
+}
+
 // isExists
 func (cd *chunkInfoDiscover) isExists(rootCid boson.Address) bool {
 	cd.RLock()
@@ -51,7 +55,7 @@ func (cd *chunkInfoDiscover) updateChunkInfo(rootCid, cid string, overlays [][]b
 	if cd.presence[rootCid] == nil {
 		m := make(map[string][][]byte)
 		overlays = make([][]byte, 0, len(mn))
-		for n, _ := range mn {
+		for n := range mn {
 			overlays = append(overlays, []byte(n))
 		}
 		m[cid] = overlays
@@ -63,7 +67,7 @@ func (cd *chunkInfoDiscover) updateChunkInfo(rootCid, cid string, overlays [][]b
 				delete(mn, string(n))
 			}
 		}
-		for k, _ := range mn {
+		for k := range mn {
 			cd.presence[rootCid][cid] = append(cd.presence[rootCid][cid], []byte(k))
 		}
 	}

@@ -7,7 +7,6 @@ import (
 	"github.com/gauss-project/aurorafs/pkg/chunkinfo/pb"
 	"github.com/gauss-project/aurorafs/pkg/p2p"
 	"github.com/gauss-project/aurorafs/pkg/p2p/protobuf"
-	"io"
 )
 
 const (
@@ -91,7 +90,7 @@ func (ci *ChunkInfo) handlerChunkInfoReq(ctx context.Context, p p2p.Peer, stream
 	if err := r.ReadMsgWithContext(ctx, &req); err != nil {
 		return fmt.Errorf("read chunkinfo req message: %w", err)
 	}
-	ci.logger.Tracef("got chunkinfo req: %q", req)
+	ci.logger.Tracef("got chunk info req: %q", req)
 	ci.onChunkInfoReq(ctx, nil, p.Address, req)
 	return nil
 }
@@ -100,16 +99,11 @@ func (ci *ChunkInfo) handlerChunkInfoResp(ctx context.Context, p p2p.Peer, strea
 	_, r := protobuf.NewWriterAndReader(stream)
 	defer stream.FullClose()
 	var resp pb.ChunkInfoResp
-	for {
-		if err := r.ReadMsgWithContext(ctx, &resp); err != nil {
-			if err == io.EOF {
-				break
-			}
-			return fmt.Errorf("read message: %w", err)
-		}
-		ci.logger.Tracef("got chunkinfo resp: %q", resp)
-		ci.onChunkInfoResp(ctx, nil, p.Address, resp)
+	if err := r.ReadMsgWithContext(ctx, &resp); err != nil {
+		return fmt.Errorf("read message: %w", err)
 	}
+	ci.logger.Tracef("got chunk info resp: %q", resp)
+	ci.onChunkInfoResp(ctx, nil, p.Address, resp)
 	return nil
 }
 
@@ -167,10 +161,15 @@ func (ci *ChunkInfo) onChunkPyramidResp(ctx context.Context, authInfo []byte, ov
 
 // onFindChunkPyramid
 func (ci *ChunkInfo) onFindChunkPyramid(ctx context.Context, authInfo []byte, rootCid, overlay boson.Address, pyramid map[string][]byte, cn map[string]*pb.Overlays) {
+	ci.tt.removeTimeOutTrigger(rootCid, overlay)
 	_, ok := ci.cp.pyramid[rootCid.ByteString()]
 	if !ok {
 		// validate pyramid
 		v, _ := ci.traversal.CheckTrieData(ctx, rootCid, pyramid)
+		if v == nil {
+			ci.logger.Errorf("chunk pyramid: check pyramid error")
+			return
+		}
 		ci.cp.updateChunkPyramid(rootCid, v)
 	}
 	ci.onFindChunkInfo(ctx, authInfo, rootCid, overlay, cn)

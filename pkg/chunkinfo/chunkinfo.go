@@ -36,21 +36,16 @@ type ChunkInfo struct {
 
 // New
 func New(streamer p2p.Streamer, logger logging.Logger, traversal traversal.Service) *ChunkInfo {
-	// message new
-	cd := &chunkInfoDiscover{presence: make(map[string]map[string][][]byte)}
-	ct := &chunkInfoTabNeighbor{presence: make(map[string][][]byte)}
-	cp := &chunkPyramid{pyramid: make(map[string]map[string]bool)}
-	cpd := &pendingFinderInfo{finder: make(map[string]struct{})}
-	tt := &timeoutTrigger{trigger: make(map[string]int64)}
 	queues := make(map[string]*queue)
 	t := time.NewTimer(Time * time.Second)
-	return &ChunkInfo{ct: ct,
-		cd:        cd,
-		cp:        cp,
-		cpd:       cpd,
+	return &ChunkInfo{
+		ct:        newChunkInfoTabNeighbor(),
+		cd:        newChunkInfoDiscover(),
+		cp:        newChunkPyramid(),
+		cpd:       newPendingFinderInfo(),
 		queues:    queues,
 		t:         t,
-		tt:        tt,
+		tt:        newTimeoutTrigger(),
 		streamer:  streamer,
 		logger:    logger,
 		traversal: traversal,

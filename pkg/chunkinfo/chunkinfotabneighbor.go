@@ -13,6 +13,10 @@ type chunkInfoTabNeighbor struct {
 	presence map[string][][]byte
 }
 
+func newChunkInfoTabNeighbor() *chunkInfoTabNeighbor {
+	return &chunkInfoTabNeighbor{presence: make(map[string][][]byte)}
+}
+
 // updateNeighborChunkInfo
 func (cn *chunkInfoTabNeighbor) updateNeighborChunkInfo(rootCid, cid boson.Address, overlay boson.Address) {
 	cn.Lock()

@@ -51,8 +51,6 @@ func TestQueueUpdate(t *testing.T) {
 
 func mockUploadFile(t *testing.T) (boson.Address, traversal.Service) {
 	chunkCount := 8192 + 1
-	//expectedFileHashCount := 3
-	//expectedChunkHashCount := chunkCount
 
 	ctx := context.Background()
 	largeBytesData := generateSampleData(boson.BigChunkSize * chunkCount)

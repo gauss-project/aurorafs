@@ -12,6 +12,10 @@ type pendingFinderInfo struct {
 	finder map[string]struct{}
 }
 
+func newPendingFinderInfo() *pendingFinderInfo {
+	return &pendingFinderInfo{finder: make(map[string]struct{})}
+}
+
 // updatePendingFinder
 func (pfi *pendingFinderInfo) updatePendingFinder(rootCid boson.Address) {
 	pfi.Lock()

@@ -8,7 +8,7 @@ import (
 )
 
 const (
-	TimeOut = 5
+	TimeOut = 1000
 	Time    = 3
 )
 
@@ -17,6 +17,10 @@ type timeoutTrigger struct {
 	sync.RWMutex
 	// rootCid_overlay : Timestamp
 	trigger map[string]int64
+}
+
+func newTimeoutTrigger() *timeoutTrigger {
+	return &timeoutTrigger{trigger: make(map[string]int64)}
 }
 
 // updateTimeOutTrigger
