@@ -58,7 +58,6 @@ func (ci *ChunkInfo) triggerTimeOut() {
 		rootCid, overlay := ci.tt.getTimeOutRootCidAndNode()
 		if rootCid != nil {
 			q := ci.getQueue(string(rootCid))
-			// 超时从正在执行放入到未执行
 			q.popNode(Pulling, overlay)
 			q.push(UnPull, overlay)
 		}

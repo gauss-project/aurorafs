@@ -58,7 +58,7 @@ func (ci *ChunkInfo) FindChunkInfo(ctx context.Context, authInfo []byte, rootCid
 	ci.cpd.updatePendingFinder(rootCid)
 	if ci.cd.isExists(rootCid) {
 		for _, overlay := range overlays {
-			ci.queues[rootCid.ByteString()].push(Pulling, overlay.Bytes())
+			ci.getQueue(rootCid.ByteString()).push(Pulling, overlay.Bytes())
 		}
 		ci.doFindChunkInfo(ctx, authInfo, rootCid)
 	} else {

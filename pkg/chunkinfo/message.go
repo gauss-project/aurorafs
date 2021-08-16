@@ -41,11 +41,11 @@ func (ci *ChunkInfo) Protocol() p2p.ProtocolSpec {
 	}
 }
 
-func (ci *ChunkInfo) sendData(ctx context.Context, address boson.Address, streamName string, msg interface{}) error {
+func (ci *ChunkInfo) sendData(ctx context.Context, address boson.Address, streamName string, msg interface{}) {
 
 	stream, err := ci.streamer.NewStream(ctx, address, nil, protocolName, protocolVersion, streamName)
 	if err != nil {
-		return fmt.Errorf("new stream: %w", err)
+		ci.logger.Errorf("new stream: %w", err)
 	}
 	defer func() {
 		if err != nil {
@@ -60,27 +60,26 @@ func (ci *ChunkInfo) sendData(ctx context.Context, address boson.Address, stream
 	case streamChunkInfoReqName:
 		req := msg.(pb.ChunkInfoReq)
 		if err := w.WriteMsgWithContext(ctx, &req); err != nil {
-			return fmt.Errorf("write message: %w", err)
+			ci.logger.Errorf("write message: %w", err)
 		}
 	case streamChunkInfoRespName:
 		req := msg.(pb.ChunkInfoResp)
 		if err := w.WriteMsgWithContext(ctx, &req); err != nil {
-			return fmt.Errorf("write message: %w", err)
+			ci.logger.Errorf("write message: %w", err)
 		}
 	case streamPyramidReqName:
 		req := msg.(pb.ChunkPyramidReq)
 		if err := w.WriteMsgWithContext(ctx, &req); err != nil {
-			return fmt.Errorf("write message: %w", err)
+			ci.logger.Errorf("write message: %w", err)
 		}
 	case streamPyramidRespName:
 		req := msg.(pb.ChunkPyramidResp)
 		if err := w.WriteMsgWithContext(ctx, &req); err != nil {
-			return fmt.Errorf("write message: %w", err)
+			ci.logger.Errorf("write message: %w", err)
 		}
 	}
 
-	ci.logger.Tracef("got chunkinfo req %q", msg)
-	return nil
+	ci.logger.Tracef("got chunk info req %q", msg)
 }
 
 func (ci *ChunkInfo) handlerChunkInfoReq(ctx context.Context, p p2p.Peer, stream p2p.Stream) error {
@@ -88,7 +87,8 @@ func (ci *ChunkInfo) handlerChunkInfoReq(ctx context.Context, p p2p.Peer, stream
 	defer stream.FullClose()
 	var req pb.ChunkInfoReq
 	if err := r.ReadMsgWithContext(ctx, &req); err != nil {
-		return fmt.Errorf("read chunkinfo req message: %w", err)
+		ci.logger.Errorf("read chunk info req message: %w", err)
+		return fmt.Errorf("read chunk info req message: %w", err)
 	}
 	ci.logger.Tracef("got chunk info req: %q", req)
 	ci.onChunkInfoReq(ctx, nil, p.Address, req)
@@ -100,6 +100,7 @@ func (ci *ChunkInfo) handlerChunkInfoResp(ctx context.Context, p p2p.Peer, strea
 	defer stream.FullClose()
 	var resp pb.ChunkInfoResp
 	if err := r.ReadMsgWithContext(ctx, &resp); err != nil {
+		ci.logger.Errorf("read message: %w", err)
 		return fmt.Errorf("read message: %w", err)
 	}
 	ci.logger.Tracef("got chunk info resp: %q", resp)
@@ -113,6 +114,7 @@ func (ci *ChunkInfo) handlerPyramidReq(ctx context.Context, p p2p.Peer, stream p
 	var req pb.ChunkPyramidReq
 	if err := r.ReadMsgWithContext(ctx, &req); err != nil {
 		_ = stream.Reset()
+		ci.logger.Errorf("read message: %w", err)
 		return fmt.Errorf("read message: %w", err)
 	}
 	ci.logger.Tracef("got pyramid req: %q", req)
@@ -125,7 +127,8 @@ func (ci *ChunkInfo) handlerPyramidResp(ctx context.Context, p p2p.Peer, stream 
 	defer stream.FullClose()
 	var resp pb.ChunkPyramidResp
 	if err := r.ReadMsgWithContext(ctx, &resp); err != nil {
-		return fmt.Errorf("read message: %w", err)
+		ci.logger.Errorf("read pyramid message: %w", err)
+		return fmt.Errorf("read pyramid message: %w", err)
 	}
 	ci.logger.Tracef("got pyramid resp: %q", resp)
 	ci.onChunkPyramidResp(ctx, nil, p.Address, resp)

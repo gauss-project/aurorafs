@@ -48,7 +48,6 @@ func (cd *chunkInfoDiscover) updateChunkInfos(rootCid boson.Address, pyramids ma
 func (cd *chunkInfoDiscover) updateChunkInfo(rootCid, cid string, overlays [][]byte) {
 	// todo leveDb
 	mn := make(map[string]struct{}, len(overlays))
-	// 去重
 	for _, n := range overlays {
 		mn[string(n)] = struct{}{}
 	}
