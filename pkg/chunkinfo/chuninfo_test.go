@@ -134,7 +134,7 @@ func TestQueueProcess(t *testing.T) {
 			a.updateQueue(context.Background(), nil, rootCid, boson.NewAddress(*a.getQueue(rc).pop(Pulling)), [][]byte{overlay.Bytes()})
 		}
 	}
-	if len(a.getQueue(rc).getPull(Pulled)) != 200 {
+	if len(a.getQueue(rc).getPull(Pulled)) != PullMax {
 		t.Fatalf("pulled len error")
 	}
 
