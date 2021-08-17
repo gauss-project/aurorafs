@@ -284,7 +284,6 @@ func (s *traversalService) GetTrieData(ctx context.Context, reference boson.Addr
 type pyramid struct {
 	data map[string][]byte
 	seen map[string]struct{}
-	leaf int
 	mu sync.Mutex
 }
 
