@@ -14,14 +14,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-
+	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/collection/entry"
 	"github.com/gauss-project/aurorafs/pkg/file"
 	"github.com/gauss-project/aurorafs/pkg/file/joiner"
 	"github.com/gauss-project/aurorafs/pkg/file/loadsave"
 	"github.com/gauss-project/aurorafs/pkg/manifest"
 	"github.com/gauss-project/aurorafs/pkg/storage"
-	"github.com/gauss-project/aurorafs/pkg/boson"
 )
 
 var (
@@ -42,6 +41,10 @@ type Service interface {
 	// TraverseManifestAddresses iterates through each address of a manifest,
 	// as well as each entry found in it.
 	TraverseManifestAddresses(context.Context, boson.Address, boson.AddressIterFunc) error
+
+	GetTrieData(context.Context, boson.Address) (map[string][]byte, error)
+
+	CheckTrieData(context.Context, boson.Address, map[string][]byte) ([][][]byte, error)
 }
 
 type traversalService struct {
@@ -247,6 +250,15 @@ func (s *traversalService) traverseChunkAddressesAsFile(
 func (s *traversalService) checkIsFile(
 	ctx context.Context,
 	reference boson.Address,
+) (bool, *entry.Entry, *entry.Metadata, error) {
+	return s.checkIsFileWithCustomStore(ctx, s.storer, reference)
+}
+
+// checkIsFileWithCustomStore checks by specify store if the content is file.
+func (s *traversalService) checkIsFileWithCustomStore(
+	ctx context.Context,
+	getter storage.Getter,
+	reference boson.Address,
 ) (isFile bool, e *entry.Entry, metadata *entry.Metadata, err error) {
 
 	var (
@@ -254,7 +266,7 @@ func (s *traversalService) checkIsFile(
 		span int64
 	)
 
-	j, span, err = joiner.New(ctx, s.storer, reference)
+	j, span, err = joiner.New(ctx, getter, reference)
 	if err != nil {
 		err = fmt.Errorf("traversal: joiner: %s: %w", reference, err)
 		return
@@ -285,7 +297,7 @@ func (s *traversalService) checkIsFile(
 		// NOTE: any bytes will unmarshall to addresses; we need to check metadata
 
 		// read metadata
-		j, _, err = joiner.New(ctx, s.storer, e.Metadata())
+		j, _, err = joiner.New(ctx, getter, e.Metadata())
 		if err != nil {
 			// ignore
 			err = nil
@@ -322,13 +334,24 @@ func (s *traversalService) checkIsManifest(
 	reference boson.Address,
 	e *entry.Entry,
 	metadata *entry.Metadata,
+) (bool, manifest.Interface, error) {
+	return s.checkIsManifestWithCustomStore(ctx, s.storer, reference, e, metadata)
+}
+
+// checkIsManifestWithCustomStore checks by specify store if the content is manifest.
+func (s *traversalService) checkIsManifestWithCustomStore(
+	ctx context.Context,
+	storer storage.Storer,
+	reference boson.Address,
+	e *entry.Entry,
+	metadata *entry.Metadata,
 ) (isManifest bool, m manifest.Interface, err error) {
 
 	// NOTE: 'encrypted' parameter only used for saving manifest
 	m, err = manifest.NewManifestReference(
 		metadata.MimeType,
 		e.Reference(),
-		loadsave.New(s.storer, storage.ModePutRequest, false),
+		loadsave.New(storer, storage.ModePutRequest, false),
 	)
 	if err != nil {
 		if err == manifest.ErrInvalidManifestType {
@@ -350,7 +373,16 @@ func (s *traversalService) processBytes(
 	reference boson.Address,
 	chunkAddressFunc boson.AddressIterFunc,
 ) error {
-	j, _, err := joiner.New(ctx, s.storer, reference)
+	return s.processBytesWithCustomStore(ctx, s.storer, reference, chunkAddressFunc)
+}
+
+func (s *traversalService) processBytesWithCustomStore(
+	ctx context.Context,
+	getter storage.Getter,
+	reference boson.Address,
+	chunkAddressFunc boson.AddressIterFunc,
+) error {
+	j, _, err := joiner.New(ctx, getter, reference)
 	if err != nil {
 		return fmt.Errorf("traversal: joiner: %s: %w", reference, err)
 	}
