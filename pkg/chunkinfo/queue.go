@@ -135,7 +135,7 @@ func (q *queue) isExists(pull Pull, overlay []byte) bool {
 
 // queueProcess
 func (ci *ChunkInfo) queueProcess(ctx context.Context, rootCid boson.Address) {
-	q := ci.getQueue(rootCid.ByteString())
+	q := ci.getQueue(rootCid.String())
 	// pulled + pulling >= pullMax
 	if q.len(Pulled)+q.len(Pulling) >= PullMax {
 		return
@@ -162,7 +162,7 @@ func (ci *ChunkInfo) queueProcess(ctx context.Context, rootCid boson.Address) {
 
 // updateQueue
 func (ci *ChunkInfo) updateQueue(ctx context.Context, authInfo []byte, rootCid, overlay boson.Address, overlays [][]byte) {
-	q := ci.getQueue(rootCid.ByteString())
+	q := ci.getQueue(rootCid.String())
 	for _, n := range overlays {
 		if q.len(UnPull) >= PullerMax {
 			return

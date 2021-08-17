@@ -96,7 +96,7 @@ func (ci *ChunkInfo) handlerChunkInfoReq(ctx context.Context, p p2p.Peer, stream
 }
 
 func (ci *ChunkInfo) handlerChunkInfoResp(ctx context.Context, p p2p.Peer, stream p2p.Stream) error {
-	_, r := protobuf.NewWriterAndReader(stream)
+	r := protobuf.NewReader(stream)
 	defer stream.FullClose()
 	var resp pb.ChunkInfoResp
 	if err := r.ReadMsgWithContext(ctx, &resp); err != nil {
@@ -109,11 +109,10 @@ func (ci *ChunkInfo) handlerChunkInfoResp(ctx context.Context, p p2p.Peer, strea
 }
 
 func (ci *ChunkInfo) handlerPyramidReq(ctx context.Context, p p2p.Peer, stream p2p.Stream) error {
-	_, r := protobuf.NewWriterAndReader(stream)
+	r := protobuf.NewReader(stream)
 	defer stream.FullClose()
 	var req pb.ChunkPyramidReq
 	if err := r.ReadMsgWithContext(ctx, &req); err != nil {
-		_ = stream.Reset()
 		ci.logger.Errorf("read message: %w", err)
 		return fmt.Errorf("read message: %w", err)
 	}
@@ -123,7 +122,7 @@ func (ci *ChunkInfo) handlerPyramidReq(ctx context.Context, p p2p.Peer, stream p
 }
 
 func (ci *ChunkInfo) handlerPyramidResp(ctx context.Context, p p2p.Peer, stream p2p.Stream) error {
-	_, r := protobuf.NewWriterAndReader(stream)
+	r := protobuf.NewReader(stream)
 	defer stream.FullClose()
 	var resp pb.ChunkPyramidResp
 	if err := r.ReadMsgWithContext(ctx, &resp); err != nil {
@@ -165,7 +164,7 @@ func (ci *ChunkInfo) onChunkPyramidResp(ctx context.Context, authInfo []byte, ov
 // onFindChunkPyramid
 func (ci *ChunkInfo) onFindChunkPyramid(ctx context.Context, authInfo []byte, rootCid, overlay boson.Address, pyramid map[string][]byte, cn map[string]*pb.Overlays) {
 	ci.tt.removeTimeOutTrigger(rootCid, overlay)
-	_, ok := ci.cp.pyramid[rootCid.ByteString()]
+	_, ok := ci.cp.pyramid[rootCid.String()]
 	if !ok {
 		// validate pyramid
 		v, _ := ci.traversal.CheckTrieData(ctx, rootCid, pyramid)

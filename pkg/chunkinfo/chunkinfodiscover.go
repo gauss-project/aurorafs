@@ -23,7 +23,7 @@ func newChunkInfoDiscover() *chunkInfoDiscover {
 func (cd *chunkInfoDiscover) isExists(rootCid boson.Address) bool {
 	cd.RLock()
 	defer cd.RUnlock()
-	_, ok := cd.presence[rootCid.ByteString()]
+	_, ok := cd.presence[rootCid.String()]
 	return ok
 }
 
@@ -31,7 +31,7 @@ func (cd *chunkInfoDiscover) isExists(rootCid boson.Address) bool {
 func (cd *chunkInfoDiscover) getChunkInfo(rootCid, cid boson.Address) [][]byte {
 	cd.RLock()
 	defer cd.RUnlock()
-	v, _ := cd.presence[rootCid.ByteString()][cid.ByteString()]
+	v, _ := cd.presence[rootCid.String()][cid.String()]
 	return v
 }
 
@@ -40,7 +40,7 @@ func (cd *chunkInfoDiscover) updateChunkInfos(rootCid boson.Address, pyramids ma
 	cd.Lock()
 	defer cd.Unlock()
 	for k, v := range pyramids {
-		cd.updateChunkInfo(rootCid.ByteString(), k, v.V)
+		cd.updateChunkInfo(rootCid.String(), k, v.V)
 	}
 }
 

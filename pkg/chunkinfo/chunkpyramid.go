@@ -22,8 +22,8 @@ func newChunkPyramid() *chunkPyramid {
 func (cp *chunkPyramid) checkPyramid(rootCid boson.Address, cid []byte) bool {
 	cp.RLock()
 	defer cp.RUnlock()
-	if cp.pyramid[rootCid.ByteString()] != nil {
-		return cp.pyramid[rootCid.ByteString()][string(cid)]
+	if cp.pyramid[rootCid.String()] != nil {
+		return cp.pyramid[rootCid.String()][boson.NewAddress(cid).String()]
 	}
 	return false
 }
@@ -35,10 +35,10 @@ func (cp *chunkPyramid) updateChunkPyramid(rootCid boson.Address, pyramids [][][
 	py := make(map[string]bool)
 	for _, p := range pyramids {
 		for _, x := range p {
-			py[string(x)] = true
+			py[boson.NewAddress(x).String()] = true
 		}
 	}
-	cp.pyramid[rootCid.ByteString()] = py
+	cp.pyramid[rootCid.String()] = py
 }
 
 // createChunkPyramidReq

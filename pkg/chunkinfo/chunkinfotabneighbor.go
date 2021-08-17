@@ -22,12 +22,12 @@ func (cn *chunkInfoTabNeighbor) updateNeighborChunkInfo(rootCid, cid boson.Addre
 	cn.Lock()
 	defer cn.Unlock()
 	// todo levelDB
-	rc := rootCid.ByteString()
+	rc := rootCid.String()
 	_, ok := cn.presence[rc]
 	if !ok {
 		cn.presence[rc] = make([][]byte, 0, 1)
 	}
-	key := rc + "_" + cid.ByteString()
+	key := rc + "_" + cid.String()
 	_, pok := cn.presence[key]
 	if !pok {
 		cn.presence[key] = make([][]byte, 0, 1)
@@ -41,14 +41,14 @@ func (cn *chunkInfoTabNeighbor) getNeighborChunkInfo(rootCid boson.Address) map[
 	cn.RLock()
 	defer cn.RUnlock()
 	res := make(map[string]*pb.Overlays)
-	rc := rootCid.ByteString()
+	rc := rootCid.String()
 	cids := cn.presence[rc]
 	for _, cid := range cids {
-		c := string(cid)
-		key := rc + "_" + c
+		c := boson.NewAddress(cid)
+		key := rc + "_" + c.String()
 		// todo levelDB
 		overlays := cn.presence[key]
-		res[c] = &pb.Overlays{V: overlays}
+		res[c.String()] = &pb.Overlays{V: overlays}
 	}
 	return res
 }
