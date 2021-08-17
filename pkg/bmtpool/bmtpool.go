@@ -15,7 +15,7 @@ import (
 var instance pool.Pooler
 
 func init() {
-	instance = pool.New(8, boson.BigBmtBranches)
+	instance = pool.New(8, boson.BmtBranches)
 }
 
 // Get a bmt Hasher instance.
