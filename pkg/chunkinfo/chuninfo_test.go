@@ -6,6 +6,7 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/collection/entry"
 	"github.com/gauss-project/aurorafs/pkg/file/pipeline/builder"
@@ -46,11 +47,47 @@ func TestFindChunkInfo(t *testing.T) {
 }
 
 func TestHandlerChunkInfoReq(t *testing.T) {
+	findAddress := boson.MustParseHexAddress("03")
+	rootCid, s := mockUploadFile(t)
 
+	client := mockChunkInfo(t, s, nil)
+	client.newQueue(rootCid.ByteString())
+	var bosoary []boson.Address
+	bosoary = append(bosoary, findAddress)
+	client.getQueue(rootCid.ByteString()).push(Pulling, bosoary[0].Bytes())
+
+	q := client.getQueue(rootCid.ByteString())
+	if q == nil {
+		t.Fatal("getQueue Error")
+	}
+
+	unNode := q.pop(UnPull)
+	q.push(Pulling, *unNode)
+	client.tt.updateTimeOutTrigger(rootCid.Bytes(), *unNode)
+	ciReq := client.cd.createChunkInfoReq(rootCid)
+	ctx := context.Background()
+	client.sendData(ctx, boson.NewAddress(*unNode), streamChunkInfoReqName, ciReq)
 }
 
 func TestHandlerChunkInfoResp(t *testing.T) {
+	serverAddress := boson.MustParseHexAddress("02")
+	clientAddress := boson.MustParseHexAddress("01")
+	rootCid, s := mockUploadFile(t)
+	server1 := mockChunkInfo(t, s, nil)
+	recorder1 := streamtest.New(
+		streamtest.WithBaseAddr(serverAddress),
+		streamtest.WithProtocols(server1.Protocol()),
+	)
 
+	server := mockChunkInfo(t, s, recorder1)
+	recorder := streamtest.New(
+		streamtest.WithProtocols(server.Protocol()),
+		streamtest.WithBaseAddr(clientAddress),
+	)
+	client := mockChunkInfo(t, s, recorder)
+	client.FindChunkInfo(context.Background(), nil, rootCid, []boson.Address{serverAddress})
+	server1.GetChunkInfo(serverAddress, clientAddress)
+	fmt.Println("sfds")
 }
 func TestHandlerPyramidReq(t *testing.T) {
 
