@@ -27,11 +27,12 @@ type ChunkInfo struct {
 	logger    logging.Logger
 	t         *time.Timer
 	tt        *timeoutTrigger
-	queues    map[string]*queue
-	ct        *chunkInfoTabNeighbor
-	cd        *chunkInfoDiscover
-	cp        *chunkPyramid
-	cpd       *pendingFinderInfo
+	// todo lock
+	queues map[string]*queue
+	ct     *chunkInfoTabNeighbor
+	cd     *chunkInfoDiscover
+	cp     *chunkPyramid
+	cpd    *pendingFinderInfo
 }
 
 // New
