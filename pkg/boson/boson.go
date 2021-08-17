@@ -18,10 +18,10 @@ import (
 const (
 	SpanSize                = 8
 	SectionSize             = 32
-	Branches                = 128
+	Branches                = 128 * 64
 	EncryptedBranches       = Branches / 2
-	BmtBranches             = 128
-	ChunkSize               = SectionSize * Branches
+	BmtBranches             = 128 * 64 // sectionSize * branches determines the maximum chunk size hashed using the tree
+	ChunkSize               = SectionSize * Branches // enlarge a minimal chunk size to 256k
 	HashSize                = 32
 	MaxPO             uint8 = 15
 	ExtendedPO        uint8 = MaxPO + 5

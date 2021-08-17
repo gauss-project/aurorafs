@@ -13,19 +13,25 @@ import (
 	"sync"
 	"sync/atomic"
 
+	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/encryption/store"
 	"github.com/gauss-project/aurorafs/pkg/file"
 	"github.com/gauss-project/aurorafs/pkg/storage"
-	"github.com/gauss-project/aurorafs/pkg/boson"
 	"golang.org/x/sync/errgroup"
 )
 
 type joiner struct {
-	addr     boson.Address
-	rootData []byte
+	addr      boson.Address
+	rootData  []byte
 	span      int64
 	off       int64
 	refLength int
+
+	dataChunks       [][]byte
+	isSaveDataChunks bool
+
+	intermediateChunks map[string][]byte
+	isSaveIntChunks bool
 
 	ctx    context.Context
 	getter storage.Getter
@@ -54,6 +60,24 @@ func New(ctx context.Context, getter storage.Getter, address boson.Address) (fil
 	}
 
 	return j, span, nil
+}
+
+func (j *joiner) GetRootData() []byte {
+	return j.rootData
+}
+
+func (j *joiner) SetSaveDataChunks() {
+	j.dataChunks = make([][]byte, 0)
+	j.isSaveDataChunks = true
+}
+
+func (j *joiner) SetSaveIntChunks(data map[string][]byte) {
+	j.intermediateChunks = data
+	j.isSaveIntChunks = true
+}
+
+func (j *joiner) GetDataChunks() [][]byte {
+	return j.dataChunks
 }
 
 // Read is called by the consumer to retrieve the joined data.
@@ -163,8 +187,8 @@ func subtrieSection(data []byte, startIdx, refLen int, subtrieSize int64) int64 
 	// x is constant (the brute forced value) and l is the size of the last subtrie
 	var (
 		refs       = int64(len(data) / refLen) // how many references in the intermediate chunk
-		branching  = int64(4096 / refLen)      // branching factor is chunkSize divided by reference length
-		branchSize = int64(4096)
+		branching  = int64(boson.ChunkSize / refLen)      // branching factor is chunkSize divided by reference length
+		branchSize = int64(boson.ChunkSize)
 	)
 	for {
 		whatsLeft := subtrieSize - (branchSize * (refs - 1))
@@ -224,6 +248,9 @@ func (j *joiner) IterateChunkAddresses(fn boson.AddressIterFunc) error {
 func (j *joiner) processChunkAddresses(ctx context.Context, fn boson.AddressIterFunc, data []byte, subTrieSize int64) error {
 	// we are at a leaf data chunk
 	if subTrieSize <= int64(len(data)) {
+		if j.isSaveDataChunks {
+			j.dataChunks = append(j.dataChunks, j.addr.Bytes())
+		}
 		return nil
 	}
 
@@ -246,7 +273,10 @@ func (j *joiner) processChunkAddresses(ctx context.Context, fn boson.AddressIter
 		}
 
 		sec := subtrieSection(data, cursor, j.refLength, subTrieSize)
-		if sec <= 4096 {
+		if sec <= boson.ChunkSize {
+			if j.isSaveDataChunks {
+				j.dataChunks = append(j.dataChunks, address.Bytes())
+			}
 			continue
 		}
 
@@ -263,6 +293,10 @@ func (j *joiner) processChunkAddresses(ctx context.Context, fn boson.AddressIter
 
 				chunkData := ch.Data()[8:]
 				subtrieSpan := int64(chunkToSpan(ch.Data()))
+
+				if j.isSaveIntChunks && subtrieSpan > int64(len(chunkData)) {
+					j.intermediateChunks[address.String()] = ch.Data()
+				}
 
 				return j.processChunkAddresses(ectx, fn, chunkData, subtrieSpan)
 			})

@@ -53,7 +53,7 @@ func newShortPipelineFunc(ctx context.Context, s storage.Putter, mode storage.Mo
 // Note that the encryption writer will mutate the data to contain the encrypted span, but the span field
 // with the unencrypted span is preserved.
 func newEncryptionPipeline(ctx context.Context, s storage.Putter, mode storage.ModePut) pipeline.Interface {
-	tw := hashtrie.NewHashTrieWriter(boson.ChunkSize, 64, boson.HashSize+encryption.KeyLength, newShortEncryptionPipelineFunc(ctx, s, mode))
+	tw := hashtrie.NewHashTrieWriter(boson.ChunkSize, boson.Branches / 2, boson.HashSize+encryption.KeyLength, newShortEncryptionPipelineFunc(ctx, s, mode))
 	lsw := store.NewStoreWriter(ctx, s, mode, tw)
 	b := bmt.NewBmtWriter(lsw)
 	enc := enc.NewEncryptionWriter(encryption.NewChunkEncrypter(), b)
