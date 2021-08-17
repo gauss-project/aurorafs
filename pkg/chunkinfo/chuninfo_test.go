@@ -1,6 +1,7 @@
 package chunkinfo
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"encoding/binary"
@@ -8,15 +9,18 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/gauss-project/aurorafs/pkg/boson"
+	"github.com/gauss-project/aurorafs/pkg/boson/test"
 	"github.com/gauss-project/aurorafs/pkg/chunkinfo/pb"
 	"github.com/gauss-project/aurorafs/pkg/collection/entry"
 	"github.com/gauss-project/aurorafs/pkg/file/pipeline/builder"
 	"github.com/gauss-project/aurorafs/pkg/logging"
+	"github.com/gauss-project/aurorafs/pkg/p2p"
 	"github.com/gauss-project/aurorafs/pkg/p2p/protobuf"
 	"github.com/gauss-project/aurorafs/pkg/p2p/streamtest"
 	"github.com/gauss-project/aurorafs/pkg/storage"
 	"github.com/gauss-project/aurorafs/pkg/storage/mock"
 	"github.com/gauss-project/aurorafs/pkg/traversal"
+	"golang.org/x/sync/errgroup"
 	"io/ioutil"
 	"testing"
 )
@@ -204,12 +208,60 @@ func TestHandlerPyramidResp(t *testing.T) {
 
 func TestQueueProcess(t *testing.T) {
 
+	rootCid, s := mockUploadFile(t)
+	recorder := streamtest.New(
+		streamtest.WithProtocols(
+			newTestProtocol(func(ctx context.Context, peer p2p.Peer, stream p2p.Stream) error {
+				if _, err := bufio.NewReader(stream).ReadString('\n'); err != nil {
+					return err
+				}
+				var g errgroup.Group
+				g.Go(stream.Close)
+				g.Go(stream.FullClose)
+
+				if err := g.Wait(); err != nil {
+					return err
+				}
+				return stream.FullClose()
+			}, protocolName, protocolVersion, streamChunkInfoReqName)),
+	)
+	addr := boson.MustParseHexAddress("ca1e9f3938cc1425c6061b96ad9eb93e134dfe8734ad490164ef20af9d1cf59c")
+	rc := rootCid.String()
+	a := mockChunkInfo(t, s, recorder)
+	a.cpd.updatePendingFinder(rootCid)
+	a.newQueue(rc)
+	a.getQueue(rc).push(Pulling, addr.Bytes())
+	// max pulling
+	for i := 0; i < PullMax; i++ {
+		overlay := test.RandomAddress()
+		if i == 0 {
+			a.updateQueue(context.Background(), nil, rootCid, addr, [][]byte{overlay.Bytes()})
+		} else {
+			a.updateQueue(context.Background(), nil, rootCid, boson.NewAddress(*a.getQueue(rc).pop(Pulling)), [][]byte{overlay.Bytes()})
+		}
+	}
+	if len(a.getQueue(rc).getPull(Pulled)) != 200 {
+		t.Fatalf("pulled len error")
+	}
+
+	if len(a.getQueue(rc).getPull(UnPull)) != 1 {
+		t.Fatalf("unpull len error")
+	}
+
 }
 
-func TestQueueUpdate(t *testing.T) {
-
+func newTestProtocol(h p2p.HandlerFunc, protocolName, protocolVersion, streamName string) p2p.ProtocolSpec {
+	return p2p.ProtocolSpec{
+		Name:    protocolName,
+		Version: protocolVersion,
+		StreamSpecs: []p2p.StreamSpec{
+			{
+				Name:    streamName,
+				Handler: h,
+			},
+		},
+	}
 }
-
 func mockUploadFile(t *testing.T) (boson.Address, traversal.Service) {
 	chunkCount := 10 + 1
 
