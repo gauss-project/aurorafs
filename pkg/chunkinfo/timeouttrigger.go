@@ -27,7 +27,7 @@ func newTimeoutTrigger() *timeoutTrigger {
 func (tt *timeoutTrigger) updateTimeOutTrigger(rootCid, overlay []byte) {
 	tt.Lock()
 	tt.Unlock()
-	key := string(rootCid) + "_" + string(overlay)
+	key := boson.NewAddress(rootCid).String() + "_" + boson.NewAddress(overlay).String()
 	tt.trigger[key] = time.Now().Unix()
 }
 
@@ -35,7 +35,7 @@ func (tt *timeoutTrigger) updateTimeOutTrigger(rootCid, overlay []byte) {
 func (tt *timeoutTrigger) removeTimeOutTrigger(rootCid, overlay boson.Address) {
 	tt.Lock()
 	tt.Unlock()
-	key := rootCid.ByteString() + "_" + overlay.ByteString()
+	key := rootCid.String() + "_" + overlay.String()
 	delete(tt.trigger, key)
 }
 
@@ -57,7 +57,7 @@ func (ci *ChunkInfo) triggerTimeOut() {
 	case <-timeTrigger.C:
 		rootCid, overlay := ci.tt.getTimeOutRootCidAndNode()
 		if rootCid != nil {
-			q := ci.getQueue(string(rootCid))
+			q := ci.getQueue(boson.NewAddress(rootCid).String())
 			q.popNode(Pulling, overlay)
 			q.push(UnPull, overlay)
 		}

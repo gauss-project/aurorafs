@@ -20,20 +20,20 @@ func newPendingFinderInfo() *pendingFinderInfo {
 func (pfi *pendingFinderInfo) updatePendingFinder(rootCid boson.Address) {
 	pfi.Lock()
 	defer pfi.Unlock()
-	pfi.finder[rootCid.ByteString()] = struct{}{}
+	pfi.finder[rootCid.String()] = struct{}{}
 }
 
 // cancelPendingFinder
 func (pfi *pendingFinderInfo) cancelPendingFinder(rootCid boson.Address) {
 	pfi.Lock()
 	defer pfi.Unlock()
-	delete(pfi.finder, rootCid.ByteString())
+	delete(pfi.finder, rootCid.String())
 }
 
 // getPendingFinder
 func (pfi *pendingFinderInfo) getPendingFinder(rootCid boson.Address) bool {
 	pfi.RLock()
 	defer pfi.RUnlock()
-	_, ok := pfi.finder[rootCid.ByteString()]
+	_, ok := pfi.finder[rootCid.String()]
 	return ok
 }

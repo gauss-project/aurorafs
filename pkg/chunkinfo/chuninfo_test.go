@@ -8,9 +8,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/gauss-project/aurorafs/pkg/boson"
+	"github.com/gauss-project/aurorafs/pkg/chunkinfo/pb"
 	"github.com/gauss-project/aurorafs/pkg/collection/entry"
 	"github.com/gauss-project/aurorafs/pkg/file/pipeline/builder"
 	"github.com/gauss-project/aurorafs/pkg/logging"
+	"github.com/gauss-project/aurorafs/pkg/p2p/protobuf"
 	"github.com/gauss-project/aurorafs/pkg/p2p/streamtest"
 	"github.com/gauss-project/aurorafs/pkg/storage"
 	"github.com/gauss-project/aurorafs/pkg/storage/mock"
@@ -29,21 +31,56 @@ var (
 func TestFindChunkInfo(t *testing.T) {
 	serverAddress := boson.MustParseHexAddress("02")
 	clientAddress := boson.MustParseHexAddress("01")
-	findAddress := boson.MustParseHexAddress("03")
+	cid := boson.MustParseHexAddress("03")
 	rootCid, s := mockUploadFile(t)
 	server1 := mockChunkInfo(t, s, nil)
+	server1.newQueue(rootCid.String())
 	recorder1 := streamtest.New(
-		streamtest.WithBaseAddr(serverAddress),
+		streamtest.WithBaseAddr(clientAddress),
 		streamtest.WithProtocols(server1.Protocol()),
 	)
 	server := mockChunkInfo(t, s, recorder1)
+	server.OnChunkTransferred(cid, rootCid, serverAddress)
 	recorder := streamtest.New(
 		streamtest.WithProtocols(server.Protocol()),
 		streamtest.WithBaseAddr(clientAddress),
 	)
 	client := mockChunkInfo(t, s, recorder)
-	client.FindChunkInfo(context.Background(), nil, rootCid, []boson.Address{findAddress})
+	client.FindChunkInfo(context.Background(), nil, rootCid, []boson.Address{serverAddress})
 
+	records, err := recorder.Records(serverAddress, "chunkinfo", "1.0.0", "chunkpyramid/req")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if l := len(records); l != 1 {
+		t.Fatalf("got %v records, want %v", l, 1)
+	}
+	record := records[0]
+	// validate received ping greetings from the client
+	messages, err := protobuf.ReadMessages(
+		bytes.NewReader(record.In()),
+		func() protobuf.Message { return new(pb.ChunkPyramidReq) },
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Log(messages)
+	records1, err1 := recorder1.Records(clientAddress, "chunkinfo", "1.0.0", "chunkpyramid/resp")
+	if err1 != nil {
+		t.Fatal(err)
+	}
+	if l := len(records1); l != 1 {
+		t.Fatalf("got %v records, want %v", l, 1)
+	}
+	record1 := records1[0]
+	messages1, err := protobuf.ReadMessages(
+		bytes.NewReader(record1.In()),
+		func() protobuf.Message { return new(pb.ChunkPyramidResp) },
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Log(messages1)
 }
 
 func TestHandlerChunkInfoReq(t *testing.T) {
@@ -105,7 +142,7 @@ func TestQueueUpdate(t *testing.T) {
 }
 
 func mockUploadFile(t *testing.T) (boson.Address, traversal.Service) {
-	chunkCount := 8192 + 1
+	chunkCount := 10 + 1
 
 	ctx := context.Background()
 	largeBytesData := generateSampleData(boson.BigChunkSize * chunkCount)
