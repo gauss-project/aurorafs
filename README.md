@@ -1,4 +1,4 @@
-# Aurora Filesystem
+# <img src="./aurorafs.png" width="50" height="50" /> Aurora Filesystem
 
 
 

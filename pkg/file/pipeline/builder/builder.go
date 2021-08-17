@@ -32,10 +32,10 @@ func NewPipelineBuilder(ctx context.Context, s storage.Putter, mode storage.Mode
 // a merkle-tree of hashes that represent the given arbitrary size byte stream. Partial
 // writes are supported. The pipeline flow is: Data -> Feeder -> BMT -> Storage -> HashTrie.
 func newPipeline(ctx context.Context, s storage.Putter, mode storage.ModePut) pipeline.Interface {
-	tw := hashtrie.NewHashTrieWriter(boson.ChunkSize, boson.BigBranches, boson.HashSize, newShortPipelineFunc(ctx, s, mode))
+	tw := hashtrie.NewHashTrieWriter(boson.ChunkSize, boson.Branches, boson.HashSize, newShortPipelineFunc(ctx, s, mode))
 	lsw := store.NewStoreWriter(ctx, s, mode, tw)
 	b := bmt.NewBmtWriter(lsw)
-	return feeder.NewChunkFeederWriter(boson.BigChunkSize, b)
+	return feeder.NewChunkFeederWriter(boson.ChunkSize, b)
 }
 
 // newShortPipelineFunc returns a constructor function for an ephemeral hashing pipeline
@@ -53,11 +53,11 @@ func newShortPipelineFunc(ctx context.Context, s storage.Putter, mode storage.Mo
 // Note that the encryption writer will mutate the data to contain the encrypted span, but the span field
 // with the unencrypted span is preserved.
 func newEncryptionPipeline(ctx context.Context, s storage.Putter, mode storage.ModePut) pipeline.Interface {
-	tw := hashtrie.NewHashTrieWriter(boson.ChunkSize, boson.BigBranches / 2, boson.HashSize+encryption.KeyLength, newShortEncryptionPipelineFunc(ctx, s, mode))
+	tw := hashtrie.NewHashTrieWriter(boson.ChunkSize, boson.Branches / 2, boson.HashSize+encryption.KeyLength, newShortEncryptionPipelineFunc(ctx, s, mode))
 	lsw := store.NewStoreWriter(ctx, s, mode, tw)
 	b := bmt.NewBmtWriter(lsw)
 	enc := enc.NewEncryptionWriter(encryption.NewChunkEncrypter(), b)
-	return feeder.NewChunkFeederWriter(boson.BigChunkSize, enc)
+	return feeder.NewChunkFeederWriter(boson.ChunkSize, enc)
 }
 
 // newShortEncryptionPipelineFunc returns a constructor function for an ephemeral hashing pipeline
@@ -74,7 +74,7 @@ func newShortEncryptionPipelineFunc(ctx context.Context, s storage.Putter, mode 
 // It returns the cryptographic root hash of the content.
 func FeedPipeline(ctx context.Context, pipeline pipeline.Interface, r io.Reader, dataLength int64) (addr boson.Address, err error) {
 	var total int64
-	data := make([]byte, boson.BigChunkSize)
+	data := make([]byte, boson.ChunkSize)
 	for {
 		c, err := r.Read(data)
 		total += int64(c)

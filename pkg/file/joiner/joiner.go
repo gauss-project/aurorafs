@@ -187,8 +187,8 @@ func subtrieSection(data []byte, startIdx, refLen int, subtrieSize int64) int64 
 	// x is constant (the brute forced value) and l is the size of the last subtrie
 	var (
 		refs       = int64(len(data) / refLen) // how many references in the intermediate chunk
-		branching  = int64(boson.BigChunkSize / refLen)      // branching factor is chunkSize divided by reference length
-		branchSize = int64(boson.BigChunkSize)
+		branching  = int64(boson.ChunkSize / refLen)      // branching factor is chunkSize divided by reference length
+		branchSize = int64(boson.ChunkSize)
 	)
 	for {
 		whatsLeft := subtrieSize - (branchSize * (refs - 1))
@@ -273,7 +273,7 @@ func (j *joiner) processChunkAddresses(ctx context.Context, fn boson.AddressIter
 		}
 
 		sec := subtrieSection(data, cursor, j.refLength, subTrieSize)
-		if sec <= boson.BigChunkSize {
+		if sec <= boson.ChunkSize {
 			if j.isSaveDataChunks {
 				j.dataChunks = append(j.dataChunks, address.Bytes())
 			}
