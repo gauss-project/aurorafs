@@ -10,6 +10,7 @@ import (
 	"github.com/gauss-project/aurorafs/pkg/collection/entry"
 	"github.com/gauss-project/aurorafs/pkg/file/pipeline/builder"
 	"github.com/gauss-project/aurorafs/pkg/logging"
+	"github.com/gauss-project/aurorafs/pkg/p2p/streamtest"
 	"github.com/gauss-project/aurorafs/pkg/storage"
 	"github.com/gauss-project/aurorafs/pkg/storage/mock"
 	"github.com/gauss-project/aurorafs/pkg/traversal"
@@ -25,12 +26,29 @@ var (
 )
 
 func TestFindChunkInfo(t *testing.T) {
+	serverAddress := boson.MustParseHexAddress("02")
+	clientAddress := boson.MustParseHexAddress("01")
+	findAddress := boson.MustParseHexAddress("03")
+	rootCid, s := mockUploadFile(t)
+	server1 := mockChunkInfo(t, s, nil)
+	recorder1 := streamtest.New(
+		streamtest.WithBaseAddr(serverAddress),
+		streamtest.WithProtocols(server1.Protocol()),
+	)
+	server := mockChunkInfo(t, s, recorder1)
+	recorder := streamtest.New(
+		streamtest.WithProtocols(server.Protocol()),
+		streamtest.WithBaseAddr(clientAddress),
+	)
+	client := mockChunkInfo(t, s, recorder)
+	client.FindChunkInfo(context.Background(), nil, rootCid, []boson.Address{findAddress})
 
 }
 
 func TestHandlerChunkInfoReq(t *testing.T) {
 
 }
+
 func TestHandlerChunkInfoResp(t *testing.T) {
 
 }
@@ -62,9 +80,9 @@ func mockUploadFile(t *testing.T) (boson.Address, traversal.Service) {
 	return reference, traversalService
 }
 
-func mockChunkInfo(t *testing.T, traversal traversal.Service) *ChunkInfo {
+func mockChunkInfo(t *testing.T, traversal traversal.Service, r *streamtest.Recorder) *ChunkInfo {
 	logger := logging.New(ioutil.Discard, 0)
-	server := New(nil, logger, traversal)
+	server := New(r, logger, traversal)
 	return server
 }
 
