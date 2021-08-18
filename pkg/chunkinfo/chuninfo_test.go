@@ -271,7 +271,7 @@ func TestQueueProcess(t *testing.T) {
 			a.updateQueue(context.Background(), nil, rootCid, boson.NewAddress(*a.getQueue(rc).pop(Pulling)), [][]byte{overlay.Bytes()})
 		}
 	}
-	if len(a.getQueue(rc).getPull(Pulled)) != 200 {
+	if len(a.getQueue(rc).getPull(Pulled)) != PullMax {
 		t.Fatalf("pulled len error")
 	}
 
@@ -297,7 +297,7 @@ func mockUploadFile(t *testing.T) (boson.Address, traversal.Service) {
 	chunkCount := 10 + 1
 
 	ctx := context.Background()
-	largeBytesData := generateSampleData(boson.BigChunkSize * chunkCount)
+	largeBytesData := generateSampleData(boson.ChunkSize * chunkCount)
 
 	mockStoreA := mock.NewStorer()
 	traversalService := traversal.NewService(mockStoreA)
@@ -378,7 +378,7 @@ func verifyChunkHash(t *testing.T, ctx context.Context, store storage.Storer, ro
 
 	chunkData := val.Data()
 	t.Logf("get val data size=%d\n", len(chunkData))
-	if len(chunkData) > 16 && len(chunkData) <= boson.BigChunkSize+8 {
+	if len(chunkData) > 16 && len(chunkData) <= boson.ChunkSize+8 {
 		trySpan := chunkData[:8]
 		if size := binary.LittleEndian.Uint64(trySpan); size > uint64(len(chunkData[8:])) {
 			for i := uint64(8); i < uint64(len(chunkData)-8); i += 32 {

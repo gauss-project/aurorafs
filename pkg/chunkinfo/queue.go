@@ -31,6 +31,8 @@ type queue struct {
 
 // newQueue
 func (ci *ChunkInfo) newQueue(rootCid string) {
+	ci.queuesLk.Lock()
+	defer ci.queuesLk.Unlock()
 	q := &queue{
 		UnPull:  make([]*[]byte, 0, PullerMax),
 		Pulling: make([]*[]byte, 0, PullingMax),
@@ -116,6 +118,8 @@ func (q *queue) updatePull(pull Pull, queue []*[]byte) {
 
 // getQueue
 func (ci *ChunkInfo) getQueue(rootCid string) *queue {
+	ci.queuesLk.RLock()
+	defer ci.queuesLk.RUnlock()
 	return ci.queues[rootCid]
 }
 

@@ -33,9 +33,9 @@ func (c *chunkEncrypter) EncryptChunk(chunkData []byte) (Key, []byte, []byte, er
 
 func newSpanEncryption(key Key) Interface {
 	refSize := int64(boson.HashSize + KeyLength)
-	return New(key, 0, uint32(boson.BigChunkSize/refSize), sha3.NewLegacyKeccak256)
+	return New(key, 0, uint32(boson.ChunkSize/refSize), sha3.NewLegacyKeccak256)
 }
 
 func newDataEncryption(key Key) Interface {
-	return New(key, int(boson.BigChunkSize), 0, sha3.NewLegacyKeccak256)
+	return New(key, int(boson.ChunkSize), 0, sha3.NewLegacyKeccak256)
 }

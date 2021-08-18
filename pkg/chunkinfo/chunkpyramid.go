@@ -19,11 +19,11 @@ func newChunkPyramid() *chunkPyramid {
 	return &chunkPyramid{pyramid: make(map[string]map[string]bool)}
 }
 
-func (cp *chunkPyramid) checkPyramid(rootCid boson.Address, cid []byte) bool {
+func (cp *chunkPyramid) checkPyramid(rootCid, cid boson.Address) bool {
 	cp.RLock()
 	defer cp.RUnlock()
 	if cp.pyramid[rootCid.String()] != nil {
-		return cp.pyramid[rootCid.String()][boson.NewAddress(cid).String()]
+		return cp.pyramid[rootCid.String()][cid.String()]
 	}
 	return false
 }

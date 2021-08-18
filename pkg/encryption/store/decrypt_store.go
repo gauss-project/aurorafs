@@ -8,9 +8,9 @@ import (
 	"context"
 	"encoding/binary"
 
+	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/encryption"
 	"github.com/gauss-project/aurorafs/pkg/storage"
-	"github.com/gauss-project/aurorafs/pkg/boson"
 	"golang.org/x/crypto/sha3"
 )
 
@@ -57,9 +57,9 @@ func decryptChunkData(chunkData []byte, encryptionKey encryption.Key) ([]byte, e
 	// removing extra bytes which were just added for padding
 	length := binary.LittleEndian.Uint64(decryptedSpan)
 	refSize := int64(boson.HashSize + encryption.KeyLength)
-	for length > boson.BigChunkSize {
-		length = length + (boson.BigChunkSize - 1)
-		length = length / boson.BigChunkSize
+	for length > boson.ChunkSize {
+		length = length + (boson.ChunkSize - 1)
+		length = length / boson.ChunkSize
 		length *= uint64(refSize)
 	}
 
@@ -84,9 +84,9 @@ func decrypt(chunkData []byte, key encryption.Key) ([]byte, []byte, error) {
 
 func newSpanEncryption(key encryption.Key) encryption.Interface {
 	refSize := int64(boson.HashSize + encryption.KeyLength)
-	return encryption.New(key, 0, uint32(boson.BigChunkSize/refSize), sha3.NewLegacyKeccak256)
+	return encryption.New(key, 0, uint32(boson.ChunkSize/refSize), sha3.NewLegacyKeccak256)
 }
 
 func newDataEncryption(key encryption.Key) encryption.Interface {
-	return encryption.New(key, int(boson.BigChunkSize), 0, sha3.NewLegacyKeccak256)
+	return encryption.New(key, int(boson.ChunkSize), 0, sha3.NewLegacyKeccak256)
 }

@@ -6,6 +6,7 @@ import (
 	"github.com/gauss-project/aurorafs/pkg/logging"
 	"github.com/gauss-project/aurorafs/pkg/p2p"
 	traversal "github.com/gauss-project/aurorafs/pkg/traversal"
+	"sync"
 	"time"
 )
 
@@ -27,12 +28,12 @@ type ChunkInfo struct {
 	logger    logging.Logger
 	t         *time.Timer
 	tt        *timeoutTrigger
-	// todo lock
-	queues map[string]*queue
-	ct     *chunkInfoTabNeighbor
-	cd     *chunkInfoDiscover
-	cp     *chunkPyramid
-	cpd    *pendingFinderInfo
+	queuesLk  sync.RWMutex
+	queues    map[string]*queue
+	ct        *chunkInfoTabNeighbor
+	cd        *chunkInfoDiscover
+	cp        *chunkPyramid
+	cpd       *pendingFinderInfo
 }
 
 // New

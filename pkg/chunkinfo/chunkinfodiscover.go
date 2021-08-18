@@ -49,7 +49,7 @@ func (cd *chunkInfoDiscover) updateChunkInfo(rootCid, cid string, overlays [][]b
 	// todo leveDb
 	mn := make(map[string]struct{}, len(overlays))
 	for _, n := range overlays {
-		mn[string(n)] = struct{}{}
+		mn[boson.NewAddress(n).String()] = struct{}{}
 	}
 	if cd.presence[rootCid] == nil {
 		m := make(map[string][][]byte)
@@ -61,9 +61,9 @@ func (cd *chunkInfoDiscover) updateChunkInfo(rootCid, cid string, overlays [][]b
 		cd.presence[rootCid] = m
 	} else {
 		for _, n := range cd.presence[rootCid][cid] {
-			_, ok := mn[string(n)]
+			_, ok := mn[boson.NewAddress(n).String()]
 			if ok {
-				delete(mn, string(n))
+				delete(mn, boson.NewAddress(n).String())
 			}
 		}
 		for k := range mn {

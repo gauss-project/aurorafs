@@ -8,8 +8,8 @@ import (
 	"encoding/binary"
 	"errors"
 
-	"github.com/gauss-project/aurorafs/pkg/file/pipeline"
 	"github.com/gauss-project/aurorafs/pkg/boson"
+	"github.com/gauss-project/aurorafs/pkg/file/pipeline"
 )
 
 var (
@@ -33,7 +33,7 @@ type hashTrieWriter struct {
 func NewHashTrieWriter(chunkSize, branching, refLen int, pipelineFn pipeline.PipelineFunc) pipeline.ChainWriter {
 	return &hashTrieWriter{
 		cursors:    make([]int, 9),
-		buffer:     make([]byte, boson.BigChunkWithSpanSize*9*2), // double size as temp workaround for weak calculation of needed buffer space
+		buffer:     make([]byte, boson.ChunkWithSpanSize*9*2), // double size as temp workaround for weak calculation of needed buffer space
 		branching:  branching,
 		chunkSize:  chunkSize,
 		refSize:    refLen,

@@ -7,15 +7,15 @@
 package bmtpool
 
 import (
-	"github.com/gauss-project/aurorafs/pkg/boson"
 	bmtlegacy "github.com/ethersphere/bmt/legacy"
 	"github.com/ethersphere/bmt/pool"
+	"github.com/gauss-project/aurorafs/pkg/boson"
 )
 
 var instance pool.Pooler
 
 func init() {
-	instance = pool.New(8, boson.BigBmtBranches)
+	instance = pool.New(8, boson.BmtBranches)
 }
 
 // Get a bmt Hasher instance.
