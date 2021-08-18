@@ -2,6 +2,8 @@ package routetab
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/gauss-project/aurorafs/pkg/boson"
@@ -10,6 +12,7 @@ import (
 	"github.com/gauss-project/aurorafs/pkg/p2p"
 	"github.com/gauss-project/aurorafs/pkg/p2p/protobuf"
 	"github.com/gauss-project/aurorafs/pkg/routetab/pb"
+	"github.com/gauss-project/aurorafs/pkg/storage"
 	"github.com/gogf/gf/os/gmlock"
 	"time"
 )
@@ -22,12 +25,13 @@ const (
 )
 
 var (
-	maxTTL         uint8 = 7
-	gcTime             = time.Minute * 10
-	pendingTimeout       = time.Second * 10
-	neighborAlpha        = 2
-	burnTickTime         = time.Minute
-	pendTickTime         = time.Second * 5
+	ErrNotFound           = errors.New("route: not found")
+	NeighborAlpha         = 2
+	MaxTTL          uint8 = 7
+	GcTime                = time.Minute * 10
+	GcInterval            = time.Minute
+	PendingTimeout        = time.Second * 10
+	PendingInterval       = time.Second
 )
 
 type RouteTab interface {
@@ -46,83 +50,124 @@ type RouteTab interface {
 ///                  |---- (nextHop) --|              |  -- (nextHop)
 ///					 |                 |--neighbor ....
 type RouteItem struct {
-	createTime int64
-	ttl        uint8
-	neighbor   boson.Address
-	nextHop    []RouteItem
+	CreateTime int64
+	TTL        uint8
+	Neighbor   boson.Address
+	NextHop    []RouteItem
 }
 
-type RouteTable struct {
-	items map[common.Hash][]RouteItem
-	gmlock.Locker
+type routeTable struct {
+	prefix      string
+	mu          *gmlock.Locker
+	store       storage.StateStorer
+	logger      logging.Logger
+	lockTimeout time.Duration
 }
 
-func (rt *RouteTable) Get(dest boson.Address) (routes []RouteItem) {
+func newRouteTable(store storage.StateStorer, logger logging.Logger) *routeTable {
+	return &routeTable{
+		prefix:      protocolName,
+		mu:          gmlock.New(),
+		store:       store,
+		logger:      logger,
+		lockTimeout: time.Second * 5,
+	}
+}
+
+func (rt *routeTable) tryLock(key string) error {
 	now := time.Now()
-	for !rt.TryRLock(dest.ByteString()) {
+	for !rt.mu.TryRLock(key) {
 		time.After(time.Millisecond * 50)
-		if time.Since(now).Seconds() > 10 {
-			return
+		if time.Since(now).Seconds() > rt.lockTimeout.Seconds() {
+			rt.logger.Errorf("routeTable: %s try lock timeout", key)
+			err := fmt.Errorf("try lock timeout")
+			return err
 		}
 	}
+	return nil
+}
 
-	destKey := common.BytesToHash(dest.Bytes())
-	routes, _ = rt.items[destKey]
-	rt.RUnlock(dest.ByteString())
+func (rt *routeTable) Set(target boson.Address, routes []RouteItem) error {
+	dest := target.String()
+	key := rt.prefix + dest
+	err := rt.tryLock(key)
+	if err != nil {
+		return err
+	}
+	defer rt.mu.RUnlock(key)
 
+	old := make([]RouteItem, 0)
+	err = rt.store.Get(key, &old)
+	if err != nil && err != ErrNotFound {
+		err = fmt.Errorf("routeTable: Set %s store get error: %s", dest, err.Error())
+		rt.logger.Errorf(err.Error())
+		return err
+	}
+	if len(old) > 0 {
+		routes = mergeRouteList(routes, old)
+	}
+
+	err = rt.store.Put(key, routes)
+	if err != nil {
+		rt.logger.Errorf("routeTable: Set %s store put error: %s", dest, err.Error())
+	}
+	return err
+}
+
+func (rt *routeTable) Get(target boson.Address) (routes []RouteItem, err error) {
+	dest := target.String()
+	key := rt.prefix + dest
+	err = rt.tryLock(key)
+	if err != nil {
+		return
+	}
+	defer rt.mu.RUnlock(key)
+
+	err = rt.store.Get(key, &routes)
+	if err != nil {
+		if err == storage.ErrNotFound {
+			err = ErrNotFound
+			return
+		}
+		err = fmt.Errorf("routeTable: Get %s store get error: %s", dest, err.Error())
+		rt.logger.Errorf(err.Error())
+	}
 	return
 }
 
-func (rt *RouteTable) Set(addrKey common.Hash, value []RouteItem) {
-	now := time.Now()
-	for !rt.TryLock(addrKey.String()) {
-		time.After(time.Millisecond * 50)
-		if time.Since(now).Seconds() > 10 {
-			return
+func (rt *routeTable) Gc(expire time.Duration) {
+	err := rt.store.Iterate(rt.prefix, func(target, value []byte) (stop bool, err error) {
+		key := string(target)
+		err = rt.tryLock(key)
+		if err != nil {
+			return false, err
 		}
-	}
-
-	old, has := rt.items[addrKey]
-	if has {
-		// update
-		value = pathToUpdateRouteList(value, old)
-	}
-	rt.items[addrKey] = value
-	rt.Unlock(addrKey.String())
-}
-
-func (rt *RouteTable) gc() {
-	ticker := time.NewTicker(burnTickTime)
-	for {
-		<-ticker.C
-		for destKey, items := range rt.items {
-			if rt.TryLock(destKey.String()) {
-				nowItems := make([]RouteItem, 0)
-				for _, v := range items {
-					if time.Now().Unix()-v.createTime < gcTime.Milliseconds()*1000 {
-						v.nextHop = gcNextHop(v.nextHop)
-						nowItems = append(nowItems, v)
-					}
+		defer rt.mu.RUnlock(key)
+		routes := make([]RouteItem, 0)
+		err = json.Unmarshal(value, &routes)
+		if err != nil {
+			return false, err
+		}
+		now, updated := checkExpired(routes, expire)
+		if updated {
+			if len(now) > 0 {
+				err = rt.store.Put(key, now)
+				if err != nil {
+					return false, err
 				}
-				if len(nowItems) > 0 {
-					rt.items[destKey] = nowItems
-				} else {
-					delete(rt.items, destKey)
+			} else {
+				err = rt.store.Delete(key)
+				if err != nil {
+					return false, err
 				}
 			}
-		}
-	}
-}
 
-func gcNextHop(old []RouteItem) []RouteItem {
-	now := make([]RouteItem, 0)
-	for _, v := range old {
-		if time.Now().Unix()-v.createTime < gcTime.Milliseconds()*1000 {
-			v.nextHop = gcNextHop(v.nextHop)
-			now = append(now, v)
 		}
+		return false, nil
+	})
+	if err != nil {
+		rt.logger.Errorf("routeTable: gc err %s", err)
 	}
-	return now
 }
 
 type pendCallResItem struct {
@@ -140,11 +185,11 @@ type Service struct {
 	logger       logging.Logger
 	metrics      metrics
 	pendingCalls pendCallResTab
-	routeTable   RouteTable
+	routeTable   *routeTable
 	kad          *kademlia.Kad
 }
 
-func New(addr boson.Address, ctx context.Context, streamer p2p.Streamer, kad *kademlia.Kad, logger logging.Logger) Service {
+func New(addr boson.Address, ctx context.Context, streamer p2p.Streamer, kad *kademlia.Kad, store storage.StateStorer, logger logging.Logger) Service {
 	// load route table from db only those valid item will be loaded
 
 	service := Service{
@@ -153,7 +198,7 @@ func New(addr boson.Address, ctx context.Context, streamer p2p.Streamer, kad *ka
 		logger:       logger,
 		kad:          kad,
 		pendingCalls: pendCallResTab{},
-		routeTable:   RouteTable{items: make(map[common.Hash][]RouteItem)},
+		routeTable:   newRouteTable(store, logger),
 		metrics:      newMetrics(),
 	}
 	// start route service
@@ -170,7 +215,14 @@ func (s *Service) Close() error {
 }
 
 func (s *Service) start(ctx context.Context) {
-	go s.routeTable.gc()
+	go func() {
+		s.routeTable.Gc(GcTime)
+		ticker := time.NewTicker(GcInterval)
+		for {
+			<-ticker.C
+			s.routeTable.Gc(GcTime)
+		}
+	}()
 	go s.pendingClean()
 	select {
 	case <-ctx.Done():
@@ -214,21 +266,15 @@ func (s *Service) handlerFindRouteReq(ctx context.Context, p p2p.Peer, stream p2
 
 	// passive route save
 	go func(path [][]byte) {
-		pathAddress := make([]boson.Address, len(path))
-		for k, v := range path {
-			addr := boson.NewAddress(v)
-			pathAddress[k] = addr
-		}
-		for i, addr := range pathAddress {
-			now := pathToRouteItem(pathAddress[i:])
-			addrKey := common.BytesToHash(addr.Bytes())
-			s.routeTable.Set(addrKey, now)
+		for i, target := range path {
+			now := pathToRouteItem(path[i:])
+			_ = s.routeTable.Set(boson.NewAddress(target), now)
 		}
 	}(req.Path)
 
 	dest := boson.NewAddress(req.Dest)
 
-	if len(req.Path) <= int(maxTTL) {
+	if len(req.Path) <= int(MaxTTL) {
 		// need resp
 		routes, err := s.GetRoute(ctx, dest)
 		if err != nil {
@@ -248,7 +294,7 @@ func (s *Service) handlerFindRouteReq(ctx context.Context, p p2p.Peer, stream p2
 				}
 			} else {
 				// dest in neighbor then resp
-				nowPath := []boson.Address{dest, s.addr}
+				nowPath := [][]byte{dest.Bytes(), s.addr.Bytes()}
 				routes = pathToRouteItem(nowPath)
 				s.doResp(ctx, p, dest, routes)
 				s.logger.Tracef("route: handlerFindRouteReq dest= %s in neighbor", dest.String())
@@ -293,7 +339,7 @@ func (s *Service) FindRoute(ctx context.Context, dest boson.Address) (routes []R
 		}
 		forward := s.getNeighbor()
 		if len(forward) > 0 {
-			ct, cancel := context.WithTimeout(ctx, pendingTimeout)
+			ct, cancel := context.WithTimeout(ctx, PendingTimeout)
 			defer cancel()
 			resCh := make(chan struct{}, len(forward))
 			for _, v := range forward {
@@ -306,7 +352,7 @@ func (s *Service) FindRoute(ctx context.Context, dest boson.Address) (routes []R
 			select {
 			case <-ct.Done():
 				close(resCh)
-				err = fmt.Errorf("route: FindRoute dest %s timeout %.0fs", dest.String(), pendingTimeout.Seconds())
+				err = fmt.Errorf("route: FindRoute dest %s timeout %.0fs", dest.String(), PendingTimeout.Seconds())
 			case <-resCh:
 				routes, err = s.GetRoute(ctx, dest)
 			}
@@ -319,22 +365,17 @@ func (s *Service) FindRoute(ctx context.Context, dest boson.Address) (routes []R
 }
 
 func (s *Service) GetRoute(_ context.Context, dest boson.Address) (routes []RouteItem, err error) {
-	routes = s.routeTable.Get(dest)
-	if len(routes) > 0 {
-		return
-	}
-	err = fmt.Errorf("route not found")
-	return
+	return s.routeTable.Get(dest)
 }
 
 func (s *Service) pendingClean() {
-	ticker := time.NewTicker(pendTickTime)
+	ticker := time.NewTicker(PendingInterval)
 	for {
 		<-ticker.C
 		for destKey, item := range s.pendingCalls {
 			now := pendingCallResArray{}
 			for _, v := range item {
-				if time.Since(v.createTime).Seconds() < pendingTimeout.Seconds() {
+				if time.Since(v.createTime).Seconds() < PendingTimeout.Seconds() {
 					now = append(now, v)
 				}
 			}
@@ -348,21 +389,22 @@ func (s *Service) pendingClean() {
 }
 
 func (s *Service) saveRespRouteItem(ctx context.Context, neighbor boson.Address, resp pb.FindRouteResp) {
-	minTTL := maxTTL
+	minTTL := MaxTTL
 	for _, v := range resp.RouteItems {
 		if uint8(v.Ttl) < minTTL {
 			minTTL = uint8(v.Ttl)
 		}
 	}
 	now := []RouteItem{{
-		createTime: time.Now().Unix(),
-		ttl:        minTTL + 1,
-		neighbor:   neighbor,
-		nextHop:    convPbItemListToRouteList(resp.RouteItems),
+		CreateTime: time.Now().Unix(),
+		TTL:        minTTL + 1,
+		Neighbor:   neighbor,
+		NextHop:    convPbToRouteList(resp.RouteItems),
 	}}
 
 	destKey := common.BytesToHash(resp.Dest)
-	s.routeTable.Set(destKey, now)
+
+	_ = s.routeTable.Set(boson.NewAddress(resp.Dest), now)
 
 	// doing resp
 	res, has := s.pendingCalls[destKey]
@@ -381,85 +423,6 @@ func (s *Service) saveRespRouteItem(ctx context.Context, neighbor boson.Address,
 	}
 }
 
-func inNeighbor(addr boson.Address, items []RouteItem) (now []RouteItem, index int, has bool) {
-	now = make([]RouteItem, 0)
-	for _, v := range items {
-		if time.Now().Unix()-v.createTime < gcTime.Milliseconds()*1000 {
-			now = append(now, v)
-			if v.neighbor.Equal(addr) {
-				// only one match
-				has = true
-				index = len(now) - 1
-			}
-		}
-	}
-	return
-}
-
-func pathToUpdateRouteList(nowList, oldList []RouteItem) (routes []RouteItem) {
-	routesNew := make([]RouteItem, 0)
-	for _, now := range nowList {
-		tmp := make([]RouteItem, 0)
-		for _, old := range oldList {
-			if now.neighbor.Equal(old.neighbor) {
-				now = pathToUpdateRouteItem(now, old)
-			} else {
-				tmp = append(tmp, old)
-			}
-		}
-		routesNew = append(routesNew, now)
-		oldList = tmp
-	}
-	if len(oldList) > 0 {
-		routesNew = append(routesNew, oldList...)
-	}
-	return routesNew
-}
-
-func pathToUpdateRouteItem(now, old RouteItem) (route RouteItem) {
-	if now.neighbor.Equal(old.neighbor) {
-		if old.ttl > now.ttl {
-			old.ttl = now.ttl
-		}
-		old.createTime = time.Now().Unix()
-		for _, x := range now.nextHop {
-			nowNext, index, has := inNeighbor(x.neighbor, old.nextHop)
-			if has {
-				nowNext[index] = pathToUpdateRouteItem(x, nowNext[index])
-				old.nextHop = nowNext
-			} else {
-				old.nextHop = append(old.nextHop, x)
-			}
-		}
-		route = old
-	}
-	return
-}
-
-// example path [a,b,c,d,e] the first is dest
-// return e-d-c-b
-func pathToRouteItem(path []boson.Address) (routes []RouteItem) {
-	ttl := len(path) - 1
-	if ttl < 1 {
-		return
-	}
-	route := RouteItem{
-		createTime: time.Now().Unix(),
-		ttl:        1,
-		neighbor:   path[1],
-	}
-	for i := 2; i <= ttl; i++ {
-		itemNew := RouteItem{
-			createTime: time.Now().Unix(),
-			ttl:        uint8(ttl),
-			neighbor:   path[i],
-			nextHop:    []RouteItem{route},
-		}
-		route = itemNew
-	}
-	return []RouteItem{route}
-}
-
 func (s *Service) getNeighbor() (forward []boson.Address) {
 	forward = make([]boson.Address, 0)
 	cnt := 0
@@ -468,7 +431,7 @@ func (s *Service) getNeighbor() (forward []boson.Address) {
 			// neighbor
 			forward = append(forward, address)
 			cnt++
-			if cnt >= neighborAlpha {
+			if cnt >= NeighborAlpha {
 				return true, false, nil
 			}
 		}
@@ -493,58 +456,6 @@ func (s *Service) isNeighbor(dest boson.Address) (has bool) {
 		s.logger.Warningf("route: isNeighbor %s", err.Error())
 	}
 	return
-}
-
-func inPath(b []byte, path [][]byte) bool {
-	s := string(b)
-	for _, v := range path {
-		if string(v) == s {
-			return true
-		}
-	}
-	return false
-}
-
-func convRouteListToPbRouteList(srcList []RouteItem) []*pb.RouteItem {
-	out := make([]*pb.RouteItem, len(srcList))
-	for k, src := range srcList {
-		out[k] = convRouteItemToPbRoute(src)
-	}
-	return out
-}
-
-func convRouteItemToPbRoute(src RouteItem) *pb.RouteItem {
-	out := &pb.RouteItem{
-		CreateTime: src.createTime,
-		Ttl:        uint32(src.ttl),
-		Neighbor:   src.neighbor.Bytes(),
-		NextHop:    make([]*pb.RouteItem, len(src.nextHop)),
-	}
-	for k, v := range src.nextHop {
-		out.NextHop[k] = convRouteItemToPbRoute(v)
-	}
-	return out
-}
-
-func convPbItemListToRouteList(srcList []*pb.RouteItem) []RouteItem {
-	out := make([]RouteItem, 0)
-	for _, src := range srcList {
-		out = append(out, convPbItemToRouteItem(src))
-	}
-	return out
-}
-
-func convPbItemToRouteItem(src *pb.RouteItem) RouteItem {
-	out := RouteItem{
-		createTime: src.CreateTime,
-		ttl:        uint8(src.Ttl),
-		neighbor:   boson.NewAddress(src.Neighbor),
-		nextHop:    make([]RouteItem, len(src.NextHop)),
-	}
-	for k, v := range src.NextHop {
-		out.nextHop[k] = convPbItemToRouteItem(v)
-	}
-	return out
 }
 
 func (s *Service) doReq(ctx context.Context, src boson.Address, peer p2p.Peer, dest boson.Address, req *pb.FindRouteReq, ch chan struct{}) {
@@ -603,7 +514,7 @@ func (s *Service) doResp(ctx context.Context, peer p2p.Peer, dest boson.Address,
 	}()
 	resp := &pb.FindRouteResp{
 		Dest:       dest.Bytes(),
-		RouteItems: convRouteListToPbRouteList(routes),
+		RouteItems: convRouteToPbRouteList(routes),
 	}
 	w := protobuf.NewWriter(stream)
 	err := w.WriteMsgWithContext(ctx, resp)
