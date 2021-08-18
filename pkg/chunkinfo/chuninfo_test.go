@@ -137,8 +137,6 @@ func TestHandlerChunkInfoResp(t *testing.T) {
 	server.OnChunkTransferred(cid3, rootCid, serverAddress) //设置cid被哪些节点调用过
 
 	client := mockChunkInfo(t, s, recorder)
-	//client.newQueue(rootCid.String())
-	//client.getQueue(rootCid.String()).push(Pulling, serverAddress.Bytes())
 
 	ctx := context.Background()
 	req := client.cd.createChunkInfoReq(rootCid)
@@ -168,6 +166,8 @@ func TestHandlerPyramidReq(t *testing.T) {
 		streamtest.WithProtocols(server1.Protocol()),
 	)
 	server := mockChunkInfo(t, s, recorder1)
+	server.newQueue(rootCid.String())
+	server.getQueue(rootCid.String()).push(Pulling, serverAddress.Bytes())
 
 	recorder := streamtest.New(
 		streamtest.WithProtocols(server.Protocol()),
@@ -184,25 +184,56 @@ func TestHandlerPyramidReq(t *testing.T) {
 
 	client.onChunkPyramidReq(ctx, nil, serverAddress, cpReq)
 
-	records1, err := recorder1.Records(clientAddress, "chunkinfo", "1.0.0", "chunkpyramid/resp")
+	records1, err := recorder.Records(serverAddress, "chunkinfo", "1.0.0", "chunkpyramid/resp")
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	fmt.Println(records1)
 
-	//r := protobuf.NewReader(stream)
-	//defer stream.FullClose()
-	//var resp pb.ChunkPyramidResp
-	//if err := r.ReadMsgWithContext(ctx, &resp); err != nil {
-	//	ci.logger.Errorf("read pyramid message: %w", err)
-	//	return fmt.Errorf("read pyramid message: %w", err)
-	//}
-	//ci.logger.Tracef("got pyramid resp: %q", resp)
-	//ci.onChunkPyramidResp(ctx, nil, p.Address, resp)
-	//return nil
 }
 func TestHandlerPyramidResp(t *testing.T) {
+
+	serverAddress := boson.MustParseHexAddress("02")
+	clientAddress := boson.MustParseHexAddress("01")
+	cid1 := boson.MustParseHexAddress("03")
+	cid2 := boson.MustParseHexAddress("04")
+	cid3 := boson.MustParseHexAddress("05")
+
+	rootCid, s := mockUploadFile(t)
+	server1 := mockChunkInfo(t, s, nil)
+	server1.newQueue(rootCid.String())
+
+	recorder1 := streamtest.New(
+		streamtest.WithBaseAddr(clientAddress),
+		streamtest.WithProtocols(server1.Protocol()),
+	)
+	server := mockChunkInfo(t, s, recorder1)
+	server.newQueue(rootCid.String())
+	server.getQueue(rootCid.String()).push(Pulling, serverAddress.Bytes())
+	server.cpd.updatePendingFinder(rootCid)
+	recorder := streamtest.New(
+		streamtest.WithProtocols(server.Protocol()),
+		streamtest.WithBaseAddr(clientAddress),
+	)
+
+	client := mockChunkInfo(t, s, recorder)
+	client.OnChunkTransferred(cid1, rootCid, clientAddress) //设置cid被哪些节点调用过
+	client.OnChunkTransferred(cid2, rootCid, clientAddress) //设置cid被哪些节点调用过
+	client.OnChunkTransferred(cid3, rootCid, clientAddress) //设置cid被哪些节点调用过
+
+	ctx := context.Background()
+	//prammap,_ := client.getChunkPyramid(ctx,rootCid)
+	cpReq := client.cp.createChunkPyramidReq(rootCid)
+
+	client.onChunkPyramidReq(ctx, nil, serverAddress, cpReq)
+
+	records1, err := recorder1.Records(clientAddress, "chunkinfo", "1.0.0", "chunkpyramid/req")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	fmt.Println(records1)
 
 }
 
