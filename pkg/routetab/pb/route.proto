@@ -4,15 +4,24 @@
 
 syntax = "proto3";
 
-package pingpong;
+package routetab;
 
 option go_package = "pb";
 
 // define FindRouteReq message struct here
 message FindRouteReq {
-    string Greeting = 1;
+    bytes Dest = 1;
+    repeated bytes Path = 2;
 }
 // define FindRouteResp message struct here
 message FindRouteResp {
-    string Response = 1;
+    bytes Dest = 1;
+    RouteItem RouteItem = 2;
+}
+
+message RouteItem {
+    int64 createTime = 1;
+    uint32 ttl = 2;
+    bytes neighbor = 3;
+    repeated RouteItem nextHop = 4;
 }
