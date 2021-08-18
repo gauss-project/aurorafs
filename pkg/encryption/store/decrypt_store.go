@@ -8,9 +8,9 @@ import (
 	"context"
 	"encoding/binary"
 
+	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/encryption"
 	"github.com/gauss-project/aurorafs/pkg/storage"
-	"github.com/gauss-project/aurorafs/pkg/boson"
 	"golang.org/x/crypto/sha3"
 )
 
