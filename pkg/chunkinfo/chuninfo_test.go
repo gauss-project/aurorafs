@@ -193,6 +193,7 @@ func TestHandlerChunkInfoResp(t *testing.T) {
 
 	fmt.Println(resp_messages)
 }
+
 func TestHandlerPyramidReq(t *testing.T) {
 	clientAddress := boson.MustParseHexAddress("01")
 	serverAddress := boson.MustParseHexAddress("02")
@@ -387,6 +388,7 @@ func newTestProtocol(h p2p.HandlerFunc, protocolName, protocolVersion, streamNam
 		},
 	}
 }
+
 func mockUploadFile(t *testing.T) (boson.Address, traversal.Service) {
 	chunkCount := 10 + 1
 
