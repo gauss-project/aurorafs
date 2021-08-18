@@ -167,8 +167,8 @@ func (ci *ChunkInfo) onFindChunkPyramid(ctx context.Context, authInfo []byte, ro
 	_, ok := ci.cp.pyramid[rootCid.String()]
 	if !ok {
 		// validate pyramid
-		v, _ := ci.traversal.CheckTrieData(ctx, rootCid, pyramid)
-		if v == nil {
+		v, err := ci.traversal.CheckTrieData(ctx, rootCid, pyramid)
+		if err != nil {
 			ci.logger.Errorf("chunk pyramid: check pyramid error")
 			return
 		}
@@ -181,13 +181,10 @@ func (ci *ChunkInfo) onFindChunkPyramid(ctx context.Context, authInfo []byte, ro
 func (ci *ChunkInfo) onFindChunkInfo(ctx context.Context, authInfo []byte, rootCid, overlay boson.Address, chunkInfo map[string]*pb.Overlays) {
 	ci.tt.removeTimeOutTrigger(rootCid, overlay)
 	overlays := make([][]byte, 0)
-	for _, n := range chunkInfo {
+	for cid, n := range chunkInfo {
 		//  validate rootCid:cid
-		s := n.V
-		for _, v := range s {
-			if ci.cp.checkPyramid(rootCid, v) {
-				overlays = append(overlays, v)
-			}
+		if ci.cp.checkPyramid(rootCid, boson.MustParseHexAddress(cid)) {
+			overlays = append(overlays, n.V...)
 		}
 	}
 	ci.cd.updateChunkInfos(rootCid, chunkInfo)
