@@ -36,12 +36,10 @@ func (cd *chunkInfoDiscover) getChunkInfo(rootCid, cid boson.Address) [][]byte {
 }
 
 // updateChunkInfos
-func (cd *chunkInfoDiscover) updateChunkInfos(rootCid boson.Address, pyramids map[string]*pb.Overlays) {
+func (cd *chunkInfoDiscover) updateChunkInfos(rootCid, cid boson.Address, overlays [][]byte) {
 	cd.Lock()
 	defer cd.Unlock()
-	for k, v := range pyramids {
-		cd.updateChunkInfo(rootCid.String(), k, v.V)
-	}
+	cd.updateChunkInfo(rootCid.String(), cid.String(), overlays)
 }
 
 // updateChunkInfo

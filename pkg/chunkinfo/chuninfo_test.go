@@ -84,6 +84,8 @@ func TestFindChunkInfo(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Log(messages1)
+	v := server1.GetChunkInfo(rootCid, cid)
+	t.Logf("%v", v)
 }
 
 func TestHandlerChunkInfoReq(t *testing.T) {

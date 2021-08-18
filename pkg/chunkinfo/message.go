@@ -183,10 +183,11 @@ func (ci *ChunkInfo) onFindChunkInfo(ctx context.Context, authInfo []byte, rootC
 	overlays := make([][]byte, 0)
 	for cid, n := range chunkInfo {
 		//  validate rootCid:cid
-		if ci.cp.checkPyramid(rootCid, boson.MustParseHexAddress(cid)) {
+		c := boson.MustParseHexAddress(cid)
+		if ci.cp.checkPyramid(rootCid, c) {
 			overlays = append(overlays, n.V...)
+			ci.cd.updateChunkInfos(rootCid, c, n.V)
 		}
 	}
-	ci.cd.updateChunkInfos(rootCid, chunkInfo)
 	ci.updateQueue(ctx, authInfo, rootCid, overlay, overlays)
 }
