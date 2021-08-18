@@ -8,8 +8,8 @@ import (
 )
 
 const (
-	TimeOut = 1000
-	Time    = 3
+	TimeOut = 30
+	Time    = 5
 )
 
 // timeoutTrigger
@@ -26,7 +26,7 @@ func newTimeoutTrigger() *timeoutTrigger {
 // updateTimeOutTrigger
 func (tt *timeoutTrigger) updateTimeOutTrigger(rootCid, overlay []byte) {
 	tt.Lock()
-	tt.Unlock()
+	defer tt.Unlock()
 	key := boson.NewAddress(rootCid).String() + "_" + boson.NewAddress(overlay).String()
 	tt.trigger[key] = time.Now().Unix()
 }
@@ -34,13 +34,15 @@ func (tt *timeoutTrigger) updateTimeOutTrigger(rootCid, overlay []byte) {
 // removeTimeOutTrigger
 func (tt *timeoutTrigger) removeTimeOutTrigger(rootCid, overlay boson.Address) {
 	tt.Lock()
-	tt.Unlock()
+	defer tt.Unlock()
 	key := rootCid.String() + "_" + overlay.String()
 	delete(tt.trigger, key)
 }
 
 // getTimeOutRootCidAndNode
 func (tt *timeoutTrigger) getTimeOutRootCidAndNode() ([]byte, []byte) {
+	tt.RLock()
+	defer tt.RUnlock()
 	for k, t := range tt.trigger {
 		if t+TimeOut <= time.Now().Unix() {
 			arr := strings.Split(k, "_")

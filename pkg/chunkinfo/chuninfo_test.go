@@ -353,24 +353,24 @@ func TestQueueProcess(t *testing.T) {
 	)
 	addr := boson.MustParseHexAddress("ca1e9f3938cc1425c6061b96ad9eb93e134dfe8734ad490164ef20af9d1cf59c")
 	rc := rootCid.String()
-	a := mockChunkInfo(s, recorder)
-	a.cpd.updatePendingFinder(rootCid)
-	a.newQueue(rc)
-	a.getQueue(rc).push(Pulling, addr.Bytes())
+	aAddress := mockChunkInfo(s, recorder)
+	aAddress.cpd.updatePendingFinder(rootCid)
+	aAddress.newQueue(rc)
+	aAddress.getQueue(rc).push(Pulling, addr.Bytes())
 	// max pulling
 	for i := 0; i < PullMax; i++ {
 		overlay := test.RandomAddress()
 		if i == 0 {
-			a.updateQueue(context.Background(), nil, rootCid, addr, [][]byte{overlay.Bytes()})
+			aAddress.updateQueue(context.Background(), nil, rootCid, addr, [][]byte{overlay.Bytes()})
 		} else {
-			a.updateQueue(context.Background(), nil, rootCid, boson.NewAddress(*a.getQueue(rc).pop(Pulling)), [][]byte{overlay.Bytes()})
+			aAddress.updateQueue(context.Background(), nil, rootCid, boson.NewAddress(*aAddress.getQueue(rc).pop(Pulling)), [][]byte{overlay.Bytes()})
 		}
 	}
-	if len(a.getQueue(rc).getPull(Pulled)) != PullMax {
+	if len(aAddress.getQueue(rc).getPull(Pulled)) != PullMax {
 		t.Fatalf("pulled len error")
 	}
 
-	if len(a.getQueue(rc).getPull(UnPull)) != 1 {
+	if len(aAddress.getQueue(rc).getPull(UnPull)) != 1 {
 		t.Fatalf("unpull len error")
 	}
 
