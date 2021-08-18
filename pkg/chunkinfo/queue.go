@@ -138,7 +138,7 @@ func (q *queue) isExists(pull Pull, overlay []byte) bool {
 }
 
 // queueProcess
-func (ci *ChunkInfo) queueProcess(ctx context.Context, rootCid boson.Address) {
+func (ci *ChunkInfo) queueProcess(ctx context.Context, rootCid boson.Address, streamName string) {
 	q := ci.getQueue(rootCid.String())
 	// pulled + pulling >= pullMax
 	if q.len(Pulled)+q.len(Pulling) >= PullMax {
@@ -159,8 +159,14 @@ func (ci *ChunkInfo) queueProcess(ctx context.Context, rootCid boson.Address) {
 		unNode := q.pop(UnPull)
 		q.push(Pulling, *unNode)
 		ci.tt.updateTimeOutTrigger(rootCid.Bytes(), *unNode)
-		ciReq := ci.cd.createChunkInfoReq(rootCid)
-		ci.sendData(ctx, boson.NewAddress(*unNode), streamChunkInfoReqName, ciReq)
+		switch streamName {
+		case streamChunkInfoReqName:
+			ciReq := ci.cd.createChunkInfoReq(rootCid)
+			ci.sendData(ctx, boson.NewAddress(*unNode), streamName, ciReq)
+		case streamPyramidReqName:
+			cpReq := ci.cp.createChunkPyramidReq(rootCid)
+			ci.sendData(ctx, boson.NewAddress(*unNode), streamName, cpReq)
+		}
 	}
 }
 

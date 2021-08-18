@@ -63,9 +63,5 @@ func (cn *chunkInfoTabNeighbor) createChunkPyramidResp(rootCid boson.Address, cp
 
 // doFindChunkPyramid
 func (ci *ChunkInfo) doFindChunkPyramid(ctx context.Context, authInfo []byte, rootCid boson.Address, overlays []boson.Address) {
-	cpReq := ci.cp.createChunkPyramidReq(rootCid)
-	for _, overlay := range overlays {
-		ci.tt.updateTimeOutTrigger(rootCid.Bytes(), overlay.Bytes())
-		ci.sendData(ctx, overlay, streamPyramidReqName, cpReq)
-	}
+	ci.queueProcess(ctx, rootCid, streamPyramidReqName)
 }

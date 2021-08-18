@@ -37,19 +37,19 @@ func TestFindChunkInfo(t *testing.T) {
 	clientAddress := boson.MustParseHexAddress("01")
 	cid := boson.MustParseHexAddress("03")
 	rootCid, s := mockUploadFile(t)
-	server1 := mockChunkInfo(t, s, nil)
+	server1 := mockChunkInfo(s, nil)
 	server1.newQueue(rootCid.String())
 	recorder1 := streamtest.New(
 		streamtest.WithBaseAddr(clientAddress),
 		streamtest.WithProtocols(server1.Protocol()),
 	)
-	server := mockChunkInfo(t, s, recorder1)
+	server := mockChunkInfo(s, recorder1)
 	server.OnChunkTransferred(cid, rootCid, serverAddress)
 	recorder := streamtest.New(
 		streamtest.WithProtocols(server.Protocol()),
 		streamtest.WithBaseAddr(clientAddress),
 	)
-	client := mockChunkInfo(t, s, recorder)
+	client := mockChunkInfo(s, recorder)
 	client.FindChunkInfo(context.Background(), nil, rootCid, []boson.Address{serverAddress})
 
 	records, err := recorder.Records(serverAddress, "chunkinfo", "1.0.0", "chunkpyramid/req")
@@ -85,8 +85,6 @@ func TestFindChunkInfo(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Log(messages1)
-	v := server1.GetChunkInfo(rootCid, cid)
-	t.Logf("%v", v)
 }
 
 func TestHandlerChunkInfoReq(t *testing.T) {
@@ -96,13 +94,13 @@ func TestHandlerChunkInfoReq(t *testing.T) {
 	cid2 := boson.MustParseHexAddress("04")
 	cid3 := boson.MustParseHexAddress("05")
 	rootCid, s := mockUploadFile(t)
-	server1 := mockChunkInfo(t, s, nil)
+	server1 := mockChunkInfo(s, nil)
 	server1.newQueue(rootCid.String())
 	recorder1 := streamtest.New(
 		streamtest.WithBaseAddr(clientAddress),
 		streamtest.WithProtocols(server1.Protocol()),
 	)
-	server := mockChunkInfo(t, s, recorder1)
+	server := mockChunkInfo(s, recorder1)
 
 	recorder := streamtest.New(
 		streamtest.WithProtocols(server.Protocol()),
@@ -115,7 +113,7 @@ func TestHandlerChunkInfoReq(t *testing.T) {
 	server.OnChunkTransferred(cid2, rootCid, serverAddress) //设置cid被哪些节点调用过
 	server.OnChunkTransferred(cid3, rootCid, serverAddress) //设置cid被哪些节点调用过
 
-	client := mockChunkInfo(t, s, recorder)
+	client := mockChunkInfo(s, recorder)
 
 	ctx := context.Background()
 	req := client.cd.createChunkInfoReq(rootCid)
@@ -150,13 +148,13 @@ func TestHandlerChunkInfoResp(t *testing.T) {
 	cid2 := boson.MustParseHexAddress("04")
 	cid3 := boson.MustParseHexAddress("05")
 	rootCid, s := mockUploadFile(t)
-	server1 := mockChunkInfo(t, s, nil)
+	server1 := mockChunkInfo(s, nil)
 	server1.newQueue(rootCid.String())
 	recorder1 := streamtest.New(
 		streamtest.WithBaseAddr(clientAddress),
 		streamtest.WithProtocols(server1.Protocol()),
 	)
-	server := mockChunkInfo(t, s, recorder1)
+	server := mockChunkInfo(s, recorder1)
 
 	recorder := streamtest.New(
 		streamtest.WithProtocols(server.Protocol()),
@@ -169,7 +167,7 @@ func TestHandlerChunkInfoResp(t *testing.T) {
 	server.OnChunkTransferred(cid2, rootCid, serverAddress)
 	server.OnChunkTransferred(cid3, rootCid, serverAddress)
 
-	client := mockChunkInfo(t, s, recorder)
+	client := mockChunkInfo(s, recorder)
 
 	ctx := context.Background()
 	req := client.cd.createChunkInfoReq(rootCid)
@@ -196,6 +194,7 @@ func TestHandlerChunkInfoResp(t *testing.T) {
 
 	fmt.Println(resp_messages)
 }
+
 func TestHandlerPyramidReq(t *testing.T) {
 
 	serverAddress := boson.MustParseHexAddress("02")
@@ -205,13 +204,13 @@ func TestHandlerPyramidReq(t *testing.T) {
 	cid3 := boson.MustParseHexAddress("05")
 
 	rootCid, s := mockUploadFile(t)
-	server1 := mockChunkInfo(t, s, nil)
+	server1 := mockChunkInfo(s, nil)
 	server1.newQueue(rootCid.String())
 	recorder1 := streamtest.New(
 		streamtest.WithBaseAddr(clientAddress),
 		streamtest.WithProtocols(server1.Protocol()),
 	)
-	server := mockChunkInfo(t, s, recorder1)
+	server := mockChunkInfo(s, recorder1)
 	server.newQueue(rootCid.String())
 	server.getQueue(rootCid.String()).push(Pulling, serverAddress.Bytes())
 
@@ -220,7 +219,7 @@ func TestHandlerPyramidReq(t *testing.T) {
 		streamtest.WithBaseAddr(clientAddress),
 	)
 
-	client := mockChunkInfo(t, s, recorder)
+	client := mockChunkInfo(s, recorder)
 	client.OnChunkTransferred(cid1, rootCid, clientAddress) //设置cid被哪些节点调用过
 	client.OnChunkTransferred(cid2, rootCid, clientAddress) //设置cid被哪些节点调用过
 	client.OnChunkTransferred(cid3, rootCid, clientAddress) //设置cid被哪些节点调用过
@@ -251,6 +250,7 @@ func TestHandlerPyramidReq(t *testing.T) {
 	fmt.Println(resp_messages)
 
 }
+
 func TestHandlerPyramidResp(t *testing.T) {
 	serverAddress := boson.MustParseHexAddress("02")
 	clientAddress := boson.MustParseHexAddress("01")
@@ -273,14 +273,14 @@ func TestHandlerPyramidResp(t *testing.T) {
 			}, protocolName, protocolVersion, streamChunkInfoRespName)),
 	)
 
-	server1 := mockChunkInfo(t, s, recorder2)
+	server1 := mockChunkInfo(s, recorder2)
 	server1.newQueue(rootCid.String())
 
 	recorder1 := streamtest.New(
 		streamtest.WithBaseAddr(clientAddress),
 		streamtest.WithProtocols(server1.Protocol()),
 	)
-	server := mockChunkInfo(t, s, recorder1)
+	server := mockChunkInfo(s, recorder1)
 	server.newQueue(rootCid.String())
 	server.getQueue(rootCid.String()).push(Pulling, serverAddress.Bytes())
 	server.cpd.updatePendingFinder(rootCid)
@@ -289,7 +289,7 @@ func TestHandlerPyramidResp(t *testing.T) {
 		streamtest.WithBaseAddr(clientAddress),
 	)
 	ctx := context.Background()
-	client := mockChunkInfo(t, s, recorder)
+	client := mockChunkInfo(s, recorder)
 	tree, _ := client.getChunkPyramid(ctx, rootCid)
 	pram, _ := client.traversal.CheckTrieData(ctx, rootCid, tree)
 
@@ -360,7 +360,7 @@ func TestQueueProcess(t *testing.T) {
 	)
 	addr := boson.MustParseHexAddress("ca1e9f3938cc1425c6061b96ad9eb93e134dfe8734ad490164ef20af9d1cf59c")
 	rc := rootCid.String()
-	a := mockChunkInfo(t, s, recorder)
+	a := mockChunkInfo(s, recorder)
 	a.cpd.updatePendingFinder(rootCid)
 	a.newQueue(rc)
 	a.getQueue(rc).push(Pulling, addr.Bytes())
@@ -395,6 +395,7 @@ func newTestProtocol(h p2p.HandlerFunc, protocolName, protocolVersion, streamNam
 		},
 	}
 }
+
 func mockUploadFile(t *testing.T) (boson.Address, traversal.Service) {
 	chunkCount := 10 + 1
 
@@ -408,7 +409,7 @@ func mockUploadFile(t *testing.T) (boson.Address, traversal.Service) {
 	return reference, traversalService
 }
 
-func mockChunkInfo(t *testing.T, traversal traversal.Service, r *streamtest.Recorder) *ChunkInfo {
+func mockChunkInfo(traversal traversal.Service, r *streamtest.Recorder) *ChunkInfo {
 	logger := logging.New(ioutil.Discard, 0)
 	server := New(r, logger, traversal)
 	return server
