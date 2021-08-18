@@ -88,29 +88,6 @@ func TestFindChunkInfo(t *testing.T) {
 }
 
 func TestHandlerChunkInfoReq(t *testing.T) {
-	findAddress := boson.MustParseHexAddress("03")
-	rootCid, s := mockUploadFile(t)
-
-	client := mockChunkInfo(t, s, nil)
-	client.newQueue(rootCid.ByteString())
-	var bosoary []boson.Address
-	bosoary = append(bosoary, findAddress)
-	client.getQueue(rootCid.ByteString()).push(Pulling, bosoary[0].Bytes())
-
-	q := client.getQueue(rootCid.ByteString())
-	if q == nil {
-		t.Fatal("getQueue Error")
-	}
-
-	unNode := q.pop(UnPull)
-	q.push(Pulling, *unNode)
-	client.tt.updateTimeOutTrigger(rootCid.Bytes(), *unNode)
-	ciReq := client.cd.createChunkInfoReq(rootCid)
-	ctx := context.Background()
-	client.sendData(ctx, boson.NewAddress(*unNode), streamChunkInfoReqName, ciReq)
-}
-
-func TestHandlerChunkInfoResp(t *testing.T) {
 	serverAddress := boson.MustParseHexAddress("02")
 	clientAddress := boson.MustParseHexAddress("01")
 	cid1 := boson.MustParseHexAddress("03")
@@ -143,12 +120,79 @@ func TestHandlerChunkInfoResp(t *testing.T) {
 
 	server.onChunkInfoReq(ctx, nil, clientAddress, req)
 
-	records1, err := recorder1.Records(clientAddress, "chunkinfo", "1.0.0", "chunkinfo/resp")
+	resp_records, err := recorder1.Records(clientAddress, "chunkinfo", "1.0.0", "chunkinfo/resp")
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	fmt.Println(records1)
+	if l := len(resp_records); l != 1 {
+		t.Fatalf("got %v records, want %v", l, 1)
+	}
+	resp_record := resp_records[0]
+	// validate received ping greetings from the client
+	resp_messages, err := protobuf.ReadMessages(
+		bytes.NewReader(resp_record.In()),
+		func() protobuf.Message { return new(pb.ChunkPyramidResp) },
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	fmt.Println(resp_messages)
+}
+
+func TestHandlerChunkInfoResp(t *testing.T) {
+	serverAddress := boson.MustParseHexAddress("02")
+	clientAddress := boson.MustParseHexAddress("01")
+	cid1 := boson.MustParseHexAddress("03")
+	cid2 := boson.MustParseHexAddress("04")
+	cid3 := boson.MustParseHexAddress("05")
+	rootCid, s := mockUploadFile(t)
+	server1 := mockChunkInfo(t, s, nil)
+	server1.newQueue(rootCid.String())
+	recorder1 := streamtest.New(
+		streamtest.WithBaseAddr(clientAddress),
+		streamtest.WithProtocols(server1.Protocol()),
+	)
+	server := mockChunkInfo(t, s, recorder1)
+
+	recorder := streamtest.New(
+		streamtest.WithProtocols(server.Protocol()),
+		streamtest.WithBaseAddr(clientAddress),
+	)
+	server.newQueue(rootCid.String())
+	server.getQueue(rootCid.String()).push(Pulling, serverAddress.Bytes())
+	server.cpd.updatePendingFinder(rootCid)
+	server.OnChunkTransferred(cid1, rootCid, serverAddress)
+	server.OnChunkTransferred(cid2, rootCid, serverAddress)
+	server.OnChunkTransferred(cid3, rootCid, serverAddress)
+
+	client := mockChunkInfo(t, s, recorder)
+
+	ctx := context.Background()
+	req := client.cd.createChunkInfoReq(rootCid)
+
+	server.onChunkInfoReq(ctx, nil, clientAddress, req)
+
+	resp_records, err := recorder1.Records(clientAddress, "chunkinfo", "1.0.0", "chunkinfo/resp")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if l := len(resp_records); l != 1 {
+		t.Fatalf("got %v records, want %v", l, 1)
+	}
+	resp_record := resp_records[0]
+	// validate received ping greetings from the client
+	resp_messages, err := protobuf.ReadMessages(
+		bytes.NewReader(resp_record.In()),
+		func() protobuf.Message { return new(pb.ChunkPyramidResp) },
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	fmt.Println(resp_messages)
 }
 func TestHandlerPyramidReq(t *testing.T) {
 
@@ -184,24 +228,50 @@ func TestHandlerPyramidReq(t *testing.T) {
 
 	client.onChunkPyramidReq(ctx, nil, serverAddress, cpReq)
 
-	records1, err := recorder.Records(serverAddress, "chunkinfo", "1.0.0", "chunkpyramid/resp")
+	resp_records, err := recorder.Records(serverAddress, "chunkinfo", "1.0.0", "chunkpyramid/resp")
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	fmt.Println(records1)
+	if l := len(resp_records); l != 1 {
+		t.Fatalf("got %v records, want %v", l, 1)
+	}
+	resp_record := resp_records[0]
+	// validate received ping greetings from the client
+	resp_messages, err := protobuf.ReadMessages(
+		bytes.NewReader(resp_record.In()),
+		func() protobuf.Message { return new(pb.ChunkPyramidResp) },
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	fmt.Println(resp_messages)
 
 }
 func TestHandlerPyramidResp(t *testing.T) {
-
 	serverAddress := boson.MustParseHexAddress("02")
 	clientAddress := boson.MustParseHexAddress("01")
-	cid1 := boson.MustParseHexAddress("03")
-	cid2 := boson.MustParseHexAddress("04")
-	cid3 := boson.MustParseHexAddress("05")
-
 	rootCid, s := mockUploadFile(t)
-	server1 := mockChunkInfo(t, s, nil)
+
+	recorder2 := streamtest.New(
+		streamtest.WithProtocols(
+			newTestProtocol(func(ctx context.Context, peer p2p.Peer, stream p2p.Stream) error {
+				if _, err := bufio.NewReader(stream).ReadString('\n'); err != nil {
+					return err
+				}
+				var g errgroup.Group
+				g.Go(stream.Close)
+				g.Go(stream.FullClose)
+
+				if err := g.Wait(); err != nil {
+					return err
+				}
+				return stream.FullClose()
+			}, protocolName, protocolVersion, streamChunkInfoRespName)),
+	)
+
+	server1 := mockChunkInfo(t, s, recorder2)
 	server1.newQueue(rootCid.String())
 
 	recorder1 := streamtest.New(
@@ -216,24 +286,54 @@ func TestHandlerPyramidResp(t *testing.T) {
 		streamtest.WithProtocols(server.Protocol()),
 		streamtest.WithBaseAddr(clientAddress),
 	)
-
-	client := mockChunkInfo(t, s, recorder)
-	client.OnChunkTransferred(cid1, rootCid, clientAddress) //设置cid被哪些节点调用过
-	client.OnChunkTransferred(cid2, rootCid, clientAddress) //设置cid被哪些节点调用过
-	client.OnChunkTransferred(cid3, rootCid, clientAddress) //设置cid被哪些节点调用过
-
 	ctx := context.Background()
-	//prammap,_ := client.getChunkPyramid(ctx,rootCid)
+	client := mockChunkInfo(t, s, recorder)
+	tree, _ := client.getChunkPyramid(ctx, rootCid)
+	pram, _ := client.traversal.CheckTrieData(ctx, rootCid, tree)
+
+	client.OnChunkTransferred(boson.NewAddress(pram[0][0]), rootCid, clientAddress) // Set nodes that have used CID
+	//client.OnChunkTransferred(boson.NewAddress(pram[0][1]), rootCid, clientAddress)
+	//client.OnChunkTransferred(boson.NewAddress(pram[0][2]), rootCid, clientAddress)
 	cpReq := client.cp.createChunkPyramidReq(rootCid)
 
 	client.onChunkPyramidReq(ctx, nil, serverAddress, cpReq)
-
-	records1, err := recorder1.Records(clientAddress, "chunkinfo", "1.0.0", "chunkpyramid/req")
+	resp_records, err := recorder.Records(serverAddress, "chunkinfo", "1.0.0", "chunkpyramid/resp")
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	fmt.Println(records1)
+	if l := len(resp_records); l != 1 {
+		t.Fatalf("got %v records, want %v", l, 1)
+	}
+	resp_record := resp_records[0]
+	// validate received ping greetings from the client
+	resp_messages, err := protobuf.ReadMessages(
+		bytes.NewReader(resp_record.In()),
+		func() protobuf.Message { return new(pb.ChunkPyramidResp) },
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Log(resp_messages)
+
+	req_records, err := recorder1.Records(clientAddress, "chunkinfo", "1.0.0", "chunkinfo/req")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if l := len(req_records); l != 1 {
+		t.Fatalf("got %v records, want %v", l, 1)
+	}
+	req_record := req_records[0]
+	// validate received ping greetings from the client
+	req_messages, err1 := protobuf.ReadMessages(
+		bytes.NewReader(req_record.In()),
+		func() protobuf.Message { return new(pb.ChunkInfoReq) },
+	)
+	if err1 != nil {
+		t.Fatal(err)
+	}
+	t.Log(req_messages)
 
 }
 
