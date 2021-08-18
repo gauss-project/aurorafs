@@ -60,7 +60,7 @@ type RouteTable struct {
 type pendCallResItem struct {
 	src        boson.Address
 	createTime time.Time
-	resCh      chan []RouteItem
+	resCh      chan struct{}
 }
 
 type pendingCallResArray []pendCallResItem
@@ -79,8 +79,6 @@ type Service struct {
 	pendingCalls pendCallResTab
 	routeTable   RouteTable
 	kad          *kademlia.Kad
-	resCh        chan respChan
-	reqCh        chan [][]byte // req path to save route
 }
 
 func New(addr boson.Address, ctx context.Context, streamer p2p.Streamer, kad *kademlia.Kad, logger logging.Logger) Service {
@@ -93,8 +91,6 @@ func New(addr boson.Address, ctx context.Context, streamer p2p.Streamer, kad *ka
 		kad:          kad,
 		pendingCalls: pendCallResTab{},
 		routeTable:   RouteTable{items: make(map[common.Hash][]RouteItem)},
-		resCh:        make(chan respChan, 1000),
-		reqCh:        make(chan [][]byte, 1000),
 		metrics:      newMetrics(),
 	}
 	// start route service
@@ -117,12 +113,6 @@ func (s *Service) start(ctx context.Context) {
 		select {
 		case <-ctx.Done():
 			return
-		case resp := <-s.resCh:
-			// save resp route
-			s.saveRespRouteItem(ctx, resp)
-		case req := <-s.reqCh:
-			// save req route
-			s.saveReqRouteItem(req)
 		}
 	}
 }
@@ -162,7 +152,7 @@ func (s *Service) handlerFindRouteReq(ctx context.Context, p p2p.Peer, stream p2
 	s.logger.Tracef("route: handlerFindRouteReq received: dest= %s", boson.NewAddress(req.Dest).String())
 
 	// passive route save
-	s.reqCh <- req.Path
+	go s.saveReqRouteItem(req.Path)
 
 	dest := boson.NewAddress(req.Dest)
 
@@ -217,10 +207,7 @@ func (s *Service) handlerFindRouteResp(ctx context.Context, p p2p.Peer, stream p
 	}
 	s.logger.Tracef("route: handlerFindRouteResp received: dest= %s", boson.NewAddress(resp.Dest).String())
 
-	go s.saveRespRouteItem(ctx, respChan{
-		neighbor: p.Address,
-		pb:       resp,
-	})
+	go s.saveRespRouteItem(ctx, p.Address, resp)
 	return nil
 }
 
@@ -236,7 +223,7 @@ func (s *Service) FindRoute(ctx context.Context, dest boson.Address) (routes []R
 		if len(forward) > 0 {
 			ct, cancel := context.WithTimeout(ctx, pendingTimeout)
 			defer cancel()
-			resCh := make(chan []RouteItem, len(forward))
+			resCh := make(chan struct{}, len(forward))
 			for _, v := range forward {
 				req := &pb.FindRouteReq{
 					Dest: dest.Bytes(),
@@ -248,7 +235,8 @@ func (s *Service) FindRoute(ctx context.Context, dest boson.Address) (routes []R
 			case <-ct.Done():
 				close(resCh)
 				err = fmt.Errorf("route: FindRoute dest %s timeout %.0fs", dest.String(), pendingTimeout.Seconds())
-			case routes = <-resCh:
+			case <-resCh:
+				routes, err = s.GetRoute(ctx, dest)
 			}
 			return
 		}
@@ -328,9 +316,9 @@ func burnNextHop(old []RouteItem) []RouteItem {
 	return now
 }
 
-func (s *Service) saveRespRouteItem(ctx context.Context, resp respChan) {
+func (s *Service) saveRespRouteItem(ctx context.Context, neighbor boson.Address, resp pb.FindRouteResp) {
 	minTTL := maxTTL
-	for _, v := range resp.pb.RouteItems {
+	for _, v := range resp.RouteItems {
 		if uint8(v.Ttl) < minTTL {
 			minTTL = uint8(v.Ttl)
 		}
@@ -338,10 +326,10 @@ func (s *Service) saveRespRouteItem(ctx context.Context, resp respChan) {
 	now := []RouteItem{{
 		createTime: time.Now().Unix(),
 		ttl:        minTTL + 1,
-		neighbor:   resp.neighbor,
-		nextHop:    convPbItemListToRouteList(resp.pb.RouteItems),
+		neighbor:   neighbor,
+		nextHop:    convPbItemListToRouteList(resp.RouteItems),
 	}}
-	destKey := common.BytesToHash(resp.pb.Dest)
+	destKey := common.BytesToHash(resp.Dest)
 	if s.routeTable.TryLock(destKey.String()) {
 		defer s.routeTable.Unlock(destKey.String())
 		// save route
@@ -351,7 +339,7 @@ func (s *Service) saveRespRouteItem(ctx context.Context, resp respChan) {
 		}
 		s.routeTable.items[destKey] = now
 	} else {
-		s.saveRespRouteItem(ctx, resp)
+		s.saveRespRouteItem(ctx, neighbor, resp)
 	}
 	// doing resp
 	res, has := s.pendingCalls[destKey]
@@ -360,11 +348,11 @@ func (s *Service) saveRespRouteItem(ctx context.Context, resp respChan) {
 		for _, v := range res {
 			if !v.src.Equal(s.addr) {
 				// forward
-				dest := boson.NewAddress(resp.pb.Dest)
+				dest := boson.NewAddress(resp.Dest)
 				s.doResp(ctx, p2p.Peer{Address: v.src}, dest, now)
 			} else if v.resCh != nil {
 				// sync return
-				v.resCh <- now
+				v.resCh <- struct{}{}
 			}
 		}
 	}
@@ -565,7 +553,7 @@ func convPbItemToRouteItem(src *pb.RouteItem) RouteItem {
 	return out
 }
 
-func (s *Service) doReq(ctx context.Context, src boson.Address, peer p2p.Peer, dest boson.Address, req *pb.FindRouteReq, ch chan []RouteItem) {
+func (s *Service) doReq(ctx context.Context, src boson.Address, peer p2p.Peer, dest boson.Address, req *pb.FindRouteReq, ch chan struct{}) {
 	s.logger.Tracef("route: doReq dest %s to neighbor %s", dest.String(), peer.Address.String())
 	stream, err1 := s.streamer.NewStream(ctx, peer.Address, nil, protocolName, protocolVersion, streamFindRouteReq)
 	if err1 != nil {
@@ -590,7 +578,7 @@ func (s *Service) doReq(ctx context.Context, src boson.Address, peer p2p.Peer, d
 	}
 }
 
-func (s *Service) pendingAdd(dest, src boson.Address, ch chan []RouteItem) {
+func (s *Service) pendingAdd(dest, src boson.Address, ch chan struct{}) {
 	pending := pendCallResItem{
 		src:        src,
 		createTime: time.Now(),

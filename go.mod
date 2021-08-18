@@ -13,7 +13,8 @@ require (
 	github.com/ethersphere/manifest v0.3.6
 	github.com/ethersphere/sw3-bindings/v3 v3.0.3
 	github.com/foxcpp/go-mockdns v0.0.0-20201212160233-ede2f9158d15
-	github.com/gogo/protobuf v1.3.1
+	github.com/gogf/gf v1.16.5
+	github.com/gogo/protobuf v1.3.2
 	github.com/golang/groupcache v0.0.0-20200121045136-8c9f03a8e57e // indirect
 	github.com/google/gopacket v1.1.19 // indirect
 	github.com/google/uuid v1.1.4 // indirect
@@ -36,7 +37,6 @@ require (
 	github.com/libp2p/go-sockaddr v0.1.0 // indirect
 	github.com/libp2p/go-tcp-transport v0.2.1
 	github.com/libp2p/go-ws-transport v0.4.0
-	github.com/mattn/go-colorable v0.1.2 // indirect
 	github.com/mitchellh/mapstructure v1.3.2 // indirect
 	github.com/multiformats/go-multiaddr v0.3.1
 	github.com/multiformats/go-multiaddr-dns v0.2.0
@@ -62,13 +62,10 @@ require (
 	go.uber.org/multierr v1.6.0 // indirect
 	go.uber.org/zap v1.16.0 // indirect
 	golang.org/x/crypto v0.0.0-20201221181555-eec23a3978ad
-	golang.org/x/mod v0.3.0 // indirect
 	golang.org/x/net v0.0.0-20201224014010-6772e930b67b
 	golang.org/x/sync v0.0.0-20201020160332-67f06af15bc9
 	golang.org/x/sys v0.0.0-20210108172913-0df2131ae363
 	golang.org/x/term v0.0.0-20201210144234-2321bbc49cbf
-	golang.org/x/text v0.3.4 // indirect
-	golang.org/x/tools v0.0.0-20200626171337-aa94e735be7f // indirect
 	gopkg.in/check.v1 v1.0.0-20200227125254-8fa46927fb4f // indirect
 	gopkg.in/ini.v1 v1.57.0 // indirect
 	gopkg.in/yaml.v2 v2.3.0
