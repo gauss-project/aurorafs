@@ -358,14 +358,17 @@ func TestQueueProcess(t *testing.T) {
 		if i == 0 {
 			aAddress.updateQueue(context.Background(), nil, rootCid, addr, [][]byte{overlay.Bytes()})
 		} else {
-			aAddress.updateQueue(context.Background(), nil, rootCid, boson.NewAddress(*aAddress.getQueue(rc).pop(Pulling)), [][]byte{overlay.Bytes()})
+			if aAddress.getQueue(rc).len(Pulled) == 168 {
+				fmt.Println("")
+			}
+			aAddress.updateQueue(context.Background(), nil, rootCid, boson.NewAddress(*aAddress.getQueue(rc).pop(Pulling)), [][]byte{overlay.Bytes(), test.RandomAddress().Bytes(), test.RandomAddress().Bytes(), test.RandomAddress().Bytes(), test.RandomAddress().Bytes(), test.RandomAddress().Bytes(), test.RandomAddress().Bytes()})
 		}
 	}
 	if len(aAddress.getQueue(rc).getPull(Pulled)) != PullMax {
 		t.Fatalf("pulled len error")
 	}
 
-	if len(aAddress.getQueue(rc).getPull(UnPull)) != 1 {
+	if len(aAddress.getQueue(rc).getPull(UnPull)) != 1000 {
 		t.Fatalf("unpull len error")
 	}
 
