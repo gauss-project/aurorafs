@@ -60,7 +60,6 @@ func TestFindChunkInfo(t *testing.T) {
 		t.Fatalf("got %v records, want %v", l, 1)
 	}
 	record := records[0]
-	// validate received ping greetings from the client
 	messages, err := protobuf.ReadMessages(
 		bytes.NewReader(record.In()),
 		func() protobuf.Message { return new(pb.ChunkPyramidReq) },
@@ -125,7 +124,6 @@ func TestHandlerChunkInfoReq(t *testing.T) {
 		t.Fatalf("got %v records, want %v", l, 1)
 	}
 	respRecord := reqRecords[0]
-	// validate received ping greetings from the client
 	reqMessages, err := protobuf.ReadMessages(
 		bytes.NewReader(respRecord.In()),
 		func() protobuf.Message { return new(pb.ChunkInfoReq) },
