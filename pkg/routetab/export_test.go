@@ -2,14 +2,5 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-package retrieval
+package routetab
 
-import (
-	"context"
-
-	"github.com/gauss-project/aurorafs/pkg/p2p"
-)
-
-func (s *Service) Handler(ctx context.Context, p p2p.Peer, stream p2p.Stream) error {
-	return s.handler(ctx, p, stream)
-}
