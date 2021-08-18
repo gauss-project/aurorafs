@@ -7,9 +7,9 @@
 package bmtpool
 
 import (
-	"github.com/gauss-project/aurorafs/pkg/boson"
 	bmtlegacy "github.com/ethersphere/bmt/legacy"
 	"github.com/ethersphere/bmt/pool"
+	"github.com/gauss-project/aurorafs/pkg/boson"
 )
 
 var instance pool.Pooler

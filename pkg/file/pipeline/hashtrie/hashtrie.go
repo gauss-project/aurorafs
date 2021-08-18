@@ -8,8 +8,8 @@ import (
 	"encoding/binary"
 	"errors"
 
-	"github.com/gauss-project/aurorafs/pkg/file/pipeline"
 	"github.com/gauss-project/aurorafs/pkg/boson"
+	"github.com/gauss-project/aurorafs/pkg/file/pipeline"
 )
 
 var (
