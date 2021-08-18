@@ -16,7 +16,7 @@ message FindRouteReq {
 // define FindRouteResp message struct here
 message FindRouteResp {
     bytes Dest = 1;
-    RouteItem RouteItem = 2;
+    repeated RouteItem RouteItems = 2;
 }
 
 message RouteItem {
