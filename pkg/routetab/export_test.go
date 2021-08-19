@@ -30,3 +30,7 @@ func (s *Service) DoResp(ctx context.Context, peer p2p.Peer, dest boson.Address,
 func (s *Service) RouteTab() *routeTable {
 	return s.routeTable
 }
+
+func (s *Service) Address() boson.Address {
+	return s.addr
+}
