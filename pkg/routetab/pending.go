@@ -73,7 +73,14 @@ func (pend *pendCallResTab) Add(target, src boson.Address, resCh chan struct{}) 
 
 	res, ok := pend.items[mKey]
 	if ok {
-		pend.items[mKey] = append(res, pending)
+		now := pendingCallResArray{}
+		for _, v := range res {
+			if v.src.Equal(src) {
+				continue
+			}
+			now = append(now, v)
+		}
+		pend.items[mKey] = append(now, pending)
 	} else {
 		pend.items[mKey] = pendingCallResArray{pending}
 	}
