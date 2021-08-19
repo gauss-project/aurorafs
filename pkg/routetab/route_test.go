@@ -11,30 +11,6 @@ import (
 	"time"
 )
 
-func TestPathToRouteItem(t *testing.T) {
-	count := 10
-	addresses := make([][]byte, count)
-	for i := 0; i < len(addresses); i++ {
-		addresses[i] = test.RandomAddress().Bytes()
-	}
-
-	route := routetab.PathToRouteItem(addresses)[0]
-	cur := len(addresses) - 1
-	for {
-		if !route.Neighbor.Equal(boson.NewAddress(addresses[cur])) {
-			t.Fatalf("current route neighbor expected to address %s, got %s\n", addresses[cur], route.Neighbor.String())
-		}
-
-		next := route.NextHop
-		if next == nil {
-			break
-		}
-
-		route = next[0]
-		cur--
-	}
-}
-
 func generatePath(path []string) routetab.RouteItem {
 	maxTTL := len(path)
 	route := routetab.RouteItem{
@@ -75,6 +51,30 @@ func Test_generatePath(t *testing.T) {
 	}
 }
 
+func TestPathToRouteItem(t *testing.T) {
+	count := 10
+	addresses := make([][]byte, count)
+	for i := 0; i < len(addresses); i++ {
+		addresses[i] = test.RandomAddress().Bytes()
+	}
+
+	route := routetab.PathToRouteItem(addresses)[0]
+	cur := len(addresses) - 1
+	for {
+		if !route.Neighbor.Equal(boson.NewAddress(addresses[cur])) {
+			t.Fatalf("current route neighbor expected to address %s, got %s\n", addresses[cur], route.Neighbor.String())
+		}
+
+		next := route.NextHop
+		if next == nil {
+			break
+		}
+
+		route = next[0]
+		cur--
+	}
+}
+
 func TestUpdateRouteItem(t *testing.T) {
 	path1 := []string{"0301", "0302", "0303"}
 	item1 := generatePath(path1)
@@ -90,58 +90,6 @@ func TestUpdateRouteItem(t *testing.T) {
 	}
 	if routes.NextHop[1].Neighbor.String() != "0302" {
 		t.Fatalf("current route NextHop expected to 0302, got %s\n", routes.NextHop[1].Neighbor.String())
-	}
-}
-
-func TestRouteTable_Gc(t *testing.T) {
-	path1 := []string{"0301", "0302", "0303"}
-	item1 := generatePath(path1)
-
-	now, updated := routetab.CheckExpired([]routetab.RouteItem{item1}, time.Second)
-
-	if updated {
-		t.Fatalf("current route gc expected to false, got true")
-	}
-	if len(now) == 0 {
-		t.Fatalf("current route gc expected now count > 0, got 0")
-	}
-	<-time.After(time.Second * 1)
-	item1.CreateTime++
-	//item1.NextHop[0].CreateTime++
-	item1.NextHop[0].NextHop[0].CreateTime++
-	now, updated = routetab.CheckExpired([]routetab.RouteItem{item1}, time.Second)
-	if !updated {
-		t.Fatalf("current route gc expected to true, got false")
-	}
-
-	if len(now) == 0 || len(now[0].NextHop) != 0 {
-		t.Fatalf("current route gc expected now count 1 and nexHop count 0, got count %d , nextHop count %d ", len(now), len(now[0].NextHop))
-	}
-	route := routetab.NewRouteTable(mockstore.NewStateStore(), logging.New(os.Stdout, 0))
-
-	item2 := generatePath(path1)
-	target := test.RandomAddress()
-	err := route.Set(target, []routetab.RouteItem{item2})
-	if err != nil {
-		t.Fatalf("routetab set err %s", err)
-	}
-	_, err = route.Get(target)
-	if err != nil {
-		t.Fatalf("routetab get err %s", err)
-		return
-	}
-	route.Gc(time.Second)
-	_, err = route.Get(target)
-	if err != nil {
-		t.Fatalf("routetab get err %s", err)
-		return
-	}
-	<-time.After(time.Second * 1)
-	route.Gc(time.Second)
-	_, err = route.Get(target)
-	if err != routetab.ErrNotFound {
-		t.Fatalf("routetab get ,expected route: not found, got %s", err)
-		return
 	}
 }
 
@@ -266,4 +214,56 @@ func TestMergeRouteList(t *testing.T) {
 
 	collectPaths(oldRoutes, routes)
 	collectPaths(newRoutes, routes)
+}
+
+func TestRouteTable_Gc(t *testing.T) {
+	path1 := []string{"0301", "0302", "0303"}
+	item1 := generatePath(path1)
+
+	now, updated := routetab.CheckExpired([]routetab.RouteItem{item1}, time.Second)
+
+	if updated {
+		t.Fatalf("current route gc expected to false, got true")
+	}
+	if len(now) == 0 {
+		t.Fatalf("current route gc expected now count > 0, got 0")
+	}
+	<-time.After(time.Second * 1)
+	item1.CreateTime++
+	//item1.NextHop[0].CreateTime++
+	item1.NextHop[0].NextHop[0].CreateTime++
+	now, updated = routetab.CheckExpired([]routetab.RouteItem{item1}, time.Second)
+	if !updated {
+		t.Fatalf("current route gc expected to true, got false")
+	}
+
+	if len(now) == 0 || len(now[0].NextHop) != 0 {
+		t.Fatalf("current route gc expected now count 1 and nexHop count 0, got count %d , nextHop count %d ", len(now), len(now[0].NextHop))
+	}
+	route := routetab.NewRouteTable(mockstore.NewStateStore(), logging.New(os.Stdout, 0))
+
+	item2 := generatePath(path1)
+	target := test.RandomAddress()
+	err := route.Set(target, []routetab.RouteItem{item2})
+	if err != nil {
+		t.Fatalf("routetab set err %s", err)
+	}
+	_, err = route.Get(target)
+	if err != nil {
+		t.Fatalf("routetab get err %s", err)
+		return
+	}
+	route.Gc(time.Second)
+	_, err = route.Get(target)
+	if err != nil {
+		t.Fatalf("routetab get err %s", err)
+		return
+	}
+	<-time.After(time.Second * 1)
+	route.Gc(time.Second)
+	_, err = route.Get(target)
+	if err != routetab.ErrNotFound {
+		t.Fatalf("routetab get ,expected route: not found, got %s", err)
+		return
+	}
 }
