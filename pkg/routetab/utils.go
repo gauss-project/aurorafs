@@ -73,7 +73,7 @@ func pathToRouteItem(path [][]byte) (routes []RouteItem) {
 	for i := 2; i <= ttl; i++ {
 		itemNew := RouteItem{
 			CreateTime: time.Now().Unix(),
-			TTL:        uint8(ttl),
+			TTL:        uint8(i),
 			Neighbor:   boson.NewAddress(path[i]),
 			NextHop:    []RouteItem{route},
 		}
