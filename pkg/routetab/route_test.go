@@ -3,6 +3,11 @@ package routetab_test
 import (
 	"context"
 	"errors"
+	"math/rand"
+	"os"
+	"testing"
+	"time"
+
 	"github.com/gauss-project/aurorafs/pkg/addressbook"
 	"github.com/gauss-project/aurorafs/pkg/aurora"
 	"github.com/gauss-project/aurorafs/pkg/boson"
@@ -18,11 +23,7 @@ import (
 	"github.com/gauss-project/aurorafs/pkg/routetab"
 	mockstate "github.com/gauss-project/aurorafs/pkg/statestore/mock"
 	ma "github.com/multiformats/go-multiaddr"
-	"math/rand"
-	"os"
-	"sync/atomic"
-	"testing"
-	"time"
+	"github.com/sirupsen/logrus"
 )
 
 func generatePath(path []string) routetab.RouteItem {
@@ -337,55 +338,36 @@ func newRoute(t *testing.T, p1, p2 boson.Address) (r1, r2 routetab.Service) {
 	return
 }
 
-func newTestKademlia(base boson.Address) (*kademlia.Kad, beeCrypto.Signer, addressbook.Interface) {
-
-	var (
-		connCounter, failedConnCounter *int32
-		pk, _                          = crypto.GenerateSecp256k1Key()                                                     // random private key
-		signer                         = beeCrypto.NewDefaultSigner(pk)                                                    // signer
-		ab                             = addressbook.New(mockstate.NewStateStore())                                        // address book
-		p2ps                           = p2pMock(ab, signer, connCounter, failedConnCounter)                               // p2p mock
-		disc                           = mock.NewDiscovery()                                                               // mock discovery protocol
-		kad                            = kademlia.New(base, ab, disc, p2ps, logging.New(os.Stdout, 0), kademlia.Options{}) // kademlia instance
-	)
-
-	return kad, signer, ab
-}
-
 const underlayBase = "/ip4/127.0.0.1/tcp/1634/dns/"
 
 var (
 	nonConnectableAddress, _ = ma.NewMultiaddr(underlayBase + "16Uiu2HAkx8ULY8cTXhdVAcMmLcH9AsTKz6uBQ7DPLKRjMLgBVYkA")
+	nopLogger = logging.New(os.NewFile(0, os.DevNull), logrus.ErrorLevel)
 )
 
-func p2pMock(ab addressbook.Interface, signer beeCrypto.Signer, counter, failedCounter *int32) p2p.Service {
-	p2ps := p2pmock.New(p2pmock.WithConnectFunc(func(ctx context.Context, addr ma.Multiaddr) (*aurora.Address, error) {
-		if addr.Equal(nonConnectableAddress) {
-			_ = atomic.AddInt32(failedCounter, 1)
+func p2pMock(ab addressbook.Interface, signer beeCrypto.Signer) p2p.Service {
+	p2ps := p2pmock.New(p2pmock.WithConnectFunc(func(ctx context.Context, underlay ma.Multiaddr) (*aurora.Address, error) {
+		if underlay.Equal(nonConnectableAddress) {
 			return nil, errors.New("non reachable node")
 		}
-		if counter != nil {
-			_ = atomic.AddInt32(counter, 1)
-		}
-
 		addresses, err := ab.Addresses()
 		if err != nil {
 			return nil, errors.New("could not fetch addresbook addresses")
 		}
 
 		for _, a := range addresses {
-			if a.Underlay.Equal(addr) {
+			if a.Underlay.Equal(underlay) {
 				return &a, nil
 			}
 		}
 
-		address := test.RandomAddress()
-		bzzAddr, err := aurora.NewAddress(signer, addr, address, 0)
+		overlay := test.RandomAddress()
+		bzzAddr, err := aurora.NewAddress(signer, underlay, overlay, 0)
 		if err != nil {
 			return nil, err
 		}
 
-		if err := ab.Put(address, *bzzAddr); err != nil {
+		if err := ab.Put(overlay, *bzzAddr); err != nil {
 			return nil, err
 		}
 
@@ -393,6 +375,20 @@ func p2pMock(ab addressbook.Interface, signer beeCrypto.Signer, counter, failedC
 	}))
 
 	return p2ps
+}
+
+func newTestKademlia(base boson.Address) (*kademlia.Kad, beeCrypto.Signer, addressbook.Interface) {
+
+	var (
+		pk, _                          = crypto.GenerateSecp256k1Key()                                                     // random private key
+		signer                         = beeCrypto.NewDefaultSigner(pk)                                                    // signer
+		ab                             = addressbook.New(mockstate.NewStateStore())                                        // address book
+		p2ps                           = p2pMock(ab, signer)                               					               // p2p mock
+		disc                           = mock.NewDiscovery()                                                               // mock discovery protocol
+		kad                            = kademlia.New(base, ab, disc, p2ps, nopLogger, kademlia.Options{}) // kademlia instance
+	)
+
+	return kad, signer, ab
 }
 
 func addOne(t *testing.T, signer beeCrypto.Signer, k *kademlia.Kad, ab addressbook.Putter, peer boson.Address) {
