@@ -29,7 +29,7 @@ type pendCallResTab struct {
 	lockTimeout time.Duration
 	logger      logging.Logger
 	addr        boson.Address
-	metrics
+	metrics     metrics
 }
 
 func newPendCallResTab(addr boson.Address, logger logging.Logger, met metrics) *pendCallResTab {

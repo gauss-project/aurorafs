@@ -3,6 +3,7 @@ package routetab_test
 import (
 	"context"
 	"errors"
+	"github.com/ethereum/go-ethereum/common"
 	"math/rand"
 	"os"
 	"testing"
@@ -420,4 +421,45 @@ func convPathByte(path []string) [][]byte {
 		out[k] = boson.MustParseHexAddress(v).Bytes()
 	}
 	return out
+}
+
+func TestPendCallResTab_Gc(t *testing.T) {
+	addr := test.RandomAddress()
+	pend := routetab.NewPendCallResTab(addr, logging.New(os.Stdout, 0), routetab.NewMetrics())
+
+	target1 := test.RandomAddress()
+	target2 := test.RandomAddress()
+	src1 := test.RandomAddress()
+	src2 := test.RandomAddress()
+	err := pend.Add(target1, src1, nil)
+	if err != nil {
+		t.Fatalf("route: pending add %s", err)
+	}
+	err = pend.Add(target1, src2, nil)
+	if err != nil {
+		t.Fatalf("route: pending add %s", err)
+	}
+	err = pend.Add(target2, src2, nil)
+	if err != nil {
+		t.Fatalf("route: pending add %s", err)
+	}
+	pend.Gc(time.Second)
+
+	items := pend.GetItems()
+	tmp1, has := items[common.BytesToHash(target1.Bytes())]
+	if !has {
+		t.Fatalf("route peing expired have %s, got nil", target1.String())
+	}
+	if len(tmp1) != 2 {
+		t.Fatalf("route peing expired have src count 2, got %d", len(tmp1))
+	}
+	if _, ok := items[common.BytesToHash(target2.Bytes())]; !ok {
+		t.Fatalf("route peing expired have %s, got nil", target1.String())
+	}
+	<-time.After(time.Second)
+	pend.Gc(time.Second)
+	items2 := pend.GetItems()
+	if len(items2) > 0 {
+		t.Fatalf("route peing expired count 0, got %d", len(items2))
+	}
 }

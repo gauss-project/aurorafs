@@ -44,7 +44,7 @@ type routeTable struct {
 	store       storage.StateStorer
 	logger      logging.Logger
 	lockTimeout time.Duration
-	metrics
+	metrics     metrics
 }
 
 func newRouteTable(store storage.StateStorer, logger logging.Logger, met metrics) *routeTable {
