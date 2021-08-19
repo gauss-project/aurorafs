@@ -259,7 +259,7 @@ func TestRouteTable_Gc(t *testing.T) {
 	if len(now) == 0 || len(now[0].NextHop) != 0 {
 		t.Fatalf("current route gc expected now count 1 and nexHop count 0, got count %d , nextHop count %d ", len(now), len(now[0].NextHop))
 	}
-	route := routetab.NewRouteTable(mockstate.NewStateStore(), logging.New(os.Stdout, 0))
+	route := routetab.NewRouteTable(mockstate.NewStateStore(), logging.New(os.Stdout, 0), routetab.NewMetrics())
 
 	item2 := generatePath(path1)
 	target := test.RandomAddress()
@@ -349,7 +349,7 @@ const underlayBase = "/ip4/127.0.0.1/tcp/1634/dns/"
 
 var (
 	nonConnectableAddress, _ = ma.NewMultiaddr(underlayBase + "16Uiu2HAkx8ULY8cTXhdVAcMmLcH9AsTKz6uBQ7DPLKRjMLgBVYkA")
-	nopLogger = logging.New(os.NewFile(0, os.DevNull), logrus.ErrorLevel)
+	nopLogger                = logging.New(os.NewFile(0, os.DevNull), logrus.ErrorLevel)
 )
 
 func p2pMock(ab addressbook.Interface, signer beeCrypto.Signer) p2p.Service {
@@ -387,12 +387,12 @@ func p2pMock(ab addressbook.Interface, signer beeCrypto.Signer) p2p.Service {
 func newTestKademlia(base boson.Address) (*kademlia.Kad, beeCrypto.Signer, addressbook.Interface) {
 
 	var (
-		pk, _                          = crypto.GenerateSecp256k1Key()                                                     // random private key
-		signer                         = beeCrypto.NewDefaultSigner(pk)                                                    // signer
-		ab                             = addressbook.New(mockstate.NewStateStore())                                        // address book
-		p2ps                           = p2pMock(ab, signer)                               					               // p2p mock
-		disc                           = mock.NewDiscovery()                                                               // mock discovery protocol
-		kad                            = kademlia.New(base, ab, disc, p2ps, nopLogger, kademlia.Options{}) // kademlia instance
+		pk, _  = crypto.GenerateSecp256k1Key()                                     // random private key
+		signer = beeCrypto.NewDefaultSigner(pk)                                    // signer
+		ab     = addressbook.New(mockstate.NewStateStore())                        // address book
+		p2ps   = p2pMock(ab, signer)                                               // p2p mock
+		disc   = mock.NewDiscovery()                                               // mock discovery protocol
+		kad    = kademlia.New(base, ab, disc, p2ps, nopLogger, kademlia.Options{}) // kademlia instance
 	)
 
 	return kad, signer, ab

@@ -17,6 +17,7 @@ var (
 	NewRouteTable   = newRouteTable
 	UpdateRouteItem = updateRouteItem
 	CheckExpired    = checkExpired
+	NewMetrics      = newMetrics
 )
 
 func (s *Service) DoReq(ctx context.Context, src boson.Address, peer p2p.Peer, dest boson.Address, req *pb.FindRouteReq, ch chan struct{}) {
