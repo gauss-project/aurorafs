@@ -33,15 +33,16 @@ func TestPathToRouteItem(t *testing.T) {
 }
 
 func generatePath(path []string) routetab.RouteItem {
+	maxTTL := len(path)
 	route := routetab.RouteItem{
 		CreateTime: time.Now().Unix(),
-		TTL:        uint8(len(path)),
+		TTL:        1,
 		Neighbor:   boson.MustParseHexAddress(path[len(path)-1]),
 	}
-	for i := len(path) - 2; i >= 0; i-- {
+	for i := maxTTL - 2; i >= 0; i-- {
 		itemNew := routetab.RouteItem{
 			CreateTime: time.Now().Unix(),
-			TTL:        uint8(i) + 1,
+			TTL:        uint8(maxTTL - i),
 			Neighbor:   boson.MustParseHexAddress(path[i]),
 			NextHop:    []routetab.RouteItem{route},
 		}
@@ -52,14 +53,15 @@ func generatePath(path []string) routetab.RouteItem {
 
 func Test_generatePath(t *testing.T) {
 	path := []string{"0301", "0302", "0303", "0304", "0305", "0306"}
+	maxTTL := uint8(len(path))
 	route := generatePath(path)
-	cur := 0
+	cur := uint8(0)
 	for {
 		if route.Neighbor.String() != path[cur] {
 			t.Fatalf("current route neighbor expected to address %s, got %s\n", path[cur], route.Neighbor.String())
 		}
-		if route.TTL != uint8(cur)+1 {
-			t.Fatalf("current route ttl expected to %d, got %d\n", cur+1, route.TTL)
+		if route.TTL != maxTTL-cur {
+			t.Fatalf("current route ttl expected to %d, got %d\n", maxTTL-cur, route.TTL)
 		}
 		next := route.NextHop
 		if next == nil {
@@ -76,7 +78,7 @@ func TestUpdateRouteItem(t *testing.T) {
 	path2 := []string{"0301", "0304", "0305", "0303"}
 	item2 := generatePath(path2)
 
-	routes := routetab.UpdateRouteItem(item1,item2)
+	routes := routetab.UpdateRouteItem(item1, item2)
 	if len(routes.NextHop) != 2 {
 		t.Fatalf("current route NextHop expected to count 2, got %d\n", len(routes.NextHop))
 	}

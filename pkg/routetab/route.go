@@ -57,6 +57,7 @@ type RouteItem struct {
 }
 
 type routeTable struct {
+	items       map[common.Hash][]RouteItem
 	prefix      string
 	mu          *gmlock.Locker
 	store       storage.StateStorer
@@ -66,6 +67,7 @@ type routeTable struct {
 
 func newRouteTable(store storage.StateStorer, logger logging.Logger) *routeTable {
 	return &routeTable{
+		items:       map[common.Hash][]RouteItem{},
 		prefix:      protocolName,
 		mu:          gmlock.New(),
 		store:       store,
@@ -96,21 +98,30 @@ func (rt *routeTable) Set(target boson.Address, routes []RouteItem) error {
 	}
 	defer rt.mu.RUnlock(key)
 
-	old := make([]RouteItem, 0)
-	err = rt.store.Get(key, &old)
-	if err != nil && err != ErrNotFound {
-		err = fmt.Errorf("routeTable: Set %s store get error: %s", dest, err.Error())
-		rt.logger.Errorf(err.Error())
-		return err
-	}
+	// store get
+	//old := make([]RouteItem, 0)
+	//err = rt.store.Get(key, &old)
+	//if err != nil && err != ErrNotFound {
+	//	err = fmt.Errorf("routeTable: Set %s store get error: %s", dest, err.Error())
+	//	rt.logger.Errorf(err.Error())
+	//	return err
+	//}
+
+	mKey := common.BytesToHash(target.Bytes())
+	old, _ := rt.items[mKey]
+
 	if len(old) > 0 {
 		routes = mergeRouteList(routes, old)
 	}
 
-	err = rt.store.Put(key, routes)
-	if err != nil {
-		rt.logger.Errorf("routeTable: Set %s store put error: %s", dest, err.Error())
-	}
+	rt.items[mKey] = routes
+
+	// store put
+	//err = rt.store.Put(key, routes)
+	//if err != nil {
+	//	rt.logger.Errorf("routeTable: Set %s store put error: %s", dest, err.Error())
+	//}
+
 	return err
 }
 
@@ -123,19 +134,46 @@ func (rt *routeTable) Get(target boson.Address) (routes []RouteItem, err error) 
 	}
 	defer rt.mu.RUnlock(key)
 
-	err = rt.store.Get(key, &routes)
-	if err != nil {
-		if err == storage.ErrNotFound {
-			err = ErrNotFound
-			return
-		}
-		err = fmt.Errorf("routeTable: Get %s store get error: %s", dest, err.Error())
-		rt.logger.Errorf(err.Error())
+	// store get
+	//err = rt.store.Get(key, &routes)
+	//if err != nil {
+	//	if err == storage.ErrNotFound {
+	//		err = ErrNotFound
+	//		return
+	//	}
+	//	err = fmt.Errorf("routeTable: Get %s store get error: %s", dest, err.Error())
+	//	rt.logger.Errorf(err.Error())
+	//}
+
+	mKey := common.BytesToHash(target.Bytes())
+	routes, _ = rt.items[mKey]
+	if len(routes) == 0 {
+		err = ErrNotFound
 	}
+
 	return
 }
 
 func (rt *routeTable) Gc(expire time.Duration) {
+	for mKey, routes := range rt.items {
+		key := rt.prefix + mKey.String()
+		err := rt.tryLock(key)
+		if err != nil {
+			continue
+		}
+		now, updated := checkExpired(routes, expire)
+		if updated {
+			if len(now) > 0 {
+				rt.items[mKey] = now
+			} else {
+				delete(rt.items, mKey)
+			}
+		}
+		rt.mu.RUnlock(key)
+	}
+}
+
+func (rt *routeTable) GcStore(expire time.Duration) {
 	err := rt.store.Iterate(rt.prefix, func(target, value []byte) (stop bool, err error) {
 		key := string(target)
 		err = rt.tryLock(key)
@@ -219,15 +257,15 @@ func (s *Service) start(ctx context.Context) {
 		s.routeTable.Gc(GcTime)
 		ticker := time.NewTicker(GcInterval)
 		for {
-			<-ticker.C
-			s.routeTable.Gc(GcTime)
+			select {
+			case <-ticker.C:
+				s.routeTable.Gc(GcTime)
+			case <-ctx.Done():
+				return
+			}
 		}
 	}()
 	go s.pendingClean()
-	select {
-	case <-ctx.Done():
-		return
-	}
 }
 
 func (s *Service) Protocol() p2p.ProtocolSpec {
