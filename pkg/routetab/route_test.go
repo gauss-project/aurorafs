@@ -108,11 +108,11 @@ func TestUpdateRouteItem(t *testing.T) {
 }
 
 func TestMergeRouteList(t *testing.T) {
-	testCase := struct{
-		oldRoutes [][]string
-		newRoutes [][]string
+	testCase := struct {
+		oldRoutes         [][]string
+		newRoutes         [][]string
 		expectedNeighbors []string
-		expectedPaths [][]string
+		expectedPaths     [][]string
 	}{
 		//
 		//  0001 → 0003 → 0008 → 0024
@@ -286,43 +286,55 @@ func TestRouteTable_Gc(t *testing.T) {
 func TestService_Req(t *testing.T) {
 	rand.Seed(time.Now().UnixNano())
 
-	serverAddr := test.RandomAddress()
 	clientAddr := test.RandomAddress()
+	serverAddr := test.RandomAddress()
+	client, server := newRoute(t, clientAddr, serverAddr)
 
 	ctx := context.TODO()
-	kad, signer, ab := newTestKademlia(serverAddr)
-	addOne(t, signer, kad, ab, clientAddr)
-	serverStream := streamtest.New()
-	server := routetab.New(serverAddr, ctx, serverStream, kad, mockstate.NewStateStore(), logging.New(os.Stdout, 0))
 
-	clientStream := streamtest.New(streamtest.WithProtocols(server.Protocol())) // connect to server
-	kad2, signer1, ab1 := newTestKademlia(clientAddr)
-	addOne(t, signer1, kad2, ab1, serverAddr)
-	client := routetab.New(clientAddr, ctx, clientStream, kad2, mockstate.NewStateStore(), logging.New(os.Stdout, 0))
+	t.Run("doResp && handlerResp can save route success", func(t *testing.T) {
+		target := test.RandomAddress()
 
-	serverStream.SetProtocols(client.Protocol()) // connect to client
+		p1 := test.RandomAddress()
+		p2 := test.RandomAddress()
+		item := generatePath([]string{p1.String(), p2.String()})
+		routes := []routetab.RouteItem{item}
+		server.DoResp(ctx, p2p.Peer{Address: clientAddr}, target, routes)
+		get, err := client.RouteTab().Get(target)
+		if err != nil {
+			t.Fatalf("client receive route err %s", err.Error())
+		}
+		if len(get) != 1 {
+			t.Fatalf("client receive route expired count 1, got %d", len(get))
+		}
+		receive := get[0]
+		if receive.TTL != 3 || !receive.Neighbor.Equal(serverAddr) {
+			t.Fatalf("client receive route expired ttl=3,neighbor=%s, got ttl=%d,neighbor=%s", serverAddr.String(), receive.TTL, receive.Neighbor.String())
+		}
+		if !receive.NextHop[0].Neighbor.Equal(p1) {
+			t.Fatalf("client receive route expired nextHop neighbor=%s, got %s", p1.String(), receive.NextHop[0].Neighbor.String())
+		}
+	})
 
-	// origin path
-	//path := []string{"0301", "0302"}
+}
 
-	target := test.RandomAddress()
+func newRoute(t *testing.T, p1, p2 boson.Address) (r1, r2 routetab.Service) {
+	ctx := context.TODO()
+	kad, signer, ab := newTestKademlia(p1)
+	addOne(t, signer, kad, ab, p2)
+	serverStream := streamtest.New(streamtest.WithBaseAddr(p1))
+	r1 = routetab.New(p1, ctx, serverStream, kad, mockstate.NewStateStore(), logging.New(os.Stdout, 0))
 
-	p1 := test.RandomAddress()
-	p2 := test.RandomAddress()
-	item := generatePath([]string{p1.String(), p2.String()})
-	routes := []routetab.RouteItem{item}
-	server.DoResp(ctx, p2p.Peer{Address: clientAddr}, target, routes)
-	get, err := client.RouteTab().Get(target)
-	if err != nil {
-		t.Fatalf("client receive route err %s", err.Error())
-	}
-	if len(get) != 1 {
-		t.Fatalf("client receive route expired count 1, got %d", len(get))
-	}
-	receive := get[0]
-	if receive.TTL != 3 || !receive.Neighbor.Equal(serverAddr) {
-		t.Fatalf("client receive route expired ttl=3,neighbor=%s, got ttl=%d,neighbor=%s", serverAddr.String(), receive.TTL, receive.Neighbor.String())
-	}
+	clientStream := streamtest.New(
+		streamtest.WithProtocols(r1.Protocol()),
+		streamtest.WithBaseAddr(p2),
+	) // connect to server
+	kad2, signer1, ab1 := newTestKademlia(p2)
+	addOne(t, signer1, kad2, ab1, p1)
+	r2 = routetab.New(p2, ctx, clientStream, kad2, mockstate.NewStateStore(), logging.New(os.Stdout, 0))
+
+	serverStream.SetProtocols(r2.Protocol()) // connect to client
+	return
 }
 
 func newTestKademlia(base boson.Address) (*kademlia.Kad, beeCrypto.Signer, addressbook.Interface) {
