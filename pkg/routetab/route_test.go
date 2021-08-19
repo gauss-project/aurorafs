@@ -3,7 +3,10 @@ package routetab_test
 import (
 	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/boson/test"
+	"github.com/gauss-project/aurorafs/pkg/logging"
 	"github.com/gauss-project/aurorafs/pkg/routetab"
+	mockstore "github.com/gauss-project/aurorafs/pkg/statestore/mock"
+	"os"
 	"testing"
 	"time"
 )
@@ -87,5 +90,57 @@ func TestUpdateRouteItem(t *testing.T) {
 	}
 	if routes.NextHop[1].Neighbor.String() != "0302" {
 		t.Fatalf("current route NextHop expected to 0302, got %s\n", routes.NextHop[1].Neighbor.String())
+	}
+}
+
+func TestRouteTable_Gc(t *testing.T) {
+	path1 := []string{"0301", "0302", "0303"}
+	item1 := generatePath(path1)
+
+	now, updated := routetab.CheckExpired([]routetab.RouteItem{item1}, time.Second)
+
+	if updated {
+		t.Fatalf("current route gc expected to false, got true")
+	}
+	if len(now) == 0 {
+		t.Fatalf("current route gc expected now count > 0, got 0")
+	}
+	<-time.After(time.Second * 1)
+	item1.CreateTime++
+	//item1.NextHop[0].CreateTime++
+	item1.NextHop[0].NextHop[0].CreateTime++
+	now, updated = routetab.CheckExpired([]routetab.RouteItem{item1}, time.Second)
+	if !updated {
+		t.Fatalf("current route gc expected to true, got false")
+	}
+
+	if len(now) == 0 || len(now[0].NextHop) != 0 {
+		t.Fatalf("current route gc expected now count 1 and nexHop count 0, got count %d , nextHop count %d ", len(now), len(now[0].NextHop))
+	}
+	route := routetab.NewRouteTable(mockstore.NewStateStore(), logging.New(os.Stdout, 0))
+
+	item2 := generatePath(path1)
+	target := test.RandomAddress()
+	err := route.Set(target, []routetab.RouteItem{item2})
+	if err != nil {
+		t.Fatalf("routetab set err %s", err)
+	}
+	_, err = route.Get(target)
+	if err != nil {
+		t.Fatalf("routetab get err %s", err)
+		return
+	}
+	route.Gc(time.Second)
+	_, err = route.Get(target)
+	if err != nil {
+		t.Fatalf("routetab get err %s", err)
+		return
+	}
+	<-time.After(time.Second * 1)
+	route.Gc(time.Second)
+	_, err = route.Get(target)
+	if err != routetab.ErrNotFound {
+		t.Fatalf("routetab get ,expected route: not found, got %s", err)
+		return
 	}
 }
