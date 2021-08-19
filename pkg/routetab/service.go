@@ -3,6 +3,8 @@ package routetab
 import (
 	"context"
 	"fmt"
+	"time"
+
 	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/kademlia"
 	"github.com/gauss-project/aurorafs/pkg/logging"
@@ -10,7 +12,6 @@ import (
 	"github.com/gauss-project/aurorafs/pkg/p2p/protobuf"
 	"github.com/gauss-project/aurorafs/pkg/routetab/pb"
 	"github.com/gauss-project/aurorafs/pkg/storage"
-	"time"
 )
 
 const (
