@@ -3,6 +3,11 @@ package routetab_test
 import (
 	"context"
 	"errors"
+	"math/rand"
+	"os"
+	"testing"
+	"time"
+
 	"github.com/gauss-project/aurorafs/pkg/addressbook"
 	"github.com/gauss-project/aurorafs/pkg/aurora"
 	"github.com/gauss-project/aurorafs/pkg/boson"
@@ -18,11 +23,7 @@ import (
 	"github.com/gauss-project/aurorafs/pkg/routetab"
 	mockstate "github.com/gauss-project/aurorafs/pkg/statestore/mock"
 	ma "github.com/multiformats/go-multiaddr"
-	"math/rand"
-	"os"
-	"sync/atomic"
-	"testing"
-	"time"
+	"github.com/sirupsen/logrus"
 )
 
 func generatePath(path []string) routetab.RouteItem {
@@ -283,97 +284,36 @@ func TestRouteTable_Gc(t *testing.T) {
 
 }
 
-func TestService_Req(t *testing.T) {
-	rand.Seed(time.Now().UnixNano())
-
-	serverAddr := test.RandomAddress()
-	clientAddr := test.RandomAddress()
-
-	ctx := context.TODO()
-	kad, signer, ab := newTestKademlia(serverAddr)
-	addOne(t, signer, kad, ab, clientAddr)
-	serverStream := streamtest.New()
-	server := routetab.New(serverAddr, ctx, serverStream, kad, mockstate.NewStateStore(), logging.New(os.Stdout, 0))
-
-	clientStream := streamtest.New(streamtest.WithProtocols(server.Protocol())) // connect to server
-	kad2, signer1, ab1 := newTestKademlia(clientAddr)
-	addOne(t, signer1, kad2, ab1, serverAddr)
-	client := routetab.New(clientAddr, ctx, clientStream, kad2, mockstate.NewStateStore(), logging.New(os.Stdout, 0))
-
-	serverStream.SetProtocols(client.Protocol()) // connect to client
-
-	// origin path
-	//path := []string{"0301", "0302"}
-
-	target := test.RandomAddress()
-
-	p1 := test.RandomAddress()
-	p2 := test.RandomAddress()
-	item := generatePath([]string{p1.String(), p2.String()})
-	routes := []routetab.RouteItem{item}
-	server.DoResp(ctx, p2p.Peer{Address: clientAddr}, target, routes)
-	get, err := client.RouteTab().Get(target)
-	if err != nil {
-		t.Fatalf("client receive route err %s", err.Error())
-	}
-	if len(get) != 1 {
-		t.Fatalf("client receive route expired count 1, got %d", len(get))
-	}
-	receive := get[0]
-	if receive.TTL != 3 || !receive.Neighbor.Equal(serverAddr) {
-		t.Fatalf("client receive route expired ttl=3,neighbor=%s, got ttl=%d,neighbor=%s", serverAddr.String(), receive.TTL, receive.Neighbor.String())
-	}
-}
-
-func newTestKademlia(base boson.Address) (*kademlia.Kad, beeCrypto.Signer, addressbook.Interface) {
-
-	var (
-		connCounter, failedConnCounter *int32
-		pk, _                          = crypto.GenerateSecp256k1Key()                                                     // random private key
-		signer                         = beeCrypto.NewDefaultSigner(pk)                                                    // signer
-		ab                             = addressbook.New(mockstate.NewStateStore())                                        // address book
-		p2ps                           = p2pMock(ab, signer, connCounter, failedConnCounter)                               // p2p mock
-		disc                           = mock.NewDiscovery()                                                               // mock discovery protocol
-		kad                            = kademlia.New(base, ab, disc, p2ps, logging.New(os.Stdout, 0), kademlia.Options{}) // kademlia instance
-	)
-
-	return kad, signer, ab
-}
-
 const underlayBase = "/ip4/127.0.0.1/tcp/1634/dns/"
 
 var (
 	nonConnectableAddress, _ = ma.NewMultiaddr(underlayBase + "16Uiu2HAkx8ULY8cTXhdVAcMmLcH9AsTKz6uBQ7DPLKRjMLgBVYkA")
+	nopLogger = logging.New(os.NewFile(0, os.DevNull), logrus.ErrorLevel)
 )
 
-func p2pMock(ab addressbook.Interface, signer beeCrypto.Signer, counter, failedCounter *int32) p2p.Service {
-	p2ps := p2pmock.New(p2pmock.WithConnectFunc(func(ctx context.Context, addr ma.Multiaddr) (*aurora.Address, error) {
-		if addr.Equal(nonConnectableAddress) {
-			_ = atomic.AddInt32(failedCounter, 1)
+func p2pMock(ab addressbook.Interface, signer beeCrypto.Signer) p2p.Service {
+	p2ps := p2pmock.New(p2pmock.WithConnectFunc(func(ctx context.Context, underlay ma.Multiaddr) (*aurora.Address, error) {
+		if underlay.Equal(nonConnectableAddress) {
 			return nil, errors.New("non reachable node")
 		}
-		if counter != nil {
-			_ = atomic.AddInt32(counter, 1)
-		}
-
 		addresses, err := ab.Addresses()
 		if err != nil {
 			return nil, errors.New("could not fetch addresbook addresses")
 		}
 
 		for _, a := range addresses {
-			if a.Underlay.Equal(addr) {
+			if a.Underlay.Equal(underlay) {
 				return &a, nil
 			}
 		}
 
-		address := test.RandomAddress()
-		bzzAddr, err := aurora.NewAddress(signer, addr, address, 0)
+		overlay := test.RandomAddress()
+		bzzAddr, err := aurora.NewAddress(signer, underlay, overlay, 0)
 		if err != nil {
 			return nil, err
 		}
 
-		if err := ab.Put(address, *bzzAddr); err != nil {
+		if err := ab.Put(overlay, *bzzAddr); err != nil {
 			return nil, err
 		}
 
@@ -381,6 +321,20 @@ func p2pMock(ab addressbook.Interface, signer beeCrypto.Signer, counter, failedC
 	}))
 
 	return p2ps
+}
+
+func newTestKademlia(base boson.Address) (*kademlia.Kad, beeCrypto.Signer, addressbook.Interface) {
+
+	var (
+		pk, _                          = crypto.GenerateSecp256k1Key()                                                     // random private key
+		signer                         = beeCrypto.NewDefaultSigner(pk)                                                    // signer
+		ab                             = addressbook.New(mockstate.NewStateStore())                                        // address book
+		p2ps                           = p2pMock(ab, signer)                               					               // p2p mock
+		disc                           = mock.NewDiscovery()                                                               // mock discovery protocol
+		kad                            = kademlia.New(base, ab, disc, p2ps, nopLogger, kademlia.Options{}) // kademlia instance
+	)
+
+	return kad, signer, ab
 }
 
 func addOne(t *testing.T, signer beeCrypto.Signer, k *kademlia.Kad, ab addressbook.Putter, peer boson.Address) {
@@ -405,4 +359,46 @@ func convPathByte(path []string) [][]byte {
 		out[k] = boson.MustParseHexAddress(v).Bytes()
 	}
 	return out
+}
+
+func TestService_Req(t *testing.T) {
+	rand.Seed(time.Now().UnixNano())
+
+	serverAddr := test.RandomAddress()
+	clientAddr := test.RandomAddress()
+
+	ctx := context.TODO()
+	kad, signer, ab := newTestKademlia(serverAddr)
+	addOne(t, signer, kad, ab, clientAddr)
+	serverStream := streamtest.New()
+	server := routetab.New(serverAddr, ctx, serverStream, kad, mockstate.NewStateStore(), nopLogger)
+
+	clientStream := streamtest.New(streamtest.WithProtocols(server.Protocol())) // connect to server
+	kad2, signer1, ab1 := newTestKademlia(clientAddr)
+	addOne(t, signer1, kad2, ab1, serverAddr)
+	client := routetab.New(clientAddr, ctx, clientStream, kad2, mockstate.NewStateStore(), nopLogger)
+
+	serverStream.SetProtocols(client.Protocol()) // connect to client
+
+	// origin path
+	//path := []string{"0301", "0302"}
+
+	target := test.RandomAddress()
+
+	p1 := test.RandomAddress()
+	p2 := test.RandomAddress()
+	item := generatePath([]string{p1.String(), p2.String()})
+	routes := []routetab.RouteItem{item}
+	server.DoResp(ctx, p2p.Peer{Address: clientAddr}, target, routes)
+	get, err := client.RouteTab().Get(target)
+	if err != nil {
+		t.Fatalf("client receive route err %s", err.Error())
+	}
+	if len(get) != 1 {
+		t.Fatalf("client receive route expired count 1, got %d", len(get))
+	}
+	receive := get[0]
+	if receive.TTL != 3 || !receive.Neighbor.Equal(serverAddr) {
+		t.Fatalf("client receive route expired ttl=3,neighbor=%s, got ttl=%d,neighbor=%s", serverAddr.String(), receive.TTL, receive.Neighbor.String())
+	}
 }
