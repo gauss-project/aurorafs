@@ -85,7 +85,7 @@ func pathToRouteItem(path [][]byte) (routes []RouteItem) {
 func inNeighbor(addr boson.Address, items []RouteItem) (now []RouteItem, index int, has bool) {
 	now = make([]RouteItem, 0)
 	for _, v := range items {
-		if time.Now().Unix()-v.CreateTime < GcTime.Milliseconds()*1000 {
+		if time.Now().Unix()-v.CreateTime < GcTime.Milliseconds()/1000 {
 			now = append(now, v)
 			if v.Neighbor.Equal(addr) {
 				// only one match
@@ -140,7 +140,7 @@ func updateRouteItem(now, old RouteItem) (route RouteItem) {
 func checkExpired(old []RouteItem, expire time.Duration) (now []RouteItem, updated bool) {
 	now = make([]RouteItem, 0)
 	for _, v := range old {
-		if time.Now().Unix()-v.CreateTime < expire.Milliseconds()*1000 {
+		if time.Now().Unix()-v.CreateTime < expire.Milliseconds()/1000 {
 			v.NextHop, updated = checkExpired(v.NextHop, expire)
 			now = append(now, v)
 		} else {

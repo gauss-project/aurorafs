@@ -9,4 +9,5 @@ var (
 	PathToRouteItem = pathToRouteItem
 	NewRouteTable   = newRouteTable
 	UpdateRouteItem = updateRouteItem
+	CheckExpired    = checkExpired
 )
