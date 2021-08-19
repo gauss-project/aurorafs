@@ -25,30 +25,6 @@ import (
 	"time"
 )
 
-func TestPathToRouteItem(t *testing.T) {
-	count := 10
-	addresses := make([][]byte, count)
-	for i := 0; i < len(addresses); i++ {
-		addresses[i] = test.RandomAddress().Bytes()
-	}
-
-	route := routetab.PathToRouteItem(addresses)[0]
-	cur := len(addresses) - 1
-	for {
-		if !route.Neighbor.Equal(boson.NewAddress(addresses[cur])) {
-			t.Fatalf("current route neighbor expected to address %s, got %s\n", addresses[cur], route.Neighbor.String())
-		}
-
-		next := route.NextHop
-		if next == nil {
-			break
-		}
-
-		route = next[0]
-		cur--
-	}
-}
-
 func generatePath(path []string) routetab.RouteItem {
 	maxTTL := len(path)
 	route := routetab.RouteItem{
@@ -89,6 +65,30 @@ func Test_generatePath(t *testing.T) {
 	}
 }
 
+func TestPathToRouteItem(t *testing.T) {
+	count := 10
+	addresses := make([][]byte, count)
+	for i := 0; i < len(addresses); i++ {
+		addresses[i] = test.RandomAddress().Bytes()
+	}
+
+	route := routetab.PathToRouteItem(addresses)[0]
+	cur := len(addresses) - 1
+	for {
+		if !route.Neighbor.Equal(boson.NewAddress(addresses[cur])) {
+			t.Fatalf("current route neighbor expected to address %s, got %s\n", addresses[cur], route.Neighbor.String())
+		}
+
+		next := route.NextHop
+		if next == nil {
+			break
+		}
+
+		route = next[0]
+		cur--
+	}
+}
+
 func TestUpdateRouteItem(t *testing.T) {
 	path1 := []string{"0301", "0302", "0303"}
 	item1 := generatePath(path1)
@@ -105,6 +105,129 @@ func TestUpdateRouteItem(t *testing.T) {
 	if routes.NextHop[1].Neighbor.String() != "0302" {
 		t.Fatalf("current route NextHop expected to 0302, got %s\n", routes.NextHop[1].Neighbor.String())
 	}
+}
+
+func TestMergeRouteList(t *testing.T) {
+	testCase := struct{
+		oldRoutes [][]string
+		newRoutes [][]string
+		expectedNeighbors []string
+		expectedPaths [][]string
+	}{
+		//
+		//  0001 → 0003 → 0008 → 0024
+		//  ↓
+		//  0006 → 0009 → 0025
+		//  -------------
+		// 0002 → 0011 → 0013 → 0014
+		// ↓    ↘
+		// 0018   0020
+		// ↓       ↓
+		// 0019 → 0021
+		//  -------------
+		// 0004 → 0026 → 0022 → 0021 → 0019
+		//
+		oldRoutes: [][]string{
+			{"0001", "0003", "0008", "0024"},
+			{"0001", "0006", "0009", "0025"},
+			{"0002", "0011", "0013", "0014"},
+			{"0002", "0018", "0019", "0021"},
+			{"0002", "0020", "0021"},
+			{"0004", "0026", "0022", "0021", "0019"},
+		},
+		// 0001 → 0003 → 0024
+		// ↓
+		// 0006 → 0007 → 0009 → 0025
+		// -------------
+		// 0002 → 0011
+		//      ↘
+		// 0018 ← 0020
+		//      ↘
+		//        0021
+		// -------------
+		// 0004 → 0026 → 0022 → 0021 → 0019
+		// ↓
+		// 0014 → 0013 → 0008
+		newRoutes: [][]string{
+			{"0001", "0003", "0024"},
+			{"0001", "0006", "0007", "0009", "0025"},
+			{"0002", "0011", "0020", "0018", "0021"},
+			{"0004", "0026", "0022", "0021", "0019"},
+			{"0004", "0014", "0013", "0008"},
+		},
+		expectedNeighbors: []string{"0001", "0002", "0004"},
+	}
+
+	generateRoutes := func(paths [][]string) []routetab.RouteItem {
+		routeMap := make(map[string][][]string, 0)
+		for _, path := range paths {
+			_, exists := routeMap[path[0]]
+			if !exists {
+				routeMap[path[0]] = make([][]string, 0)
+			}
+			routeMap[path[0]] = append(routeMap[path[0]], path)
+		}
+		routeItems := make([]routetab.RouteItem, 0)
+		for _, route := range routeMap {
+			var prev routetab.RouteItem
+			for i := 0; i < len(route); i++ {
+				if i == 0 {
+					prev = generatePath(route[i])
+				} else {
+					prev = routetab.UpdateRouteItem(generatePath(route[i]), prev)
+				}
+			}
+			if len(route) > 0 {
+				routeItems = append(routeItems, prev)
+			}
+		}
+		return routeItems
+	}
+
+	oldRoutes := generateRoutes(testCase.oldRoutes)
+	newRoutes := generateRoutes(testCase.newRoutes)
+	routes := routetab.MergeRouteList(newRoutes, oldRoutes)
+
+	neighbors := make(map[string]int)
+	for i, route := range routes {
+		neighbors[route.Neighbor.String()] = i
+	}
+
+	for _, expected := range testCase.expectedNeighbors {
+		_, exists := neighbors[expected]
+		if !exists {
+			t.Fatalf("neighbor %s not found\n", expected)
+		}
+	}
+
+	collectPaths := func(expected, routes []routetab.RouteItem) {
+		var iterate func(w, r routetab.RouteItem)
+		iterate = func(w, r routetab.RouteItem) {
+			if !w.Neighbor.Equal(r.Neighbor) {
+				t.Fatalf("expected to route neighbor %s, got %s\n", w.Neighbor, r.Neighbor)
+			}
+
+			nextHopMap := make(map[string]int)
+			for i, next := range r.NextHop {
+				nextHopMap[next.Neighbor.String()] = i
+			}
+
+			for _, expect := range w.NextHop {
+				idx, exists := nextHopMap[expect.Neighbor.String()]
+				if !exists {
+					t.Fatalf("next route %s not found\n", expect.Neighbor)
+				}
+				iterate(expect, r.NextHop[idx])
+			}
+		}
+
+		for _, route := range expected {
+			iterate(route, routes[neighbors[route.Neighbor.String()]])
+		}
+	}
+
+	collectPaths(oldRoutes, routes)
+	collectPaths(newRoutes, routes)
 }
 
 func TestRouteTable_Gc(t *testing.T) {
@@ -157,6 +280,7 @@ func TestRouteTable_Gc(t *testing.T) {
 		t.Fatalf("routetab get ,expected route: not found, got %s", err)
 		return
 	}
+
 }
 
 func TestService_Req(t *testing.T) {
