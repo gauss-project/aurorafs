@@ -9,6 +9,7 @@ import (
 	"io"
 	"math/rand"
 	"os"
+	"sync"
 	"testing"
 	"time"
 
@@ -41,17 +42,17 @@ const underlayBase = "/ip4/127.0.0.1/tcp/1634/dns/"
 
 var (
 	nonConnectableAddress, _ = ma.NewMultiaddr(underlayBase + "16Uiu2HAkx8ULY8cTXhdVAcMmLcH9AsTKz6uBQ7DPLKRjMLgBVYkA")
-	nopLogger = logging.New(os.NewFile(0, os.DevNull), logrus.ErrorLevel)
+	nopLogger                = logging.New(os.NewFile(0, os.DevNull), logrus.ErrorLevel)
 )
 
 type Node struct {
 	routetab.Service
 	signer crypto.Signer
-	book addressbook.Interface
+	book   addressbook.Interface
 }
 
 type Network struct {
-	ctx context.Context
+	ctx    context.Context
 	server Node
 	client Node
 }
@@ -141,12 +142,12 @@ func newTestKademlia(base boson.Address) (*kademlia.Kad, beeCrypto.Signer, addre
 			return f(bin, peers, connected)
 		}
 
-		pk, _                          = crypto.GenerateSecp256k1Key()                                                     // random private key
-		signer                         = beeCrypto.NewDefaultSigner(pk)                                                    // signer
-		ab                             = addressbook.New(mockstate.NewStateStore())                                        // address book
-		p2ps                           = p2pMock(ab, signer)                               					               // p2p mock
-		disc                           = mock.NewDiscovery()                                                               // mock discovery protocol
-		kad                            = kademlia.New(base, ab, disc, p2ps, nopLogger, kademlia.Options{SaturationFunc: saturationFunc, BitSuffixLength: 2}) // kademlia instance
+		pk, _  = crypto.GenerateSecp256k1Key()                                                                                       // random private key
+		signer = beeCrypto.NewDefaultSigner(pk)                                                                                      // signer
+		ab     = addressbook.New(mockstate.NewStateStore())                                                                          // address book
+		p2ps   = p2pMock(ab, signer)                                                                                                 // p2p mock
+		disc   = mock.NewDiscovery()                                                                                                 // mock discovery protocol
+		kad    = kademlia.New(base, ab, disc, p2ps, nopLogger, kademlia.Options{SaturationFunc: saturationFunc, BitSuffixLength: 2}) // kademlia instance
 	)
 
 	sfImpl := func(bin uint8, peers, connected *pslice.PSlice) (bool, bool) {
@@ -439,41 +440,64 @@ func TestRouteTable_Gc(t *testing.T) {
 
 }
 
-func TestService_Req(t *testing.T) {
+func TestService_FindRoute(t *testing.T) {
 	ctx := context.Background()
 	ns := newNetwork(t)
+	ns.Start()
+	defer ns.Close()
 
-	t.Run("doResp && handlerResp can save route success", func(t *testing.T) {
-		target := test.RandomAddress()
+	target := test.RandomAddress()
 
-		p1 := test.RandomAddress()
-		p2 := test.RandomAddress()
+	addOne(t, ns.client.signer, ns.client.Kad(), ns.client.book, test.RandomAddress())
+
+	p1 := test.RandomAddress()
+	p2 := test.RandomAddress()
+
+	wg := sync.WaitGroup{}
+	wg.Add(1)
+	go func(t *testing.T) {
+		<-time.After(time.Second)
 		item := generateRoute([]string{p1.String(), p2.String()})
 		routes := []routetab.RouteItem{item}
 		ns.server.DoResp(ctx, ns.ClientPeer(), target, routes)
-		get, err := ns.client.RouteTab().Get(target)
-		if err != nil {
-			t.Fatalf("client receive route err %s", err.Error())
-		}
-		if len(get) != 1 {
-			t.Fatalf("client receive route expired count 1, got %d", len(get))
-		}
-		receive := get[0]
-		if receive.TTL != 3 || !receive.Neighbor.Equal(ns.server.Address()) {
-			t.Fatalf("client receive route expired ttl=3,neighbor=%s, got ttl=%d,neighbor=%s", ns.server.Address().String(), receive.TTL, receive.Neighbor.String())
-		}
-		if !receive.NextHop[0].Neighbor.Equal(p1) {
-			t.Fatalf("client receive route expired nextHop neighbor=%s, got %s", p1.String(), receive.NextHop[0].Neighbor.String())
-		}
-	})
+		wg.Done()
+	}(t)
 
+	route, err := ns.client.FindRoute(ctx, target)
+	if err != nil {
+		t.Fatalf("FindRoute err %s", err)
+	}
+	wg.Wait()
+
+	receive := route[0]
+	if receive.TTL != 3 || !receive.Neighbor.Equal(ns.server.Address()) {
+		t.Fatalf("client receive route expired ttl=3,neighbor=%s, got ttl=%d,neighbor=%s", ns.server.Address().String(), receive.TTL, receive.Neighbor.String())
+	}
+	if !receive.NextHop[0].Neighbor.Equal(p1) {
+		t.Fatalf("client receive route expired nextHop neighbor=%s, got %s", p1.String(), receive.NextHop[0].Neighbor.String())
+	}
+
+	get, err := ns.client.RouteTab().Get(target)
+	if err != nil {
+		t.Fatalf("client receive route err %s", err.Error())
+	}
+	if len(get) != 1 {
+		t.Fatalf("client receive route expired count 1, got %d", len(get))
+	}
+	receive = get[0]
+	if receive.TTL != 3 || !receive.Neighbor.Equal(ns.server.Address()) {
+		t.Fatalf("client receive route expired ttl=3,neighbor=%s, got ttl=%d,neighbor=%s", ns.server.Address().String(), receive.TTL, receive.Neighbor.String())
+	}
+	if !receive.NextHop[0].Neighbor.Equal(p1) {
+		t.Fatalf("client receive route expired nextHop neighbor=%s, got %s", p1.String(), receive.NextHop[0].Neighbor.String())
+	}
 }
 
 func TestHandleMaxTTLResponse(t *testing.T) {
 	ctx := context.Background()
 	ns := newNetwork(t)
 
-	paths := make([]string, routetab.MaxTTL + 1)
+	paths := make([]string, routetab.MaxTTL+1)
 	for i := 0; i < len(paths); i++ {
 		paths[i] = test.RandomAddress().String()
 	}
@@ -511,7 +535,7 @@ func TestHandleMaxTTLResponse(t *testing.T) {
 		i--
 		iterate(r.NextHop[0], i)
 	}
-	iterate(serverRoute[0], len(paths) - 1)
+	iterate(serverRoute[0], len(paths)-1)
 
 	_, err = ns.client.RouteTab().Get(target)
 	if !errors.Is(err, routetab.ErrNotFound) {
@@ -542,7 +566,7 @@ func TestHandleCirclePathResponse(t *testing.T) {
 		paths[i] = test.RandomAddress().String()
 	}
 
-	circleHead := paths[rand.Intn(len(paths) - 1)]
+	circleHead := paths[rand.Intn(len(paths)-1)]
 	neighbor := boson.MustParseHexAddress(circleHead)
 	addOne(t, ns.server.signer, ns.server.Kad(), ns.server.book, neighbor)
 
