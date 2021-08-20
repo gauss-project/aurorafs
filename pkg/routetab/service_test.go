@@ -389,6 +389,37 @@ func TestMergeRouteList(t *testing.T) {
 	collectPaths(newRoutes, routes)
 }
 
+func TestRouteTableWriteConflict(t *testing.T) {
+	rt := routetab.NewRouteTable(mockstate.NewStateStore(), nopLogger, routetab.NewMetrics())
+
+	target := test.RandomAddress()
+	largePaths := make([]string, 1001)
+	for i := 0; i < len(largePaths); i++ {
+		largePaths[i] = test.RandomAddress().String()
+	}
+
+	rt.Set(target, []routetab.RouteItem{generateRoute([]string{largePaths[0]})})
+
+	go func() {
+		for i := 1; i < len(largePaths); i++ {
+			rt.Set(target, []routetab.RouteItem{generateRoute([]string{largePaths[i]})})
+		}
+	}()
+
+	cur := 0
+	for i := 0; i < len(largePaths); i++ {
+		route, err := rt.Get(target)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(route) < cur {
+			t.Fatalf("current route number expected to %d, got %d\n", cur, len(route))
+		} else {
+			cur = len(route)
+		}
+	}
+}
+
 func TestRouteTable_Gc(t *testing.T) {
 	path1 := []string{"0301", "0302", "0303"}
 	item1 := generateRoute(path1)
@@ -413,7 +444,7 @@ func TestRouteTable_Gc(t *testing.T) {
 	if len(now) == 0 || len(now[0].NextHop) != 0 {
 		t.Fatalf("current route gc expected now count 1 and nexHop count 0, got count %d , nextHop count %d ", len(now), len(now[0].NextHop))
 	}
-	route := routetab.NewRouteTable(mockstate.NewStateStore(), logging.New(os.Stdout, 0), routetab.NewMetrics())
+	route := routetab.NewRouteTable(mockstate.NewStateStore(), nopLogger, routetab.NewMetrics())
 
 	item2 := generateRoute(path1)
 	target := test.RandomAddress()
@@ -670,7 +701,7 @@ func TestHandleCirclePathResponse(t *testing.T) {
 
 func TestPendCallResTab_Gc(t *testing.T) {
 	addr := test.RandomAddress()
-	pend := routetab.NewPendCallResTab(addr, logging.New(os.Stdout, 0), routetab.NewMetrics())
+	pend := routetab.NewPendCallResTab(addr, nopLogger, routetab.NewMetrics())
 
 	target1 := test.RandomAddress()
 	target2 := test.RandomAddress()
