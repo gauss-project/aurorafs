@@ -62,7 +62,7 @@ func newRouteTable(store storage.StateStorer, logger logging.Logger, met metrics
 
 func (rt *routeTable) tryLock(key string) error {
 	now := time.Now()
-	for !rt.mu.TryLock(key) {
+	for !rt.mu.TryRLock(key) {
 		time.After(time.Millisecond * 50)
 		if time.Since(now).Seconds() > rt.lockTimeout.Seconds() {
 			rt.metrics.TotalErrors.Inc()
@@ -81,7 +81,7 @@ func (rt *routeTable) Set(target boson.Address, routes []RouteItem) error {
 	if err != nil {
 		return err
 	}
-	defer rt.mu.Unlock(key)
+	defer rt.mu.RUnlock(key)
 
 	// store get
 	//old := make([]RouteItem, 0)
@@ -117,7 +117,7 @@ func (rt *routeTable) Get(target boson.Address) (routes []RouteItem, err error) 
 	if err != nil {
 		return
 	}
-	defer rt.mu.Unlock(key)
+	defer rt.mu.RUnlock(key)
 
 	// store get
 	//err = rt.store.Get(key, &routes)
@@ -154,7 +154,7 @@ func (rt *routeTable) Gc(expire time.Duration) {
 				delete(rt.items, mKey)
 			}
 		}
-		rt.mu.Unlock(key)
+		rt.mu.RUnlock(key)
 	}
 }
 

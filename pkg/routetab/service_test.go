@@ -505,6 +505,7 @@ func TestService_FindRoute(t *testing.T) {
 }
 
 func TestService_HandleReq(t *testing.T) {
+	rand.Seed(2)
 	ctx := context.Background()
 	ns := newNetwork(t)
 	ns.Start()
