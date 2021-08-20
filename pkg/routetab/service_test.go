@@ -515,15 +515,6 @@ func TestService_HandleReq(t *testing.T) {
 
 	addOne(t, ns.client.signer, ns.client.Kad(), ns.client.book, target)
 
-	ns.server.DoReq(
-		ctx,
-		ns.server.Address(),
-		p2p.Peer{Address: ns.client.Address()},
-		target,
-		&pb.FindRouteReq{Dest: target.Bytes()},
-		nil,
-	)
-	time.Sleep(time.Millisecond*100)
 	route, err := ns.server.FindRoute(ctx, target)
 	if err != nil {
 		t.Fatalf("client receive route err %s", err.Error())
@@ -550,13 +541,6 @@ func TestService_HandleReq(t *testing.T) {
 		t.Fatalf("routetab set err %s", err.Error())
 		return
 	}
-	ns.server.DoReq(
-		ctx, ns.server.Address(),
-		p2p.Peer{Address: ns.client.Address()},
-		target2, &pb.FindRouteReq{Dest: target2.Bytes()},
-		nil,
-	)
-	time.Sleep(time.Millisecond*100)
 	route, err = ns.server.FindRoute(ctx, target2)
 	if err != nil {
 		t.Fatalf("client receive route err %s", err.Error())

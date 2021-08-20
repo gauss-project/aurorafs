@@ -194,7 +194,7 @@ func (s *Service) handlerFindRouteResp(ctx context.Context, p p2p.Peer, stream p
 
 func (s *Service) FindRoute(ctx context.Context, dest boson.Address) (routes []RouteItem, err error) {
 	routes, err = s.GetRoute(ctx, dest)
-	if err != nil {
+	if err == ErrNotFound {
 		s.logger.Debugf("route: FindRoute dest %s", dest.String(), err)
 		if s.isNeighbor(dest) {
 			err = fmt.Errorf("route: FindRoute dest %s is neighbor", dest.String())
