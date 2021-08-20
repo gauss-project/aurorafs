@@ -13,11 +13,13 @@ import (
 )
 
 var (
-	ErrNotFound         = errors.New("route: not found")
-	NeighborAlpha       = 2
-	MaxTTL        uint8 = 7
-	GcTime              = time.Minute * 10
-	GcInterval          = time.Minute
+	ErrNotFound = errors.New("route: not found")
+
+	MaxTTL uint8 = 7
+
+	neighborAlpha = 2
+	gcTime        = time.Minute * 10
+	gcInterval    = time.Minute
 )
 
 // RouteItem

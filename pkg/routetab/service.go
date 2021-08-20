@@ -3,7 +3,6 @@ package routetab
 import (
 	"context"
 	"fmt"
-	"os"
 	"time"
 
 	"github.com/gauss-project/aurorafs/pkg/boson"
@@ -66,19 +65,19 @@ func (s *Service) Close() error {
 
 func (s *Service) start(ctx context.Context) {
 	go func() {
-		s.routeTable.Gc(GcTime)
-		ticker := time.NewTicker(GcInterval)
+		s.routeTable.Gc(gcTime)
+		ticker := time.NewTicker(gcInterval)
 		for {
 			select {
 			case <-ticker.C:
-				s.routeTable.Gc(GcTime)
+				s.routeTable.Gc(gcTime)
 			case <-ctx.Done():
 				return
 			}
 		}
 	}()
 	go func() {
-		ticker := time.NewTicker(PendingInterval)
+		ticker := time.NewTicker(pendingInterval)
 		for {
 			select {
 			case <-ticker.C:
@@ -130,7 +129,9 @@ func (s *Service) handlerFindRouteReq(ctx context.Context, p p2p.Peer, stream p2
 	go func(path [][]byte) {
 		for i, target := range path {
 			now := pathToRouteItem(path[i:])
-			_ = s.routeTable.Set(boson.NewAddress(target), now)
+			if len(now) > 0 {
+				_ = s.routeTable.Set(boson.NewAddress(target), now)
+			}
 		}
 	}(req.Path)
 
@@ -148,7 +149,7 @@ func (s *Service) handlerFindRouteReq(ctx context.Context, p p2p.Peer, stream p2
 					if !inPath(v.Bytes(), req.Path) {
 						// forward
 						req.Path = append(req.Path, p.Address.Bytes())
-						s.doReq(ctx, p.Address, p2p.Peer{Address: v}, dest, &req, nil)
+						s.doReq(ctx, s.addr, p2p.Peer{Address: v}, dest, &req, nil)
 						s.logger.Tracef("route: handlerFindRouteReq dest= %s forward ro %s", dest.String(), v.String())
 					}
 					// discard
@@ -156,8 +157,6 @@ func (s *Service) handlerFindRouteReq(ctx context.Context, p p2p.Peer, stream p2
 				}
 			} else {
 				// dest in neighbor then resp
-				nowPath := [][]byte{dest.Bytes(), s.addr.Bytes()}
-				routes = pathToRouteItem(nowPath)
 				s.doResp(ctx, p, dest, routes)
 				s.logger.Tracef("route: handlerFindRouteReq dest= %s in neighbor", dest.String())
 			}
@@ -195,7 +194,7 @@ func (s *Service) handlerFindRouteResp(ctx context.Context, p p2p.Peer, stream p
 
 func (s *Service) FindRoute(ctx context.Context, dest boson.Address) (routes []RouteItem, err error) {
 	routes, err = s.GetRoute(ctx, dest)
-	if err != nil {
+	if err == ErrNotFound {
 		s.logger.Debugf("route: FindRoute dest %s", dest.String(), err)
 		if s.isNeighbor(dest) {
 			err = fmt.Errorf("route: FindRoute dest %s is neighbor", dest.String())
@@ -237,6 +236,9 @@ func (s *Service) GetRoute(_ context.Context, dest boson.Address) (routes []Rout
 
 func (s *Service) saveRespRouteItem(ctx context.Context, neighbor boson.Address, resp pb.FindRouteResp) {
 	minTTL := MaxTTL
+	if len(resp.RouteItems) == 0 {
+		minTTL = 0
+	}
 	for _, v := range resp.RouteItems {
 		if uint8(v.Ttl) < minTTL {
 			minTTL = uint8(v.Ttl)
@@ -270,7 +272,7 @@ func (s *Service) getNeighbor() (forward []boson.Address) {
 			// neighbor
 			forward = append(forward, address)
 			cnt++
-			if cnt >= NeighborAlpha {
+			if cnt >= neighborAlpha {
 				return true, false, nil
 			}
 		}
@@ -343,10 +345,15 @@ func (s *Service) doResp(ctx context.Context, peer p2p.Peer, dest boson.Address,
 		}
 	}()
 	resp := &pb.FindRouteResp{
-		Dest:       dest.Bytes(),
-		RouteItems: convRouteToPbRouteList(routes),
+		Dest: dest.Bytes(),
+		RouteItems: func() []*pb.RouteItem {
+			if len(routes) > 0 {
+				return convRouteToPbRouteList(routes)
+			}
+			return []*pb.RouteItem{}
+		}(),
 	}
-	fmt.Fprintf(os.Stderr, "do resp.\n")
+
 	w := protobuf.NewWriter(stream)
 	err := w.WriteMsgWithContext(ctx, resp)
 	if err != nil {

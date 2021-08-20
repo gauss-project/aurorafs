@@ -1,10 +1,8 @@
 package routetab
 
 import (
-	"fmt"
 	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/routetab/pb"
-	"os"
 	"time"
 )
 
@@ -17,7 +15,6 @@ func convRouteToPbRouteList(srcList []RouteItem) []*pb.RouteItem {
 }
 
 func convRouteItemToPbRoute(src RouteItem) *pb.RouteItem {
-	fmt.Fprintf(os.Stderr, "route %s ttl %d\n", src.Neighbor, src.TTL)
 	out := &pb.RouteItem{
 		CreateTime: src.CreateTime,
 		Ttl:        uint32(src.TTL),
@@ -88,7 +85,7 @@ func pathToRouteItem(path [][]byte) (routes []RouteItem) {
 func inNeighbor(addr boson.Address, items []RouteItem) (now []RouteItem, index int, has bool) {
 	now = make([]RouteItem, 0)
 	for _, v := range items {
-		if time.Now().Unix()-v.CreateTime < GcTime.Milliseconds()/1000 {
+		if time.Now().Unix()-v.CreateTime < gcTime.Milliseconds()/1000 {
 			now = append(now, v)
 			if v.Neighbor.Equal(addr) {
 				// only one match
