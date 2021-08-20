@@ -13,7 +13,7 @@ import (
 
 var (
 	PendingTimeout  = time.Second * 10
-	PendingInterval = time.Second
+	pendingInterval = time.Second
 )
 
 type pendCallResItem struct {

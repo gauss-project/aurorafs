@@ -27,7 +27,6 @@ var (
 	CheckExpired      = checkExpired
 	NewMetrics        = newMetrics
 	NewPendCallResTab = newPendCallResTab
-	ConvRouteToPbRouteList = convRouteToPbRouteList
 )
 
 func (s *Service) DoReq(ctx context.Context, src boson.Address, peer p2p.Peer, dest boson.Address, req *pb.FindRouteReq, ch chan struct{}) {

@@ -458,18 +458,27 @@ func TestService_FindRoute(t *testing.T) {
 	wg := sync.WaitGroup{}
 	wg.Add(1)
 	go func(t *testing.T) {
-		<-time.After(time.Second)
+		<-time.After(time.Millisecond*100)
 		item := generateRoute([]string{p1.String(), p2.String()})
 		routes := []routetab.RouteItem{item}
 		ns.server.DoResp(ctx, ns.ClientPeer(), target, routes)
 		wg.Done()
 	}(t)
 
-	route, err := ns.client.FindRoute(ctx, target)
-	if err != nil {
-		t.Fatalf("FindRoute err %s", err)
-	}
+	ns.client.DoReq(
+		ctx,
+		ns.server.Address(),
+		p2p.Peer{Address: ns.server.Address()},
+		target,
+		&pb.FindRouteReq{Dest: target.Bytes()},
+		nil,
+	)
 	wg.Wait()
+
+	route, err := ns.client.GetRoute(ctx, target)
+	if err != nil {
+		t.Fatalf("GetRoute err %s", err)
+	}
 
 	receive := route[0]
 	if receive.TTL != 3 || !receive.Neighbor.Equal(ns.server.Address()) {
@@ -489,6 +498,72 @@ func TestService_FindRoute(t *testing.T) {
 	receive = get[0]
 	if receive.TTL != 3 || !receive.Neighbor.Equal(ns.server.Address()) {
 		t.Fatalf("client receive route expired ttl=3,neighbor=%s, got ttl=%d,neighbor=%s", ns.server.Address().String(), receive.TTL, receive.Neighbor.String())
+	}
+	if !receive.NextHop[0].Neighbor.Equal(p1) {
+		t.Fatalf("client receive route expired nextHop neighbor=%s, got %s", p1.String(), receive.NextHop[0].Neighbor.String())
+	}
+}
+
+func TestService_HandleReq(t *testing.T) {
+	ctx := context.Background()
+	ns := newNetwork(t)
+	ns.Start()
+	defer ns.Close()
+
+	// target in client neighbor
+	target := test.RandomAddressAt(ns.client.Address(),0)
+
+	addOne(t, ns.client.signer, ns.client.Kad(), ns.client.book, target)
+
+	ns.server.DoReq(
+		ctx,
+		ns.server.Address(),
+		p2p.Peer{Address: ns.client.Address()},
+		target,
+		&pb.FindRouteReq{Dest: target.Bytes()},
+		nil,
+	)
+	time.Sleep(time.Millisecond*100)
+	route, err := ns.server.FindRoute(ctx, target)
+	if err != nil {
+		t.Fatalf("client receive route err %s", err.Error())
+	}
+	if len(route) != 1 {
+		t.Fatalf("client receive route expired count 1, got %d", len(route))
+	}
+	receive := route[0]
+	if receive.TTL != 1 || !receive.Neighbor.Equal(ns.client.Address()) {
+		t.Fatalf("client receive route expired ttl=1,neighbor=%s, got ttl=%d,neighbor=%s", ns.client.Address().String(), receive.TTL, receive.Neighbor.String())
+	}
+	if len(receive.NextHop) != 0 {
+		t.Fatalf("client receive route expired len(nextHop)==0, got %d", len(receive.NextHop))
+	}
+
+	// client have route
+	target2 := test.RandomAddress()
+	p1 := test.RandomAddress()
+	p2 := test.RandomAddress()
+	item := generateRoute([]string{p1.String(), p2.String()})
+	routes := []routetab.RouteItem{item}
+	err = ns.client.RouteTab().Set(target2, routes)
+	if err != nil {
+		t.Fatalf("routetab set err %s", err.Error())
+		return
+	}
+	ns.server.DoReq(
+		ctx, ns.server.Address(),
+		p2p.Peer{Address: ns.client.Address()},
+		target2, &pb.FindRouteReq{Dest: target2.Bytes()},
+		nil,
+	)
+	time.Sleep(time.Millisecond*100)
+	route, err = ns.server.FindRoute(ctx, target2)
+	if err != nil {
+		t.Fatalf("client receive route err %s", err.Error())
+	}
+	receive = route[0]
+	if receive.TTL != 3 || !receive.Neighbor.Equal(ns.client.Address()) {
+		t.Fatalf("client receive route expired ttl=3,neighbor=%s, got ttl=%d,neighbor=%s", ns.client.Address().String(), receive.TTL, receive.Neighbor.String())
 	}
 	if !receive.NextHop[0].Neighbor.Equal(p1) {
 		t.Fatalf("client receive route expired nextHop neighbor=%s, got %s", p1.String(), receive.NextHop[0].Neighbor.String())
@@ -649,8 +724,8 @@ func TestPendCallResTab_Gc(t *testing.T) {
 	}
 }
 
-type nopService struct{
-	err error
+type nopService struct {
+	err      error
 	response pb.FindRouteResp
 }
 
@@ -660,13 +735,13 @@ func (s *nopService) Protocol() p2p.ProtocolSpec {
 		Version: routetab.ProtocolVersion,
 		StreamSpecs: []p2p.StreamSpec{
 			{
-				Name:    routetab.StreamFindRouteReq,
+				Name: routetab.StreamFindRouteReq,
 				Handler: func(ctx context.Context, peer p2p.Peer, stream p2p.Stream) error {
 					return nil
 				},
 			},
 			{
-				Name:    routetab.StreamFindRouteResp,
+				Name: routetab.StreamFindRouteResp,
 				Handler: func(ctx context.Context, peer p2p.Peer, stream p2p.Stream) error {
 					r := protobuf.NewReader(stream)
 					defer func() {
@@ -738,8 +813,8 @@ func TestBusyNetworkResponse(t *testing.T) {
 	}
 
 	var (
-		iterate func (r *pb.RouteItem)
-		index int
+		iterate func(r *pb.RouteItem)
+		index   int
 	)
 	expectedPaths := []string{
 		ns.server.Address().String(),
@@ -747,7 +822,7 @@ func TestBusyNetworkResponse(t *testing.T) {
 		target.String(),
 	}
 
-	iterate = func (r *pb.RouteItem) {
+	iterate = func(r *pb.RouteItem) {
 		if hex.EncodeToString(r.Neighbor) != expectedPaths[index] {
 			t.Fatalf("expected to route address %s, got %s\n", expectedPaths[index], hex.EncodeToString(r.Neighbor))
 		}

@@ -1,7 +1,6 @@
 package routetab
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"github.com/ethereum/go-ethereum/common"
@@ -13,11 +12,13 @@ import (
 )
 
 var (
-	ErrNotFound         = errors.New("route: not found")
-	NeighborAlpha       = 2
-	MaxTTL        uint8 = 7
-	GcTime              = time.Minute * 10
-	GcInterval          = time.Minute
+	ErrNotFound = errors.New("route: not found")
+
+	MaxTTL uint8 = 7
+
+	neighborAlpha = 2
+	gcTime        = time.Minute * 10
+	gcInterval    = time.Minute
 )
 
 // RouteItem
@@ -61,7 +62,7 @@ func newRouteTable(store storage.StateStorer, logger logging.Logger, met metrics
 
 func (rt *routeTable) tryLock(key string) error {
 	now := time.Now()
-	for !rt.mu.TryRLock(key) {
+	for !rt.mu.TryLock(key) {
 		time.After(time.Millisecond * 50)
 		if time.Since(now).Seconds() > rt.lockTimeout.Seconds() {
 			rt.metrics.TotalErrors.Inc()
@@ -80,7 +81,7 @@ func (rt *routeTable) Set(target boson.Address, routes []RouteItem) error {
 	if err != nil {
 		return err
 	}
-	defer rt.mu.RUnlock(key)
+	defer rt.mu.Unlock(key)
 
 	// store get
 	//old := make([]RouteItem, 0)
@@ -116,7 +117,7 @@ func (rt *routeTable) Get(target boson.Address) (routes []RouteItem, err error) 
 	if err != nil {
 		return
 	}
-	defer rt.mu.RUnlock(key)
+	defer rt.mu.Unlock(key)
 
 	// store get
 	//err = rt.store.Get(key, &routes)
@@ -153,42 +154,42 @@ func (rt *routeTable) Gc(expire time.Duration) {
 				delete(rt.items, mKey)
 			}
 		}
-		rt.mu.RUnlock(key)
+		rt.mu.Unlock(key)
 	}
 }
 
-func (rt *routeTable) GcStore(expire time.Duration) {
-	err := rt.store.Iterate(rt.prefix, func(target, value []byte) (stop bool, err error) {
-		key := string(target)
-		err = rt.tryLock(key)
-		if err != nil {
-			return false, err
-		}
-		defer rt.mu.RUnlock(key)
-		routes := make([]RouteItem, 0)
-		err = json.Unmarshal(value, &routes)
-		if err != nil {
-			return false, err
-		}
-		now, updated := checkExpired(routes, expire)
-		if updated {
-			if len(now) > 0 {
-				err = rt.store.Put(key, now)
-				if err != nil {
-					return false, err
-				}
-			} else {
-				err = rt.store.Delete(key)
-				if err != nil {
-					return false, err
-				}
-			}
-
-		}
-		return false, nil
-	})
-	if err != nil {
-		rt.metrics.TotalErrors.Inc()
-		rt.logger.Errorf("routeTable: gc err %s", err)
-	}
-}
+//func (rt *routeTable) GcStore(expire time.Duration) {
+//	err := rt.store.Iterate(rt.prefix, func(target, value []byte) (stop bool, err error) {
+//		key := string(target)
+//		err = rt.tryLock(key)
+//		if err != nil {
+//			return false, err
+//		}
+//		defer rt.mu.RUnlock(key)
+//		routes := make([]RouteItem, 0)
+//		err = json.Unmarshal(value, &routes)
+//		if err != nil {
+//			return false, err
+//		}
+//		now, updated := checkExpired(routes, expire)
+//		if updated {
+//			if len(now) > 0 {
+//				err = rt.store.Put(key, now)
+//				if err != nil {
+//					return false, err
+//				}
+//			} else {
+//				err = rt.store.Delete(key)
+//				if err != nil {
+//					return false, err
+//				}
+//			}
+//
+//		}
+//		return false, nil
+//	})
+//	if err != nil {
+//		rt.metrics.TotalErrors.Inc()
+//		rt.logger.Errorf("routeTable: gc err %s", err)
+//	}
+//}
