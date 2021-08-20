@@ -782,14 +782,9 @@ func TestBusyNetworkResponse(t *testing.T) {
 	ctx := context.Background()
 	ns := newNetwork(t)
 
-	t.Logf("client addr = %s\n", ns.client.Address())
-	t.Logf("server addr = %s\n", ns.server.Address())
-
 	target := test.RandomAddress()
-	t.Logf("target addr = %s\n", target)
 
 	beforeClient := test.RandomAddress()
-	t.Logf("before client addr = %s\n", beforeClient)
 	beforeClientService := &nopService{}
 	_ = streamtest.New(
 		streamtest.WithProtocols(ns.client.Protocol()),
@@ -801,7 +796,6 @@ func TestBusyNetworkResponse(t *testing.T) {
 	paths := make([]string, 3)
 	for i := 0; i < len(paths); i++ {
 		paths[i] = test.RandomAddress().String()
-		t.Logf("path %d addr = %s\n", i, paths[i])
 	}
 	paths = append(paths, beforeClient.String())
 	request := pb.FindRouteReq{
@@ -813,7 +807,6 @@ func TestBusyNetworkResponse(t *testing.T) {
 	time.Sleep(1 * time.Second)
 
 	beforeTarget := test.RandomAddress()
-	t.Logf("before target addr = %s\n", beforeTarget)
 	paths = []string{beforeTarget.String(), target.String()}
 	route := generateRoute(paths)
 	ns.server.DoResp(ctx, ns.ClientPeer(), target, []routetab.RouteItem{route})
