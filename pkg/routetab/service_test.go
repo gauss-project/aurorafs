@@ -8,8 +8,8 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"math/rand"
-	"os"
 	"sync"
 	"testing"
 	"time"
@@ -44,7 +44,7 @@ const underlayBase = "/ip4/127.0.0.1/tcp/1634/dns/"
 
 var (
 	nonConnectableAddress, _ = ma.NewMultiaddr(underlayBase + "16Uiu2HAkx8ULY8cTXhdVAcMmLcH9AsTKz6uBQ7DPLKRjMLgBVYkA")
-	nopLogger                = logging.New(os.NewFile(0, os.DevNull), logrus.ErrorLevel)
+	nopLogger                = logging.New(ioutil.Discard, logrus.ErrorLevel)
 )
 
 type Node struct {
