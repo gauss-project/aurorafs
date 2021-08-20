@@ -1,9 +1,10 @@
 package routetab
 
 import (
+	"time"
+
 	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/routetab/pb"
-	"time"
 )
 
 func convRouteToPbRouteList(srcList []RouteItem) []*pb.RouteItem {

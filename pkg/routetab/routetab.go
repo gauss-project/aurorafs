@@ -2,12 +2,13 @@ package routetab
 
 import (
 	"errors"
+	"time"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/logging"
 	"github.com/gauss-project/aurorafs/pkg/storage"
 	"github.com/gogf/gf/os/gmlock"
-	"time"
 )
 
 var (
