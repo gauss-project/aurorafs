@@ -536,7 +536,6 @@ func TestService_FindRoute(t *testing.T) {
 }
 
 func TestService_HandleReq(t *testing.T) {
-	rand.Seed(2)
 	ctx := context.Background()
 	ns := newNetwork(t)
 	ns.Start()
@@ -546,6 +545,7 @@ func TestService_HandleReq(t *testing.T) {
 	target := test.RandomAddressAt(ns.client.Address(),0)
 
 	addOne(t, ns.client.signer, ns.client.Kad(), ns.client.book, target)
+	addOne(t, ns.server.signer, ns.server.Kad(), ns.server.book, test.RandomAddress())
 
 	route, err := ns.server.FindRoute(ctx, target)
 	if err != nil {
