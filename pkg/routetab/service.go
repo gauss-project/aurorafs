@@ -266,9 +266,10 @@ func (s *Service) saveRespRouteItem(ctx context.Context, neighbor boson.Address,
 
 func (s *Service) getNeighbor() (forward []boson.Address) {
 	forward = make([]boson.Address, 0)
+	depth := s.kad.NeighborhoodDepth()
 	cnt := 0
 	err := s.kad.EachPeer(func(address boson.Address, u uint8) (stop, jumpToNext bool, err error) {
-		if u >= s.kad.NeighborhoodDepth() {
+		if u >= depth {
 			// neighbor
 			forward = append(forward, address)
 			cnt++
