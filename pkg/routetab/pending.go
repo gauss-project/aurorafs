@@ -2,7 +2,6 @@ package routetab
 
 import (
 	"context"
-	"fmt"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/logging"
@@ -43,20 +42,6 @@ func newPendCallResTab(addr boson.Address, logger logging.Logger, met metrics) *
 	}
 }
 
-func (pend *pendCallResTab) tryLock(key string) error {
-	now := time.Now()
-	for !pend.mu.TryRLock(key) {
-		time.After(time.Millisecond * 10)
-		if time.Since(now).Seconds() > pend.lockTimeout.Seconds() {
-			pend.metrics.TotalErrors.Inc()
-			pend.logger.Errorf("pendCallResTab: %s try lock timeout", key)
-			err := fmt.Errorf("try lock timeout")
-			return err
-		}
-	}
-	return nil
-}
-
 func (pend *pendCallResTab) Add(target, src boson.Address, resCh chan struct{}) error {
 	key := target.String()
 	pending := pendCallResItem{
@@ -66,10 +51,8 @@ func (pend *pendCallResTab) Add(target, src boson.Address, resCh chan struct{}) 
 	}
 	mKey := common.BytesToHash(target.Bytes())
 
-	if err := pend.tryLock(key); err != nil {
-		return err
-	}
-	defer pend.mu.RUnlock(key)
+	pend.mu.Lock(key)
+	defer pend.mu.Unlock(key)
 
 	res, ok := pend.items[mKey]
 	if ok {
@@ -89,10 +72,9 @@ func (pend *pendCallResTab) Add(target, src boson.Address, resCh chan struct{}) 
 
 func (pend *pendCallResTab) Forward(ctx context.Context, s *Service, target boson.Address, routes []RouteItem) error {
 	key := target.String()
-	if err := pend.tryLock(key); err != nil {
-		return err
-	}
-	defer pend.mu.RUnlock(key)
+
+	pend.mu.Lock(key)
+	defer pend.mu.Unlock(key)
 
 	mKey := common.BytesToHash(target.Bytes())
 	res := pend.items[mKey]
@@ -111,7 +93,7 @@ func (pend *pendCallResTab) Forward(ctx context.Context, s *Service, target boso
 
 func (pend *pendCallResTab) Gc(expire time.Duration) {
 	for destKey, item := range pend.items {
-		pend.mu.TryRLockFunc(destKey.String(), func() {
+		pend.mu.TryLockFunc(destKey.String(), func() {
 			var now pendingCallResArray
 			for i := len(item) - 1; i >= 0; i-- {
 				if time.Since(item[i].createTime).Seconds() >= expire.Seconds() {

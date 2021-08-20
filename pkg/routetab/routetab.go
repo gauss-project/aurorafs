@@ -2,7 +2,6 @@ package routetab
 
 import (
 	"errors"
-	"fmt"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/logging"
@@ -60,28 +59,11 @@ func newRouteTable(store storage.StateStorer, logger logging.Logger, met metrics
 	}
 }
 
-func (rt *routeTable) tryLock(key string) error {
-	now := time.Now()
-	for !rt.mu.TryRLock(key) {
-		time.After(time.Millisecond * 50)
-		if time.Since(now).Seconds() > rt.lockTimeout.Seconds() {
-			rt.metrics.TotalErrors.Inc()
-			rt.logger.Errorf("routeTable: %s try lock timeout", key)
-			err := fmt.Errorf("try lock timeout")
-			return err
-		}
-	}
-	return nil
-}
-
 func (rt *routeTable) Set(target boson.Address, routes []RouteItem) error {
 	dest := target.String()
 	key := rt.prefix + dest
-	err := rt.tryLock(key)
-	if err != nil {
-		return err
-	}
-	defer rt.mu.RUnlock(key)
+	rt.mu.Lock(key)
+	defer rt.mu.Unlock(key)
 
 	// store get
 	//old := make([]RouteItem, 0)
@@ -107,17 +89,14 @@ func (rt *routeTable) Set(target boson.Address, routes []RouteItem) error {
 	//	rt.logger.Errorf("routeTable: Set %s store put error: %s", dest, err.Error())
 	//}
 
-	return err
+	return nil
 }
 
 func (rt *routeTable) Get(target boson.Address) (routes []RouteItem, err error) {
 	dest := target.String()
 	key := rt.prefix + dest
-	err = rt.tryLock(key)
-	if err != nil {
-		return
-	}
-	defer rt.mu.RUnlock(key)
+	rt.mu.Lock(key)
+	defer rt.mu.Unlock(key)
 
 	// store get
 	//err = rt.store.Get(key, &routes)
@@ -142,8 +121,7 @@ func (rt *routeTable) Get(target boson.Address) (routes []RouteItem, err error) 
 func (rt *routeTable) Gc(expire time.Duration) {
 	for mKey, routes := range rt.items {
 		key := rt.prefix + mKey.String()
-		err := rt.tryLock(key)
-		if err != nil {
+		if !rt.mu.TryLock(key) {
 			continue
 		}
 		now, updated := checkExpired(routes, expire)
@@ -154,7 +132,7 @@ func (rt *routeTable) Gc(expire time.Duration) {
 				delete(rt.items, mKey)
 			}
 		}
-		rt.mu.RUnlock(key)
+		rt.mu.Unlock(key)
 	}
 }
 
