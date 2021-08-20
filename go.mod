@@ -13,6 +13,7 @@ require (
 	github.com/ethersphere/manifest v0.3.6
 	github.com/ethersphere/sw3-bindings/v3 v3.0.3
 	github.com/foxcpp/go-mockdns v0.0.0-20201212160233-ede2f9158d15
+	github.com/gogf/gf v1.16.5
 	github.com/gogo/protobuf v1.3.1
 	github.com/golang/groupcache v0.0.0-20200121045136-8c9f03a8e57e // indirect
 	github.com/google/gopacket v1.1.19 // indirect
@@ -36,7 +37,6 @@ require (
 	github.com/libp2p/go-sockaddr v0.1.0 // indirect
 	github.com/libp2p/go-tcp-transport v0.2.1
 	github.com/libp2p/go-ws-transport v0.4.0
-	github.com/mattn/go-colorable v0.1.2 // indirect
 	github.com/mitchellh/mapstructure v1.3.2 // indirect
 	github.com/multiformats/go-multiaddr v0.3.1
 	github.com/multiformats/go-multiaddr-dns v0.2.0
