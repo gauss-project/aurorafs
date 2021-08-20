@@ -1,15 +1,15 @@
 package routetab
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
+	"time"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/logging"
 	"github.com/gauss-project/aurorafs/pkg/storage"
 	"github.com/gogf/gf/os/gmlock"
-	"time"
 )
 
 var (
@@ -59,9 +59,9 @@ func newRouteTable(store storage.StateStorer, logger logging.Logger, met metrics
 	}
 }
 
-func (rt *routeTable) tryLock(key string) error {
+func (rt *routeTable) tryLock(key string, f func() error, trylock func(string) bool, unlock func(string)) error {
 	now := time.Now()
-	for !rt.mu.TryRLock(key) {
+	for !trylock(key) {
 		time.After(time.Millisecond * 50)
 		if time.Since(now).Seconds() > rt.lockTimeout.Seconds() {
 			rt.metrics.TotalErrors.Inc()
@@ -70,70 +70,72 @@ func (rt *routeTable) tryLock(key string) error {
 			return err
 		}
 	}
+	defer unlock(key)
+
+	if err := f(); err != nil {
+		return err
+	}
+
 	return nil
 }
 
 func (rt *routeTable) Set(target boson.Address, routes []RouteItem) error {
 	dest := target.String()
 	key := rt.prefix + dest
-	err := rt.tryLock(key)
-	if err != nil {
-		return err
-	}
-	defer rt.mu.RUnlock(key)
 
-	// store get
-	//old := make([]RouteItem, 0)
-	//err = rt.store.Get(key, &old)
-	//if err != nil && err != ErrNotFound {
-	//	err = fmt.Errorf("routeTable: Set %s store get error: %s", dest, err.Error())
-	//	rt.logger.Errorf(err.Error())
-	//	return err
-	//}
+	return rt.tryLock(key, func() error {
+		// store get
+		//old := make([]RouteItem, 0)
+		//err = rt.store.Get(key, &old)
+		//if err != nil && err != ErrNotFound {
+		//	err = fmt.Errorf("routeTable: Set %s store get error: %s", dest, err.Error())
+		//	rt.logger.Errorf(err.Error())
+		//	return err
+		//}
 
-	mKey := common.BytesToHash(target.Bytes())
-	old, _ := rt.items[mKey]
+		mKey := common.BytesToHash(target.Bytes())
+		old, _ := rt.items[mKey]
 
-	if len(old) > 0 {
-		routes = mergeRouteList(routes, old)
-	}
+		if len(old) > 0 {
+			routes = mergeRouteList(routes, old)
+		}
 
-	rt.items[mKey] = routes
+		rt.items[mKey] = routes
 
-	// store put
-	//err = rt.store.Put(key, routes)
-	//if err != nil {
-	//	rt.logger.Errorf("routeTable: Set %s store put error: %s", dest, err.Error())
-	//}
+		// store put
+		//err = rt.store.Put(key, routes)
+		//if err != nil {
+		//	rt.logger.Errorf("routeTable: Set %s store put error: %s", dest, err.Error())
+		//}
 
-	return err
+		return nil
+	}, rt.mu.TryLock, rt.mu.Unlock)
 }
 
 func (rt *routeTable) Get(target boson.Address) (routes []RouteItem, err error) {
 	dest := target.String()
 	key := rt.prefix + dest
-	err = rt.tryLock(key)
-	if err != nil {
-		return
-	}
-	defer rt.mu.RUnlock(key)
 
-	// store get
-	//err = rt.store.Get(key, &routes)
-	//if err != nil {
-	//	if err == storage.ErrNotFound {
-	//		err = ErrNotFound
-	//		return
-	//	}
-	//	err = fmt.Errorf("routeTable: Get %s store get error: %s", dest, err.Error())
-	//	rt.logger.Errorf(err.Error())
-	//}
+	rt.tryLock(key, func() error {
+		// store get
+		//err = rt.store.Get(key, &routes)
+		//if err != nil {
+		//	if err == storage.ErrNotFound {
+		//		err = ErrNotFound
+		//		return
+		//	}
+		//	err = fmt.Errorf("routeTable: Get %s store get error: %s", dest, err.Error())
+		//	rt.logger.Errorf(err.Error())
+		//}
 
-	mKey := common.BytesToHash(target.Bytes())
-	routes, _ = rt.items[mKey]
-	if len(routes) == 0 {
-		err = ErrNotFound
-	}
+		mKey := common.BytesToHash(target.Bytes())
+		routes, _ = rt.items[mKey]
+		if len(routes) == 0 {
+			err = ErrNotFound
+		}
+
+		return nil
+	}, rt.mu.TryRLock, rt.mu.RUnlock)
 
 	return
 }
@@ -141,54 +143,56 @@ func (rt *routeTable) Get(target boson.Address) (routes []RouteItem, err error) 
 func (rt *routeTable) Gc(expire time.Duration) {
 	for mKey, routes := range rt.items {
 		key := rt.prefix + mKey.String()
-		err := rt.tryLock(key)
+		err := rt.tryLock(key, func() error {
+			now, updated := checkExpired(routes, expire)
+			if updated {
+				if len(now) > 0 {
+					rt.items[mKey] = now
+				} else {
+					delete(rt.items, mKey)
+				}
+			}
+
+			return nil
+		}, rt.mu.TryLock, rt.mu.Unlock)
 		if err != nil {
 			continue
 		}
-		now, updated := checkExpired(routes, expire)
-		if updated {
-			if len(now) > 0 {
-				rt.items[mKey] = now
-			} else {
-				delete(rt.items, mKey)
-			}
-		}
-		rt.mu.RUnlock(key)
 	}
 }
 
-func (rt *routeTable) GcStore(expire time.Duration) {
-	err := rt.store.Iterate(rt.prefix, func(target, value []byte) (stop bool, err error) {
-		key := string(target)
-		err = rt.tryLock(key)
-		if err != nil {
-			return false, err
-		}
-		defer rt.mu.RUnlock(key)
-		routes := make([]RouteItem, 0)
-		err = json.Unmarshal(value, &routes)
-		if err != nil {
-			return false, err
-		}
-		now, updated := checkExpired(routes, expire)
-		if updated {
-			if len(now) > 0 {
-				err = rt.store.Put(key, now)
-				if err != nil {
-					return false, err
-				}
-			} else {
-				err = rt.store.Delete(key)
-				if err != nil {
-					return false, err
-				}
-			}
-
-		}
-		return false, nil
-	})
-	if err != nil {
-		rt.metrics.TotalErrors.Inc()
-		rt.logger.Errorf("routeTable: gc err %s", err)
-	}
-}
+//func (rt *routeTable) GcStore(expire time.Duration) {
+//	err := rt.store.Iterate(rt.prefix, func(target, value []byte) (stop bool, err error) {
+//		key := string(target)
+//		err = rt.tryLock(key, func() error {
+//			routes := make([]RouteItem, 0)
+//			err = json.Unmarshal(value, &routes)
+//			if err != nil {
+//				return err
+//			}
+//			now, updated := checkExpired(routes, expire)
+//			if updated {
+//				if len(now) > 0 {
+//					err = rt.store.Put(key, now)
+//					if err != nil {
+//						return err
+//					}
+//				} else {
+//					err = rt.store.Delete(key)
+//					if err != nil {
+//						return err
+//					}
+//				}
+//			}
+//			return nil
+//		}, rt.mu.TryLock, rt.mu.Unlock)
+//		if err != nil {
+//			stop = true
+//		}
+//		return
+//	})
+//	if err != nil {
+//		rt.metrics.TotalErrors.Inc()
+//		rt.logger.Errorf("routeTable: gc err %s", err)
+//	}
+//}

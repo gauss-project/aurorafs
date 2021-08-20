@@ -12,6 +12,7 @@ import (
 	"github.com/gauss-project/aurorafs/pkg/kademlia"
 	"github.com/gauss-project/aurorafs/pkg/p2p"
 	"github.com/gauss-project/aurorafs/pkg/routetab/pb"
+	"github.com/gogf/gf/os/gmlock"
 )
 
 var (
@@ -20,14 +21,14 @@ var (
 	StreamFindRouteReq  = streamFindRouteReq
 	StreamFindRouteResp = streamFindRouteResp
 
-	MergeRouteList    = mergeRouteList
-	PathToRouteItem   = pathToRouteItem
-	NewRouteTable     = newRouteTable
-	UpdateRouteItem   = updateRouteItem
 	CheckExpired      = checkExpired
+	ConvRouteToPbRouteList = convRouteToPbRouteList
+	MergeRouteList    = mergeRouteList
 	NewMetrics        = newMetrics
 	NewPendCallResTab = newPendCallResTab
-	ConvRouteToPbRouteList = convRouteToPbRouteList
+	NewRouteTable     = newRouteTable
+	PathToRouteItem   = pathToRouteItem
+	UpdateRouteItem   = updateRouteItem
 )
 
 func (s *Service) DoReq(ctx context.Context, src boson.Address, peer p2p.Peer, dest boson.Address, req *pb.FindRouteReq, ch chan struct{}) {
@@ -56,4 +57,12 @@ func (s *Service) P2P() p2p.Streamer {
 
 func (pend *pendCallResTab) GetItems() map[common.Hash]pendingCallResArray {
 	return pend.items
+}
+
+func (rt *routeTable) TryLock(key string, f func() error, trylock func(string) bool, unlock func(string)) error {
+	return rt.tryLock(key, f, trylock, unlock)
+}
+
+func (rt *routeTable) Locker() *gmlock.Locker {
+	return rt.mu
 }
