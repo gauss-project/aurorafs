@@ -15,6 +15,11 @@ import (
 )
 
 var (
+	ProtocolName        = protocolName
+	ProtocolVersion     = protocolVersion
+	StreamFindRouteReq  = streamFindRouteReq
+	StreamFindRouteResp = streamFindRouteResp
+
 	MergeRouteList    = mergeRouteList
 	PathToRouteItem   = pathToRouteItem
 	NewRouteTable     = newRouteTable
@@ -22,6 +27,7 @@ var (
 	CheckExpired      = checkExpired
 	NewMetrics        = newMetrics
 	NewPendCallResTab = newPendCallResTab
+	ConvRouteToPbRouteList = convRouteToPbRouteList
 )
 
 func (s *Service) DoReq(ctx context.Context, src boson.Address, peer p2p.Peer, dest boson.Address, req *pb.FindRouteReq, ch chan struct{}) {
@@ -42,6 +48,10 @@ func (s *Service) Address() boson.Address {
 
 func (s *Service) Kad() *kademlia.Kad {
 	return s.kad
+}
+
+func (s *Service) P2P() p2p.Streamer {
+	return s.streamer
 }
 
 func (pend *pendCallResTab) GetItems() map[common.Hash]pendingCallResArray {

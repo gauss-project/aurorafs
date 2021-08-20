@@ -4,8 +4,10 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"encoding/hex"
 	"errors"
 	"fmt"
+	"github.com/gauss-project/aurorafs/pkg/p2p/protobuf"
 	"io"
 	"math/rand"
 	"os"
@@ -515,7 +517,7 @@ func TestHandleMaxTTLResponse(t *testing.T) {
 	ch := make(chan struct{}, 0)
 	ns.client.DoReq(ctx, ns.server.Address(), ns.ServerPeer(), target, &request, ch)
 
-	time.Sleep(10 * time.Second)
+	time.Sleep(1 * time.Second)
 
 	serverRoute, err := ns.server.RouteTab().Get(boson.MustParseHexAddress(paths[0]))
 	if err != nil {
@@ -577,7 +579,7 @@ func TestHandleCirclePathResponse(t *testing.T) {
 	}
 	ns.client.DoReq(ctx, ns.server.Address(), ns.ServerPeer(), target, &request, nil)
 
-	time.Sleep(5 * time.Second)
+	time.Sleep(2 * time.Second)
 
 	_, err := ns.client.RouteTab().Get(target)
 	if !errors.Is(err, routetab.ErrNotFound) {
@@ -645,4 +647,118 @@ func TestPendCallResTab_Gc(t *testing.T) {
 	if len(items2) > 0 {
 		t.Fatalf("route peing expired count 0, got %d", len(items2))
 	}
+}
+
+type nopService struct{
+	err error
+	response pb.FindRouteResp
+}
+
+func (s *nopService) Protocol() p2p.ProtocolSpec {
+	return p2p.ProtocolSpec{
+		Name:    routetab.ProtocolName,
+		Version: routetab.ProtocolVersion,
+		StreamSpecs: []p2p.StreamSpec{
+			{
+				Name:    routetab.StreamFindRouteReq,
+				Handler: func(ctx context.Context, peer p2p.Peer, stream p2p.Stream) error {
+					return nil
+				},
+			},
+			{
+				Name:    routetab.StreamFindRouteResp,
+				Handler: func(ctx context.Context, peer p2p.Peer, stream p2p.Stream) error {
+					r := protobuf.NewReader(stream)
+					defer func() {
+						stream.FullClose()
+					}()
+
+					s.err = r.ReadMsgWithContext(ctx, &s.response)
+
+					return nil
+				},
+			},
+		},
+	}
+}
+
+func TestBusyNetworkResponse(t *testing.T) {
+	routetab.PendingTimeout = 1 * time.Minute
+	defer func() {
+		routetab.PendingTimeout = time.Second * 10
+	}()
+
+	ctx := context.Background()
+	ns := newNetwork(t)
+
+	t.Logf("client addr = %s\n", ns.client.Address())
+	t.Logf("server addr = %s\n", ns.server.Address())
+
+	target := test.RandomAddress()
+	t.Logf("target addr = %s\n", target)
+
+	beforeClient := test.RandomAddress()
+	t.Logf("before client addr = %s\n", beforeClient)
+	beforeClientService := &nopService{}
+	_ = streamtest.New(
+		streamtest.WithProtocols(ns.client.Protocol()),
+		streamtest.WithBaseAddr(beforeClient),
+	)
+	addOne(t, ns.client.signer, ns.client.Kad(), ns.client.book, ns.client.Address())
+	ns.client.P2P().(*streamtest.Recorder).SetProtocols(beforeClientService.Protocol())
+
+	paths := make([]string, 3)
+	for i := 0; i < len(paths); i++ {
+		paths[i] = test.RandomAddress().String()
+		t.Logf("path %d addr = %s\n", i, paths[i])
+	}
+	paths = append(paths, beforeClient.String())
+	request := pb.FindRouteReq{
+		Dest: target.Bytes(),
+		Path: convPathByte(paths),
+	}
+	ns.client.DoReq(ctx, beforeClient, ns.ServerPeer(), target, &request, nil)
+
+	time.Sleep(1 * time.Second)
+
+	beforeTarget := test.RandomAddress()
+	t.Logf("before target addr = %s\n", beforeTarget)
+	paths = []string{beforeTarget.String(), target.String()}
+	route := generateRoute(paths)
+	ns.server.DoResp(ctx, ns.ClientPeer(), target, []routetab.RouteItem{route})
+
+	time.Sleep(1 * time.Second)
+
+	if beforeClientService.err != nil {
+		t.Fatal(beforeClientService.err)
+	}
+
+	if !bytes.Equal(beforeClientService.response.Dest, target.Bytes()) {
+		t.Fatalf("expected to route destination %s, got. %s\n", target, boson.NewAddress(beforeClientService.response.Dest))
+	}
+
+	var (
+		iterate func (r *pb.RouteItem)
+		index int
+	)
+	expectedPaths := []string{
+		ns.server.Address().String(),
+		beforeTarget.String(),
+		target.String(),
+	}
+
+	iterate = func (r *pb.RouteItem) {
+		if hex.EncodeToString(r.Neighbor) != expectedPaths[index] {
+			t.Fatalf("expected to route address %s, got %s\n", expectedPaths[index], hex.EncodeToString(r.Neighbor))
+		}
+
+		if len(r.NextHop) == 0 {
+			return
+		}
+
+		index++
+		iterate(r.NextHop[0])
+	}
+
+	iterate(beforeClientService.response.RouteItems[0])
 }

@@ -3,6 +3,7 @@ package routetab
 import (
 	"context"
 	"fmt"
+	"os"
 	"time"
 
 	"github.com/gauss-project/aurorafs/pkg/boson"
@@ -345,6 +346,7 @@ func (s *Service) doResp(ctx context.Context, peer p2p.Peer, dest boson.Address,
 		Dest:       dest.Bytes(),
 		RouteItems: convRouteToPbRouteList(routes),
 	}
+	fmt.Fprintf(os.Stderr, "do resp.\n")
 	w := protobuf.NewWriter(stream)
 	err := w.WriteMsgWithContext(ctx, resp)
 	if err != nil {
