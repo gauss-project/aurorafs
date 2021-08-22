@@ -15,7 +15,8 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/gauss-project/aurorafs/pkg/accounting"
+	"github.com/gauss-project/aurorafs/pkg/boson"
+	//"github.com/gauss-project/aurorafs/pkg/accounting"
 	"github.com/gauss-project/aurorafs/pkg/cac"
 	"github.com/gauss-project/aurorafs/pkg/logging"
 	"github.com/gauss-project/aurorafs/pkg/p2p"
@@ -23,7 +24,6 @@ import (
 	pb "github.com/gauss-project/aurorafs/pkg/retrieval/pb"
 	"github.com/gauss-project/aurorafs/pkg/soc"
 	"github.com/gauss-project/aurorafs/pkg/storage"
-	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/topology"
 	"github.com/gauss-project/aurorafs/pkg/tracing"
 	"github.com/opentracing/opentracing-go"
@@ -45,29 +45,29 @@ type Interface interface {
 }
 
 type Service struct {
-	addr     boson.Address
-	streamer p2p.Streamer
+	addr          boson.Address
+	streamer      p2p.Streamer
 	peerSuggester topology.EachPeerer
 	storer        storage.Storer
 	singleflight  singleflight.Group
 	logger        logging.Logger
-	accounting    accounting.Interface
-	pricer        accounting.Pricer
-	metrics       metrics
-	tracer        *tracing.Tracer
+	//accounting    accounting.Interface
+	//pricer        accounting.Pricer
+	metrics metrics
+	tracer  *tracing.Tracer
 }
 
-func New(addr boson.Address, storer storage.Storer, streamer p2p.Streamer, chunkPeerer topology.EachPeerer, logger logging.Logger, accounting accounting.Interface, pricer accounting.Pricer, tracer *tracing.Tracer) *Service {
+func New(addr boson.Address, storer storage.Storer, streamer p2p.Streamer, chunkPeerer topology.EachPeerer, logger logging.Logger, tracer *tracing.Tracer) *Service {
 	return &Service{
 		addr:          addr,
 		streamer:      streamer,
 		peerSuggester: chunkPeerer,
 		storer:        storer,
 		logger:        logger,
-		accounting:    accounting,
-		pricer:        pricer,
-		metrics:       newMetrics(),
-		tracer:        tracer,
+		//accounting:    accounting,
+		//pricer:        pricer,
+		metrics: newMetrics(),
+		tracer:  tracer,
 	}
 }
 
@@ -202,12 +202,12 @@ func (s *Service) retrieveChunk(ctx context.Context, addr boson.Address, sp *ski
 	sp.Add(peer)
 
 	// compute the price we pay for this chunk and reserve it for the rest of this function
-	chunkPrice := s.pricer.PeerPrice(peer, addr)
-	err = s.accounting.Reserve(ctx, peer, chunkPrice)
-	if err != nil {
-		return nil, peer, err
-	}
-	defer s.accounting.Release(peer, chunkPrice)
+	//chunkPrice := s.pricer.PeerPrice(peer, addr)
+	//err = s.accounting.Reserve(ctx, peer, chunkPrice)
+	//if err != nil {
+	//	return nil, peer, err
+	//}
+	//defer s.accounting.Release(peer, chunkPrice)
 
 	s.logger.Tracef("retrieval: requesting chunk %s from peer %s", addr, peer)
 	stream, err := s.streamer.NewStream(ctx, peer, nil, protocolName, protocolVersion, streamName)
@@ -251,11 +251,11 @@ func (s *Service) retrieveChunk(ctx context.Context, addr boson.Address, sp *ski
 	}
 
 	// credit the peer after successful delivery
-	err = s.accounting.Credit(peer, chunkPrice)
-	if err != nil {
-		return nil, peer, err
-	}
-	s.metrics.ChunkPrice.Observe(float64(chunkPrice))
+	//err = s.accounting.Credit(peer, chunkPrice)
+	//if err != nil {
+	//	return nil, peer, err
+	//}
+	//s.metrics.ChunkPrice.Observe(float64(chunkPrice))
 
 	return chunk, peer, err
 }
@@ -356,11 +356,11 @@ func (s *Service) handler(ctx context.Context, p p2p.Peer, stream p2p.Stream) (e
 	s.logger.Tracef("retrieval protocol debiting peer %s", p.Address.String())
 
 	// compute the price we charge for this chunk and debit it from p's balance
-	chunkPrice := s.pricer.Price(chunk.Address())
-	err = s.accounting.Debit(p.Address, chunkPrice)
-	if err != nil {
-		return err
-	}
+	//chunkPrice := s.pricer.Price(chunk.Address())
+	//err = s.accounting.Debit(p.Address, chunkPrice)
+	//if err != nil {
+	//	return err
+	//}
 
 	return nil
 }

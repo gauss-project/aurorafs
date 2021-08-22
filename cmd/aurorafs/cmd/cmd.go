@@ -75,7 +75,7 @@ func newCommand(opts ...option) (c *command, err error) {
 	c = &command{
 		root: &cobra.Command{
 			Use:           "aurorafs",
-			Short:         "Ethereum Swarm Bee",
+			Short:         "aurora file system node",
 			SilenceErrors: true,
 			SilenceUsage:  true,
 			PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
