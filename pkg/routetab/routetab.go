@@ -76,7 +76,7 @@ func (rt *routeTable) Set(target boson.Address, routes []RouteItem) error {
 	//}
 
 	mKey := common.BytesToHash(target.Bytes())
-	old, _ := rt.items[mKey]
+	old := rt.items[mKey]
 
 	if len(old) > 0 {
 		routes = mergeRouteList(routes, old)
@@ -111,7 +111,7 @@ func (rt *routeTable) Get(target boson.Address) (routes []RouteItem, err error) 
 	//}
 
 	mKey := common.BytesToHash(target.Bytes())
-	routes, _ = rt.items[mKey]
+	routes = rt.items[mKey]
 	if len(routes) == 0 {
 		err = ErrNotFound
 	}
