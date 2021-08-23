@@ -39,10 +39,10 @@ func New(s storage.Storer, r retrieval.Interface, logger logging.Logger) storage
 
 // Get retrieves a given chunk address.
 // It will request a chunk from the network whenever it cannot be found locally.
-func (s *store) Get(ctx context.Context, mode storage.ModeGet, addr boson.Address) (ch boson.Chunk, err error) {
+func (s *store) Get(ctx context.Context, mode storage.ModeGet, addr boson.Address, rootCid ...boson.Address) (ch boson.Chunk, err error) {
 	ch, err = s.Storer.Get(ctx, mode, addr)
 	if err != nil {
-		if errors.Is(err, storage.ErrNotFound) {
+		if errors.Is(err, storage.ErrNotFound) && len(rootCid) > 0 {
 			// request from network
 			ch, err = s.retrieval.RetrieveChunk(ctx, addr)
 			if err != nil {
