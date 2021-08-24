@@ -76,6 +76,7 @@ type Options struct {
 	EnableQUIC               bool
 	WelcomeMessage           string
 	Bootnodes                []string
+	OracleEndpoint           string
 	CORSAllowedOrigins       []string
 	Logger                   logging.Logger
 	Standalone               bool
