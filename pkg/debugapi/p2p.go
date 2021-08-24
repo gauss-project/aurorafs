@@ -40,7 +40,6 @@ func (s *Service) addressesHandler(w http.ResponseWriter, r *http.Request) {
 	jsonhttp.OK(w, addressesResponse{
 		Overlay:      s.overlay,
 		Underlay:     underlay,
-		Ethereum:     s.ethereumAddress,
 		PublicKey:    hex.EncodeToString(crypto.EncodeSecp256k1PublicKey(&s.publicKey)),
 		PSSPublicKey: hex.EncodeToString(crypto.EncodeSecp256k1PublicKey(&s.pssPublicKey)),
 	})
