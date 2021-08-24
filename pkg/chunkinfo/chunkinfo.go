@@ -42,10 +42,11 @@ type ChunkInfo struct {
 	cp           *chunkPyramid
 	cpd          *pendingFinderInfo
 	singleflight singleflight.Group
+	oracleUrl    string
 }
 
 // New
-func New(streamer p2p.Streamer, logger logging.Logger, traversal traversal.Service) *ChunkInfo {
+func New(streamer p2p.Streamer, logger logging.Logger, traversal traversal.Service, oracleUrl string) *ChunkInfo {
 	queues := make(map[string]*queue)
 	t := time.NewTimer(Time * time.Second)
 	return &ChunkInfo{
@@ -59,13 +60,11 @@ func New(streamer p2p.Streamer, logger logging.Logger, traversal traversal.Servi
 		streamer:  streamer,
 		logger:    logger,
 		traversal: traversal,
+		oracleUrl: oracleUrl,
 	}
 }
 
-const (
-	chunkInfoRetryIntervalDuration = 5 * time.Second
-	oracleUrl                      = "http://127.0.0.1:8000/api/v1.0/rcid"
-)
+const chunkInfoRetryIntervalDuration = 5 * time.Second
 
 type Response struct {
 	StatusCode int             `json:"code"`
@@ -80,7 +79,7 @@ type RootCIDResponse struct {
 
 func (ci *ChunkInfo) Init(ctx context.Context, authInfo []byte, rootCid boson.Address) bool {
 	v, _, _ := ci.singleflight.Do(rootCid.String(), func() (interface{}, error) {
-		r, err := http.Get(fmt.Sprintf("%s/%s", oracleUrl, rootCid.String()))
+		r, err := http.Get(fmt.Sprintf("http://%s/api/v1.0/rcid/%s", ci.oracleUrl, rootCid.String()))
 		if err != nil {
 			return false, nil
 		}
@@ -97,7 +96,7 @@ func (ci *ChunkInfo) Init(ctx context.Context, authInfo []byte, rootCid boson.Ad
 			ci.logger.Errorf("expected %d response, got %d", http.StatusOK, r.StatusCode)
 			return false, nil
 		}
-		if resp.StatusCode != http.StatusOK {
+		if resp.StatusCode != 400 {
 			ci.logger.Errorf("expected %d response, got %d", http.StatusOK, r.StatusCode)
 			return false, nil
 		}
