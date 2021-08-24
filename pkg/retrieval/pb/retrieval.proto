@@ -15,3 +15,8 @@ message Request {
 message Delivery {
     bytes Data = 1;
 }
+
+message RequestChunk{
+    bytes RootAddr = 1;
+    bytes ChunkAddr = 2;
+}
