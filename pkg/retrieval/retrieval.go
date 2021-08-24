@@ -52,7 +52,7 @@ type Service struct {
 	metrics 			metrics
 	tracer  			*tracing.Tracer
 
-	chunkinfo     		chunkinfo.ChunkInfo
+	chunkinfo     		*chunkinfo.ChunkInfo
 	// routetabService  	routetab.Service
 }
 
@@ -70,17 +70,16 @@ const (
 	retrieveRetryIntervalDuration = 5 * time.Second
 )
 
-func New(addr boson.Address, storer storage.Storer, streamer p2p.Streamer, chunkPeerer topology.EachPeerer, logger logging.Logger, tracer *tracing.Tracer) *Service {
+func New(addr boson.Address, streamer p2p.Streamer, chunkPeerer topology.EachPeerer, storer storage.Storer, logger logging.Logger, tracer *tracing.Tracer, chunkinfo *chunkinfo.ChunkInfo) *Service {
 	return &Service{
 		addr:          addr,
 		streamer:      streamer,
 		peerSuggester: chunkPeerer,
 		storer:        storer,
 		logger:        logger,
-		//accounting:    accounting,
-		//pricer:        pricer,
 		metrics: newMetrics(),
 		tracer:  tracer,
+		chunkinfo: chunkinfo,
 	}
 }
 
@@ -152,6 +151,9 @@ func (s *Service) RetrieveChunk(ctx context.Context, root_addr, chunk_addr boson
 }
 
 func (s *Service) retrieveChunk(ctx context.Context, target_node boson.Address, root_addr, chunk_addr boson.Address) (boson.Chunk, float64, error){
+	if !s.isNeighborNode(target_node){
+		return nil, -1, fmt.Errorf("not neighbornode: %v", target_node.String())
+	}
 
 	stream, err := s.streamer.NewStream(ctx, target_node, nil, protocolName, protocolVersion, streamName)
 	if err != nil {
@@ -275,16 +277,16 @@ func (s *Service) rankNodeDownload(node boson.Address, download_rate float64){
 	return
 }
 
-// func (s *Service) isNeighborNode(node_addr boson.Address)bool{
-// 	var result bool
+func (s *Service) isNeighborNode(node_addr boson.Address)bool{
+	var result bool
 
-// 	_ = s.peerSuggester.EachPeer(func(peer boson.Address, po uint8) (bool, bool, error) {
-// 		if peer.Equal(node_addr){
-// 			result = true
-// 			return true, false, nil		// stop review
-// 		}
-// 		return false, true, nil			// jump to next
-// 	})
+	_ = s.peerSuggester.EachPeer(func(peer boson.Address, po uint8) (bool, bool, error) {
+		if peer.Equal(node_addr){
+			result = true
+			return true, false, nil		// stop review
+		}
+		return false, true, nil			// jump to next
+	})
 
-// 	return result
-// }
+	return result
+}
