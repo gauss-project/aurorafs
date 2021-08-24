@@ -7,6 +7,7 @@ import (
 	"github.com/gauss-project/aurorafs/pkg/chunkinfo/pb"
 	"github.com/gauss-project/aurorafs/pkg/p2p"
 	"github.com/gauss-project/aurorafs/pkg/p2p/protobuf"
+	"time"
 )
 
 const (
@@ -41,11 +42,13 @@ func (ci *ChunkInfo) Protocol() p2p.ProtocolSpec {
 	}
 }
 
-func (ci *ChunkInfo) sendData(ctx context.Context, address boson.Address, streamName string, msg interface{}) {
-
+func (ci *ChunkInfo) sendData(ctx context.Context, address boson.Address, streamName string, msg interface{}) error {
+	ctx, cancel := context.WithTimeout(ctx, TimeOut*time.Second)
+	defer cancel()
 	stream, err := ci.streamer.NewStream(ctx, address, nil, protocolName, protocolVersion, streamName)
 	if err != nil {
 		ci.logger.Errorf("new stream: %w", err)
+		return err
 	}
 	defer func() {
 		if err != nil {
@@ -54,36 +57,40 @@ func (ci *ChunkInfo) sendData(ctx context.Context, address boson.Address, stream
 			_ = stream.FullClose()
 		}
 	}()
-
 	w, _ := protobuf.NewWriterAndReader(stream)
 	switch streamName {
 	case streamChunkInfoReqName:
 		req := msg.(pb.ChunkInfoReq)
 		if err := w.WriteMsgWithContext(ctx, &req); err != nil {
 			ci.logger.Errorf("write message: %w", err)
+			return err
 		}
 	case streamChunkInfoRespName:
 		req := msg.(pb.ChunkInfoResp)
 		if err := w.WriteMsgWithContext(ctx, &req); err != nil {
 			ci.logger.Errorf("write message: %w", err)
+			return err
 		}
 	case streamPyramidReqName:
 		req := msg.(pb.ChunkPyramidReq)
 		if err := w.WriteMsgWithContext(ctx, &req); err != nil {
 			ci.logger.Errorf("write message: %w", err)
+			return err
 		}
 	case streamPyramidRespName:
 		req := msg.(pb.ChunkPyramidResp)
 		if err := w.WriteMsgWithContext(ctx, &req); err != nil {
 			ci.logger.Errorf("write message: %w", err)
+			return err
 		}
 	}
 
 	ci.logger.Tracef("got chunk info req %q", msg)
+	return nil
 }
 
 func (ci *ChunkInfo) handlerChunkInfoReq(ctx context.Context, p p2p.Peer, stream p2p.Stream) error {
-	_, r := protobuf.NewWriterAndReader(stream)
+	r := protobuf.NewReader(stream)
 	defer stream.FullClose()
 	var req pb.ChunkInfoReq
 	if err := r.ReadMsgWithContext(ctx, &req); err != nil {
@@ -91,8 +98,7 @@ func (ci *ChunkInfo) handlerChunkInfoReq(ctx context.Context, p p2p.Peer, stream
 		return fmt.Errorf("read chunk info req message: %w", err)
 	}
 	ci.logger.Tracef("got chunk info req: %q", req)
-	ci.onChunkInfoReq(ctx, nil, p.Address, req)
-	return nil
+	return ci.onChunkInfoReq(ctx, nil, p.Address, req)
 }
 
 func (ci *ChunkInfo) handlerChunkInfoResp(ctx context.Context, p p2p.Peer, stream p2p.Stream) error {
@@ -117,8 +123,7 @@ func (ci *ChunkInfo) handlerPyramidReq(ctx context.Context, p p2p.Peer, stream p
 		return fmt.Errorf("read message: %w", err)
 	}
 	ci.logger.Tracef("got pyramid req: %q", req)
-	ci.onChunkPyramidReq(ctx, nil, p.Address, req)
-	return nil
+	return ci.onChunkPyramidReq(ctx, nil, p.Address, req)
 }
 
 func (ci *ChunkInfo) handlerPyramidResp(ctx context.Context, p p2p.Peer, stream p2p.Stream) error {
@@ -135,11 +140,11 @@ func (ci *ChunkInfo) handlerPyramidResp(ctx context.Context, p p2p.Peer, stream 
 }
 
 // onChunkInfoReq
-func (ci *ChunkInfo) onChunkInfoReq(ctx context.Context, authInfo []byte, overlay boson.Address, req pb.ChunkInfoReq) {
+func (ci *ChunkInfo) onChunkInfoReq(ctx context.Context, authInfo []byte, overlay boson.Address, req pb.ChunkInfoReq) error {
 	rc := boson.NewAddress(req.RootCid)
 	ctn := ci.ct.getNeighborChunkInfo(rc)
 	resp := ci.ct.createChunkInfoResp(rc, ctn)
-	ci.sendData(ctx, overlay, streamChunkInfoRespName, resp)
+	return ci.sendData(ctx, overlay, streamChunkInfoRespName, resp)
 }
 
 // onChunkInfoResp
@@ -148,12 +153,12 @@ func (ci *ChunkInfo) onChunkInfoResp(ctx context.Context, authInfo []byte, overl
 }
 
 // onChunkPyramidReq
-func (ci *ChunkInfo) onChunkPyramidReq(ctx context.Context, authInfo []byte, overlay boson.Address, req pb.ChunkPyramidReq) {
+func (ci *ChunkInfo) onChunkPyramidReq(ctx context.Context, authInfo []byte, overlay boson.Address, req pb.ChunkPyramidReq) error {
 	rootCid := boson.NewAddress(req.RootCid)
 	cp, _ := ci.getChunkPyramid(ctx, rootCid)
 	nci := ci.ct.getNeighborChunkInfo(rootCid)
 	resp := ci.ct.createChunkPyramidResp(rootCid, cp, nci)
-	ci.sendData(ctx, overlay, streamPyramidRespName, resp)
+	return ci.sendData(ctx, overlay, streamPyramidRespName, resp)
 }
 
 // onChunkPyramidResp
