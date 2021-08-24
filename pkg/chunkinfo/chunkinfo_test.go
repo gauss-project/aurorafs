@@ -21,7 +21,10 @@ import (
 	"github.com/gauss-project/aurorafs/pkg/storage/mock"
 	"github.com/gauss-project/aurorafs/pkg/traversal"
 	"golang.org/x/sync/errgroup"
+	"io"
 	"io/ioutil"
+	"net/http"
+	"strings"
 	"testing"
 )
 
@@ -31,6 +34,30 @@ var (
 	debug      = false
 	simpleData = []byte("hello test world") // fixed, 16 bytes
 )
+
+func addBody() io.Reader {
+	return body(`{"rootcid": "6aa47f0d31e20784005cb2148b6fed85e538f829698ef552bb590be1bfa7e643", "address": "ca1e9f3938cc1425c6061b96ad9eb93e134dfe8734ad490164ef20af9d1cf59c"}`)
+}
+
+func body(in string) io.Reader {
+	return strings.NewReader(in)
+}
+
+func TestInit(t *testing.T) {
+	if _, err := http.Post(oracleUrl, "application/json", addBody()); err != nil {
+		return
+	}
+	serverAddress := boson.MustParseHexAddress("01")
+	rootCid, _ := boson.ParseHexAddress("6aa47f0d31e20784005cb2148b6fed85e538f829698ef552bb590be1bfa7e643")
+	_, s := mockUploadFile(t)
+	recorder := streamtest.New(
+		streamtest.WithBaseAddr(serverAddress),
+	)
+	server := mockChunkInfo(s, recorder)
+	if server.Init(context.Background(), nil, rootCid) {
+		t.Fatal("error")
+	}
+}
 
 func TestFindChunkInfo(t *testing.T) {
 	serverAddress := boson.MustParseHexAddress("02")
