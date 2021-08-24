@@ -51,7 +51,7 @@ func (s *server) setupRouting() {
 		),
 	})
 
-	handle(router, "/dirs", jsonhttp.MethodHandler{
+	handle(router, "/aurora", jsonhttp.MethodHandler{
 		"POST": web.ChainHandlers(
 			s.newTracingHandler("dirs-upload"),
 			web.FinalHandlerFunc(s.dirUploadHandler),

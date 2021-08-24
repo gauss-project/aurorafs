@@ -122,6 +122,7 @@ func (c *command) initStartCmd() (err error) {
 				EnableQUIC:               c.config.GetBool(optionNameP2PQUICEnable),
 				WelcomeMessage:           c.config.GetString(optionWelcomeMessage),
 				Bootnodes:                c.config.GetStringSlice(optionNameBootnodes),
+				OracleEndpoint:           c.config.GetString(optionNameOracleAPIAddr),
 				CORSAllowedOrigins:       c.config.GetStringSlice(optionCORSAllowedOrigins),
 				Standalone:               c.config.GetBool(optionNameStandalone),
 				TracingEnabled:           c.config.GetBool(optionNameTracingEnabled),
