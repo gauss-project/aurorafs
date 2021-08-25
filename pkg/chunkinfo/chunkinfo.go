@@ -79,6 +79,11 @@ type RootCIDResponse struct {
 
 func (ci *ChunkInfo) Init(ctx context.Context, authInfo []byte, rootCid boson.Address) bool {
 	v, _, _ := ci.singleflight.Do(rootCid.String(), func() (interface{}, error) {
+
+		if ci.cd.isExists(rootCid) {
+			return true, nil
+		}
+
 		r, err := http.Get(fmt.Sprintf("http://%s/api/v1.0/rcid/%s", ci.oracleUrl, rootCid.String()))
 		if err != nil {
 			return false, nil
