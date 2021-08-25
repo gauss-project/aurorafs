@@ -316,17 +316,20 @@ func (s *server) fileDownloadHandler(w http.ResponseWriter, r *http.Request) {
 		"Content-Type":        {metaData.MimeType},
 	}
 
-	s.downloadHandler(w, r, e.Reference(), additionalHeaders, true)
+	s.downloadHandler(w, r, e.Reference(), additionalHeaders, true, address)
 }
 
 // downloadHandler contains common logic for dowloading Swarm file from API
-func (s *server) downloadHandler(w http.ResponseWriter, r *http.Request, reference boson.Address, additionalHeaders http.Header, etag bool) {
+func (s *server) downloadHandler(w http.ResponseWriter, r *http.Request, reference boson.Address, additionalHeaders http.Header, etag bool, rootCid ...boson.Address) {
 	logger := tracing.NewLoggerWithTraceID(r.Context(), s.logger)
 
 
-	reader, l, err := joiner.New(r.Context(), s.storer, reference)
+	reader, l, err := joiner.New(r.Context(), s.storer, reference, rootCid...)
 	if err != nil {
 		if errors.Is(err, storage.ErrNotFound) {
+			if len(rootCid) > 0 {
+				s.chunkInfo.FindChunkInfo(r.Context(), nil, rootCid[0], []boson.Address{s.overlay})
+			}
 			logger.Debugf("api download: not found %s: %v", reference, err)
 			logger.Error("api download: not found")
 			jsonhttp.NotFound(w, nil)

@@ -34,24 +34,6 @@ func (s *server) bytesUploadHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	a, err := s.traversal.GetTrieData(ctx, address)
-	if err != nil {
-		logger.Errorf("bytes upload: get trie data err: %v", err)
-		jsonhttp.InternalServerError(w, "could not get trie data")
-		return
-	}
-	dataChunks ,_ := s.traversal.CheckTrieData(ctx, address, a)
-	if err != nil {
-		logger.Errorf("bytes upload: check trie data err: %v", err)
-		jsonhttp.InternalServerError(w, "check trie data error")
-		return
-	}
-	for _,li := range dataChunks {
-		for _,b := range li {
-			s.chunkInfo.OnChunkTransferred(boson.NewAddress(b), address, s.overlay)
-		}
-	}
-
 	jsonhttp.OK(w, bytesPostResponse{
 		Reference: address,
 	})
@@ -66,12 +48,6 @@ func (s *server) bytesGetHandler(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		logger.Debugf("bytes: parse address %s: %v", nameOrHex, err)
 		logger.Error("bytes: parse address error")
-		jsonhttp.NotFound(w, nil)
-		return
-	}
-
-	if !s.chunkInfo.Init(r.Context(), nil, address) {
-		logger.Debugf("bytes get: chunkInfo init %s: %v", nameOrHex, err)
 		jsonhttp.NotFound(w, nil)
 		return
 	}
