@@ -9,8 +9,8 @@ import (
 	"errors"
 	"sync"
 
-	"github.com/gauss-project/aurorafs/pkg/storage"
 	"github.com/gauss-project/aurorafs/pkg/boson"
+	"github.com/gauss-project/aurorafs/pkg/storage"
 )
 
 var _ storage.Storer = (*MockStorer)(nil)
@@ -68,7 +68,7 @@ func NewStorer(opts ...Option) *MockStorer {
 	return s
 }
 
-func (m *MockStorer) Get(_ context.Context, _ storage.ModeGet, addr boson.Address) (ch boson.Chunk, err error) {
+func (m *MockStorer) Get(_ context.Context, _ storage.ModeGet, addr boson.Address, rootCid ...boson.Address) (ch boson.Chunk, err error) {
 	m.mtx.Lock()
 	defer m.mtx.Unlock()
 

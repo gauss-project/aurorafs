@@ -152,7 +152,7 @@ type Putter interface {
 }
 
 type Getter interface {
-	Get(ctx context.Context, mode ModeGet, addr boson.Address) (ch boson.Chunk, err error)
+	Get(ctx context.Context, mode ModeGet, addr boson.Address, rootCid ...boson.Address) (ch boson.Chunk, err error)
 }
 
 type Setter interface {

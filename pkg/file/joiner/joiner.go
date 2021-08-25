@@ -38,10 +38,10 @@ type joiner struct {
 }
 
 // New creates a new Joiner. A Joiner provides Read, Seek and Size functionalities.
-func New(ctx context.Context, getter storage.Getter, address boson.Address) (file.Joiner, int64, error) {
+func New(ctx context.Context, getter storage.Getter, address boson.Address, rootCid ...boson.Address) (file.Joiner, int64, error) {
 	getter = store.New(getter)
 	// retrieve the root chunk to read the total data length the be retrieved
-	rootChunk, err := getter.Get(ctx, storage.ModeGetRequest, address)
+	rootChunk, err := getter.Get(ctx, storage.ModeGetRequest, address, rootCid...)
 	if err != nil {
 		return nil, 0, err
 	}

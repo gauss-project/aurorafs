@@ -23,9 +23,9 @@ import (
 
 	"github.com/syndtr/goleveldb/leveldb"
 
+	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/shed"
 	"github.com/gauss-project/aurorafs/pkg/storage"
-	"github.com/gauss-project/aurorafs/pkg/boson"
 )
 
 // Get returns a chunk from the database. If the chunk is
@@ -33,7 +33,7 @@ import (
 // All required indexes will be updated required by the
 // Getter Mode. Get is required to implement chunk.Store
 // interface.
-func (db *DB) Get(ctx context.Context, mode storage.ModeGet, addr boson.Address) (ch boson.Chunk, err error) {
+func (db *DB) Get(ctx context.Context, mode storage.ModeGet, addr boson.Address, rootCid ...boson.Address) (ch boson.Chunk, err error) {
 	db.metrics.ModeGet.Inc()
 	defer totalTimeMetric(db.metrics.TotalTimeGet, time.Now())
 
