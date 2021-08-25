@@ -1,9 +1,9 @@
 package retrieval
 
 import (
+	"context"
 	"fmt"
 	"time"
-	"context"
 
 	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/retrieval/pb"
@@ -12,9 +12,9 @@ import (
 	"github.com/gauss-project/aurorafs/pkg/logging"
 	"github.com/gauss-project/aurorafs/pkg/p2p"
 
+	"github.com/gauss-project/aurorafs/pkg/cac"
 	"github.com/gauss-project/aurorafs/pkg/p2p/protobuf"
 	"github.com/gauss-project/aurorafs/pkg/soc"
-	"github.com/gauss-project/aurorafs/pkg/cac"
 	"github.com/gauss-project/aurorafs/pkg/storage"
 	"github.com/gauss-project/aurorafs/pkg/topology"
 	"github.com/gauss-project/aurorafs/pkg/tracing"
@@ -194,6 +194,8 @@ func (s *Service) retrieveChunk(ctx context.Context, target_node boson.Address, 
 			return nil, -1, boson.ErrInvalidChunk
 		}
 	}
+
+	s.chunkinfo.OnChunkTransferred(chunk_addr, root_addr, s.addr)
 
 	// credit the peer after successful delivery
 	//err = s.accounting.Credit(peer, chunkPrice)
