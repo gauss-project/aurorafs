@@ -110,24 +110,79 @@ func (m *Delivery) GetData() []byte {
 	return nil
 }
 
+type RequestChunk struct {
+	RootAddr  []byte `protobuf:"bytes,1,opt,name=RootAddr,proto3" json:"RootAddr,omitempty"`
+	ChunkAddr []byte `protobuf:"bytes,2,opt,name=ChunkAddr,proto3" json:"ChunkAddr,omitempty"`
+}
+
+func (m *RequestChunk) Reset()         { *m = RequestChunk{} }
+func (m *RequestChunk) String() string { return proto.CompactTextString(m) }
+func (*RequestChunk) ProtoMessage()    {}
+func (*RequestChunk) Descriptor() ([]byte, []int) {
+	return fileDescriptor_fcade0a564e5dcd4, []int{2}
+}
+func (m *RequestChunk) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *RequestChunk) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_RequestChunk.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalToSizedBuffer(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+	}
+}
+func (m *RequestChunk) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_RequestChunk.Merge(m, src)
+}
+func (m *RequestChunk) XXX_Size() int {
+	return m.Size()
+}
+func (m *RequestChunk) XXX_DiscardUnknown() {
+	xxx_messageInfo_RequestChunk.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_RequestChunk proto.InternalMessageInfo
+
+func (m *RequestChunk) GetRootAddr() []byte {
+	if m != nil {
+		return m.RootAddr
+	}
+	return nil
+}
+
+func (m *RequestChunk) GetChunkAddr() []byte {
+	if m != nil {
+		return m.ChunkAddr
+	}
+	return nil
+}
+
 func init() {
 	proto.RegisterType((*Request)(nil), "retieval.Request")
 	proto.RegisterType((*Delivery)(nil), "retieval.Delivery")
+	proto.RegisterType((*RequestChunk)(nil), "retieval.RequestChunk")
 }
 
 func init() { proto.RegisterFile("retrieval.proto", fileDescriptor_fcade0a564e5dcd4) }
 
 var fileDescriptor_fcade0a564e5dcd4 = []byte{
-	// 134 bytes of a gzipped FileDescriptorProto
+	// 169 bytes of a gzipped FileDescriptorProto
 	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xe2, 0xe2, 0x2f, 0x4a, 0x2d, 0x29,
 	0xca, 0x4c, 0x2d, 0x4b, 0xcc, 0xd1, 0x2b, 0x28, 0xca, 0x2f, 0xc9, 0x17, 0xe2, 0x28, 0x4a, 0x2d,
 	0x01, 0xf3, 0x95, 0x64, 0xb9, 0xd8, 0x83, 0x52, 0x0b, 0x4b, 0x53, 0x8b, 0x4b, 0x84, 0x84, 0xb8,
 	0x58, 0x1c, 0x53, 0x52, 0x8a, 0x24, 0x18, 0x15, 0x18, 0x35, 0x78, 0x82, 0xc0, 0x6c, 0x25, 0x39,
 	0x2e, 0x0e, 0x97, 0xd4, 0x9c, 0xcc, 0xb2, 0xd4, 0xa2, 0x4a, 0x90, 0xbc, 0x4b, 0x62, 0x49, 0x22,
-	0x4c, 0x1e, 0xc4, 0x76, 0x92, 0x39, 0xf1, 0x48, 0x8e, 0xf1, 0xc2, 0x23, 0x39, 0xc6, 0x07, 0x8f,
-	0xe4, 0x18, 0x27, 0x3c, 0x96, 0x63, 0xb8, 0xf0, 0x58, 0x8e, 0xe1, 0xc6, 0x63, 0x39, 0x86, 0x28,
-	0xa6, 0x82, 0xa4, 0x24, 0x36, 0xb0, 0x6d, 0xc6, 0x80, 0x00, 0x00, 0x00, 0xff, 0xff, 0xe5, 0x88,
-	0xb0, 0x44, 0x80, 0x00, 0x00, 0x00,
+	0x4c, 0x1e, 0xc4, 0x56, 0xf2, 0xe0, 0xe2, 0x81, 0x6a, 0x77, 0xce, 0x28, 0xcd, 0xcb, 0x16, 0x92,
+	0xe2, 0xe2, 0x08, 0xca, 0xcf, 0x2f, 0x41, 0x32, 0x07, 0xce, 0x17, 0x92, 0xe1, 0xe2, 0x04, 0x2b,
+	0x02, 0x4b, 0x32, 0x81, 0x25, 0x11, 0x02, 0x4e, 0x32, 0x27, 0x1e, 0xc9, 0x31, 0x5e, 0x78, 0x24,
+	0xc7, 0xf8, 0xe0, 0x91, 0x1c, 0xe3, 0x84, 0xc7, 0x72, 0x0c, 0x17, 0x1e, 0xcb, 0x31, 0xdc, 0x78,
+	0x2c, 0xc7, 0x10, 0xc5, 0x54, 0x90, 0x94, 0xc4, 0x06, 0x76, 0xb7, 0x31, 0x20, 0x00, 0x00, 0xff,
+	0xff, 0xa4, 0x9c, 0xb5, 0x08, 0xca, 0x00, 0x00, 0x00,
 }
 
 func (m *Request) Marshal() (dAtA []byte, err error) {
@@ -190,6 +245,43 @@ func (m *Delivery) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 	return len(dAtA) - i, nil
 }
 
+func (m *RequestChunk) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *RequestChunk) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *RequestChunk) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	if len(m.ChunkAddr) > 0 {
+		i -= len(m.ChunkAddr)
+		copy(dAtA[i:], m.ChunkAddr)
+		i = encodeVarintRetrieval(dAtA, i, uint64(len(m.ChunkAddr)))
+		i--
+		dAtA[i] = 0x12
+	}
+	if len(m.RootAddr) > 0 {
+		i -= len(m.RootAddr)
+		copy(dAtA[i:], m.RootAddr)
+		i = encodeVarintRetrieval(dAtA, i, uint64(len(m.RootAddr)))
+		i--
+		dAtA[i] = 0xa
+	}
+	return len(dAtA) - i, nil
+}
+
 func encodeVarintRetrieval(dAtA []byte, offset int, v uint64) int {
 	offset -= sovRetrieval(v)
 	base := offset
@@ -221,6 +313,23 @@ func (m *Delivery) Size() (n int) {
 	var l int
 	_ = l
 	l = len(m.Data)
+	if l > 0 {
+		n += 1 + l + sovRetrieval(uint64(l))
+	}
+	return n
+}
+
+func (m *RequestChunk) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	l = len(m.RootAddr)
+	if l > 0 {
+		n += 1 + l + sovRetrieval(uint64(l))
+	}
+	l = len(m.ChunkAddr)
 	if l > 0 {
 		n += 1 + l + sovRetrieval(uint64(l))
 	}
@@ -302,10 +411,7 @@ func (m *Request) Unmarshal(dAtA []byte) error {
 			if err != nil {
 				return err
 			}
-			if skippy < 0 {
-				return ErrInvalidLengthRetrieval
-			}
-			if (iNdEx + skippy) < 0 {
+			if (skippy < 0) || (iNdEx+skippy) < 0 {
 				return ErrInvalidLengthRetrieval
 			}
 			if (iNdEx + skippy) > l {
@@ -389,10 +495,125 @@ func (m *Delivery) Unmarshal(dAtA []byte) error {
 			if err != nil {
 				return err
 			}
-			if skippy < 0 {
+			if (skippy < 0) || (iNdEx+skippy) < 0 {
 				return ErrInvalidLengthRetrieval
 			}
-			if (iNdEx + skippy) < 0 {
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *RequestChunk) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowRetrieval
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: RequestChunk: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: RequestChunk: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field RootAddr", wireType)
+			}
+			var byteLen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowRetrieval
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				byteLen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if byteLen < 0 {
+				return ErrInvalidLengthRetrieval
+			}
+			postIndex := iNdEx + byteLen
+			if postIndex < 0 {
+				return ErrInvalidLengthRetrieval
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.RootAddr = append(m.RootAddr[:0], dAtA[iNdEx:postIndex]...)
+			if m.RootAddr == nil {
+				m.RootAddr = []byte{}
+			}
+			iNdEx = postIndex
+		case 2:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field ChunkAddr", wireType)
+			}
+			var byteLen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowRetrieval
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				byteLen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if byteLen < 0 {
+				return ErrInvalidLengthRetrieval
+			}
+			postIndex := iNdEx + byteLen
+			if postIndex < 0 {
+				return ErrInvalidLengthRetrieval
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.ChunkAddr = append(m.ChunkAddr[:0], dAtA[iNdEx:postIndex]...)
+			if m.ChunkAddr == nil {
+				m.ChunkAddr = []byte{}
+			}
+			iNdEx = postIndex
+		default:
+			iNdEx = preIndex
+			skippy, err := skipRetrieval(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if (skippy < 0) || (iNdEx+skippy) < 0 {
 				return ErrInvalidLengthRetrieval
 			}
 			if (iNdEx + skippy) > l {
