@@ -26,11 +26,16 @@ const (
 
 // NewOverlayAddress constructs a Swarm Address from ECDSA public key.
 func NewOverlayAddress(p ecdsa.PublicKey, networkID uint64) (boson.Address, error) {
-	ethAddr, err := NewEthereumAddress(p)
+	if p.X == nil || p.Y == nil {
+		return boson.ZeroAddress, errors.New("invalid public key")
+	}
+	pubBytes := elliptic.Marshal(btcec.S256(), p.X, p.Y)
+	pubHash, err := LegacyKeccak256(pubBytes[1:])
 	if err != nil {
 		return boson.ZeroAddress, err
 	}
-	return NewOverlayFromEthereumAddress(ethAddr, networkID), nil
+	overlay := sha3.Sum256(pubHash)
+	return boson.NewAddress(overlay[:]), nil
 }
 
 // NewOverlayFromEthereumAddress constructs a Swarm Address for an Ethereum address.
