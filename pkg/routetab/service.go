@@ -22,8 +22,8 @@ const (
 )
 
 type RouteTab interface {
-	GetRoute(ctx context.Context, dest boson.Address) (neighbor boson.Address, err error)
-	FindRoute(ctx context.Context, dest boson.Address) (route RouteItem, err error)
+	GetRoute(ctx context.Context, dest boson.Address) (routes []RouteItem, err error)
+	FindRoute(ctx context.Context, dest boson.Address) (route []RouteItem, err error)
 }
 
 type Service struct {

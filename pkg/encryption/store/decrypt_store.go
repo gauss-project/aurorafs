@@ -22,7 +22,7 @@ func New(s storage.Getter) storage.Getter {
 	return &decryptingStore{s}
 }
 
-func (s *decryptingStore) Get(ctx context.Context, mode storage.ModeGet, addr boson.Address) (ch boson.Chunk, err error) {
+func (s *decryptingStore) Get(ctx context.Context, mode storage.ModeGet, addr boson.Address, rootCid ...boson.Address) (ch boson.Chunk, err error) {
 	switch l := len(addr.Bytes()); l {
 	case boson.HashSize:
 		// normal, unencrypted content

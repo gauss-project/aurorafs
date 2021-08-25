@@ -19,9 +19,9 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 
+	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/logging"
 	"github.com/gauss-project/aurorafs/pkg/storage"
-	"github.com/gauss-project/aurorafs/pkg/boson"
 )
 
 // nopWriteCloser wraps a io.Writer in the same manner as ioutil.NopCloser does
@@ -102,7 +102,7 @@ func (f *FsStore) Put(ctx context.Context, mode storage.ModePut, chs ...boson.Ch
 }
 
 // Get implements storage.Getter.
-func (f *FsStore) Get(ctx context.Context, mode storage.ModeGet, address boson.Address) (ch boson.Chunk, err error) {
+func (f *FsStore) Get(ctx context.Context, mode storage.ModeGet, address boson.Address, rootCid ...boson.Address) (ch boson.Chunk, err error) {
 	chunkPath := filepath.Join(f.path, address.String())
 	data, err := ioutil.ReadFile(chunkPath)
 	if err != nil {
@@ -152,7 +152,7 @@ func (a *ApiStore) Put(ctx context.Context, mode storage.ModePut, chs ...boson.C
 }
 
 // Get implements storage.Getter.
-func (a *ApiStore) Get(ctx context.Context, mode storage.ModeGet, address boson.Address) (ch boson.Chunk, err error) {
+func (a *ApiStore) Get(ctx context.Context, mode storage.ModeGet, address boson.Address, rootCid ...boson.Address) (ch boson.Chunk, err error) {
 	addressHex := address.String()
 	url := strings.Join([]string{a.baseUrl, addressHex}, "/")
 	res, err := http.DefaultClient.Get(url)
