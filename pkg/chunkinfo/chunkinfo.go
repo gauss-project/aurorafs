@@ -80,7 +80,7 @@ type RootCIDResponse struct {
 func (ci *ChunkInfo) Init(ctx context.Context, authInfo []byte, rootCid boson.Address) bool {
 	v, _, _ := ci.singleflight.Do(rootCid.String(), func() (interface{}, error) {
 
-		if ci.cd.isExists(rootCid) {
+		if ci.ct.getNeighborChunkInfo(rootCid) != nil {
 			return true, nil
 		}
 
