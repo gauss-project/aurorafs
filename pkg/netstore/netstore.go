@@ -44,7 +44,7 @@ func (s *store) Get(ctx context.Context, mode storage.ModeGet, addr boson.Addres
 	if err != nil {
 		if errors.Is(err, storage.ErrNotFound) && len(rootCid) > 0 {
 			// request from network
-			ch, err = s.retrieval.RetrieveChunk(ctx, addr)
+			ch, err = s.retrieval.RetrieveChunk(ctx, rootCid[0], addr)
 			if err != nil {
 
 				return nil, storage.ErrNotFound

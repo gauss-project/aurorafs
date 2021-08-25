@@ -11,6 +11,8 @@ import (
 	"context"
 	"crypto/ecdsa"
 	"fmt"
+	"github.com/gauss-project/aurorafs/pkg/chunkinfo"
+	"github.com/gauss-project/aurorafs/pkg/routetab"
 	"io"
 	"log"
 	"net"
@@ -34,8 +36,6 @@ import (
 	"github.com/gauss-project/aurorafs/pkg/pingpong"
 	"github.com/gauss-project/aurorafs/pkg/resolver/multiresolver"
 	"github.com/gauss-project/aurorafs/pkg/retrieval"
-	"github.com/gauss-project/aurorafs/pkg/storage"
-
 	"github.com/gauss-project/aurorafs/pkg/tracing"
 	"github.com/gauss-project/aurorafs/pkg/traversal"
 	ma "github.com/multiformats/go-multiaddr"
@@ -359,6 +359,11 @@ func NewBee(addr string, bosonAddress boson.Address, publicKey ecdsa.PublicKey, 
 		logger.Debugf("p2p address: %s", addr)
 	}
 
+	route := routetab.New(bosonAddress, p2pCtx, p2ps, kad, stateStore, logger)
+	if err = p2ps.AddProtocol(route.Protocol()); err != nil {
+		return nil, fmt.Errorf("routetab service: %w", err)
+	}
+
 	var path string
 
 	if o.DataDir != "" {
@@ -383,10 +388,14 @@ func NewBee(addr string, bosonAddress boson.Address, publicKey ecdsa.PublicKey, 
 		return nil, fmt.Errorf("retrieval service: %w", err)
 	}
 
-	var ns storage.Storer
-	ns = netstore.New(storer, retrieve, logger)
+	ns := netstore.New(storer, retrieve, logger)
 
 	traversalService := traversal.NewService(ns)
+
+	chunkInfo := chunkinfo.New(p2ps, logger, traversalService)
+	if err = p2ps.AddProtocol(chunkInfo.Protocol()); err != nil {
+		return nil, fmt.Errorf("chunkInfo service: %w", err)
+	}
 
 	multiResolver := multiresolver.NewMultiResolver(
 		multiresolver.WithConnectionConfigs(o.ResolverConnectionCfgs),
