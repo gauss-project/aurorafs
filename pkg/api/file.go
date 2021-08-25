@@ -196,6 +196,24 @@ func (s *server) fileUploadHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	a, err := s.traversal.GetTrieData(ctx, reference)
+	if err != nil {
+		logger.Errorf("file upload: get trie data, file %q: %v", fileName, err)
+		jsonhttp.InternalServerError(w, "could not get trie data")
+		return
+	}
+	dataChunks ,_ := s.traversal.CheckTrieData(ctx, reference, a)
+	if err != nil {
+		logger.Errorf("file upload: check trie data, file %q: %v", fileName, err)
+		jsonhttp.InternalServerError(w, "check trie data error")
+		return
+	}
+	for _,li := range dataChunks {
+		for _,b := range li {
+			s.chunkInfo.OnChunkTransferred(boson.NewAddress(b), reference, s.overlay)
+		}
+	}
+
 	w.Header().Set("ETag", fmt.Sprintf("%q", reference.String()))
 
 	jsonhttp.OK(w, fileUploadResponse{
@@ -224,10 +242,16 @@ func (s *server) fileDownloadHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if !s.chunkInfo.Init(r.Context(), nil, address) {
+		logger.Debugf("file download: chunkInfo init %s: %v", nameOrHex, err)
+		jsonhttp.NotFound(w, nil)
+		return
+	}
 
 	// read entry
 	j, _, err := joiner.New(r.Context(), s.storer, address)
 	if err != nil {
+		errors.Is(err, storage.ErrNotFound)
 		logger.Debugf("file download: joiner %s: %v", address, err)
 		logger.Errorf("file download: joiner %s", address)
 		jsonhttp.NotFound(w, nil)

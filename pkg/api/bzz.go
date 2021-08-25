@@ -50,6 +50,11 @@ func (s *server) bzzDownloadHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if !s.chunkInfo.Init(r.Context(), nil, address) {
+		logger.Debugf("aurora download: chunkInfo init %s: %v", nameOrHex, err)
+		jsonhttp.NotFound(w, nil)
+		return
+	}
 
 	// read manifest entry
 	j, _, err := joiner.New(ctx, s.storer, address)
