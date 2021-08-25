@@ -178,6 +178,7 @@ func (ci *ChunkInfo) onFindChunkPyramid(ctx context.Context, authInfo []byte, ro
 			return
 		}
 		ci.cp.updateChunkPyramid(rootCid, v)
+		ci.ct.initNeighborChunkInfo(rootCid)
 	}
 	ci.onFindChunkInfo(ctx, authInfo, rootCid, overlay, cn)
 }

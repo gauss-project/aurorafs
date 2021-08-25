@@ -80,7 +80,7 @@ type RootCIDResponse struct {
 func (ci *ChunkInfo) Init(ctx context.Context, authInfo []byte, rootCid boson.Address) bool {
 	//v, _, _ := ci.singleflight.Do(rootCid.String(), func() (interface{}, error) {
 
-	if len(ci.ct.getNeighborChunkInfo(rootCid)) > 0 {
+	if ci.ct.isExists(rootCid) {
 		return true
 	}
 
@@ -126,14 +126,13 @@ func (ci *ChunkInfo) Init(ctx context.Context, authInfo []byte, rootCid boson.Ad
 	)
 
 	for {
-
-		if peerAttempt < count {
-			if ci.cd.isExists(rootCid) {
-				if len(overlays) > 1 {
-					ci.FindChunkInfo(ctx, authInfo, rootCid, overlays[peerAttempt:])
-				}
-				return true
+		if ci.cd.isExists(rootCid) {
+			if len(overlays) > 1 {
+				ci.FindChunkInfo(ctx, authInfo, rootCid, overlays[peerAttempt:])
 			}
+			return true
+		}
+		if peerAttempt < count {
 			if ci.getQueue(rootCid.String()) == nil {
 				ci.newQueue(rootCid.String())
 				ci.getQueue(rootCid.String()).push(Pulling, overlays[peerAttempt].Bytes())
