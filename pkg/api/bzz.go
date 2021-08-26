@@ -50,6 +50,11 @@ func (s *server) bzzDownloadHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if !s.chunkInfo.Init(r.Context(), nil, address) {
+		logger.Debugf("aurora download: chunkInfo init %s: %v", nameOrHex, err)
+		jsonhttp.NotFound(w, nil)
+		return
+	}
 
 	// read manifest entry
 	j, _, err := joiner.New(ctx, s.storer, address)
@@ -128,7 +133,7 @@ func (s *server) bzzDownloadHandler(w http.ResponseWriter, r *http.Request) {
 				// index document exists
 				logger.Debugf("aurora download: serving path: %s", pathWithIndex)
 
-				s.serveManifestEntry(w, r, address, indexDocumentManifestEntry.Reference(), !feedDereferenced)
+				s.serveManifestEntry(w, r,  address, indexDocumentManifestEntry.Reference(), !feedDereferenced)
 				return
 			}
 		}
@@ -264,7 +269,7 @@ func (s *server) serveManifestEntry(w http.ResponseWriter, r *http.Request, addr
 
 	fileEntryAddress := fe.Reference()
 
-	s.downloadHandler(w, r, fileEntryAddress, additionalHeaders, etag)
+	s.downloadHandler(w, r, fileEntryAddress, additionalHeaders, etag, address)
 }
 
 // manifestMetadataLoad returns the value for a key stored in the metadata of

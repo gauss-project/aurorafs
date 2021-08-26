@@ -10,6 +10,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/gauss-project/aurorafs/pkg/chunkinfo"
 	"io"
 	"math"
 	"net/http"
@@ -22,11 +23,11 @@ import (
 	"github.com/gauss-project/aurorafs/pkg/file/pipeline/builder"
 	"github.com/gauss-project/aurorafs/pkg/logging"
 	m "github.com/gauss-project/aurorafs/pkg/metrics"
-	
+
+	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/resolver"
 	"github.com/gauss-project/aurorafs/pkg/storage"
-	"github.com/gauss-project/aurorafs/pkg/boson"
-	
+
 	"github.com/gauss-project/aurorafs/pkg/tracing"
 	"github.com/gauss-project/aurorafs/pkg/traversal"
 )
@@ -71,6 +72,8 @@ type server struct {
 	storer      storage.Storer
 	resolver    resolver.Interface
 
+	overlay     boson.Address
+	chunkInfo   chunkinfo.Interface
 	traversal   traversal.Service
 	logger      logging.Logger
 	tracer      *tracing.Tracer
@@ -95,12 +98,14 @@ const (
 )
 
 // New will create a and initialize a new API service.
-func New(storer storage.Storer, resolver resolver.Interface,  traversalService traversal.Service,  logger logging.Logger, tracer *tracing.Tracer, o Options) Service {
+func New(storer storage.Storer, resolver resolver.Interface, addr boson.Address,  chunkInfo chunkinfo.Interface,  traversalService traversal.Service,  logger logging.Logger, tracer *tracing.Tracer, o Options) Service {
 	s := &server{
 
 		storer:      storer,
 		resolver:    resolver,
 
+		overlay:     addr,
+		chunkInfo:   chunkInfo,
 		traversal:   traversalService,
 
 		Options:     o,

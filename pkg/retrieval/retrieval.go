@@ -1,9 +1,9 @@
 package retrieval
 
 import (
+	"context"
 	"fmt"
 	"time"
-	"context"
 
 	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/retrieval/pb"
@@ -12,9 +12,9 @@ import (
 	"github.com/gauss-project/aurorafs/pkg/logging"
 	"github.com/gauss-project/aurorafs/pkg/p2p"
 
+	"github.com/gauss-project/aurorafs/pkg/cac"
 	"github.com/gauss-project/aurorafs/pkg/p2p/protobuf"
 	"github.com/gauss-project/aurorafs/pkg/soc"
-	"github.com/gauss-project/aurorafs/pkg/cac"
 	"github.com/gauss-project/aurorafs/pkg/storage"
 	"github.com/gauss-project/aurorafs/pkg/topology"
 	"github.com/gauss-project/aurorafs/pkg/tracing"
@@ -52,7 +52,7 @@ type Service struct {
 	metrics 			metrics
 	tracer  			*tracing.Tracer
 
-	chunkinfo     		*chunkinfo.ChunkInfo
+	chunkinfo     		chunkinfo.Interface
 	// routetabService  	routetab.Service
 }
 
@@ -70,7 +70,7 @@ const (
 	retrieveRetryIntervalDuration = 5 * time.Second
 )
 
-func New(addr boson.Address, streamer p2p.Streamer, chunkPeerer topology.EachPeerer, storer storage.Storer, logger logging.Logger, tracer *tracing.Tracer, chunkinfo *chunkinfo.ChunkInfo) *Service {
+func New(addr boson.Address, streamer p2p.Streamer, chunkPeerer topology.EachPeerer, storer storage.Storer, logger logging.Logger, tracer *tracing.Tracer) *Service {
 	return &Service{
 		addr:          addr,
 		streamer:      streamer,
@@ -79,8 +79,11 @@ func New(addr boson.Address, streamer p2p.Streamer, chunkPeerer topology.EachPee
 		logger:        logger,
 		metrics: newMetrics(),
 		tracer:  tracer,
-		chunkinfo: chunkinfo,
 	}
+}
+
+func (s *Service) Config(chunkInfo chunkinfo.Interface)  {
+	s.chunkinfo = chunkInfo
 }
 
 func (s *Service) Protocol() p2p.ProtocolSpec {
@@ -151,13 +154,14 @@ func (s *Service) RetrieveChunk(ctx context.Context, root_addr, chunk_addr boson
 }
 
 func (s *Service) retrieveChunk(ctx context.Context, target_node boson.Address, root_addr, chunk_addr boson.Address) (boson.Chunk, float64, error){
-	if !s.isNeighborNode(target_node){
-		return nil, -1, fmt.Errorf("not neighbornode: %v", target_node.String())
-	}
+	//if !s.isNeighborNode(target_node){
+	//	return nil, -1, fmt.Errorf("not neighbornode: %v", target_node.String())
+	//}
 
 	stream, err := s.streamer.NewStream(ctx, target_node, nil, protocolName, protocolVersion, streamName)
 	if err != nil {
 		s.logger.Errorf("new stream: %w", err)
+		return nil, -1, err
 	}
 	defer func() {
 		if err != nil {
@@ -177,14 +181,13 @@ func (s *Service) retrieveChunk(ctx context.Context, target_node boson.Address, 
 		return nil, -1, fmt.Errorf("write request: %w peer %s", err, target_node.String())
 	}
 
-	end_time := time.Now()
 	var d pb.Delivery
 	if err := r.ReadMsgWithContext(ctx, &d); err != nil {
 		s.metrics.TotalErrors.Inc()
 		return nil, -1, fmt.Errorf("read delivery: %w peer %s", err, target_node.String())
 	}
-	elapsed := end_time.Unix() - start_time.Unix()
-	download_rate := int64(d.Size())/elapsed
+	elapsed := time.Now().Sub(start_time)
+	download_rate := int64(d.Size())/elapsed.Microseconds()*1000.0
 
 	chunk := boson.NewChunk(chunk_addr, d.Data)
 	if !cac.Valid(chunk) {
@@ -194,6 +197,8 @@ func (s *Service) retrieveChunk(ctx context.Context, target_node boson.Address, 
 			return nil, -1, boson.ErrInvalidChunk
 		}
 	}
+
+	s.chunkinfo.OnChunkTransferred(chunk_addr, root_addr, s.addr)
 
 	// credit the peer after successful delivery
 	//err = s.accounting.Credit(peer, chunkPrice)
@@ -274,6 +279,7 @@ func (s *Service) getACONodeList(optional_node_list []boson.Address, node_count 
 
 func (s *Service) rankNodeDownload(node boson.Address, download_rate float64){
 	// do nothing
+	s.logger.Tracef("download rate = %f\n", download_rate)
 	return
 }
 

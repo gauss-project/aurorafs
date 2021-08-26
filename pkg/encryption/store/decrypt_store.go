@@ -26,13 +26,13 @@ func (s *decryptingStore) Get(ctx context.Context, mode storage.ModeGet, addr bo
 	switch l := len(addr.Bytes()); l {
 	case boson.HashSize:
 		// normal, unencrypted content
-		return s.Getter.Get(ctx, mode, addr)
+		return s.Getter.Get(ctx, mode, addr, rootCid...)
 
 	case encryption.ReferenceSize:
 		// encrypted reference
 		ref := addr.Bytes()
 		address := boson.NewAddress(ref[:boson.HashSize])
-		ch, err := s.Getter.Get(ctx, mode, address)
+		ch, err := s.Getter.Get(ctx, mode, address, rootCid...)
 		if err != nil {
 			return nil, err
 		}
