@@ -31,8 +31,7 @@ func (cd *chunkInfoDiscover) isExists(rootCid boson.Address) bool {
 func (cd *chunkInfoDiscover) getChunkInfo(rootCid, cid boson.Address) [][]byte {
 	cd.RLock()
 	defer cd.RUnlock()
-	v, _ := cd.presence[rootCid.String()][cid.String()]
-	return v
+	return cd.presence[rootCid.String()][cid.String()]
 }
 
 // updateChunkInfos
