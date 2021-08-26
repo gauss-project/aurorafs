@@ -154,13 +154,14 @@ func (s *Service) RetrieveChunk(ctx context.Context, root_addr, chunk_addr boson
 }
 
 func (s *Service) retrieveChunk(ctx context.Context, target_node boson.Address, root_addr, chunk_addr boson.Address) (boson.Chunk, float64, error){
-	if !s.isNeighborNode(target_node){
-		return nil, -1, fmt.Errorf("not neighbornode: %v", target_node.String())
-	}
+	//if !s.isNeighborNode(target_node){
+	//	return nil, -1, fmt.Errorf("not neighbornode: %v", target_node.String())
+	//}
 
 	stream, err := s.streamer.NewStream(ctx, target_node, nil, protocolName, protocolVersion, streamName)
 	if err != nil {
 		s.logger.Errorf("new stream: %w", err)
+		return nil, -1, err
 	}
 	defer func() {
 		if err != nil {
@@ -180,14 +181,13 @@ func (s *Service) retrieveChunk(ctx context.Context, target_node boson.Address, 
 		return nil, -1, fmt.Errorf("write request: %w peer %s", err, target_node.String())
 	}
 
-	end_time := time.Now()
 	var d pb.Delivery
 	if err := r.ReadMsgWithContext(ctx, &d); err != nil {
 		s.metrics.TotalErrors.Inc()
 		return nil, -1, fmt.Errorf("read delivery: %w peer %s", err, target_node.String())
 	}
-	elapsed := end_time.Unix() - start_time.Unix()
-	download_rate := int64(d.Size())/elapsed
+	elapsed := time.Now().Sub(start_time)
+	download_rate := int64(d.Size())/elapsed.Microseconds()*1000.0
 
 	chunk := boson.NewChunk(chunk_addr, d.Data)
 	if !cac.Valid(chunk) {
@@ -279,6 +279,7 @@ func (s *Service) getACONodeList(optional_node_list []boson.Address, node_count 
 
 func (s *Service) rankNodeDownload(node boson.Address, download_rate float64){
 	// do nothing
+	s.logger.Tracef("download rate = %f\n", download_rate)
 	return
 }
 
