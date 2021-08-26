@@ -313,7 +313,7 @@ func TestHandlerPyramidResp(t *testing.T) {
 	cpReq := client.cp.createChunkPyramidReq(rootCid)
 
 	client.onChunkPyramidReq(ctx, nil, serverAddress, cpReq)
-	respRecords, err := recorder.Records(serverAddress, "chunkinfo", "1.0.0", "chunkpyramid/resp")
+	respRecords, err := recorder.Records(serverAddress, "chunkinfo", "1.0.0", "chunkpyramidresp")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -330,8 +330,8 @@ func TestHandlerPyramidResp(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Log(respMessages)
-
-	reqRecords, err := recorder1.Records(clientAddress, "chunkinfo", "1.0.0", "chunkinfo/req")
+	client.tt.getTimeOutRootCidAndNode()
+	reqRecords, err := recorder1.Records(clientAddress, "chunkinfo", "1.0.0", "chunkinforeq")
 	if err != nil {
 		t.Fatal(err)
 	}
