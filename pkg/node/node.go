@@ -383,8 +383,7 @@ func NewBee(addr string, bosonAddress boson.Address, publicKey ecdsa.PublicKey, 
 	}
 	b.localstoreCloser = storer
 
-	retrieve := retrieval.New(bosonAddress, storer, p2ps, kad, logger, tracer)
-
+	retrieve := retrieval.New(bosonAddress, p2ps, kad, storer, logger, tracer)
 	if err = p2ps.AddProtocol(retrieve.Protocol()); err != nil {
 		return nil, fmt.Errorf("retrieval service: %w", err)
 	}
@@ -393,10 +392,13 @@ func NewBee(addr string, bosonAddress boson.Address, publicKey ecdsa.PublicKey, 
 
 	traversalService := traversal.NewService(ns)
 
-	chunkInfo := chunkinfo.New(p2ps, logger, traversalService)
+	chunkInfo := chunkinfo.New(p2ps, logger, traversalService, o.OracleEndpoint)
 	if err = p2ps.AddProtocol(chunkInfo.Protocol()); err != nil {
 		return nil, fmt.Errorf("chunkInfo service: %w", err)
 	}
+
+	retrieve.Config(chunkInfo)
+
 
 	multiResolver := multiresolver.NewMultiResolver(
 		multiresolver.WithConnectionConfigs(o.ResolverConnectionCfgs),
@@ -408,7 +410,7 @@ func NewBee(addr string, bosonAddress boson.Address, publicKey ecdsa.PublicKey, 
 	if o.APIAddr != "" {
 		// API server
 
-		apiService = api.New(ns, multiResolver, traversalService, logger, tracer, api.Options{
+		apiService = api.New(ns, multiResolver, bosonAddress, chunkInfo, traversalService, logger, tracer, api.Options{
 			CORSAllowedOrigins: o.CORSAllowedOrigins,
 			GatewayMode:        o.GatewayMode,
 			WsPingPeriod:       60 * time.Second,

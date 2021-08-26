@@ -78,78 +78,82 @@ type RootCIDResponse struct {
 }
 
 func (ci *ChunkInfo) Init(ctx context.Context, authInfo []byte, rootCid boson.Address) bool {
-	v, _, _ := ci.singleflight.Do(rootCid.String(), func() (interface{}, error) {
-		r, err := http.Get(fmt.Sprintf("http://%s/api/v1.0/rcid/%s", ci.oracleUrl, rootCid.String()))
-		if err != nil {
-			return false, nil
-		}
-		defer r.Body.Close()
-		data, err := io.ReadAll(r.Body)
-		if err != nil {
-			return false, nil
-		}
-		var resp Response
-		if err := json.Unmarshal(data, &resp); err != nil {
-			return false, nil
-		}
-		if r.StatusCode != http.StatusOK {
-			ci.logger.Errorf("expected %d response, got %d", http.StatusOK, r.StatusCode)
-			return false, nil
-		}
-		if resp.StatusCode != 400 {
-			ci.logger.Errorf("expected %d response, got %d", http.StatusOK, r.StatusCode)
-			return false, nil
-		}
-		addrs := resp.Body.Addresses
-		count := len(addrs)
-		if count <= 0 {
-			return false, nil
-		}
-		overlays := make([]boson.Address, 0, count)
-		for _, addr := range addrs {
-			a, _ := boson.ParseHexAddress(addr)
-			overlays = append(overlays, a)
-		}
+	if ci.ct.isExists(rootCid) {
+		return true
+	}
 
-		ticker := time.NewTicker(chunkInfoRetryIntervalDuration)
-		defer ticker.Stop()
+	r, err := http.Get(fmt.Sprintf("http://%s/api/v1.0/rcid/%s", ci.oracleUrl, rootCid.String()))
+	if err != nil {
+		return false
+	}
+	defer r.Body.Close()
+	data, err := io.ReadAll(r.Body)
+	if err != nil {
+		return false
+	}
+	var resp Response
+	if err := json.Unmarshal(data, &resp); err != nil {
+		return false
+	}
+	if r.StatusCode != http.StatusOK {
+		ci.logger.Errorf("expected %d response, got %d", http.StatusOK, r.StatusCode)
+		return false
+	}
+	if resp.StatusCode != 400 {
+		ci.logger.Errorf("expected %d response, got %d", http.StatusOK, r.StatusCode)
+		return false
+	}
+	addrs := resp.Body.Addresses
+	count := len(addrs)
+	if count <= 0 {
+		return false
+	}
+	overlays := make([]boson.Address, 0, count)
+	for _, addr := range addrs {
+		a, _ := boson.ParseHexAddress(addr)
+		overlays = append(overlays, a)
+	}
 
-		var (
-			peerAttempt  int
-			peersResults int
-			errorC       = make(chan error, count)
-		)
+	ticker := time.NewTicker(chunkInfoRetryIntervalDuration)
+	defer ticker.Stop()
 
-		for {
+	var (
+		peerAttempt  int
+		peersResults int
+		errorC       = make(chan error, count)
+	)
 
-			if peerAttempt < count {
-				if ci.cd.isExists(rootCid) {
-					ci.FindChunkInfo(ctx, authInfo, rootCid, overlays[peerAttempt:])
-					return true, nil
-				}
-				if ci.getQueue(rootCid.String()) == nil {
-					ci.newQueue(rootCid.String())
-				}
-				cpReq := ci.cp.createChunkPyramidReq(rootCid)
-				if err := ci.sendData(ctx, overlays[peerAttempt], streamPyramidReqName, cpReq); err != nil {
-					errorC <- err
-				}
-				peerAttempt++
+	for {
+		if ci.cd.isExists(rootCid) {
+			if len(overlays) > 1 {
+				ci.FindChunkInfo(ctx, authInfo, rootCid, overlays[peerAttempt:])
 			}
-
-			select {
-			case <-ticker.C:
-			case <-errorC:
-				peersResults++
-			case <-ctx.Done():
-				return false, nil
-			}
-			if peersResults >= count {
-				return false, nil
-			}
+			return true
 		}
-	})
-	return v.(bool)
+		if peerAttempt < count {
+			if ci.getQueue(rootCid.String()) == nil {
+				ci.newQueue(rootCid.String())
+				ci.getQueue(rootCid.String()).push(Pulling, overlays[peerAttempt].Bytes())
+			}
+			cpReq := ci.cp.createChunkPyramidReq(rootCid)
+			if err := ci.sendData(ctx, overlays[peerAttempt], streamPyramidReqName, cpReq); err != nil {
+				errorC <- err
+			}
+			peerAttempt++
+		}
+
+		select {
+		case <-ticker.C:
+		case <-errorC:
+			peersResults++
+		case <-ctx.Done():
+			return false
+		}
+		if peersResults >= count {
+			return false
+
+		}
+	}
 }
 
 // FindChunkInfo
@@ -161,6 +165,10 @@ func (ci *ChunkInfo) FindChunkInfo(ctx context.Context, authInfo []byte, rootCid
 	}
 	if ci.cd.isExists(rootCid) {
 		for _, overlay := range overlays {
+			if ci.getQueue(rootCid.String()).isExists(Pulled, overlay.Bytes()) || ci.getQueue(rootCid.String()).isExists(Pulling, overlay.Bytes()) ||
+				ci.getQueue(rootCid.String()).isExists(UnPull, overlay.Bytes()) {
+				continue
+			}
 			ci.getQueue(rootCid.String()).push(UnPull, overlay.Bytes())
 		}
 		ci.doFindChunkInfo(ctx, authInfo, rootCid)

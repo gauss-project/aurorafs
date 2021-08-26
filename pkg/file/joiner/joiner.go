@@ -21,6 +21,7 @@ import (
 )
 
 type joiner struct {
+	rootCid   []boson.Address
 	addr      boson.Address
 	rootData  []byte
 	span      int64
@@ -51,6 +52,7 @@ func New(ctx context.Context, getter storage.Getter, address boson.Address, root
 	span := int64(binary.LittleEndian.Uint64(chunkData[:boson.SpanSize]))
 
 	j := &joiner{
+		rootCid:   rootCid,
 		addr:      rootChunk.Address(),
 		refLength: len(address.Bytes()),
 		ctx:       ctx,
@@ -157,7 +159,7 @@ func (j *joiner) readAtOffset(b, data []byte, cur, subTrieSize, off, bufferOffse
 
 		func(address boson.Address, b []byte, cur, subTrieSize, off, bufferOffset, bytesToRead int64) {
 			eg.Go(func() error {
-				ch, err := j.getter.Get(j.ctx, storage.ModeGetRequest, address)
+				ch, err := j.getter.Get(j.ctx, storage.ModeGetRequest, address, j.rootCid...)
 				if err != nil {
 					return err
 				}

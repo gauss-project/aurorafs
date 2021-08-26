@@ -65,6 +65,24 @@ func (s *server) dirUploadHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	a, err := s.traversal.GetTrieData(ctx, reference)
+	if err != nil {
+		logger.Errorf("dir upload: get trie data err: %v", err)
+		jsonhttp.InternalServerError(w, "could not get trie data")
+		return
+	}
+	dataChunks ,_ := s.traversal.CheckTrieData(ctx, reference, a)
+	if err != nil {
+		logger.Errorf("dir upload: check trie data err: %v", err)
+		jsonhttp.InternalServerError(w, "check trie data error")
+		return
+	}
+	for _,li := range dataChunks {
+		for _,b := range li {
+			s.chunkInfo.OnChunkTransferred(boson.NewAddress(b), reference, s.overlay)
+		}
+	}
+
 	jsonhttp.OK(w, fileUploadResponse{
 		Reference: reference,
 	})

@@ -48,7 +48,7 @@ var (
 )
 
 type Node struct {
-	routetab.Service
+	*routetab.Service
 	signer crypto.Signer
 	book   addressbook.Interface
 }
