@@ -330,7 +330,6 @@ func TestHandlerPyramidResp(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Log(respMessages)
-	client.tt.getTimeOutRootCidAndNode()
 	reqRecords, err := recorder1.Records(clientAddress, "chunkinfo", "1.0.0", "chunkinforeq")
 	if err != nil {
 		t.Fatal(err)
