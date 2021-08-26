@@ -52,7 +52,7 @@ type Service struct {
 	metrics 			metrics
 	tracer  			*tracing.Tracer
 
-	chunkinfo     		*chunkinfo.ChunkInfo
+	chunkinfo     		chunkinfo.Interface
 	// routetabService  	routetab.Service
 }
 
@@ -70,7 +70,7 @@ const (
 	retrieveRetryIntervalDuration = 5 * time.Second
 )
 
-func New(addr boson.Address, streamer p2p.Streamer, chunkPeerer topology.EachPeerer, storer storage.Storer, logger logging.Logger, tracer *tracing.Tracer, chunkinfo *chunkinfo.ChunkInfo) *Service {
+func New(addr boson.Address, streamer p2p.Streamer, chunkPeerer topology.EachPeerer, storer storage.Storer, logger logging.Logger, tracer *tracing.Tracer) *Service {
 	return &Service{
 		addr:          addr,
 		streamer:      streamer,
@@ -79,8 +79,11 @@ func New(addr boson.Address, streamer p2p.Streamer, chunkPeerer topology.EachPee
 		logger:        logger,
 		metrics: newMetrics(),
 		tracer:  tracer,
-		chunkinfo: chunkinfo,
 	}
+}
+
+func (s *Service) Config(chunkInfo chunkinfo.Interface)  {
+	s.chunkinfo = chunkInfo
 }
 
 func (s *Service) Protocol() p2p.ProtocolSpec {

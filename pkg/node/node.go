@@ -383,21 +383,22 @@ func NewBee(addr string, bosonAddress boson.Address, publicKey ecdsa.PublicKey, 
 	}
 	b.localstoreCloser = storer
 
-	var chunkInfo *chunkinfo.ChunkInfo
-	retrieve := retrieval.New(bosonAddress, p2ps, kad, storer, logger, tracer, chunkInfo)
+	retrieve := retrieval.New(bosonAddress, p2ps, kad, storer, logger, tracer)
+	if err = p2ps.AddProtocol(retrieve.Protocol()); err != nil {
+		return nil, fmt.Errorf("retrieval service: %w", err)
+	}
 
 	ns := netstore.New(storer, retrieve, logger)
 
 	traversalService := traversal.NewService(ns)
 
-	chunkInfo = chunkinfo.New(p2ps, logger, traversalService, o.OracleEndpoint)
+	chunkInfo := chunkinfo.New(p2ps, logger, traversalService, o.OracleEndpoint)
 	if err = p2ps.AddProtocol(chunkInfo.Protocol()); err != nil {
 		return nil, fmt.Errorf("chunkInfo service: %w", err)
 	}
 
-	if err = p2ps.AddProtocol(retrieve.Protocol()); err != nil {
-		return nil, fmt.Errorf("retrieval service: %w", err)
-	}
+	retrieve.Config(chunkInfo)
+
 
 	multiResolver := multiresolver.NewMultiResolver(
 		multiresolver.WithConnectionConfigs(o.ResolverConnectionCfgs),
