@@ -52,7 +52,7 @@ func (cd *chunkInfoDiscover) updateChunkInfo(rootCid, cid string, overlays [][]b
 		m := make(map[string][][]byte)
 		overlays = make([][]byte, 0, len(mn))
 		for n := range mn {
-			overlays = append(overlays, []byte(n))
+			overlays = append(overlays, boson.MustParseHexAddress(n).Bytes())
 		}
 		m[cid] = overlays
 		cd.presence[rootCid] = m
@@ -64,7 +64,7 @@ func (cd *chunkInfoDiscover) updateChunkInfo(rootCid, cid string, overlays [][]b
 			}
 		}
 		for k := range mn {
-			cd.presence[rootCid][cid] = append(cd.presence[rootCid][cid], []byte(k))
+			cd.presence[rootCid][cid] = append(cd.presence[rootCid][cid], boson.MustParseHexAddress(k).Bytes())
 		}
 	}
 }
