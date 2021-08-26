@@ -36,12 +36,12 @@ type Service struct {
 	kad          *kademlia.Kad
 }
 
-func New(addr boson.Address, ctx context.Context, streamer p2p.Streamer, kad *kademlia.Kad, store storage.StateStorer, logger logging.Logger) Service {
+func New(addr boson.Address, ctx context.Context, streamer p2p.Streamer, kad *kademlia.Kad, store storage.StateStorer, logger logging.Logger) *Service {
 	// load route table from db only those valid item will be loaded
 
 	met := newMetrics()
 
-	service := Service{
+	service := &Service{
 		addr:         addr,
 		streamer:     streamer,
 		logger:       logger,

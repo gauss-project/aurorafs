@@ -13,10 +13,10 @@ import (
 const (
 	protocolName            = "chunkinfo"
 	protocolVersion         = "1.0.0"
-	streamChunkInfoReqName  = "chunkinfo/req"
-	streamChunkInfoRespName = "chunkinfo/resp"
-	streamPyramidReqName    = "chunkpyramid/req"
-	streamPyramidRespName   = "chunkpyramid/resp"
+	streamChunkInfoReqName  = "chunkinforeq"
+	streamChunkInfoRespName = "chunkinforesp"
+	streamPyramidReqName    = "chunkpyramidreq"
+	streamPyramidRespName   = "chunkpyramidresp"
 )
 
 func (ci *ChunkInfo) Protocol() p2p.ProtocolSpec {
@@ -178,6 +178,7 @@ func (ci *ChunkInfo) onFindChunkPyramid(ctx context.Context, authInfo []byte, ro
 			return
 		}
 		ci.cp.updateChunkPyramid(rootCid, v)
+		ci.ct.initNeighborChunkInfo(rootCid)
 	}
 	ci.onFindChunkInfo(ctx, authInfo, rootCid, overlay, cn)
 }

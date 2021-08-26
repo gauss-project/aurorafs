@@ -36,6 +36,21 @@ func (cn *chunkInfoTabNeighbor) updateNeighborChunkInfo(rootCid, cid boson.Addre
 	cn.presence[key] = append(cn.presence[key], overlay.Bytes())
 }
 
+func (cn *chunkInfoTabNeighbor) initNeighborChunkInfo(rootCid boson.Address) {
+	cn.Lock()
+	defer cn.Unlock()
+	v := make([][]byte, 0)
+	cn.presence[rootCid.String()] = v
+}
+
+func (cn *chunkInfoTabNeighbor) isExists(rootCid boson.Address) bool {
+	cn.RLock()
+	defer cn.RUnlock()
+	rc := rootCid.String()
+	_, b := cn.presence[rc]
+	return b
+}
+
 // getNeighborChunkInfo
 func (cn *chunkInfoTabNeighbor) getNeighborChunkInfo(rootCid boson.Address) map[string]*pb.Overlays {
 	cn.RLock()

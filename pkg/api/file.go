@@ -196,6 +196,24 @@ func (s *server) fileUploadHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	a, err := s.traversal.GetTrieData(ctx, reference)
+	if err != nil {
+		logger.Errorf("file upload: get trie data, file %q: %v", fileName, err)
+		jsonhttp.InternalServerError(w, "could not get trie data")
+		return
+	}
+	dataChunks ,_ := s.traversal.CheckTrieData(ctx, reference, a)
+	if err != nil {
+		logger.Errorf("file upload: check trie data, file %q: %v", fileName, err)
+		jsonhttp.InternalServerError(w, "check trie data error")
+		return
+	}
+	for _,li := range dataChunks {
+		for _,b := range li {
+			s.chunkInfo.OnChunkTransferred(boson.NewAddress(b), reference, s.overlay)
+		}
+	}
+
 	w.Header().Set("ETag", fmt.Sprintf("%q", reference.String()))
 
 	jsonhttp.OK(w, fileUploadResponse{
@@ -224,10 +242,16 @@ func (s *server) fileDownloadHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if !s.chunkInfo.Init(r.Context(), nil, address) {
+		logger.Debugf("file download: chunkInfo init %s: %v", nameOrHex, err)
+		jsonhttp.NotFound(w, nil)
+		return
+	}
 
 	// read entry
 	j, _, err := joiner.New(r.Context(), s.storer, address)
 	if err != nil {
+		errors.Is(err, storage.ErrNotFound)
 		logger.Debugf("file download: joiner %s: %v", address, err)
 		logger.Errorf("file download: joiner %s", address)
 		jsonhttp.NotFound(w, nil)
@@ -292,17 +316,20 @@ func (s *server) fileDownloadHandler(w http.ResponseWriter, r *http.Request) {
 		"Content-Type":        {metaData.MimeType},
 	}
 
-	s.downloadHandler(w, r, e.Reference(), additionalHeaders, true)
+	s.downloadHandler(w, r, e.Reference(), additionalHeaders, true, address)
 }
 
 // downloadHandler contains common logic for dowloading Swarm file from API
-func (s *server) downloadHandler(w http.ResponseWriter, r *http.Request, reference boson.Address, additionalHeaders http.Header, etag bool) {
+func (s *server) downloadHandler(w http.ResponseWriter, r *http.Request, reference boson.Address, additionalHeaders http.Header, etag bool, rootCid ...boson.Address) {
 	logger := tracing.NewLoggerWithTraceID(r.Context(), s.logger)
 
 
-	reader, l, err := joiner.New(r.Context(), s.storer, reference)
+	reader, l, err := joiner.New(r.Context(), s.storer, reference, rootCid...)
 	if err != nil {
 		if errors.Is(err, storage.ErrNotFound) {
+			if len(rootCid) > 0 {
+				s.chunkInfo.FindChunkInfo(r.Context(), nil, rootCid[0], []boson.Address{s.overlay})
+			}
 			logger.Debugf("api download: not found %s: %v", reference, err)
 			logger.Error("api download: not found")
 			jsonhttp.NotFound(w, nil)
