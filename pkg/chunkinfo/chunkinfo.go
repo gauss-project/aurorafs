@@ -78,8 +78,6 @@ type RootCIDResponse struct {
 }
 
 func (ci *ChunkInfo) Init(ctx context.Context, authInfo []byte, rootCid boson.Address) bool {
-	//v, _, _ := ci.singleflight.Do(rootCid.String(), func() (interface{}, error) {
-
 	if ci.ct.isExists(rootCid) {
 		return true
 	}
@@ -156,8 +154,6 @@ func (ci *ChunkInfo) Init(ctx context.Context, authInfo []byte, rootCid boson.Ad
 
 		}
 	}
-	//})
-	//return v.(bool)
 }
 
 // FindChunkInfo

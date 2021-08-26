@@ -83,7 +83,7 @@ func TestFindChunkInfo(t *testing.T) {
 	client := mockChunkInfo(s, recorder)
 	client.FindChunkInfo(context.Background(), nil, rootCid, []boson.Address{serverAddress})
 
-	records, err := recorder.Records(serverAddress, "chunkinfo", "1.0.0", "chunkpyramid/req")
+	records, err := recorder.Records(serverAddress, "chunkinfo", "1.0.0", "chunkpyramidreq")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -99,7 +99,7 @@ func TestFindChunkInfo(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Log(messages)
-	records1, err1 := recorder1.Records(clientAddress, "chunkinfo", "1.0.0", "chunkpyramid/resp")
+	records1, err1 := recorder1.Records(clientAddress, "chunkinfo", "1.0.0", "chunkpyramidresp")
 	if err1 != nil {
 		t.Fatal(err)
 	}
@@ -146,7 +146,7 @@ func TestHandlerChunkInfoReq(t *testing.T) {
 	ctx := context.Background()
 	a.doFindChunkInfo(ctx, nil, rootCid)
 
-	reqRecords, err := recorder.Records(serverAddress, "chunkinfo", "1.0.0", "chunkinfo/req")
+	reqRecords, err := recorder.Records(serverAddress, "chunkinfo", "1.0.0", "chunkinforeq")
 
 	if err != nil {
 		t.Fatal(err)
@@ -197,7 +197,7 @@ func TestHandlerChunkInfoResp(t *testing.T) {
 
 	b.onChunkInfoReq(ctx, nil, clientAddress, req)
 
-	respRecords, err := recorder1.Records(clientAddress, "chunkinfo", "1.0.0", "chunkinfo/resp")
+	respRecords, err := recorder1.Records(clientAddress, "chunkinfo", "1.0.0", "chunkinforesp")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -246,7 +246,7 @@ func TestHandlerPyramidReq(t *testing.T) {
 	ctx := context.Background()
 	a.doFindChunkPyramid(ctx, nil, rootCid, []boson.Address{serverAddress})
 
-	reqRecords, err := recorder.Records(serverAddress, "chunkinfo", "1.0.0", "chunkpyramid/req")
+	reqRecords, err := recorder.Records(serverAddress, "chunkinfo", "1.0.0", "chunkpyramidreq")
 
 	if err != nil {
 		t.Fatal(err)
