@@ -26,7 +26,6 @@ import (
 	"github.com/gauss-project/aurorafs/pkg/debugapi"
 
 	"github.com/gauss-project/aurorafs/pkg/boson"
-	"github.com/gauss-project/aurorafs/pkg/hive"
 	"github.com/gauss-project/aurorafs/pkg/kademlia"
 	"github.com/gauss-project/aurorafs/pkg/localstore"
 	"github.com/gauss-project/aurorafs/pkg/logging"
@@ -267,10 +266,10 @@ func NewBee(addr string, bosonAddress boson.Address, publicKey ecdsa.PublicKey, 
 		return nil, fmt.Errorf("pingpong service: %w", err)
 	}
 
-	hive := hive.New(p2ps, addressbook, networkID, logger)
-	if err = p2ps.AddProtocol(hive.Protocol()); err != nil {
-		return nil, fmt.Errorf("hive service: %w", err)
-	}
+	//hive := hive.New(p2ps, addressbook, networkID, logger)
+	//if err = p2ps.AddProtocol(hive.Protocol()); err != nil {
+	//	return nil, fmt.Errorf("hive service: %w", err)
+	//}
 
 	var bootnodes []ma.Multiaddr
 	if o.Standalone {
@@ -347,9 +346,9 @@ func NewBee(addr string, bosonAddress boson.Address, publicKey ecdsa.PublicKey, 
 	//settlement.SetNotifyPaymentFunc(acc.AsyncNotifyPayment)
 	//pricing.SetPaymentThresholdObserver(acc)
 
-	kad := kademlia.New(bosonAddress, addressbook, hive, p2ps, logger, kademlia.Options{Bootnodes: bootnodes, StandaloneMode: o.Standalone, BootnodeMode: o.BootnodeMode})
+	kad := kademlia.New(bosonAddress, addressbook, nil, p2ps, logger, kademlia.Options{Bootnodes: bootnodes, StandaloneMode: o.Standalone, BootnodeMode: o.BootnodeMode})
 	b.topologyCloser = kad
-	hive.SetAddPeersHandler(kad.AddPeers)
+	//hive.SetAddPeersHandler(kad.AddPeers)
 	p2ps.SetPickyNotifier(kad)
 	addrs, err := p2ps.Addresses()
 	if err != nil {

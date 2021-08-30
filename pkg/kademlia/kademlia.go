@@ -623,7 +623,7 @@ func (k *Kad) connect(ctx context.Context, peer boson.Address, ma ma.Multiaddr, 
 		return errOverlayMismatch
 	}
 
-	return k.announce(ctx, peer)
+	return nil
 }
 
 // announce a newly connected peer to our connected peers, but also
@@ -722,9 +722,9 @@ func (k *Kad) Connected(ctx context.Context, peer p2p.Peer) error {
 }
 
 func (k *Kad) connected(ctx context.Context, addr boson.Address) error {
-	if err := k.announce(ctx, addr); err != nil {
-		return err
-	}
+	//if err := k.announce(ctx, addr); err != nil {
+	//	return err
+	//}
 
 	po := boson.Proximity(k.base.Bytes(), addr.Bytes())
 

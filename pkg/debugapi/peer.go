@@ -35,6 +35,14 @@ func (s *Service) peerConnectHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	err = s.topologyDriver.AddPeers(r.Context(), bzzAddr.Overlay)
+	if err != nil {
+		s.logger.Debugf("debug api: kademlia add peer %s: %v", bzzAddr.Overlay, err)
+		s.logger.Errorf("debug api: kademlia add peer %s", bzzAddr.Overlay)
+		jsonhttp.InternalServerError(w, err)
+		return
+	}
+
 	jsonhttp.OK(w, peerConnectResponse{
 		Address: bzzAddr.Overlay.String(),
 	})
