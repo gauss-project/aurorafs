@@ -7,7 +7,6 @@
 package topology
 
 import (
-	"context"
 	"errors"
 	"io"
 
@@ -31,7 +30,7 @@ type Driver interface {
 
 type PeerAdder interface {
 	// AddPeers is called when peers are added to the topology backlog
-	AddPeers(ctx context.Context, addr ...boson.Address) error
+	AddPeers(...boson.Address) error
 }
 
 type ClosestPeerer interface {

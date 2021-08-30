@@ -173,7 +173,7 @@ func addOne(t *testing.T, signer beeCrypto.Signer, k *kademlia.Kad, ab addressbo
 	if err = ab.Put(peer, *bzzAddr); err != nil {
 		t.Fatal(err)
 	}
-	_ = k.AddPeers(context.Background(), peer)
+	_ = k.AddPeers(peer)
 }
 
 func convPathByte(path []string) [][]byte {

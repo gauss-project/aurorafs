@@ -15,29 +15,33 @@ import (
 	"time"
 
 	"github.com/gauss-project/aurorafs/pkg/addressbook"
+	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/discovery"
+	"github.com/gauss-project/aurorafs/pkg/kademlia/internal/waitnext"
 	"github.com/gauss-project/aurorafs/pkg/kademlia/pslice"
 	"github.com/gauss-project/aurorafs/pkg/logging"
 	"github.com/gauss-project/aurorafs/pkg/p2p"
-	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/topology"
 	ma "github.com/multiformats/go-multiaddr"
 )
 
 const (
-	nnLowWatermark         = 2 // the number of peers in consecutive deepest bins that constitute as nearest neighbours
-	maxConnAttempts        = 3 // when there is maxConnAttempts failed connect calls for a given peer it is considered non-connectable
-	maxBootnodeAttempts    = 3 // how many attempts to dial to bootnodes before giving up
-	defaultBitSuffixLength = 2 // the number of bits used to create pseudo addresses for balancing
+	nnLowWatermark               = 2               // the number of peers in consecutive deepest bins that constitute as nearest neighbours
+	maxConnAttempts              = 3               // when there is maxConnAttempts failed connect calls for a given peer it is considered non-connectable
+	maxBootnodeAttempts          = 3               // how many attempts to dial to bootnodes before giving up
+	defaultBitSuffixLength       = 3               // the number of bits used to create pseudo addresses for balancing
+	peerConnectionAttemptTimeout = 5 * time.Second // Timeout for establishing a new connection with peer.
 )
 
 var (
-	errMissingAddressBookEntry = errors.New("addressbook underlay entry not found")
-	errOverlayMismatch         = errors.New("overlay mismatch")
-	timeToRetry                = 60 * time.Second
-	shortRetry                 = 30 * time.Second
-	saturationPeers            = 4
-	overSaturationPeers        = 16
+	errMissingAddressBookEntry  = errors.New("addressbook underlay entry not found")
+	errOverlayMismatch          = errors.New("overlay mismatch")
+	timeToRetry                 = 60 * time.Second
+	shortRetry                  = 30 * time.Second
+	quickSaturationPeers        = 4
+	saturationPeers             = 8
+	overSaturationPeers         = 20
+	bootnodeOverSaturationPeers = 20
 )
 
 type binSaturationFunc func(bin uint8, peers, connected *pslice.PSlice) (saturated bool, oversaturated bool)
@@ -66,11 +70,11 @@ type Kad struct {
 	connectedPeers    *pslice.PSlice        // a slice of peers sorted and indexed by po, indexes kept in `bins`
 	knownPeers        *pslice.PSlice        // both are po aware slice of addresses
 	bootnodes         []ma.Multiaddr
-	depth             uint8                // current neighborhood depth
-	depthMu           sync.RWMutex         // protect depth changes
-	manageC           chan struct{}        // trigger the manage forever loop to connect to new peers
-	waitNext          map[string]retryInfo // sanction connections to a peer, key is overlay string and value is a retry information
-	waitNextMu        sync.Mutex           // synchronize map
+	depth             uint8              // current neighborhood depth
+	radius            uint8         // storage area of responsibility
+	depthMu           sync.RWMutex       // protect depth changes
+	manageC           chan struct{}      // trigger the manage forever loop to connect to new peers
+	waitNext          *waitnext.WaitNext // sanction connections to a peer, key is overlay string and value is a retry information
 	peerSig           []chan struct{}
 	peerSigMtx        sync.Mutex
 	logger            logging.Logger // logger
@@ -84,12 +88,17 @@ type Kad struct {
 type retryInfo struct {
 	tryAfter       time.Time
 	failedAttempts int
+	waitNext       *waitnext.WaitNext
 }
 
 // New returns a new Kademlia.
 func New(base boson.Address, addressbook addressbook.Interface, discovery discovery.Driver, p2p p2p.Service, logger logging.Logger, o Options) *Kad {
 	if o.SaturationFunc == nil {
-		o.SaturationFunc = binSaturated
+		os := overSaturationPeers
+		if o.BootnodeMode {
+			os = bootnodeOverSaturationPeers
+		}
+		o.SaturationFunc = binSaturated(os)
 	}
 	if o.BitSuffixLength == 0 {
 		o.BitSuffixLength = defaultBitSuffixLength
@@ -103,11 +112,11 @@ func New(base boson.Address, addressbook addressbook.Interface, discovery discov
 		saturationFunc:    o.SaturationFunc,
 		bitSuffixLength:   o.BitSuffixLength,
 		commonBinPrefixes: make([][]boson.Address, int(boson.MaxBins)),
-		connectedPeers:    pslice.New(int(boson.MaxBins)),
-		knownPeers:        pslice.New(int(boson.MaxBins)),
+		connectedPeers:    pslice.New(int(boson.MaxBins), base),
+		knownPeers:        pslice.New(int(boson.MaxBins), base),
 		bootnodes:         o.Bootnodes,
 		manageC:           make(chan struct{}, 1),
-		waitNext:          make(map[string]retryInfo),
+		waitNext:          waitnext.New(),
 		logger:            logger,
 		standalone:        o.StandaloneMode,
 		bootnode:          o.BootnodeMode,
@@ -189,37 +198,213 @@ func (k *Kad) generateCommonBinPrefixes() {
 // Clears the bit at pos in n.
 func clearBit(n, pos uint8) uint8 {
 	mask := ^(uint8(1) << pos)
-	n &= mask
-	return n
+	return n & mask
 }
 
 // Sets the bit at pos in the integer n.
 func setBit(n, pos uint8) uint8 {
-	n |= (1 << pos)
-	return n
+	return n | 1<<pos
 }
 
 func hasBit(n, pos uint8) bool {
-	val := n & (1 << pos)
-	return (val > 0)
+	return n&(1<<pos) > 0
+}
+
+// peerConnInfo groups necessary fields needed to create a connection.
+type peerConnInfo struct {
+	po   uint8
+	addr boson.Address
+}
+
+// connectionAttemptsHandler handles the connection attempts
+// to peers sent by the producers to the peerConnChan.
+func (k *Kad) connectionAttemptsHandler(ctx context.Context, wg *sync.WaitGroup, peerConnChan <-chan *peerConnInfo) {
+	connect := func(peer *peerConnInfo) {
+		bzzAddr, err := k.addressBook.Get(peer.addr)
+		switch {
+		case errors.Is(err, addressbook.ErrNotFound):
+			k.logger.Debugf("kademlia: empty address book entry for peer %q", peer.addr)
+			k.knownPeers.Remove(peer.addr)
+		case err != nil:
+			k.logger.Debugf("kademlia: failed to get address book entry for peer %q: %v", peer.addr, err)
+			return
+		}
+
+		switch err = k.connect(ctx, peer.addr, bzzAddr.Underlay); {
+		case errors.Is(err, errOverlayMismatch):
+			k.logger.Debugf("kademlia: overlay mismatch has occurred to an overlay %q with underlay %q", peer.addr, bzzAddr.Underlay)
+			k.waitNext.Remove(peer.addr)
+			k.knownPeers.Remove(peer.addr)
+			if err := k.addressBook.Remove(peer.addr); err != nil {
+				k.logger.Debugf("kademlia: could not remove peer %q from addressbook", peer.addr)
+			}
+			fallthrough
+		case err != nil:
+			k.logger.Debugf("kademlia: peer not reachable from kademlia %q: %v", bzzAddr, err)
+			k.logger.Warningf("peer not reachable when attempting to connect")
+			return
+		}
+
+		k.waitNext.Set(peer.addr, time.Now().Add(shortRetry), 0)
+
+		k.connectedPeers.Add(peer.addr)
+
+		k.depthMu.Lock()
+		k.depth = recalcDepth(k.connectedPeers, k.radius)
+		k.depthMu.Unlock()
+
+		select {
+		case k.manageC <- struct{}{}:
+		default:
+		}
+
+		k.logger.Debugf("kademlia: connected to peer: %q for bin: %d", peer.addr, peer.po)
+		k.notifyPeerSig()
+	}
+
+	var (
+		inProgress   = make(map[string]bool)
+		inProgressMu sync.Mutex
+	)
+
+	for i := 0; i < int(boson.MaxBins); i++ {
+		go func() {
+			for {
+				select {
+				case <-k.quit:
+					return
+				case peer := <-peerConnChan:
+					addr := peer.addr.String()
+
+					// Check if the peer was penalized
+					if k.waitNext.Waiting(peer.addr) {
+						wg.Done()
+						continue
+					}
+
+					// connect the peer
+					inProgressMu.Lock()
+					if !inProgress[addr] {
+						inProgress[addr] = true
+						inProgressMu.Unlock()
+						connect(peer)
+						inProgressMu.Lock()
+						delete(inProgress, addr)
+					}
+					inProgressMu.Unlock()
+					wg.Done()
+				}
+			}
+		}()
+	}
+}
+
+// connectBalanced attempts to connect to the balanced peers first.
+func (k *Kad) connectBalanced(wg *sync.WaitGroup, peerConnChan chan<- *peerConnInfo) {
+	skipPeers := func(peer boson.Address) bool {
+		return k.waitNext.Waiting(peer)
+	}
+
+	for i := range k.commonBinPrefixes {
+		for j := range k.commonBinPrefixes[i] {
+			pseudoAddr := k.commonBinPrefixes[i][j]
+
+			closestConnectedPeer, err := closestPeer(k.connectedPeers, pseudoAddr, noopSanctionedPeerFn)
+			if err != nil {
+				if errors.Is(err, topology.ErrNotFound) {
+					break
+				}
+				k.logger.Errorf("closest connected peer: %v", err)
+				continue
+			}
+
+			closestConnectedPO := boson.ExtendedProximity(closestConnectedPeer.Bytes(), pseudoAddr.Bytes())
+			if int(closestConnectedPO) >= i+k.bitSuffixLength+1 {
+				continue
+			}
+
+			// Connect to closest known peer which we haven't tried connecting to recently.
+			closestKnownPeer, err := closestPeer(k.knownPeers, pseudoAddr, skipPeers)
+			if err != nil {
+				if errors.Is(err, topology.ErrNotFound) {
+					break
+				}
+				k.logger.Errorf("closest known peer: %v", err)
+				continue
+			}
+
+			if k.connectedPeers.Exists(closestKnownPeer) {
+				continue
+			}
+
+			closestKnownPeerPO := boson.ExtendedProximity(closestKnownPeer.Bytes(), pseudoAddr.Bytes())
+			if int(closestKnownPeerPO) < i+k.bitSuffixLength+1 {
+				continue
+			}
+
+			select {
+			case <-k.quit:
+				return
+			default:
+				wg.Add(1)
+				peerConnChan <- &peerConnInfo{
+					po:   boson.Proximity(k.base.Bytes(), closestKnownPeer.Bytes()),
+					addr: closestKnownPeer,
+				}
+			}
+
+			break
+		}
+	}
+}
+
+// connectNeighbours attempts to connect to the neighbours
+// which were not considered by the connectBalanced method.
+func (k *Kad) connectNeighbours(wg *sync.WaitGroup, peerConnChan chan<- *peerConnInfo) {
+	// The topology.EachPeerFunc doesn't return an error
+	// so we ignore the error returned from EachBinRev.
+	depth := k.NeighborhoodDepth()
+
+	_ = k.knownPeers.EachBinRev(func(addr boson.Address, po uint8) (bool, bool, error) {
+		if po < depth {
+			return false, true, nil
+		}
+
+		if k.connectedPeers.Exists(addr) {
+			return false, false, nil
+		}
+
+		if k.waitNext.Waiting(addr) {
+			return false, false, nil
+		}
+
+		select {
+		case <-k.quit:
+			return true, false, nil
+		default:
+			wg.Add(1)
+			peerConnChan <- &peerConnInfo{
+				po:   po,
+				addr: addr,
+			}
+		}
+
+		// The bin could be saturated or not, so a decision cannot
+		// be made before checking the next peer, so we iterate to next.
+		return false, true, nil
+	})
+}
+
+func (k *Kad) notifyManageLoop() {
+	select {
+	case k.manageC <- struct{}{}:
+	default:
+	}
 }
 
 // manage is a forever loop that manages the connection to new peers
 // once they get added or once others leave.
 func (k *Kad) manage() {
-	var (
-		peerToRemove boson.Address
-		start        time.Time
-		spf          = func(peer boson.Address) bool {
-			k.waitNextMu.Lock()
-			defer k.waitNextMu.Unlock()
-			if next, ok := k.waitNext[peer.String()]; ok && time.Now().Before(next.tryAfter) {
-				return true
-			}
-			return false
-		}
-	)
-
 	defer k.wg.Done()
 	defer close(k.done)
 
@@ -228,18 +413,22 @@ func (k *Kad) manage() {
 		<-k.quit
 		cancel()
 	}()
+
+	var (
+		wg           sync.WaitGroup
+		peerConnChan = make(chan *peerConnInfo)
+	)
+	go k.connectionAttemptsHandler(ctx, &wg, peerConnChan)
+
 	for {
 		select {
 		case <-k.quit:
 			return
 		case <-time.After(30 * time.Second):
 			// periodically try to connect to new peers
-			select {
-			case k.manageC <- struct{}{}:
-			default:
-			}
+			k.notifyManageLoop()
 		case <-k.manageC:
-			start = time.Now()
+			start := time.Now()
 			select {
 			case <-k.quit:
 				return
@@ -249,208 +438,20 @@ func (k *Kad) manage() {
 				continue
 			}
 
+			oldDepth := k.NeighborhoodDepth()
 			// attempt balanced connection first
-			err := func() error {
-				// for each bin
-				for i := range k.commonBinPrefixes {
-					// and each pseudo address
-
-					for j := range k.commonBinPrefixes[i] {
-						pseudoAddr := k.commonBinPrefixes[i][j]
-
-						closestConnectedPeer, err := closestPeer(k.connectedPeers, pseudoAddr, noopSanctionedPeerFn, boson.ZeroAddress)
-						if err != nil {
-							if errors.Is(err, topology.ErrNotFound) {
-								break
-							}
-
-							k.logger.Errorf("closest connected peer: %v", err)
-							continue
-						}
-
-						// check proximity
-						closestConnectedPO := boson.ExtendedProximity(closestConnectedPeer.Bytes(), pseudoAddr.Bytes())
-
-						if int(closestConnectedPO) < i+k.bitSuffixLength+1 {
-							// connect to closest known peer which we haven't tried connecting
-							// to recently
-
-							closestKnownPeer, err := closestPeer(k.knownPeers, pseudoAddr, spf, boson.ZeroAddress)
-							if err != nil {
-								if errors.Is(err, topology.ErrNotFound) {
-									break
-								}
-
-								k.logger.Errorf("closest known peer: %v", err)
-								continue
-							}
-
-							if k.connectedPeers.Exists(closestKnownPeer) {
-								continue
-							}
-
-							closestKnownPeerPO := boson.ExtendedProximity(closestKnownPeer.Bytes(), pseudoAddr.Bytes())
-
-							if int(closestKnownPeerPO) < i+k.bitSuffixLength+1 {
-								continue
-							}
-
-							peer := closestKnownPeer
-
-							bzzAddr, err := k.addressBook.Get(peer)
-							if err != nil {
-								if err == addressbook.ErrNotFound {
-									k.logger.Debugf("failed to get address book entry for peer: %s", peer.String())
-									peerToRemove = peer
-									return errMissingAddressBookEntry
-								}
-								// either a peer is not known in the address book, in which case it
-								// should be removed, or that some severe I/O problem is at hand
-								return err
-							}
-
-							po := boson.Proximity(k.base.Bytes(), peer.Bytes())
-
-							err = k.connect(ctx, peer, bzzAddr.Underlay, po)
-							if err != nil {
-								if errors.Is(err, errOverlayMismatch) {
-									k.knownPeers.Remove(peer, po)
-									if err := k.addressBook.Remove(peer); err != nil {
-										k.logger.Debugf("could not remove peer from addressbook: %s", peer.String())
-									}
-								}
-								k.logger.Debugf("peer not reachable from kademlia %s: %v", bzzAddr.String(), err)
-								k.logger.Warningf("peer not reachable when attempting to connect")
-
-								k.waitNextMu.Lock()
-								if _, ok := k.waitNext[peer.String()]; !ok {
-									// don't override existing data in the map
-									k.waitNext[peer.String()] = retryInfo{tryAfter: time.Now().Add(timeToRetry)}
-								}
-								k.waitNextMu.Unlock()
-
-								// continue to next
-								continue
-							}
-
-							k.waitNextMu.Lock()
-							k.waitNext[peer.String()] = retryInfo{tryAfter: time.Now().Add(shortRetry)}
-							k.waitNextMu.Unlock()
-
-							k.connectedPeers.Add(peer, po)
-
-							k.depthMu.Lock()
-							k.depth = recalcDepth(k.connectedPeers)
-							k.depthMu.Unlock()
-
-							k.logger.Debugf("connected to peer: %s for bin: %d", peer, i)
-
-							k.notifyPeerSig()
-						}
-					}
-				}
-				return nil
-			}()
-			k.logger.Tracef("kademlia balanced connector took %s to finish", time.Since(start))
-
-			if err != nil {
-				if errors.Is(err, errMissingAddressBookEntry) {
-					po := boson.Proximity(k.base.Bytes(), peerToRemove.Bytes())
-					k.knownPeers.Remove(peerToRemove, po)
-				} else {
-					k.logger.Errorf("kademlia manage loop iterator: %v", err)
-				}
-			}
-
-			err = k.knownPeers.EachBinRev(func(peer boson.Address, po uint8) (bool, bool, error) {
-
-				if k.connectedPeers.Exists(peer) {
-					return false, false, nil
-				}
-
-				k.waitNextMu.Lock()
-				if next, ok := k.waitNext[peer.String()]; ok && time.Now().Before(next.tryAfter) {
-					k.waitNextMu.Unlock()
-					return false, false, nil
-				}
-				k.waitNextMu.Unlock()
-
-				currentDepth := k.NeighborhoodDepth()
-				if saturated, _ := k.saturationFunc(po, k.knownPeers, k.connectedPeers); saturated {
-					return false, true, nil // bin is saturated, skip to next bin
-				}
-
-				bzzAddr, err := k.addressBook.Get(peer)
-				if err != nil {
-					if err == addressbook.ErrNotFound {
-						k.logger.Debugf("failed to get address book entry for peer: %s", peer.String())
-						peerToRemove = peer
-						return false, false, errMissingAddressBookEntry
-					}
-					// either a peer is not known in the address book, in which case it
-					// should be removed, or that some severe I/O problem is at hand
-					return false, false, err
-				}
-
-				err = k.connect(ctx, peer, bzzAddr.Underlay, po)
-				if err != nil {
-					if errors.Is(err, errOverlayMismatch) {
-						k.knownPeers.Remove(peer, po)
-						if err := k.addressBook.Remove(peer); err != nil {
-							k.logger.Debugf("could not remove peer from addressbook: %s", peer.String())
-						}
-					}
-					k.logger.Debugf("peer not reachable from kademlia %s: %v", bzzAddr.String(), err)
-					k.logger.Warningf("peer not reachable when attempting to connect")
-
-					k.waitNextMu.Lock()
-					if _, ok := k.waitNext[peer.String()]; !ok {
-						// don't override existing data in the map
-						k.waitNext[peer.String()] = retryInfo{tryAfter: time.Now().Add(timeToRetry)}
-					}
-					k.waitNextMu.Unlock()
-
-					// continue to next
-					return false, false, nil
-				}
-
-				k.waitNextMu.Lock()
-				k.waitNext[peer.String()] = retryInfo{tryAfter: time.Now().Add(shortRetry)}
-				k.waitNextMu.Unlock()
-
-				k.connectedPeers.Add(peer, po)
-
-				k.depthMu.Lock()
-				k.depth = recalcDepth(k.connectedPeers)
-				k.depthMu.Unlock()
-
-				k.logger.Debugf("connected to peer: %s old depth: %d new depth: %d", peer, currentDepth, k.NeighborhoodDepth())
-
-				k.notifyPeerSig()
-
-				select {
-				case <-k.quit:
-					return true, false, nil
-				default:
-				}
-
-				// the bin could be saturated or not, so a decision cannot
-				// be made before checking the next peer, so we iterate to next
-				return false, false, nil
-			})
-			k.logger.Tracef("kademlia iterator took %s to finish", time.Since(start))
-
-			if err != nil {
-				if errors.Is(err, errMissingAddressBookEntry) {
-					po := boson.Proximity(k.base.Bytes(), peerToRemove.Bytes())
-					k.knownPeers.Remove(peerToRemove, po)
-				} else {
-					k.logger.Errorf("kademlia manage loop iterator: %v", err)
-				}
-			}
+			k.connectBalanced(&wg, peerConnChan)
+			k.connectNeighbours(&wg, peerConnChan)
+			wg.Wait()
+			k.logger.Tracef(
+				"kademlia: connector took %s to finish: old depth %d; new depth %d",
+				time.Since(start),
+				oldDepth,
+				k.NeighborhoodDepth(),
+			)
 
 			if k.connectedPeers.Length() == 0 {
-				k.logger.Debug("kademlia has no connected peers, trying bootnodes")
+				k.logger.Debug("kademlia: no connected peers, trying bootnodes")
 				k.connectBootnodes(ctx)
 			}
 
@@ -467,7 +468,7 @@ func (k *Kad) Start(ctx context.Context) error {
 		return fmt.Errorf("addressbook overlays: %w", err)
 	}
 
-	return k.AddPeers(ctx, addresses...)
+	return k.AddPeers(addresses...)
 }
 
 func (k *Kad) connectBootnodes(ctx context.Context) {
@@ -517,34 +518,36 @@ func (k *Kad) connectBootnodes(ctx context.Context) {
 // binSaturated indicates whether a certain bin is saturated or not.
 // when a bin is not saturated it means we would like to proactively
 // initiate connections to other peers in the bin.
-func binSaturated(bin uint8, peers, connected *pslice.PSlice) (bool, bool) {
-	potentialDepth := recalcDepth(peers)
+func binSaturated(oversaturationAmount int) binSaturationFunc {
+	return func(bin uint8, peers, connected *pslice.PSlice) (bool, bool) {
+		potentialDepth := recalcDepth(peers, boson.MaxPO)
 
-	// short circuit for bins which are >= depth
-	if bin >= potentialDepth {
-		return false, false
-	}
-
-	// lets assume for now that the minimum number of peers in a bin
-	// would be 2, under which we would always want to connect to new peers
-	// obviously this should be replaced with a better optimization
-	// the iterator is used here since when we check if a bin is saturated,
-	// the plain number of size of bin might not suffice (for example for squared
-	// gaps measurement)
-
-	size := 0
-	_ = connected.EachBin(func(_ boson.Address, po uint8) (bool, bool, error) {
-		if po == bin {
-			size++
+		// short circuit for bins which are >= depth
+		if bin >= potentialDepth {
+			return false, false
 		}
-		return false, false, nil
-	})
 
-	return size >= saturationPeers, size >= overSaturationPeers
+		// lets assume for now that the minimum number of peers in a bin
+		// would be 2, under which we would always want to connect to new peers
+		// obviously this should be replaced with a better optimization
+		// the iterator is used here since when we check if a bin is saturated,
+		// the plain number of size of bin might not suffice (for example for squared
+		// gaps measurement)
+
+		size := 0
+		_ = connected.EachBin(func(_ boson.Address, po uint8) (bool, bool, error) {
+			if po == bin {
+				size++
+			}
+			return false, false, nil
+		})
+
+		return size >= saturationPeers, size >= oversaturationAmount
+	}
 }
 
 // recalcDepth calculates and returns the kademlia depth.
-func recalcDepth(peers *pslice.PSlice) uint8 {
+func recalcDepth(peers *pslice.PSlice, radius uint8) uint8 {
 	// handle edge case separately
 	if peers.Length() <= nnLowWatermark {
 		return 0
@@ -555,6 +558,32 @@ func recalcDepth(peers *pslice.PSlice) uint8 {
 		shallowestEmpty, noEmptyBins = peers.ShallowestEmpty()
 	)
 
+	shallowestUnsaturated := uint8(0)
+	binCount := 0
+	_ = peers.EachBinRev(func(_ boson.Address, bin uint8) (bool, bool, error) {
+		if bin == shallowestUnsaturated {
+			binCount++
+			return false, false, nil
+		}
+		if bin > shallowestUnsaturated && binCount < quickSaturationPeers {
+			// this means we have less than quickSaturation in the previous bin
+			// therefore we can return assuming that bin is the unsaturated one.
+			return true, false, nil
+		}
+		// bin > shallowestUnsaturated && binCount >= saturationPeers
+		shallowestUnsaturated = bin
+		binCount = 1
+
+		return false, false, nil
+	})
+
+	// if there are some empty bins and the shallowestEmpty is
+	// smaller than the shallowestUnsaturated then set shallowest
+	// unsaturated to the empty bin.
+	if !noEmptyBins && shallowestEmpty < shallowestUnsaturated {
+		shallowestUnsaturated = shallowestEmpty
+	}
+
 	_ = peers.EachBin(func(_ boson.Address, po uint8) (bool, bool, error) {
 		peersCtr++
 		if peersCtr >= nnLowWatermark {
@@ -564,60 +593,57 @@ func recalcDepth(peers *pslice.PSlice) uint8 {
 		return false, false, nil
 	})
 
-	if noEmptyBins || shallowestEmpty > candidate {
+	if shallowestUnsaturated > candidate {
+		if radius < candidate {
+			return radius
+		}
 		return candidate
 	}
 
-	return shallowestEmpty
+	if radius < shallowestUnsaturated {
+		return radius
+	}
+	return shallowestUnsaturated
 }
 
 // connect connects to a peer and gossips its address to our connected peers,
 // as well as sends the peers we are connected to to the newly connected peer
-func (k *Kad) connect(ctx context.Context, peer boson.Address, ma ma.Multiaddr, po uint8) error {
+func (k *Kad) connect(ctx context.Context, peer boson.Address, ma ma.Multiaddr) error {
 	k.logger.Infof("attempting to connect to peer %s", peer)
-	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, peerConnectionAttemptTimeout)
 	defer cancel()
-	i, err := k.p2p.Connect(ctx, ma)
-	if err != nil {
-		if errors.Is(err, p2p.ErrAlreadyConnected) {
-			if !i.Overlay.Equal(peer) {
-				return errOverlayMismatch
-			}
-
-			return nil
+	switch i, err := k.p2p.Connect(ctx, ma); {
+	case errors.Is(err, p2p.ErrAlreadyConnected):
+		if !i.Overlay.Equal(peer) {
+			return errOverlayMismatch
 		}
-
+		return nil
+	case errors.Is(err, context.Canceled):
+		return err
+	case err != nil:
 		k.logger.Debugf("could not connect to peer %s: %v", peer, err)
 		retryTime := time.Now().Add(timeToRetry)
 		var e *p2p.ConnectionBackoffError
-		k.waitNextMu.Lock()
 		failedAttempts := 0
 		if errors.As(err, &e) {
 			retryTime = e.TryAfter()
 		} else {
-			info, ok := k.waitNext[peer.String()]
-			if ok {
-				failedAttempts = info.failedAttempts
-			}
-
+			failedAttempts = k.waitNext.Attempts(peer)
 			failedAttempts++
 		}
 
 		if failedAttempts > maxConnAttempts {
-			delete(k.waitNext, peer.String())
+			k.waitNext.Remove(peer)
+			k.knownPeers.Remove(peer)
 			if err := k.addressBook.Remove(peer); err != nil {
 				k.logger.Debugf("could not remove peer from addressbook: %s", peer.String())
 			}
 			k.logger.Debugf("kademlia pruned peer from address book %s", peer.String())
 		} else {
-			k.waitNext[peer.String()] = retryInfo{tryAfter: retryTime, failedAttempts: failedAttempts}
+			k.waitNext.Set(peer, retryTime, failedAttempts)
 		}
-
-		k.waitNextMu.Unlock()
 		return err
-	}
-
-	if !i.Overlay.Equal(peer) {
+	case !i.Overlay.Equal(peer):
 		_ = k.p2p.Disconnect(peer)
 		_ = k.p2p.Disconnect(i.Overlay)
 		return errOverlayMismatch
@@ -663,26 +689,15 @@ func (k *Kad) announce(ctx context.Context, peer boson.Address) error {
 		_ = k.p2p.Disconnect(peer)
 	}
 
-	return err
+	return nil
 }
 
 // AddPeers adds peers to the knownPeers list.
 // This does not guarantee that a connection will immediately
 // be made to the peer.
-func (k *Kad) AddPeers(ctx context.Context, addrs ...boson.Address) error {
-	for _, addr := range addrs {
-		if k.knownPeers.Exists(addr) {
-			continue
-		}
-
-		po := boson.Proximity(k.base.Bytes(), addr.Bytes())
-		k.knownPeers.Add(addr, po)
-	}
-
-	select {
-	case k.manageC <- struct{}{}:
-	default:
-	}
+func (k *Kad) AddPeers(addrs ...boson.Address) error {
+	k.knownPeers.Add(addrs...)
+	k.notifyManageLoop()
 
 	return nil
 }
@@ -713,10 +728,7 @@ func (k *Kad) Connected(ctx context.Context, peer p2p.Peer) error {
 		return err
 	}
 
-	select {
-	case k.manageC <- struct{}{}:
-	default:
-	}
+	k.notifyManageLoop()
 
 	return nil
 }
@@ -726,17 +738,13 @@ func (k *Kad) connected(ctx context.Context, addr boson.Address) error {
 		return err
 	}
 
-	po := boson.Proximity(k.base.Bytes(), addr.Bytes())
+	k.knownPeers.Add(addr)
+	k.connectedPeers.Add(addr)
 
-	k.knownPeers.Add(addr, po)
-	k.connectedPeers.Add(addr, po)
-
-	k.waitNextMu.Lock()
-	delete(k.waitNext, addr.String())
-	k.waitNextMu.Unlock()
+	k.waitNext.Remove(addr)
 
 	k.depthMu.Lock()
-	k.depth = recalcDepth(k.connectedPeers)
+	k.depth = recalcDepth(k.connectedPeers, k.radius)
 	k.depthMu.Unlock()
 
 	k.notifyPeerSig()
@@ -746,21 +754,17 @@ func (k *Kad) connected(ctx context.Context, addr boson.Address) error {
 
 // Disconnected is called when peer disconnects.
 func (k *Kad) Disconnected(peer p2p.Peer) {
-	po := boson.Proximity(k.base.Bytes(), peer.Address.Bytes())
-	k.connectedPeers.Remove(peer.Address, po)
+	k.logger.Debugf("kademlia: disconnected peer %s", peer.Address)
 
-	k.waitNextMu.Lock()
-	k.waitNext[peer.Address.String()] = retryInfo{tryAfter: time.Now().Add(timeToRetry), failedAttempts: 0}
-	k.waitNextMu.Unlock()
+	k.connectedPeers.Remove(peer.Address)
+
+	k.waitNext.SetTryAfter(peer.Address, time.Now().Add(timeToRetry))
 
 	k.depthMu.Lock()
-	k.depth = recalcDepth(k.connectedPeers)
+	k.depth = recalcDepth(k.connectedPeers, k.radius)
 	k.depthMu.Unlock()
 
-	select {
-	case k.manageC <- struct{}{}:
-	default:
-	}
+	k.notifyManageLoop()
 	k.notifyPeerSig()
 }
 
@@ -779,14 +783,9 @@ func (k *Kad) notifyPeerSig() {
 	}
 }
 
-func closestPeer(peers *pslice.PSlice, addr boson.Address, spf sanctionedPeerFunc, skipPeers ...boson.Address) (boson.Address, error) {
-	closest := boson.Address{}
+func closestPeer(peers *pslice.PSlice, addr boson.Address, spf sanctionedPeerFunc) (boson.Address, error) {
+	closest := boson.ZeroAddress
 	err := peers.EachBinRev(func(peer boson.Address, po uint8) (bool, bool, error) {
-		for _, a := range skipPeers {
-			if a.Equal(peer) {
-				return false, false, nil
-			}
-		}
 		// check whether peer is sanctioned
 		if spf(peer) {
 			return false, false, nil
@@ -812,12 +811,12 @@ func closestPeer(peers *pslice.PSlice, addr boson.Address, spf sanctionedPeerFun
 		return false, false, nil
 	})
 	if err != nil {
-		return boson.Address{}, err
+		return boson.ZeroAddress, err
 	}
 
 	// check if found
 	if closest.IsZero() {
-		return boson.Address{}, topology.ErrNotFound
+		return boson.ZeroAddress, topology.ErrNotFound
 	}
 
 	return closest, nil
@@ -931,10 +930,6 @@ func (k *Kad) NeighborhoodDepth() uint8 {
 	k.depthMu.RLock()
 	defer k.depthMu.RUnlock()
 
-	return k.neighborhoodDepth()
-}
-
-func (k *Kad) neighborhoodDepth() uint8 {
 	return k.depth
 }
 
@@ -950,7 +945,7 @@ func (k *Kad) IsBalanced(bin uint8) bool {
 	// for each pseudo address
 	for i := range k.commonBinPrefixes[bin] {
 		pseudoAddr := k.commonBinPrefixes[bin][i]
-		closestConnectedPeer, err := closestPeer(k.connectedPeers, pseudoAddr, noopSanctionedPeerFn, boson.ZeroAddress)
+		closestConnectedPeer, err := closestPeer(k.connectedPeers, pseudoAddr, noopSanctionedPeerFn)
 		if err != nil {
 			return false
 		}
@@ -962,6 +957,20 @@ func (k *Kad) IsBalanced(bin uint8) bool {
 	}
 
 	return true
+}
+
+func (k *Kad) SetRadius(r uint8) {
+	k.depthMu.Lock()
+	defer k.depthMu.Unlock()
+	if k.radius == r {
+		return
+	}
+	k.radius = r
+	oldD := k.depth
+	k.depth = recalcDepth(k.connectedPeers, k.radius)
+	if k.depth != oldD {
+		k.notifyManageLoop()
+	}
 }
 
 // MarshalJSON returns a JSON representation of Kademlia.
@@ -1087,7 +1096,7 @@ func (k *Kad) Close() error {
 
 	select {
 	case <-cc:
-	case <-time.After(10 * time.Second):
+	case <-time.After(peerConnectionAttemptTimeout):
 		k.logger.Warning("kademlia shutting down with announce goroutines")
 	}
 

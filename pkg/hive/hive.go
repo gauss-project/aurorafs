@@ -35,7 +35,7 @@ const (
 type Service struct {
 	streamer        p2p.Streamer
 	addressBook     addressbook.GetPutter
-	addPeersHandler func(context.Context, ...boson.Address) error
+	addPeersHandler func(...boson.Address) error
 	networkID       uint64
 	logger          logging.Logger
 	metrics         metrics
@@ -83,7 +83,7 @@ func (s *Service) BroadcastPeers(ctx context.Context, addressee boson.Address, p
 	return nil
 }
 
-func (s *Service) SetAddPeersHandler(h func(ctx context.Context, addr ...boson.Address) error) {
+func (s *Service) SetAddPeersHandler(h func(...boson.Address) error) {
 	s.addPeersHandler = h
 }
 
@@ -162,7 +162,7 @@ func (s *Service) peersHandler(ctx context.Context, peer p2p.Peer, stream p2p.St
 	}
 
 	if s.addPeersHandler != nil {
-		if err := s.addPeersHandler(ctx, peers...); err != nil {
+		if err := s.addPeersHandler(peers...); err != nil {
 			return err
 		}
 	}
