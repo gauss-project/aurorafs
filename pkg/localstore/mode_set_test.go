@@ -19,9 +19,8 @@ package localstore
 import (
 	"context"
 	"errors"
-	"testing"
-
 	"github.com/gauss-project/aurorafs/pkg/storage"
+	"testing"
 
 	"github.com/syndtr/goleveldb/leveldb"
 )
@@ -69,4 +68,28 @@ func TestModeSetRemove(t *testing.T) {
 			t.Run("gc size", newIndexGCSizeTest(db))
 		})
 	}
+}
+
+func TestModeSetBin(t *testing.T) {
+	//db := newTestDB(t, nil)
+	//
+	//ch := boson.NewChunk(boson.NewAddress([]byte("1")),[]byte("111111111"))
+	//ch1 := boson.NewChunk(boson.NewAddress([]byte("2")),[]byte("22222222"))
+	//
+	//ctx := context.Background()
+	//ext,err := db.Put(ctx,storage.ModePutUploadPin,ch,ch1)
+	//if err != nil{
+	//	t.Fatal(err)
+	//}
+	//for _,val := range ext{
+	//	if val == false{
+	//		t.Fatal(errors.New("chunk error!"))
+	//	}
+	//}
+	//
+	//item := shed.Item{Address: ch.Address().Bytes()}
+	//i,err := db.pinIndex.Get(item)
+	//fmt.Println(i)
+	//fmt.Println(err)
+
 }
