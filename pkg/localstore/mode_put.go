@@ -27,16 +27,22 @@ import (
 	"github.com/syndtr/goleveldb/leveldb"
 )
 
+type RootCIDKey struct{}
+
 // Put stores Chunks to database and depending
 // on the Putter mode, it updates required indexes.
 // Put is required to implement storage.Store
 // interface.
 func (db *DB) Put(ctx context.Context, mode storage.ModePut, chs ...boson.Chunk) (exist []bool, err error) {
+	rootCID, ok := ctx.Value(RootCIDKey{}).(boson.Address)
+	if !ok {
+		rootCID = boson.ZeroAddress
+	}
 
 	db.metrics.ModePut.Inc()
 	defer totalTimeMetric(db.metrics.TotalTimePut, time.Now())
 
-	exist, err = db.put(mode, chs...)
+	exist, err = db.put(mode, rootCID, chs...)
 	if err != nil {
 		db.metrics.ModePutFailure.Inc()
 	}
@@ -51,7 +57,7 @@ func (db *DB) Put(ctx context.Context, mode storage.ModePut, chs ...boson.Chunk)
 // and following ones will have exist set to true for their index in exist
 // slice. This is the same behaviour as if the same chunks are passed one by one
 // in multiple put method calls.
-func (db *DB) put(mode storage.ModePut, chs ...boson.Chunk) (exist []bool, err error) {
+func (db *DB) put(mode storage.ModePut, rootCID boson.Address, chs ...boson.Chunk) (exist []bool, err error) {
 	// protect parallel updates
 	db.batchMu.Lock()
 	defer db.batchMu.Unlock()
