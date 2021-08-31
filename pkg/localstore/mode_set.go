@@ -232,65 +232,36 @@ func (db *DB) setPin(batch *leveldb.Batch, addr boson.Address) (err error) {
 	item := addressToItem(addr)
 
 	_, err = db.pinIndex.Get(item)
-	if !errors.Is(err, leveldb.ErrNotFound) {
-		return err
-	}
-	//binIDs := make(map[uint8]uint64)
-	//item.BinID, err = db.incBinID(binIDs, db.po(boson.NewAddress(item.Address)))
-	//item.AccessTimestamp = 111111
-	//if err != nil {
-	//	return err
-	//}
-	i, err := db.retrievalDataIndex.Get(item)
 	if err != nil {
-		return err
+		if !errors.Is(err, leveldb.ErrNotFound) {
+			return err
+		}
+
+		i, err := db.retrievalAccessIndex.Get(item)
+		if err != nil {
+			if !errors.Is(err, leveldb.ErrNotFound) {
+				return err
+			}
+		} else {
+			item.AccessTimestamp = i.AccessTimestamp
+			i, err = db.retrievalDataIndex.Get(item)
+			if err != nil {
+				return err
+			}
+			item.StoreTimestamp = i.StoreTimestamp
+			item.BinID = i.BinID
+
+			err = db.gcIndex.DeleteInBatch(batch, item)
+			if err != nil {
+				return err
+			}
+		}
+
+		err = db.pinIndex.PutInBatch(batch, item)
+		if err != nil {
+			return err
+		}
 	}
-	item.StoreTimestamp = i.StoreTimestamp
-	item.BinID = i.BinID
-
-	err = db.gcIndex.DeleteInBatch(batch, item)
-	if err != nil {
-		return err
-	}
-
-	err = db.pinIndex.PutInBatch(batch, item)
-	if err != nil {
-		return err
-	}
-
-	//if pinnedChunk == nil {
-	//	err = db.pinIndex.PutInBatch(batch, item)
-	//	if err != nil{
-	//		return err
-	//	}
-	//}
-
-	//// Get the existing pin counter of the chunk
-	//existingPinCounter := uint64(0)
-	//pinnedChunk, err := db.pinIndex.Get(item)
-	//if err != nil {
-	//	if errors.Is(err, leveldb.ErrNotFound) {
-	//		// If this Address is not present in DB, then its a new entry
-	//		existingPinCounter = 0
-	//
-	//		// Add in gcExcludeIndex of the chunk is not pinned already
-	//		err = db.gcExcludeIndex.PutInBatch(batch, item)
-	//		if err != nil {
-	//			return err
-	//		}
-	//	} else {
-	//		return err
-	//	}
-	//} else {
-	//	existingPinCounter = pinnedChunk.PinCounter
-	//}
-	//
-	//// Otherwise increase the existing counter by 1
-	//item.PinCounter = existingPinCounter + 1
-	//err = db.pinIndex.PutInBatch(batch, item)
-	//if err != nil {
-	//	return err
-	//}
 
 	return nil
 }
@@ -300,7 +271,7 @@ func (db *DB) setPin(batch *leveldb.Batch, addr boson.Address) (err error) {
 func (db *DB) setUnpin(batch *leveldb.Batch, addr boson.Address) (err error) {
 	item := addressToItem(addr)
 
-	// Get the existing pin counter of the chunk
+	// guarantee pin existing
 	_, err = db.pinIndex.Get(item)
 	if err != nil {
 		return err
@@ -317,11 +288,6 @@ func (db *DB) setUnpin(batch *leveldb.Batch, addr boson.Address) (err error) {
 	}
 	item.StoreTimestamp = i.StoreTimestamp
 	item.BinID = i.BinID
-	//i, err = db.pushIndex.Get(item)
-	//if !errors.Is(err, leveldb.ErrNotFound) {
-	//	// err is either nil or not leveldb.ErrNotFound
-	//	return  err
-	//}
 
 	i, err = db.retrievalAccessIndex.Get(item)
 	if err != nil {
