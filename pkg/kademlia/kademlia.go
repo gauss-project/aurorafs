@@ -27,25 +27,26 @@ import (
 
 const (
 	nnLowWatermark               = 2               // the number of peers in consecutive deepest bins that constitute as nearest neighbours
-	maxConnAttempts              = 3               // when there is maxConnAttempts failed connect calls for a given peer it is considered non-connectable
-	maxBootnodeAttempts          = 3               // how many attempts to dial to bootnodes before giving up
+	maxConnAttempts              = 1               // when there is maxConnAttempts failed connect calls for a given peer it is considered non-connectable
+	maxBootNodeAttempts          = 3               // how many attempts to dial to boot-nodes before giving up
 	defaultBitSuffixLength       = 3               // the number of bits used to create pseudo addresses for balancing
 	peerConnectionAttemptTimeout = 5 * time.Second // Timeout for establishing a new connection with peer.
 )
 
 var (
-	errMissingAddressBookEntry  = errors.New("addressbook underlay entry not found")
 	errOverlayMismatch          = errors.New("overlay mismatch")
 	timeToRetry                 = 60 * time.Second
 	shortRetry                  = 30 * time.Second
 	quickSaturationPeers        = 4
 	saturationPeers             = 8
 	overSaturationPeers         = 20
-	bootnodeOverSaturationPeers = 20
+	bootNodeOverSaturationPeers = 20
 )
 
-type binSaturationFunc func(bin uint8, peers, connected *pslice.PSlice) (saturated bool, oversaturated bool)
-type sanctionedPeerFunc func(peer boson.Address) bool
+type (
+	binSaturationFunc  func(bin uint8, peers, connected *pslice.PSlice) (saturated bool, overSaturated bool)
+	sanctionedPeerFunc func(peer boson.Address) bool
+)
 
 var noopSanctionedPeerFn = func(_ boson.Address) bool { return false }
 
@@ -85,18 +86,13 @@ type Kad struct {
 	wg                sync.WaitGroup
 }
 
-type retryInfo struct {
-	tryAfter       time.Time
-	failedAttempts int
-	waitNext       *waitnext.WaitNext
-}
 
 // New returns a new Kademlia.
-func New(base boson.Address, addressbook addressbook.Interface, discovery discovery.Driver, p2p p2p.Service, logger logging.Logger, o Options) *Kad {
+func New(base boson.Address, addressBook addressbook.Interface, discovery discovery.Driver, p2p p2p.Service, logger logging.Logger, o Options) *Kad {
 	if o.SaturationFunc == nil {
 		os := overSaturationPeers
 		if o.BootnodeMode {
-			os = bootnodeOverSaturationPeers
+			os = bootNodeOverSaturationPeers
 		}
 		o.SaturationFunc = binSaturated(os)
 	}
@@ -107,7 +103,7 @@ func New(base boson.Address, addressbook addressbook.Interface, discovery discov
 	k := &Kad{
 		base:              base,
 		discovery:         discovery,
-		addressBook:       addressbook,
+		addressBook:       addressBook,
 		p2p:               p2p,
 		saturationFunc:    o.SaturationFunc,
 		bitSuffixLength:   o.BitSuffixLength,
@@ -452,7 +448,7 @@ func (k *Kad) manage() {
 
 			if k.connectedPeers.Length() == 0 {
 				k.logger.Debug("kademlia: no connected peers, trying bootnodes")
-				k.connectBootnodes(ctx)
+				k.connectBootNodes(ctx)
 			}
 
 		}
@@ -471,9 +467,9 @@ func (k *Kad) Start(ctx context.Context) error {
 	return k.AddPeers(addresses...)
 }
 
-func (k *Kad) connectBootnodes(ctx context.Context) {
+func (k *Kad) connectBootNodes(ctx context.Context) {
 	var attempts, connected int
-	var totalAttempts = maxBootnodeAttempts * len(k.bootnodes)
+	var totalAttempts = maxBootNodeAttempts * len(k.bootnodes)
 
 	ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
 	defer cancel()
@@ -485,7 +481,7 @@ func (k *Kad) connectBootnodes(ctx context.Context) {
 
 		if _, err := p2p.Discover(ctx, addr, func(addr ma.Multiaddr) (stop bool, err error) {
 			k.logger.Tracef("connecting to bootnode %s", addr)
-			if attempts >= maxBootnodeAttempts {
+			if attempts >= maxBootNodeAttempts {
 				return true, nil
 			}
 			bzzAddress, err := k.p2p.Connect(ctx, addr)
@@ -655,7 +651,7 @@ func (k *Kad) connect(ctx context.Context, peer boson.Address, ma ma.Multiaddr) 
 // announce a newly connected peer to our connected peers, but also
 // notify the peer about our already connected peers
 func (k *Kad) announce(ctx context.Context, peer boson.Address) error {
-	addrs := []boson.Address{}
+	var addrs []boson.Address
 
 	_ = k.connectedPeers.EachBinRev(func(connectedPeer boson.Address, _ uint8) (bool, bool, error) {
 		if connectedPeer.Equal(peer) {

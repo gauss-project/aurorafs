@@ -17,6 +17,8 @@ import (
 
 	"github.com/gauss-project/aurorafs/pkg/addressbook"
 	"github.com/gauss-project/aurorafs/pkg/aurora"
+	"github.com/gauss-project/aurorafs/pkg/boson"
+	"github.com/gauss-project/aurorafs/pkg/boson/test"
 	"github.com/gauss-project/aurorafs/pkg/crypto"
 	beeCrypto "github.com/gauss-project/aurorafs/pkg/crypto"
 	"github.com/gauss-project/aurorafs/pkg/discovery/mock"
@@ -26,8 +28,6 @@ import (
 	"github.com/gauss-project/aurorafs/pkg/p2p"
 	p2pmock "github.com/gauss-project/aurorafs/pkg/p2p/mock"
 	mockstate "github.com/gauss-project/aurorafs/pkg/statestore/mock"
-	"github.com/gauss-project/aurorafs/pkg/boson"
-	"github.com/gauss-project/aurorafs/pkg/boson/test"
 	"github.com/gauss-project/aurorafs/pkg/topology"
 )
 
@@ -446,13 +446,13 @@ func TestOversaturationBootnode(t *testing.T) {
 	}
 }
 
-func TestBootnodeMaxConnections(t *testing.T) {
-	t.Skip("disable test because we don't kick any peer in bootnode mode, see #1715")
+func TestBootNodeMaxConnections(t *testing.T) {
+	t.Skip("disable test because we don't kick any peer in boot-node mode, see #1715")
 
 	defer func(p int) {
-		*kademlia.BootnodeOverSaturationPeers = p
-	}(*kademlia.BootnodeOverSaturationPeers)
-	*kademlia.BootnodeOverSaturationPeers = 4
+		*kademlia.BootNodeOverSaturationPeers = p
+	}(*kademlia.BootNodeOverSaturationPeers)
+	*kademlia.BootNodeOverSaturationPeers = 4
 
 	defer func(p int) {
 		*kademlia.SaturationPeers = p
@@ -472,7 +472,7 @@ func TestBootnodeMaxConnections(t *testing.T) {
 
 	// Add maximum accepted number of peers up until bin 5 without problems
 	for i := 0; i < 6; i++ {
-		for j := 0; j < *kademlia.BootnodeOverSaturationPeers; j++ {
+		for j := 0; j < *kademlia.BootNodeOverSaturationPeers; j++ {
 			addr := test.RandomAddressAt(base, i)
 			// if error is not nil as specified, connectOne goes fatal
 			connectOne(t, signer, kad, ab, addr, nil)
