@@ -1,0 +1,25 @@
+// Copyright 2020 The Swarm Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
+syntax = "proto3";
+
+package discovery;
+
+option go_package = "pb";
+
+message Peers {
+    repeated AuroraAddress peers = 1;
+}
+
+message FindNodeReq {
+    bytes Overlay = 1;
+    int32 Bin = 2;
+    int32 Max = 3;
+}
+
+message AuroraAddress {
+    bytes Underlay = 1;
+    bytes Signature = 2;
+    bytes Overlay = 3;
+}

@@ -514,7 +514,7 @@ func (k *Kad) connectBootNodes(ctx context.Context) {
 // binSaturated indicates whether a certain bin is saturated or not.
 // when a bin is not saturated it means we would like to proactively
 // initiate connections to other peers in the bin.
-func binSaturated(oversaturationAmount int) binSaturationFunc {
+func binSaturated(overSaturationAmount int) binSaturationFunc {
 	return func(bin uint8, peers, connected *pslice.PSlice) (bool, bool) {
 		potentialDepth := recalcDepth(peers, boson.MaxPO)
 
@@ -538,7 +538,7 @@ func binSaturated(oversaturationAmount int) binSaturationFunc {
 			return false, false, nil
 		})
 
-		return size >= saturationPeers, size >= oversaturationAmount
+		return size >= saturationPeers, size >= overSaturationAmount
 	}
 }
 
@@ -705,15 +705,15 @@ func (k *Kad) Pick(peer p2p.Peer) bool {
 		return true
 	}
 	po := boson.Proximity(k.base.Bytes(), peer.Address.Bytes())
-	_, oversaturated := k.saturationFunc(po, k.knownPeers, k.connectedPeers)
-	// pick the peer if we are not oversaturated
-	return !oversaturated
+	_, overSaturated := k.saturationFunc(po, k.knownPeers, k.connectedPeers)
+	// pick the peer if we are not overSaturated
+	return !overSaturated
 }
 
 // Connected is called when a peer has dialed in.
 func (k *Kad) Connected(ctx context.Context, peer p2p.Peer) error {
 	if !k.bootnode {
-		// don't run this check if we're a bootnode
+		// don't run this check if we're a boot-node
 		po := boson.Proximity(k.base.Bytes(), peer.Address.Bytes())
 		if _, overSaturated := k.saturationFunc(po, k.knownPeers, k.connectedPeers); overSaturated {
 			return topology.ErrOversaturated
