@@ -284,44 +284,6 @@ func newRetrieveIndexesTestWithAccess(db *DB, ch boson.Chunk, storeTimestamp, ac
 	}
 }
 
-// newPullIndexTest returns a test function that validates if the right
-// chunk values are in the pull index.
-func newPullIndexTest(db *DB, ch boson.Chunk, binID uint64, wantError error) func(t *testing.T) {
-	return func(t *testing.T) {
-		t.Helper()
-
-		item, err := db.pullIndex.Get(shed.Item{
-			Address: ch.Address().Bytes(),
-			BinID:   binID,
-		})
-		if !errors.Is(err, wantError) {
-			t.Errorf("got error %v, want %v", err, wantError)
-		}
-		if err == nil {
-			validateItem(t, item, ch.Address().Bytes(), nil, 0, 0)
-		}
-	}
-}
-
-// newPushIndexTest returns a test function that validates if the right
-// chunk values are in the push index.
-func newPushIndexTest(db *DB, ch boson.Chunk, storeTimestamp int64, wantError error) func(t *testing.T) {
-	return func(t *testing.T) {
-		t.Helper()
-
-		item, err := db.pushIndex.Get(shed.Item{
-			Address:        ch.Address().Bytes(),
-			StoreTimestamp: storeTimestamp,
-		})
-		if !errors.Is(err, wantError) {
-			t.Errorf("got error %v, want %v", err, wantError)
-		}
-		if err == nil {
-			validateItem(t, item, ch.Address().Bytes(), nil, storeTimestamp, 0)
-		}
-	}
-}
-
 // newGCIndexTest returns a test function that validates if the right
 // chunk values are in the GC index.
 func newGCIndexTest(db *DB, chunk boson.Chunk, storeTimestamp, accessTimestamp int64, binID uint64, wantError error) func(t *testing.T) {

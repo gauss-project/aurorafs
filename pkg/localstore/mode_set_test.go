@@ -64,12 +64,6 @@ func TestModeSetRemove(t *testing.T) {
 				t.Run("retrieve access index count", newItemsCountTest(db.retrievalAccessIndex, 0))
 			})
 
-			for _, ch := range chunks {
-				newPullIndexTest(db, ch, 0, leveldb.ErrNotFound)(t)
-			}
-
-			t.Run("pull index count", newItemsCountTest(db.pullIndex, 0))
-
 			t.Run("gc index count", newItemsCountTest(db.gcIndex, 0))
 
 			t.Run("gc size", newIndexGCSizeTest(db))

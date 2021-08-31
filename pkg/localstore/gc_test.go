@@ -108,8 +108,6 @@ func testDBCollectGarbageWorker(t *testing.T) {
 		}
 	}
 
-	t.Run("pull index count", newItemsCountTest(db.pullIndex, int(gcTarget)))
-
 	t.Run("gc index count", newItemsCountTest(db.gcIndex, int(gcTarget)))
 
 	t.Run("gc size", newIndexGCSizeTest(db))
@@ -210,8 +208,6 @@ func TestPinGC(t *testing.T) {
 	t.Run("pin Index count", newItemsCountTest(db.pinIndex, pinChunksCount))
 
 	t.Run("gc exclude index count", newItemsCountTest(db.gcExcludeIndex, 0))
-
-	t.Run("pull index count", newItemsCountTest(db.pullIndex, int(gcTarget)+pinChunksCount))
 
 	t.Run("gc index count", newItemsCountTest(db.gcIndex, int(gcTarget)))
 
@@ -395,8 +391,6 @@ func TestDB_collectGarbageWorker_withRequests(t *testing.T) {
 	if totalCollectedCount != wantTotalCollectedCount {
 		t.Errorf("total collected chunks %v, want %v", totalCollectedCount, wantTotalCollectedCount)
 	}
-
-	t.Run("pull index count", newItemsCountTest(db.pullIndex, int(gcTarget)))
 
 	t.Run("gc index count", newItemsCountTest(db.gcIndex, int(gcTarget)))
 
@@ -814,8 +808,6 @@ func TestGC_NoEvictDirty(t *testing.T) {
 			break
 		}
 	}
-
-	t.Run("pull index count", newItemsCountTest(db.pullIndex, int(gcTarget)))
 
 	t.Run("gc index count", newItemsCountTest(db.gcIndex, int(gcTarget)))
 

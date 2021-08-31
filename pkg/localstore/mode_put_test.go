@@ -136,7 +136,6 @@ func TestModePutSync(t *testing.T) {
 				binIDs[po]++
 
 				newRetrieveIndexesTestWithAccess(db, ch, wantTimestamp, wantTimestamp)(t)
-				newPullIndexTest(db, ch, binIDs[po], nil)(t)
 				newPinIndexTest(db, ch, leveldb.ErrNotFound)(t)
 				newItemsCountTest(db.gcIndex, tc.count)(t)
 				newIndexGCSizeTest(db)(t)
@@ -170,8 +169,6 @@ func TestModePutUpload(t *testing.T) {
 				binIDs[po]++
 
 				newRetrieveIndexesTest(db, ch, wantTimestamp, 0)(t)
-				newPullIndexTest(db, ch, binIDs[po], nil)(t)
-				newPushIndexTest(db, ch, wantTimestamp, nil)(t)
 				newPinIndexTest(db, ch, leveldb.ErrNotFound)(t)
 			}
 		})
@@ -203,8 +200,6 @@ func TestModePutUploadPin(t *testing.T) {
 				binIDs[po]++
 
 				newRetrieveIndexesTest(db, ch, wantTimestamp, 0)(t)
-				newPullIndexTest(db, ch, binIDs[po], nil)(t)
-				newPushIndexTest(db, ch, wantTimestamp, nil)(t)
 				newPinIndexTest(db, ch, nil)(t)
 			}
 		})
@@ -361,16 +356,7 @@ func TestModePut_sameChunk(t *testing.T) {
 							}
 						}
 
-						count := func(b bool) (c int) {
-							if b {
-								return tc.count
-							}
-							return 0
-						}
-
 						newItemsCountTest(db.retrievalDataIndex, tc.count)(t)
-						newItemsCountTest(db.pullIndex, count(tcn.pullIndex))(t)
-						newItemsCountTest(db.pushIndex, count(tcn.pushIndex))(t)
 					}
 				})
 			}

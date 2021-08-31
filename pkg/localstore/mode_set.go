@@ -136,37 +136,12 @@ func (db *DB) setSync(batch *leveldb.Batch, addr boson.Address, mode storage.Mod
 	i, err := db.retrievalDataIndex.Get(item)
 	if err != nil {
 		if errors.Is(err, leveldb.ErrNotFound) {
-			// chunk is not found,
-			// no need to update gc index
-			// just delete from the push index
-			// if it is there
-			err = db.pushIndex.DeleteInBatch(batch, item)
-			if err != nil {
-				return 0, err
-			}
 			return 0, nil
 		}
 		return 0, err
 	}
 	item.StoreTimestamp = i.StoreTimestamp
 	item.BinID = i.BinID
-
-	i, err = db.pushIndex.Get(item)
-	if err != nil {
-		if errors.Is(err, leveldb.ErrNotFound) {
-			// we handle this error internally, since this is an internal inconsistency of the indices
-			// this error can happen if the chunk is put with ModePutRequest or ModePutSync
-			// but this function is called with ModeSetSync
-			db.logger.Debugf("localstore: chunk with address %s not found in push index", addr)
-		} else {
-			return 0, err
-		}
-	}
-
-	err = db.pushIndex.DeleteInBatch(batch, item)
-	if err != nil {
-		return 0, err
-	}
 
 	i, err = db.retrievalAccessIndex.Get(item)
 	switch {
@@ -233,10 +208,6 @@ func (db *DB) setRemove(batch *leveldb.Batch, addr boson.Address) (gcSizeChange 
 		return 0, err
 	}
 	err = db.retrievalAccessIndex.DeleteInBatch(batch, item)
-	if err != nil {
-		return 0, err
-	}
-	err = db.pullIndex.DeleteInBatch(batch, item)
 	if err != nil {
 		return 0, err
 	}

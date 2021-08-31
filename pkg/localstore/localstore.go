@@ -64,17 +64,6 @@ type DB struct {
 	// retrieval indexes
 	retrievalDataIndex   shed.Index
 	retrievalAccessIndex shed.Index
-	// push syncing index
-	pushIndex shed.Index
-	// push syncing subscriptions triggers
-	pushTriggers   []chan<- struct{}
-	pushTriggersMu sync.RWMutex
-
-	// pull syncing index
-	pullIndex shed.Index
-	// pull syncing subscriptions triggers per bin
-	pullTriggers   map[uint8][]chan<- struct{}
-	pullTriggersMu sync.RWMutex
 
 	// binIDs stores the latest chunk serial ID for every
 	// proximity order bin
@@ -292,76 +281,11 @@ func New(path string, baseKey []byte, o *Options, logger logging.Logger) (db *DB
 	if err != nil {
 		return nil, err
 	}
-	// pull index allows history and live syncing per po bin
-	db.pullIndex, err = db.shed.NewIndex("PO|BinID->Hash|Tag", shed.IndexFuncs{
-		EncodeKey: func(fields shed.Item) (key []byte, err error) {
-			key = make([]byte, 41)
-			key[0] = db.po(boson.NewAddress(fields.Address))
-			binary.BigEndian.PutUint64(key[1:9], fields.BinID)
-			return key, nil
-		},
-		DecodeKey: func(key []byte) (e shed.Item, err error) {
-			e.BinID = binary.BigEndian.Uint64(key[1:9])
-			return e, nil
-		},
-		EncodeValue: func(fields shed.Item) (value []byte, err error) {
-			value = make([]byte, 36) // 32 bytes address, 4 bytes tag
-			copy(value, fields.Address)
-
-			if fields.Tag != 0 {
-				binary.BigEndian.PutUint32(value[32:], fields.Tag)
-			}
-
-			return value, nil
-		},
-		DecodeValue: func(keyItem shed.Item, value []byte) (e shed.Item, err error) {
-			e.Address = value[:32]
-			if len(value) > 32 {
-				e.Tag = binary.BigEndian.Uint32(value[32:])
-			}
-			return e, nil
-		},
-	})
-	if err != nil {
-		return nil, err
-	}
 	// create a vector for bin IDs
 	db.binIDs, err = db.shed.NewUint64Vector("bin-ids")
 	if err != nil {
 		return nil, err
 	}
-	// create a pull syncing triggers used by SubscribePull function
-	db.pullTriggers = make(map[uint8][]chan<- struct{})
-	// push index contains as yet unsynced chunks
-	db.pushIndex, err = db.shed.NewIndex("StoreTimestamp|Hash->Tags", shed.IndexFuncs{
-		EncodeKey: func(fields shed.Item) (key []byte, err error) {
-			key = make([]byte, 40)
-			binary.BigEndian.PutUint64(key[:8], uint64(fields.StoreTimestamp))
-			copy(key[8:], fields.Address)
-			return key, nil
-		},
-		DecodeKey: func(key []byte) (e shed.Item, err error) {
-			e.Address = key[8:]
-			e.StoreTimestamp = int64(binary.BigEndian.Uint64(key[:8]))
-			return e, nil
-		},
-		EncodeValue: func(fields shed.Item) (value []byte, err error) {
-			tag := make([]byte, 4)
-			binary.BigEndian.PutUint32(tag, fields.Tag)
-			return tag, nil
-		},
-		DecodeValue: func(keyItem shed.Item, value []byte) (e shed.Item, err error) {
-			if len(value) == 4 { // only values with tag should be decoded
-				e.Tag = binary.BigEndian.Uint32(value)
-			}
-			return e, nil
-		},
-	})
-	if err != nil {
-		return nil, err
-	}
-	// create a push syncing triggers used by SubscribePush function
-	db.pushTriggers = make([]chan<- struct{}, 0)
 	// gc index for removable chunk ordered by ascending last access time
 	db.gcIndex, err = db.shed.NewIndex("AccessTimestamp|BinID|Hash->nil", shed.IndexFuncs{
 		EncodeKey: func(fields shed.Item) (key []byte, err error) {
@@ -478,8 +402,6 @@ func (db *DB) DebugIndices() (indexInfo map[string]int, err error) {
 	for k, v := range map[string]shed.Index{
 		"retrievalDataIndex":   db.retrievalDataIndex,
 		"retrievalAccessIndex": db.retrievalAccessIndex,
-		"pushIndex":            db.pushIndex,
-		"pullIndex":            db.pullIndex,
 		"gcIndex":              db.gcIndex,
 		"gcExcludeIndex":       db.gcExcludeIndex,
 		"pinIndex":             db.pinIndex,

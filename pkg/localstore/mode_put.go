@@ -110,12 +110,6 @@ func (db *DB) put(mode storage.ModePut, chs ...boson.Chunk) (exist []bool, err e
 				return nil, err
 			}
 			exist[i] = exists
-			//if !exists {
-			//	// chunk is new so, trigger subscription feeds
-			//	// after the batch is successfully written
-			//	triggerPullFeed[db.po(ch.Address())] = struct{}{}
-			//	triggerPushFeed = true
-			//}
 			gcSizeChange += c
 			if mode == storage.ModePutUploadPin {
 				err = db.setPin(batch, ch.Address())
@@ -136,11 +130,6 @@ func (db *DB) put(mode storage.ModePut, chs ...boson.Chunk) (exist []bool, err e
 				return nil, err
 			}
 			exist[i] = exists
-			//if !exists {
-			//	// chunk is new so, trigger pull subscription feed
-			//	// after the batch is successfully written
-			//	triggerPullFeed[db.po(ch.Address())] = struct{}{}
-			//}
 			gcSizeChange += c
 		}
 
@@ -162,12 +151,6 @@ func (db *DB) put(mode storage.ModePut, chs ...boson.Chunk) (exist []bool, err e
 		return nil, err
 	}
 
-	//for po := range triggerPullFeed {
-	//	db.triggerPullSubscriptions(po)
-	//}
-	//if triggerPushFeed {
-	//	db.triggerPushSubscriptions()
-	//}
 	return exist, nil
 }
 
@@ -226,14 +209,6 @@ func (db *DB) putUpload(batch *leveldb.Batch, binIDs map[uint8]uint64, item shed
 	if err != nil {
 		return false, 0, err
 	}
-	err = db.pullIndex.PutInBatch(batch, item)
-	if err != nil {
-		return false, 0, err
-	}
-	err = db.pushIndex.PutInBatch(batch, item)
-	if err != nil {
-		return false, 0, err
-	}
 
 	return false, 0, nil
 }
@@ -257,10 +232,6 @@ func (db *DB) putSync(batch *leveldb.Batch, binIDs map[uint8]uint64, item shed.I
 		return false, 0, err
 	}
 	err = db.retrievalDataIndex.PutInBatch(batch, item)
-	if err != nil {
-		return false, 0, err
-	}
-	err = db.pullIndex.PutInBatch(batch, item)
 	if err != nil {
 		return false, 0, err
 	}
