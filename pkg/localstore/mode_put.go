@@ -71,7 +71,7 @@ func (db *DB) put(mode storage.ModePut, rootCID boson.Address, chs ...boson.Chun
 
 	// variables that provide information for operations
 	// to be done after write batch function successfully executes
-	var gcSizeChange int64                      // number to add or subtract from gcSize
+	var gcSizeChange int64 // number to add or subtract from gcSize
 	//var triggerPushFeed bool                    // signal push feed subscriptions to iterate
 	//triggerPullFeed := make(map[uint8]struct{}) // signal pull feed subscriptions to iterate
 
@@ -98,7 +98,12 @@ func (db *DB) put(mode storage.ModePut, rootCID boson.Address, chs ...boson.Chun
 			gcSizeChange += c
 
 			if mode == storage.ModePutRequestPin {
-				err = db.setPin(batch, ch.Address())
+				if rootCID.IsZero() {
+					err = db.setPin(batch, ch.Address())
+				} else {
+					err = db.setPin(batch, rootCID)
+				}
+
 				if err != nil {
 					return nil, err
 				}
@@ -118,7 +123,12 @@ func (db *DB) put(mode storage.ModePut, rootCID boson.Address, chs ...boson.Chun
 			exist[i] = exists
 			gcSizeChange += c
 			if mode == storage.ModePutUploadPin {
-				err = db.setPin(batch, ch.Address())
+				if rootCID.IsZero() {
+					err = db.setPin(batch, ch.Address())
+				} else {
+					err = db.setPin(batch, rootCID)
+				}
+
 				if err != nil {
 					return nil, err
 				}

@@ -236,24 +236,25 @@ func (db *DB) setPin(batch *leveldb.Batch, addr boson.Address) (err error) {
 		return err
 	}
 
+	i, err := db.retrievalAccessIndex.Get(item)
+	if err == nil {
+		item.AccessTimestamp = i.AccessTimestamp
+		i, err := db.retrievalDataIndex.Get(item)
+		if err == nil {
+			item.StoreTimestamp = i.StoreTimestamp
+			item.BinID = i.BinID
 
-	i, err := db.retrievalDataIndex.Get(item)
-	if err != nil {
-		return err
-	}
-	item.StoreTimestamp = i.StoreTimestamp
-	item.BinID = i.BinID
-
-	err = db.gcIndex.DeleteInBatch(batch, item)
-	if err != nil {
-		return err
+			err = db.gcIndex.DeleteInBatch(batch, item)
+			if err != nil {
+				return err
+			}
+		}
 	}
 
 	err = db.pinIndex.PutInBatch(batch, item)
 	if err != nil {
 		return err
 	}
-
 
 	return nil
 }

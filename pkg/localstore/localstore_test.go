@@ -29,11 +29,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/logging"
 	"github.com/gauss-project/aurorafs/pkg/shed"
 	"github.com/gauss-project/aurorafs/pkg/storage"
 	chunktesting "github.com/gauss-project/aurorafs/pkg/storage/testing"
-	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/syndtr/goleveldb/leveldb"
 )
 
@@ -319,6 +319,17 @@ func newPinIndexTest(db *DB, chunk boson.Chunk, wantError error) func(t *testing
 		if err == nil {
 			validateItem(t, item, chunk.Address().Bytes(), nil, 0, 0)
 		}
+	}
+}
+
+func newPinChunkValidateTest(db *DB, chunk boson.Chunk, wantError error) error {
+	_, err := db.pinIndex.Get(shed.Item{
+		Address: chunk.Address().Bytes(),
+	})
+	if errors.Is(err, leveldb.ErrNotFound) {
+		return nil
+	} else {
+		return errors.New("Chunk in Stored In Pin")
 	}
 }
 
