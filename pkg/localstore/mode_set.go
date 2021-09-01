@@ -115,9 +115,7 @@ func (db *DB) set(mode storage.ModeSet, addrs ...boson.Address) (err error) {
 	if err != nil {
 		return err
 	}
-	//for po := range triggerPullFeed {
-	//	db.triggerPullSubscriptions(po)
-	//}
+
 	return nil
 }
 

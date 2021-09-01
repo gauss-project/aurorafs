@@ -44,6 +44,7 @@ type Item struct {
 	StoreTimestamp  int64
 	BinID           uint64
 	PinCounter      uint64 // maintains the no of time a chunk is pinned
+	GCounter        uint64
 	Tag             uint32
 }
 

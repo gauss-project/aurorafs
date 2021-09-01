@@ -111,39 +111,6 @@ func TestModePutRequestPin(t *testing.T) {
 	}
 }
 
-// TestModePutSync validates ModePutSync index values on the provided DB.
-func TestModePutSync(t *testing.T) {
-	for _, tc := range multiChunkTestCases {
-		t.Run(tc.name, func(t *testing.T) {
-			db := newTestDB(t, nil)
-
-			wantTimestamp := time.Now().UTC().UnixNano()
-			defer setNow(func() (t int64) {
-				return wantTimestamp
-			})()
-
-			chunks := generateTestRandomChunks(tc.count)
-
-			_, err := db.Put(context.Background(), storage.ModePutSync, chunks...)
-			if err != nil {
-				t.Fatal(err)
-			}
-
-			binIDs := make(map[uint8]uint64)
-
-			for _, ch := range chunks {
-				po := db.po(ch.Address())
-				binIDs[po]++
-
-				newRetrieveIndexesTestWithAccess(db, ch, wantTimestamp, wantTimestamp)(t)
-				newPinIndexTest(db, ch, leveldb.ErrNotFound)(t)
-				newItemsCountTest(db.gcIndex, tc.count)(t)
-				newIndexGCSizeTest(db)(t)
-			}
-		})
-	}
-}
-
 // TestModePutUpload validates ModePutUpload index values on the provided DB.
 func TestModePutUpload(t *testing.T) {
 	for _, tc := range multiChunkTestCases {
@@ -328,12 +295,6 @@ func TestModePut_sameChunk(t *testing.T) {
 					pullIndex: true,
 					pushIndex: true,
 				},
-				{
-					name:      "ModePutSync",
-					mode:      storage.ModePutSync,
-					pullIndex: true,
-					pushIndex: false,
-				},
 			} {
 				t.Run(tcn.name, func(t *testing.T) {
 					db := newTestDB(t, nil)
@@ -370,7 +331,6 @@ func TestPutDuplicateChunks(t *testing.T) {
 	for _, mode := range []storage.ModePut{
 		storage.ModePutUpload,
 		storage.ModePutRequest,
-		storage.ModePutSync,
 	} {
 		t.Run(mode.String(), func(t *testing.T) {
 			db := newTestDB(t, nil)

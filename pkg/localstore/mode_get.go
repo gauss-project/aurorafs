@@ -43,7 +43,7 @@ func (db *DB) Get(ctx context.Context, mode storage.ModeGet, addr boson.Address,
 		}
 	}()
 
-	out, err := db.get(mode, addr)
+	out, err := db.get(mode, addr, rootCid...)
 	if err != nil {
 		if errors.Is(err, leveldb.ErrNotFound) {
 			return nil, storage.ErrNotFound
@@ -55,7 +55,7 @@ func (db *DB) Get(ctx context.Context, mode storage.ModeGet, addr boson.Address,
 
 // get returns Item from the retrieval index
 // and updates other indexes.
-func (db *DB) get(mode storage.ModeGet, addr boson.Address) (out shed.Item, err error) {
+func (db *DB) get(mode storage.ModeGet, addr boson.Address, rootCID ...boson.Address) (out shed.Item, err error) {
 	item := addressToItem(addr)
 
 	out, err = db.retrievalDataIndex.Get(item)
@@ -65,7 +65,11 @@ func (db *DB) get(mode storage.ModeGet, addr boson.Address) (out shed.Item, err 
 	switch mode {
 	// update the access timestamp and gc index
 	case storage.ModeGetRequest:
-		db.updateGCItems(out)
+		if len(rootCID) > 0 {
+			db.updateGCItems(addressToItem(rootCID[0]))
+		} else {
+			db.updateGCItems(out)
+		}
 
 	case storage.ModeGetPin:
 		pinnedItem, err := db.pinIndex.Get(item)
@@ -146,6 +150,13 @@ func (db *DB) updateGC(item shed.Item) (err error) {
 		// chunk is not yet synced
 		// do not add it to the gc index
 		return nil
+	}
+	if item.BinID == 0 {
+		i, err = db.retrievalDataIndex.Get(item)
+		if err != nil {
+			return err
+		}
+		item.BinID = i.BinID
 	}
 	// delete current entry from the gc index
 	err = db.gcIndex.DeleteInBatch(batch, item)

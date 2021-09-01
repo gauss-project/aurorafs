@@ -58,6 +58,19 @@ func (db *DB) Put(ctx context.Context, mode storage.ModePut, chs ...boson.Chunk)
 // slice. This is the same behaviour as if the same chunks are passed one by one
 // in multiple put method calls.
 func (db *DB) put(mode storage.ModePut, rootCID boson.Address, chs ...boson.Chunk) (exist []bool, err error) {
+	// this is an optimization that tries to optimize on already existing chunks
+	// not needing to acquire batchMu. This is in order to reduce lock contention
+	// when chunks are retried across the network for whatever reason.
+	if len(chs) == 1 && mode != storage.ModePutRequestPin && mode != storage.ModePutUploadPin {
+		has, err := db.retrievalDataIndex.Has(chunkToItem(chs[0]))
+		if err != nil {
+			return nil, err
+		}
+		if has {
+			return []bool{true}, nil
+		}
+	}
+
 	// protect parallel updates
 	db.batchMu.Lock()
 	defer db.batchMu.Unlock()
@@ -72,8 +85,6 @@ func (db *DB) put(mode storage.ModePut, rootCID boson.Address, chs ...boson.Chun
 	// variables that provide information for operations
 	// to be done after write batch function successfully executes
 	var gcSizeChange int64                      // number to add or subtract from gcSize
-	//var triggerPushFeed bool                    // signal push feed subscriptions to iterate
-	//triggerPullFeed := make(map[uint8]struct{}) // signal pull feed subscriptions to iterate
 
 	exist = make([]bool, len(chs))
 
@@ -90,12 +101,12 @@ func (db *DB) put(mode storage.ModePut, rootCID boson.Address, chs ...boson.Chun
 				exist[i] = true
 				continue
 			}
-			exists, c, err := db.putRequest(batch, binIDs, chunkToItem(ch))
+			exists, err := db.putRequest(batch, binIDs, chunkToItem(ch))
 			if err != nil {
 				return nil, err
 			}
 			exist[i] = exists
-			gcSizeChange += c
+			gcSizeChange++
 
 			if mode == storage.ModePutRequestPin {
 				err = db.setPin(batch, ch.Address())
@@ -111,12 +122,11 @@ func (db *DB) put(mode storage.ModePut, rootCID boson.Address, chs ...boson.Chun
 				exist[i] = true
 				continue
 			}
-			exists, c, err := db.putUpload(batch, binIDs, chunkToItem(ch))
+			exists, err := db.putUpload(batch, binIDs, chunkToItem(ch))
 			if err != nil {
 				return nil, err
 			}
 			exist[i] = exists
-			gcSizeChange += c
 			if mode == storage.ModePutUploadPin {
 				err = db.setPin(batch, ch.Address())
 				if err != nil {
@@ -125,26 +135,53 @@ func (db *DB) put(mode storage.ModePut, rootCID boson.Address, chs ...boson.Chun
 			}
 		}
 
-	case storage.ModePutSync:
-		for i, ch := range chs {
-			if containsChunk(ch.Address(), chs[:i]...) {
-				exist[i] = true
-				continue
-			}
-			exists, c, err := db.putSync(batch, binIDs, chunkToItem(ch))
-			if err != nil {
-				return nil, err
-			}
-			exist[i] = exists
-			gcSizeChange += c
-		}
-
 	default:
 		return nil, ErrInvalidMode
 	}
 
 	for po, id := range binIDs {
 		db.binIDs.PutInBatch(batch, uint64(po), id)
+	}
+
+	if !rootCID.IsZero() {
+		item := addressToItem(rootCID)
+		i, err := db.retrievalAccessIndex.Get(item)
+		if err != nil {
+			if !errors.Is(err, storage.ErrNotFound) {
+				return nil, err
+			}
+		} else {
+			item.AccessTimestamp = i.AccessTimestamp
+			i, err = db.retrievalDataIndex.Get(item)
+			if err != nil {
+				return nil, err
+			}
+			item.BinID = i.BinID
+			gcItem, err := db.gcIndex.Get(item)
+			if err != nil {
+				if errors.Is(err, storage.ErrNotFound) {
+					gcItem.BinID = item.BinID
+					gcItem.Address = item.Address
+					gcItem.AccessTimestamp = item.AccessTimestamp
+					gcItem.GCounter = uint64(gcSizeChange)
+				} else {
+					return nil, err
+				}
+			} else {
+				err = db.gcIndex.DeleteInBatch(batch, item)
+				if gcSizeChange >= 0 {
+					gcItem.GCounter += uint64(gcSizeChange)
+				} else {
+					c := uint64(-gcSizeChange)
+					if c > gcItem.GCounter {
+						gcItem.GCounter = 0
+					} else {
+						gcItem.GCounter -= c
+					}
+				}
+			}
+			db.gcIndex.PutInBatch(batch, gcItem)
+		}
 	}
 
 	err = db.incGCSizeInBatch(batch, gcSizeChange)
@@ -165,58 +202,59 @@ func (db *DB) put(mode storage.ModePut, rootCID boson.Address, chs ...boson.Chun
 //  - it does not enter the syncpool
 // The batch can be written to the database.
 // Provided batch and binID map are updated.
-func (db *DB) putRequest(batch *leveldb.Batch, binIDs map[uint8]uint64, item shed.Item) (exists bool, gcSizeChange int64, err error) {
+func (db *DB) putRequest(batch *leveldb.Batch, binIDs map[uint8]uint64, item shed.Item) (exists bool, err error) {
 	has, err := db.retrievalDataIndex.Has(item)
 	if err != nil {
-		return false, 0, err
+		return false,  err
 	}
 	if has {
-		return true, 0, nil
+		return true,  nil
 	}
 
 	item.StoreTimestamp = now()
 	item.BinID, err = db.incBinID(binIDs, db.po(boson.NewAddress(item.Address)))
 	if err != nil {
-		return false, 0, err
-	}
-
-	gcSizeChange, err = db.setGC(batch, item)
-	if err != nil {
-		return false, 0, err
+		return false,  err
 	}
 
 	err = db.retrievalDataIndex.PutInBatch(batch, item)
 	if err != nil {
-		return false, 0, err
+		return false,  err
 	}
 
-	return false, gcSizeChange, nil
+	item.AccessTimestamp = now()
+	err = db.retrievalAccessIndex.PutInBatch(batch, item)
+	if err != nil {
+		return false,  err
+	}
+
+	return false, nil
 }
 
 // putUpload adds an Item to the batch by updating required indexes:
 //  - put to indexes: retrieve, push, pull
 // The batch can be written to the database.
 // Provided batch and binID map are updated.
-func (db *DB) putUpload(batch *leveldb.Batch, binIDs map[uint8]uint64, item shed.Item) (exists bool, gcSizeChange int64, err error) {
+func (db *DB) putUpload(batch *leveldb.Batch, binIDs map[uint8]uint64, item shed.Item) (exists bool, err error) {
 	exists, err = db.retrievalDataIndex.Has(item)
 	if err != nil {
-		return false, 0, err
+		return false, err
 	}
 	if exists {
-		return true, 0, nil
+		return true, nil
 	}
 
 	item.StoreTimestamp = now()
 	item.BinID, err = db.incBinID(binIDs, db.po(boson.NewAddress(item.Address)))
 	if err != nil {
-		return false, 0, err
+		return false, err
 	}
 	err = db.retrievalDataIndex.PutInBatch(batch, item)
 	if err != nil {
-		return false, 0, err
+		return false, err
 	}
 
-	return false, 0, nil
+	return false, nil
 }
 
 // putSync adds an Item to the batch by updating required indexes:

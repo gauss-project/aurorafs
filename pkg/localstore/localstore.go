@@ -72,9 +72,6 @@ type DB struct {
 	// garbage collection index
 	gcIndex shed.Index
 
-	// garbage collection exclude index for pinned contents
-	gcExcludeIndex shed.Index
-
 	// pin files Index
 	pinIndex shed.Index
 
@@ -335,26 +332,6 @@ func New(path string, baseKey []byte, o *Options, logger logging.Logger) (db *DB
 		return nil, err
 	}
 
-	// Create a index structure for excluding pinned chunks from gcIndex
-	db.gcExcludeIndex, err = db.shed.NewIndex("Hash->nil", shed.IndexFuncs{
-		EncodeKey: func(fields shed.Item) (key []byte, err error) {
-			return fields.Address, nil
-		},
-		DecodeKey: func(key []byte) (e shed.Item, err error) {
-			e.Address = key
-			return e, nil
-		},
-		EncodeValue: func(fields shed.Item) (value []byte, err error) {
-			return nil, nil
-		},
-		DecodeValue: func(keyItem shed.Item, value []byte) (e shed.Item, err error) {
-			return e, nil
-		},
-	})
-	if err != nil {
-		return nil, err
-	}
-
 	// start garbage collection worker
 	go db.collectGarbageWorker()
 	return db, nil
@@ -403,7 +380,6 @@ func (db *DB) DebugIndices() (indexInfo map[string]int, err error) {
 		"retrievalDataIndex":   db.retrievalDataIndex,
 		"retrievalAccessIndex": db.retrievalAccessIndex,
 		"gcIndex":              db.gcIndex,
-		"gcExcludeIndex":       db.gcExcludeIndex,
 		"pinIndex":             db.pinIndex,
 	} {
 		indexSize, err := v.Count()
