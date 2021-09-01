@@ -168,7 +168,6 @@ func (db *DB) put(mode storage.ModePut, rootCID boson.Address, chs ...boson.Chun
 					return nil, err
 				}
 			} else {
-				err = db.gcIndex.DeleteInBatch(batch, item)
 				if gcSizeChange >= 0 {
 					gcItem.GCounter += uint64(gcSizeChange)
 				} else {

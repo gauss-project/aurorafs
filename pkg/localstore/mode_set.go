@@ -201,6 +201,9 @@ func (db *DB) setRemove(batch *leveldb.Batch, addr boson.Address) (gcSizeChange 
 	item.StoreTimestamp = i.StoreTimestamp
 	item.BinID = i.BinID
 
+	db.metrics.GCStoreTimeStamps.Set(float64(item.StoreTimestamp))
+	db.metrics.GCStoreAccessTimeStamps.Set(float64(item.AccessTimestamp))
+
 	err = db.retrievalDataIndex.DeleteInBatch(batch, item)
 	if err != nil {
 		return 0, err
@@ -209,18 +212,21 @@ func (db *DB) setRemove(batch *leveldb.Batch, addr boson.Address) (gcSizeChange 
 	if err != nil {
 		return 0, err
 	}
+	// a check is needed for decrementing gcSize
+	// as delete is not reporting if the key/value pair
+	// is deleted or not
+	_, err = db.gcIndex.Get(item)
+	if err != nil {
+		if !errors.Is(err, storage.ErrNotFound) {
+			return 0, err
+		}
+		return 0, db.pinIndex.DeleteInBatch(batch, item)
+	}
 	err = db.gcIndex.DeleteInBatch(batch, item)
 	if err != nil {
 		return 0, err
 	}
-	// a check is needed for decrementing gcSize
-	// as delete is not reporting if the key/value pair
-	// is deleted or not
-	if _, err := db.gcIndex.Get(item); err == nil {
-		gcSizeChange = -1
-	}
-
-	return gcSizeChange, nil
+	return -1, nil
 }
 
 // setPin increments pin counter for the chunk by updating
