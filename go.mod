@@ -12,17 +12,18 @@ require (
 	github.com/ethersphere/langos v1.0.0
 	github.com/ethersphere/manifest v0.3.6
 	github.com/ethersphere/sw3-bindings/v3 v3.0.3
-	github.com/foxcpp/go-mockdns v0.0.0-20201212160233-ede2f9158d15
 	github.com/gogf/gf v1.16.5
-	github.com/gogo/protobuf v1.3.1
+	github.com/gogo/protobuf v1.3.2
 	github.com/golang/groupcache v0.0.0-20200121045136-8c9f03a8e57e // indirect
 	github.com/golang/protobuf v1.5.2 // indirect
+	github.com/google/go-cmp v0.5.6
 	github.com/google/gopacket v1.1.19 // indirect
 	github.com/google/uuid v1.1.4 // indirect
 	github.com/gopherjs/gopherjs v0.0.0-20200217142428-fce0ec30dd00 // indirect
 	github.com/gorilla/handlers v1.4.2
 	github.com/gorilla/mux v1.7.4
 	github.com/gorilla/websocket v1.4.2
+	github.com/hashicorp/go-multierror v1.0.0
 	github.com/ipfs/go-cid v0.0.7
 	github.com/kardianos/service v1.2.0
 	github.com/koron/go-ssdp v0.0.2 // indirect
@@ -33,6 +34,7 @@ require (
 	github.com/libp2p/go-libp2p-noise v0.1.2 // indirect
 	github.com/libp2p/go-libp2p-peerstore v0.2.6
 	github.com/libp2p/go-libp2p-quic-transport v0.10.0
+	github.com/libp2p/go-libp2p-swarm v0.4.0
 	github.com/libp2p/go-libp2p-transport-upgrader v0.4.0
 	github.com/libp2p/go-netroute v0.1.4 // indirect
 	github.com/libp2p/go-sockaddr v0.1.0 // indirect
@@ -60,6 +62,7 @@ require (
 	github.com/wealdtech/go-ens/v3 v3.4.4
 	gitlab.com/nolash/go-mockbytes v0.0.7
 	go.opencensus.io v0.22.5 // indirect
+	go.uber.org/atomic v1.7.0
 	go.uber.org/multierr v1.6.0 // indirect
 	go.uber.org/zap v1.16.0 // indirect
 	golang.org/x/crypto v0.0.0-20201221181555-eec23a3978ad
@@ -68,7 +71,7 @@ require (
 	golang.org/x/sync v0.0.0-20201020160332-67f06af15bc9
 	golang.org/x/sys v0.0.0-20210108172913-0df2131ae363
 	golang.org/x/term v0.0.0-20201210144234-2321bbc49cbf
-	golang.org/x/text v0.3.4 // indirect
+	golang.org/x/time v0.0.0-20191024005414-555d28b269f0
 	golang.org/x/tools v0.0.0-20200626171337-aa94e735be7f // indirect
 	google.golang.org/protobuf v1.27.1 // indirect
 	gopkg.in/check.v1 v1.0.0-20200227125254-8fa46927fb4f // indirect

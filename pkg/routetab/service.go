@@ -2,8 +2,9 @@ package routetab
 
 import (
 	"context"
+	"errors"
 	"fmt"
-	"github.com/gauss-project/aurorafs/pkg/kademlia"
+	"github.com/gauss-project/aurorafs/pkg/topology"
 	"time"
 
 	"github.com/gauss-project/aurorafs/pkg/boson"
@@ -33,10 +34,10 @@ type Service struct {
 	metrics      metrics
 	pendingCalls *pendCallResTab
 	routeTable   *routeTable
-	kad          *kademlia.Kad
+	topology     topology.Driver
 }
 
-func New(addr boson.Address, ctx context.Context, streamer p2p.Streamer, kad *kademlia.Kad, store storage.StateStorer, logger logging.Logger) *Service {
+func New(addr boson.Address, ctx context.Context, streamer p2p.Streamer, topology topology.Driver, store storage.StateStorer, logger logging.Logger) *Service {
 	// load route table from db only those valid item will be loaded
 
 	met := newMetrics()
@@ -45,7 +46,7 @@ func New(addr boson.Address, ctx context.Context, streamer p2p.Streamer, kad *ka
 		addr:         addr,
 		streamer:     streamer,
 		logger:       logger,
-		kad:          kad,
+		topology:     topology,
 		pendingCalls: newPendCallResTab(addr, logger, met),
 		routeTable:   newRouteTable(store, logger, met),
 		metrics:      met,
@@ -109,10 +110,12 @@ func (s *Service) Protocol() p2p.ProtocolSpec {
 func (s *Service) onRouteReq(ctx context.Context, p p2p.Peer, stream p2p.Stream) error {
 	r := protobuf.NewReader(stream)
 	defer func() {
-		err := stream.FullClose()
-		if err != nil {
-			s.logger.Warningf("route: handlerFindRouteReq stream.FullClose: %s", err.Error())
-		}
+		go func() {
+			err := stream.FullClose()
+			if err != nil {
+				s.logger.Warningf("route: sendDataToNode stream.FullClose, %s", err.Error())
+			}
+		}()
 	}()
 
 	var req pb.FindRouteReq
@@ -172,10 +175,12 @@ func (s *Service) onRouteReq(ctx context.Context, p p2p.Peer, stream p2p.Stream)
 func (s *Service) onRouteResp(ctx context.Context, p p2p.Peer, stream p2p.Stream) error {
 	r := protobuf.NewReader(stream)
 	defer func() {
-		err := stream.FullClose()
-		if err != nil {
-			s.logger.Warningf("route: handlerFindRouteResp stream.FullClose: %s", err.Error())
-		}
+		go func() {
+			err := stream.FullClose()
+			if err != nil {
+				s.logger.Warningf("route: sendDataToNode stream.FullClose, %s", err.Error())
+			}
+		}()
 	}()
 
 	resp := pb.FindRouteResp{}
@@ -265,12 +270,16 @@ func (s *Service) saveRespRouteItem(ctx context.Context, neighbor boson.Address,
 }
 
 func (s *Service) getNeighbor(target boson.Address, alpha int32) (forward []boson.Address) {
-	forward = make([]boson.Address, alpha)
+	forward = make([]boson.Address, 0)
 	for i := int32(0); i < alpha; i++ {
-		addr, err := s.kad.ClosestPeer(target, forward...)
+		addr, err := s.topology.ClosestPeer(target, false, forward...)
 		if err != nil {
+			if errors.Is(err, topology.ErrNotFound) {
+				break
+			}
 			s.metrics.TotalErrors.Inc()
 			s.logger.Errorf("route: get neighbor: %s", err.Error())
+			continue
 		}
 		forward = append(forward, addr)
 	}
@@ -278,7 +287,7 @@ func (s *Service) getNeighbor(target boson.Address, alpha int32) (forward []boso
 }
 
 func (s *Service) isNeighbor(dest boson.Address) (has bool) {
-	err := s.kad.EachPeer(func(address boson.Address, u uint8) (stop, jumpToNext bool, err error) {
+	err := s.topology.EachPeer(func(address boson.Address, u uint8) (stop, jumpToNext bool, err error) {
 		if dest.Equal(address) {
 			has = true
 			return
@@ -328,10 +337,12 @@ func (s *Service) sendDataToNode(ctx context.Context, peer p2p.Peer, streamName 
 		return
 	}
 	defer func() {
-		err := stream.FullClose()
-		if err != nil {
-			s.logger.Warningf("route: sendDataToNode stream.FullClose, %s", err.Error())
-		}
+		go func() {
+			err := stream.FullClose()
+			if err != nil {
+				s.logger.Warningf("route: sendDataToNode stream.FullClose, %s", err.Error())
+			}
+		}()
 	}()
 	w := protobuf.NewWriter(stream)
 	err := w.WriteMsgWithContext(ctx, msg)

@@ -26,6 +26,7 @@ type Service interface {
 	BlocklistedPeers() ([]Peer, error)
 	Addresses() ([]ma.Multiaddr, error)
 	SetPickyNotifier(PickyNotifier)
+	Halter
 }
 
 type Disconnecter interface {
@@ -35,15 +36,22 @@ type Disconnecter interface {
 	Blocklist(overlay boson.Address, duration time.Duration) error
 }
 
-// PickyNotifer can decide whether a peer should be picked
+type Halter interface {
+	// Halt new incoming connections while shutting down
+	Halt()
+}
+
+// PickyNotifier can decide whether a peer should be picked
 type PickyNotifier interface {
 	Pick(Peer) bool
 	Notifier
 }
 
 type Notifier interface {
-	Connected(context.Context, Peer) error
+	Connected(context.Context, Peer, bool) error
 	Disconnected(Peer)
+	Announce(ctx context.Context, peer boson.Address, fullnode bool) error
+	AnnounceTo(ctx context.Context, addressee, peer boson.Address, fullnode bool) error
 }
 
 // DebugService extends the Service with method used for debugging.
@@ -63,10 +71,23 @@ type StreamerDisconnecter interface {
 	Disconnecter
 }
 
+// Pinger interface is used to ping a underlay address which is not yet known to the bee node.
+// It uses libp2p's default ping protocol. This is different from the PingPong protocol as this
+// is meant to be used before we know a particular underlay and we can consider it useful
+type Pinger interface {
+	Ping(ctx context.Context, addr ma.Multiaddr) (rtt time.Duration, err error)
+}
+
+type StreamerPinger interface {
+	Streamer
+	Pinger
+}
+
 // Stream represent a bidirectional data Stream.
 type Stream interface {
 	io.ReadWriter
 	io.Closer
+	ResponseHeaders() Headers
 	Headers() Headers
 	FullClose() error
 	Reset() error
@@ -92,7 +113,8 @@ type StreamSpec struct {
 
 // Peer holds information about a Peer.
 type Peer struct {
-	Address boson.Address `json:"address"`
+	Address         boson.Address
+	FullNode        bool
 }
 
 // HandlerFunc handles a received Stream from a Peer.
@@ -103,7 +125,7 @@ type HandlerMiddleware func(HandlerFunc) HandlerFunc
 
 // HeadlerFunc is returning response headers based on the received request
 // headers.
-type HeadlerFunc func(Headers) Headers
+type HeadlerFunc func(Headers, boson.Address) Headers
 
 // Headers represents a collection of p2p header key value pairs.
 type Headers map[string][]byte
@@ -116,5 +138,5 @@ const (
 // NewSwarmStreamName constructs a libp2p compatible stream name out of
 // protocol name and version and stream name.
 func NewSwarmStreamName(protocol, version, stream string) string {
-	return "/boson/" + protocol + "/" + version + "/" + stream
+	return "/swarm/" + protocol + "/" + version + "/" + stream
 }

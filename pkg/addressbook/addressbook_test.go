@@ -9,9 +9,9 @@ import (
 
 	"github.com/gauss-project/aurorafs/pkg/addressbook"
 	"github.com/gauss-project/aurorafs/pkg/aurora"
+	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/crypto"
 	"github.com/gauss-project/aurorafs/pkg/statestore/mock"
-	"github.com/gauss-project/aurorafs/pkg/boson"
 
 	ma "github.com/multiformats/go-multiaddr"
 )

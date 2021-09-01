@@ -12,43 +12,72 @@ package hive
 
 import (
 	"context"
+	"encoding/hex"
+	"errors"
 	"fmt"
+	"github.com/gauss-project/aurorafs/pkg/ratelimit"
+	ma "github.com/multiformats/go-multiaddr"
+	"golang.org/x/sync/semaphore"
+	"sync"
 	"time"
 
 	"github.com/gauss-project/aurorafs/pkg/addressbook"
 	"github.com/gauss-project/aurorafs/pkg/aurora"
+	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/hive/pb"
 	"github.com/gauss-project/aurorafs/pkg/logging"
 	"github.com/gauss-project/aurorafs/pkg/p2p"
 	"github.com/gauss-project/aurorafs/pkg/p2p/protobuf"
-	"github.com/gauss-project/aurorafs/pkg/boson"
 )
 
 const (
-	protocolName    = "hive"
-	protocolVersion = "1.0.0"
-	peersStreamName = "peers"
-	messageTimeout  = 1 * time.Minute // maximum allowed time for a message to be read or written.
-	maxBatchSize    = 30
+	protocolName           = "hive"
+	protocolVersion        = "1.2.0"
+	peersStreamName        = "peers"
+	messageTimeout         = 1 * time.Minute // maximum allowed time for a message to be read or written.
+	maxBatchSize           = 30
+	pingTimeout            = time.Second * 5 // time to wait for ping to succeed
+	batchValidationTimeout = 5 * time.Minute // prevent lock contention on peer validation
+)
+
+var (
+	limitBurst = 4 * int(boson.MaxBins)
+	limitRate  = time.Minute
+
+	ErrRateLimitExceeded = errors.New("rate limit exceeded")
 )
 
 type Service struct {
-	streamer        p2p.Streamer
+	streamer        p2p.StreamerPinger
 	addressBook     addressbook.GetPutter
-	addPeersHandler func(...boson.Address) error
+	addPeersHandler func(...boson.Address)
 	networkID       uint64
 	logger          logging.Logger
 	metrics         metrics
+	inLimiter       *ratelimit.Limiter
+	outLimiter      *ratelimit.Limiter
+	clearMtx        sync.Mutex
+	quit            chan struct{}
+	wg              sync.WaitGroup
+	peersChan       chan pb.Peers
+	sem             *semaphore.Weighted
 }
 
-func New(streamer p2p.Streamer, addressbook addressbook.GetPutter, networkID uint64, logger logging.Logger) *Service {
-	return &Service{
+func New(streamer p2p.StreamerPinger, addressbook addressbook.GetPutter, networkID uint64, logger logging.Logger) *Service {
+	svc := &Service{
 		streamer:    streamer,
 		logger:      logger,
 		addressBook: addressbook,
 		networkID:   networkID,
 		metrics:     newMetrics(),
+		inLimiter:   ratelimit.New(limitRate, limitBurst),
+		outLimiter:  ratelimit.New(limitRate, limitBurst),
+		quit:        make(chan struct{}),
+		peersChan:   make(chan pb.Peers),
+		sem:         semaphore.NewWeighted(int64(31)),
 	}
+	svc.startCheckPeersHandler()
+	return svc
 }
 
 func (s *Service) Protocol() p2p.ProtocolSpec {
@@ -61,6 +90,8 @@ func (s *Service) Protocol() p2p.ProtocolSpec {
 				Handler: s.peersHandler,
 			},
 		},
+		DisconnectIn:  s.disconnect,
+		DisconnectOut: s.disconnect,
 	}
 }
 
@@ -73,6 +104,12 @@ func (s *Service) BroadcastPeers(ctx context.Context, addressee boson.Address, p
 		if max > len(peers) {
 			max = len(peers)
 		}
+
+		// If broadcasting limit is exceeded, return early
+		if !s.outLimiter.Allow(addressee.ByteString(), max) {
+			return nil
+		}
+
 		if err := s.sendPeers(ctx, addressee, peers[:max]); err != nil {
 			return err
 		}
@@ -83,8 +120,25 @@ func (s *Service) BroadcastPeers(ctx context.Context, addressee boson.Address, p
 	return nil
 }
 
-func (s *Service) SetAddPeersHandler(h func(...boson.Address) error) {
+func (s *Service) SetAddPeersHandler(h func(addr ...boson.Address)) {
 	s.addPeersHandler = h
+}
+
+func (s *Service) Close() error {
+	close(s.quit)
+
+	stopped := make(chan struct{})
+	go func() {
+		defer close(stopped)
+		s.wg.Wait()
+	}()
+
+	select {
+	case <-stopped:
+		return nil
+	case <-time.After(time.Second * 5):
+		return errors.New("hive: waited 5 seconds to close active goroutines")
+	}
 }
 
 func (s *Service) sendPeers(ctx context.Context, peer boson.Address, peers []boson.Address) (err error) {
@@ -97,7 +151,9 @@ func (s *Service) sendPeers(ctx context.Context, peer boson.Address, peers []bos
 		if err != nil {
 			_ = stream.Reset()
 		} else {
-			_ = stream.FullClose()
+			// added this because Recorder (unit test) emits an unnecessary EOF when Close is called
+			time.Sleep(time.Millisecond * 50)
+			_ = stream.Close()
 		}
 	}()
 	w, _ := protobuf.NewWriterAndReader(stream)
@@ -139,33 +195,121 @@ func (s *Service) peersHandler(ctx context.Context, peer p2p.Peer, stream p2p.St
 
 	s.metrics.PeersHandlerPeers.Add(float64(len(peersReq.Peers)))
 
+	if !s.inLimiter.Allow(peer.Address.ByteString(), len(peersReq.Peers)) {
+		_ = stream.Reset()
+		return ErrRateLimitExceeded
+	}
+
 	// close the stream before processing in order to unblock the sending side
 	// fullclose is called async because there is no need to wait for confirmation,
 	// but we still want to handle not closed stream from the other side to avoid zombie stream
 	go stream.FullClose()
 
-	var peers []boson.Address
-	for _, newPeer := range peersReq.Peers {
-		bzzAddress, err := aurora.ParseAddress(newPeer.Underlay, newPeer.Overlay, newPeer.Signature, s.networkID)
-		if err != nil {
-			s.logger.Warningf("skipping peer in response %s: %v", newPeer.String(), err)
-			continue
-		}
-
-		err = s.addressBook.Put(bzzAddress.Overlay, *bzzAddress)
-		if err != nil {
-			s.logger.Warningf("skipping peer in response %s: %v", newPeer.String(), err)
-			continue
-		}
-
-		peers = append(peers, bzzAddress.Overlay)
-	}
-
-	if s.addPeersHandler != nil {
-		if err := s.addPeersHandler(peers...); err != nil {
-			return err
-		}
+	select {
+	case s.peersChan <- peersReq:
+	case <-s.quit:
+		return errors.New("failed to process peers, shutting down hive")
 	}
 
 	return nil
+}
+
+func (s *Service) disconnect(peer p2p.Peer) error {
+
+	s.clearMtx.Lock()
+	defer s.clearMtx.Unlock()
+
+	s.inLimiter.Clear(peer.Address.ByteString())
+	s.outLimiter.Clear(peer.Address.ByteString())
+
+	return nil
+}
+
+func (s *Service) startCheckPeersHandler() {
+	ctx, cancel := context.WithCancel(context.Background())
+	s.wg.Add(1)
+	go func() {
+		defer s.wg.Done()
+		<-s.quit
+		cancel()
+	}()
+
+	s.wg.Add(1)
+	go func() {
+		defer s.wg.Done()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case newPeers := <-s.peersChan:
+				s.wg.Add(1)
+				go func() {
+					defer s.wg.Done()
+					cctx, cancel := context.WithTimeout(ctx, batchValidationTimeout)
+					defer cancel()
+					s.checkAndAddPeers(cctx, newPeers)
+				}()
+			}
+		}
+	}()
+}
+
+func (s *Service) checkAndAddPeers(ctx context.Context, peers pb.Peers) {
+
+	var peersToAdd []boson.Address
+	mtx := sync.Mutex{}
+	wg := sync.WaitGroup{}
+
+	for _, p := range peers.Peers {
+		err := s.sem.Acquire(ctx, 1)
+		if err != nil {
+			return
+		}
+
+		wg.Add(1)
+		go func(newPeer *pb.BzzAddress) {
+			defer func() {
+				s.sem.Release(1)
+				wg.Done()
+			}()
+
+			multiUnderlay, err := ma.NewMultiaddrBytes(newPeer.Underlay)
+			if err != nil {
+				s.logger.Errorf("hive: multi address underlay err: %v", err)
+				return
+			}
+
+			ctx, cancel := context.WithTimeout(ctx, pingTimeout)
+			defer cancel()
+
+			// check if the underlay is usable by doing a raw ping using libp2p
+			if _, err = s.streamer.Ping(ctx, multiUnderlay); err != nil {
+				s.metrics.UnreachablePeers.Inc()
+				s.logger.Debugf("hive: peer %s: underlay %s not reachable", hex.EncodeToString(newPeer.Overlay), multiUnderlay)
+				return
+			}
+
+			bzzAddress := aurora.Address{
+				Overlay:   boson.NewAddress(newPeer.Overlay),
+				Underlay:  multiUnderlay,
+				Signature: newPeer.Signature,
+			}
+
+			err = s.addressBook.Put(bzzAddress.Overlay, bzzAddress)
+			if err != nil {
+				s.logger.Warningf("skipping peer in response %s: %v", newPeer.String(), err)
+				return
+			}
+
+			mtx.Lock()
+			peersToAdd = append(peersToAdd, bzzAddress.Overlay)
+			mtx.Unlock()
+		}(p)
+	}
+
+	wg.Wait()
+
+	if s.addPeersHandler != nil && len(peersToAdd) > 0 {
+		s.addPeersHandler(peersToAdd...)
+	}
 }

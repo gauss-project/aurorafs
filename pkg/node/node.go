@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-// Package node defines the concept of a Bee node
+// Package node defines the concept of a Aurora node
 // by bootstrapping and injecting all necessary
 // dependencies.
 package node
@@ -13,6 +13,10 @@ import (
 	"fmt"
 	"github.com/gauss-project/aurorafs/pkg/chunkinfo"
 	"github.com/gauss-project/aurorafs/pkg/routetab"
+	"github.com/gauss-project/aurorafs/pkg/shed"
+	"github.com/gauss-project/aurorafs/pkg/topology"
+	"github.com/gauss-project/aurorafs/pkg/topology/kademlia"
+	"github.com/gauss-project/aurorafs/pkg/topology/lightnode"
 	"io"
 	"log"
 	"net"
@@ -27,7 +31,6 @@ import (
 
 	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/hive"
-	"github.com/gauss-project/aurorafs/pkg/kademlia"
 	"github.com/gauss-project/aurorafs/pkg/localstore"
 	"github.com/gauss-project/aurorafs/pkg/logging"
 	"github.com/gauss-project/aurorafs/pkg/metrics"
@@ -56,6 +59,7 @@ type Bee struct {
 	stateStoreCloser io.Closer
 	localstoreCloser io.Closer
 	topologyCloser   io.Closer
+	topologyHalter   topology.Halter
 
 	ethClientCloser func()
 	//recoveryHandleCleanup func()
@@ -231,12 +235,13 @@ func NewBee(addr string, bosonAddress boson.Address, publicKey ecdsa.PublicKey, 
 	//	)
 	//}
 
-	p2ps, err := libp2p.New(p2pCtx, signer, networkID, bosonAddress, addr, addressbook, stateStore, logger, tracer, libp2p.Options{
+	lightNodes := lightnode.NewContainer(bosonAddress)
+
+	p2ps, err := libp2p.New(p2pCtx, signer, networkID, bosonAddress, addr, addressbook, stateStore, lightNodes, logger, tracer, libp2p.Options{
 		PrivateKey:     libp2pPrivateKey,
 		NATAddr:        o.NATAddr,
 		EnableWS:       o.EnableWS,
 		EnableQUIC:     o.EnableQUIC,
-		Standalone:     o.Standalone,
 		WelcomeMessage: o.WelcomeMessage,
 	})
 	if err != nil {
@@ -347,7 +352,12 @@ func NewBee(addr string, bosonAddress boson.Address, publicKey ecdsa.PublicKey, 
 	//settlement.SetNotifyPaymentFunc(acc.AsyncNotifyPayment)
 	//pricing.SetPaymentThresholdObserver(acc)
 
-	kad := kademlia.New(bosonAddress, addressbook, hive, p2ps, logger, kademlia.Options{Bootnodes: bootnodes, StandaloneMode: o.Standalone, BootnodeMode: o.BootnodeMode})
+	metricsDB, err := shed.NewDBWrap(stateStore.DB())
+	if err != nil {
+		return nil, fmt.Errorf("unable to create metrics storage for kademlia: %w", err)
+	}
+
+	kad := kademlia.New(bosonAddress, addressbook, hive, p2ps, metricsDB, logger, kademlia.Options{Bootnodes: bootnodes, BootnodeMode: o.BootnodeMode})
 	b.topologyCloser = kad
 	hive.SetAddPeersHandler(kad.AddPeers)
 	p2ps.SetPickyNotifier(kad)
@@ -398,7 +408,6 @@ func NewBee(addr string, bosonAddress boson.Address, publicKey ecdsa.PublicKey, 
 	}
 
 	retrieve.Config(chunkInfo)
-
 
 	multiResolver := multiresolver.NewMultiResolver(
 		multiresolver.WithConnectionConfigs(o.ResolverConnectionCfgs),

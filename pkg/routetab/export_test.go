@@ -6,12 +6,11 @@ package routetab
 
 import (
 	"context"
-
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/gauss-project/aurorafs/pkg/boson"
-	"github.com/gauss-project/aurorafs/pkg/kademlia"
 	"github.com/gauss-project/aurorafs/pkg/p2p"
 	"github.com/gauss-project/aurorafs/pkg/routetab/pb"
+	"github.com/gauss-project/aurorafs/pkg/topology"
 )
 
 var (
@@ -45,8 +44,8 @@ func (s *Service) Address() boson.Address {
 	return s.addr
 }
 
-func (s *Service) Kad() *kademlia.Kad {
-	return s.kad
+func (s *Service) Kad() topology.Driver {
+	return s.topology
 }
 
 func (s *Service) P2P() p2p.Streamer {

@@ -19,15 +19,14 @@ type PSlice struct {
 	peers     []boson.Address // the slice of peers
 	bins      []uint          // the indexes of every proximity order in the peers slice, index is po, value is index of peers slice
 	baseBytes []byte
-
 	sync.RWMutex
 }
 
 // New creates a new PSlice.
 func New(maxBins int, base boson.Address) *PSlice {
 	return &PSlice{
-		peers: make([]boson.Address, 0),
-		bins:  make([]uint, maxBins),
+		peers:     make([]boson.Address, 0),
+		bins:      make([]uint, maxBins),
 		baseBytes: base.Bytes(),
 	}
 }
@@ -97,6 +96,48 @@ func (s *PSlice) EachBinRev(pf topology.EachPeerFunc) error {
 	return nil
 }
 
+func (s *PSlice) BinSize(bin uint8) int {
+
+	s.RLock()
+	defer s.RUnlock()
+
+	b := int(bin)
+	if b >= len(s.bins) {
+		return 0
+	}
+
+	var bEnd int
+	if b == len(s.bins)-1 {
+		bEnd = len(s.peers)
+	} else {
+		bEnd = int(s.bins[b+1])
+	}
+
+	return bEnd - int(s.bins[b])
+}
+
+func (s *PSlice) BinPeers(bin uint8) []boson.Address {
+	s.RLock()
+	defer s.RUnlock()
+
+	b := int(bin)
+	if b >= len(s.bins) {
+		return nil
+	}
+
+	var bEnd int
+	if b == len(s.bins)-1 {
+		bEnd = len(s.peers)
+	} else {
+		bEnd = int(s.bins[b+1])
+	}
+
+	ret := make([]boson.Address, bEnd-int(s.bins[b]))
+	copy(ret, s.peers[s.bins[b]:bEnd])
+
+	return ret
+}
+
 func (s *PSlice) Length() int {
 	s.RLock()
 	defer s.RUnlock()
@@ -127,12 +168,12 @@ func (s *PSlice) Exists(addr boson.Address) bool {
 	s.RLock()
 	defer s.RUnlock()
 
-	b, _ := s.exists(addr)
+	b, _ := s.index(addr)
 	return b
 }
 
-// checks if a peer exists. must be called under lock.
-func (s *PSlice) exists(addr boson.Address) (bool, int) {
+// checks if a peer index. must be called under lock.
+func (s *PSlice) index(addr boson.Address) (bool, int) {
 	if len(s.peers) == 0 {
 		return false, 0
 	}
@@ -152,11 +193,13 @@ func (s *PSlice) Add(addrs ...boson.Address) {
 	peers, bins := s.copy(len(addrs))
 
 	for _, addr := range addrs {
-		if e, _ := s.exists(addr); e {
+
+		if e, _ := s.index(addr); e {
 			return
 		}
 
-		po := boson.Proximity(s.baseBytes, addr.Bytes())
+		po := s.po(addr.Bytes())
+
 		peers = insertAddresses(peers, int(s.bins[po]), addr)
 		s.peers = peers
 
@@ -170,7 +213,7 @@ func (s *PSlice) Remove(addr boson.Address) {
 	s.Lock()
 	defer s.Unlock()
 
-	e, i := s.exists(addr)
+	e, i := s.index(addr)
 	if !e {
 		return
 	}
@@ -180,8 +223,18 @@ func (s *PSlice) Remove(addr boson.Address) {
 	peers = append(peers[:i], peers[i+1:]...)
 	s.peers = peers
 
-	decDeeper(bins, boson.Proximity(s.baseBytes, addr.Bytes()))
+	decDeeper(bins, s.po(addr.Bytes()))
 	s.bins = bins
+}
+
+func (s *PSlice) po(peer []byte) uint8 {
+
+	po := boson.Proximity(s.baseBytes, peer)
+	if int(po) >= len(s.bins) {
+		return uint8(len(s.bins)) - 1
+	}
+
+	return po
 }
 
 // incDeeper increments the peers slice bin index for proximity order > po for non-empty bins only.
@@ -211,6 +264,9 @@ func decDeeper(bins []uint, po uint8) {
 	}
 }
 
+// copy makes copies of peers and bins with a possibility of adding peers
+// additional capacity if it is know that a number of new addresses will be
+// inserted.
 func (s *PSlice) copy(peersExtraCap int) (peers []boson.Address, bins []uint) {
 	peers = make([]boson.Address, len(s.peers), len(s.peers)+peersExtraCap)
 	copy(peers, s.peers)

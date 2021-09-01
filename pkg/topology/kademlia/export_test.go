@@ -9,5 +9,5 @@ var (
 	QuickSaturationPeers        = &quickSaturationPeers
 	SaturationPeers             = &saturationPeers
 	OverSaturationPeers         = &overSaturationPeers
-	BootNodeOverSaturationPeers = &bootNodeOverSaturationPeers
+	BootnodeOverSaturationPeers = &bootNodeOverSaturationPeers
 )

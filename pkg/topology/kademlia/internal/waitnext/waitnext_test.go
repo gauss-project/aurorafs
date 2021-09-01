@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"github.com/gauss-project/aurorafs/pkg/boson/test"
-	"github.com/gauss-project/aurorafs/pkg/kademlia/internal/waitnext"
+	"github.com/gauss-project/aurorafs/pkg/topology/kademlia/internal/waitnext"
 )
 
 func TestSet(t *testing.T) {
