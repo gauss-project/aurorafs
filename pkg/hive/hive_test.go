@@ -88,7 +88,7 @@ func TestHandlerRateLimit(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	rec, err := serverRecorder.Records(serverAddress, "hive", "1.0.0", "peers")
+	rec, err := serverRecorder.Records(serverAddress, hive.ProtocolName, hive.ProtocolVersion, hive.PeersStreamName)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -236,7 +236,7 @@ func TestBroadcastPeers(t *testing.T) {
 			}
 
 			// get a record for this stream
-			records, err := recorder.Records(tc.addresee, "hive", "1.0.0", "peers")
+			records, err := recorder.Records(tc.addresee, hive.ProtocolName, hive.ProtocolVersion, hive.PeersStreamName)
 			if err != nil {
 				t.Fatal(err)
 			}
