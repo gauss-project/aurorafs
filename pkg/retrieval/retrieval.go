@@ -280,7 +280,6 @@ func (s *Service) getACONodeList(optional_node_list []boson.Address, node_count 
 func (s *Service) rankNodeDownload(node boson.Address, download_rate float64){
 	// do nothing
 	s.logger.Tracef("download rate = %f\n", download_rate)
-	return
 }
 
 func (s *Service) isNeighborNode(node_addr boson.Address)bool{
