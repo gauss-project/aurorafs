@@ -22,7 +22,7 @@ type Interface interface {
 
 	CancelFindChunkInfo(rootCid boson.Address)
 
-	OnChunkTransferred(cid boson.Address, rootCid boson.Address, overlays boson.Address)
+	OnChunkTransferred(ctx context.Context, cid boson.Address, rootCid boson.Address, overlays boson.Address)
 
 	Init(ctx context.Context, authInfo []byte, rootCid boson.Address) bool
 }
@@ -122,7 +122,7 @@ func (ci *ChunkInfo) Init(ctx context.Context, authInfo []byte, rootCid boson.Ad
 		peersResults int
 		errorC       = make(chan error, count)
 	)
-
+	// todo 修改逻辑
 	for {
 		if ci.cd.isExists(rootCid) {
 			if len(overlays) > 1 {
@@ -133,9 +133,10 @@ func (ci *ChunkInfo) Init(ctx context.Context, authInfo []byte, rootCid boson.Ad
 		if peerAttempt < count {
 			if ci.getQueue(rootCid.String()) == nil {
 				ci.newQueue(rootCid.String())
-				ci.getQueue(rootCid.String()).push(Pulling, overlays[peerAttempt].Bytes())
+				ci.getQueue(rootCid.String()).push(UnPull, overlays[peerAttempt].Bytes())
 			}
 			cpReq := ci.cp.createChunkPyramidReq(rootCid)
+			// todo 调用获取树
 			if err := ci.sendData(ctx, overlays[peerAttempt], streamPyramidReqName, cpReq); err != nil {
 				errorC <- err
 			}
@@ -163,26 +164,24 @@ func (ci *ChunkInfo) FindChunkInfo(ctx context.Context, authInfo []byte, rootCid
 	if ci.getQueue(rootCid.String()) == nil {
 		ci.newQueue(rootCid.String())
 	}
-	if ci.cd.isExists(rootCid) {
-		for _, overlay := range overlays {
-			if ci.getQueue(rootCid.String()).isExists(Pulled, overlay.Bytes()) || ci.getQueue(rootCid.String()).isExists(Pulling, overlay.Bytes()) ||
-				ci.getQueue(rootCid.String()).isExists(UnPull, overlay.Bytes()) {
-				continue
-			}
-			ci.getQueue(rootCid.String()).push(UnPull, overlay.Bytes())
+	// todo 修改逻辑
+	for _, overlay := range overlays {
+		if ci.getQueue(rootCid.String()).isExists(Pulled, overlay.Bytes()) || ci.getQueue(rootCid.String()).isExists(Pulling, overlay.Bytes()) ||
+			ci.getQueue(rootCid.String()).isExists(UnPull, overlay.Bytes()) {
+			continue
 		}
+		ci.getQueue(rootCid.String()).push(UnPull, overlay.Bytes())
+	}
+	if ci.cd.isExists(rootCid) {
 		ci.doFindChunkInfo(ctx, authInfo, rootCid)
 	} else {
-		for _, overlay := range overlays {
-			ci.getQueue(rootCid.String()).push(UnPull, overlay.Bytes())
-		}
 		ci.doFindChunkPyramid(ctx, authInfo, rootCid, overlays)
 	}
 }
 
 // GetChunkInfo
 func (ci *ChunkInfo) GetChunkInfo(rootCid boson.Address, cid boson.Address) [][]byte {
-	return ci.cd.getChunkInfo(rootCid, cid)
+	return ci.getChunkInfo(rootCid, cid)
 }
 
 // CancelFindChunkInfo
@@ -191,6 +190,6 @@ func (ci *ChunkInfo) CancelFindChunkInfo(rootCid boson.Address) {
 }
 
 // OnChunkTransferred
-func (ci *ChunkInfo) OnChunkTransferred(cid, rootCid boson.Address, overlay boson.Address) {
-	ci.ct.updateNeighborChunkInfo(rootCid, cid, overlay)
+func (ci *ChunkInfo) OnChunkTransferred(ctx context.Context, cid, rootCid boson.Address, overlay boson.Address) {
+	ci.updateNeighborChunkInfo(ctx, rootCid, cid, overlay)
 }

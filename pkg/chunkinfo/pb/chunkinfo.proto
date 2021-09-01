@@ -30,5 +30,5 @@ message ChunkInfoReq {
 
 message ChunkInfoResp {
   bytes RootCid = 1;
-  map<string, Overlays> Presence = 2;
+  map<string, bytes> Presence = 2;
 }

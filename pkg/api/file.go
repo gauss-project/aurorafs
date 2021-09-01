@@ -60,8 +60,6 @@ func (s *server) fileUploadHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-
-
 	ctx := r.Context()
 
 	if mediaType == multiPartFormData {
@@ -170,7 +168,6 @@ func (s *server) fileUploadHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-
 	mr, err := p(ctx, bytes.NewReader(metadataBytes), int64(len(metadataBytes)))
 	if err != nil {
 		logger.Debugf("file upload: metadata store, file %q: %v", fileName, err)
@@ -202,15 +199,15 @@ func (s *server) fileUploadHandler(w http.ResponseWriter, r *http.Request) {
 		jsonhttp.InternalServerError(w, "could not get trie data")
 		return
 	}
-	dataChunks ,_ := s.traversal.CheckTrieData(ctx, reference, a)
+	dataChunks, _ := s.traversal.CheckTrieData(ctx, reference, a)
 	if err != nil {
 		logger.Errorf("file upload: check trie data, file %q: %v", fileName, err)
 		jsonhttp.InternalServerError(w, "check trie data error")
 		return
 	}
-	for _,li := range dataChunks {
-		for _,b := range li {
-			s.chunkInfo.OnChunkTransferred(boson.NewAddress(b), reference, s.overlay)
+	for _, li := range dataChunks {
+		for _, b := range li {
+			s.chunkInfo.OnChunkTransferred(ctx, boson.NewAddress(b), reference, s.overlay)
 		}
 	}
 
@@ -323,7 +320,6 @@ func (s *server) fileDownloadHandler(w http.ResponseWriter, r *http.Request) {
 func (s *server) downloadHandler(w http.ResponseWriter, r *http.Request, reference boson.Address, additionalHeaders http.Header, etag bool, rootCid ...boson.Address) {
 	logger := tracing.NewLoggerWithTraceID(r.Context(), s.logger)
 
-
 	reader, l, err := joiner.New(r.Context(), s.storer, reference, rootCid...)
 	if err != nil {
 		if errors.Is(err, storage.ErrNotFound) {
@@ -358,7 +354,6 @@ func (s *server) downloadHandler(w http.ResponseWriter, r *http.Request, referen
 	w.Header().Set("Content-Length", fmt.Sprintf("%d", l))
 	w.Header().Set("Decompressed-Content-Length", fmt.Sprintf("%d", l))
 	w.Header().Set("Access-Control-Expose-Headers", "Content-Disposition")
-
 
 	http.ServeContent(w, r, "", time.Now(), langos.NewBufferedLangos(reader, lookaheadBufferSize(l)))
 }

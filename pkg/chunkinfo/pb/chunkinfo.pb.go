@@ -231,8 +231,8 @@ func (m *ChunkInfoReq) GetCreateTime() int64 {
 }
 
 type ChunkInfoResp struct {
-	RootCid  []byte               `protobuf:"bytes,1,opt,name=RootCid,proto3" json:"RootCid,omitempty"`
-	Presence map[string]*Overlays `protobuf:"bytes,2,rep,name=Presence,proto3" json:"Presence,omitempty" protobuf_key:"bytes,1,opt,name=key,proto3" protobuf_val:"bytes,2,opt,name=value,proto3"`
+	RootCid  []byte            `protobuf:"bytes,1,opt,name=RootCid,proto3" json:"RootCid,omitempty"`
+	Presence map[string][]byte `protobuf:"bytes,2,rep,name=Presence,proto3" json:"Presence,omitempty" protobuf_key:"bytes,1,opt,name=key,proto3" protobuf_val:"bytes,2,opt,name=value,proto3"`
 }
 
 func (m *ChunkInfoResp) Reset()         { *m = ChunkInfoResp{} }
@@ -275,7 +275,7 @@ func (m *ChunkInfoResp) GetRootCid() []byte {
 	return nil
 }
 
-func (m *ChunkInfoResp) GetPresence() map[string]*Overlays {
+func (m *ChunkInfoResp) GetPresence() map[string][]byte {
 	if m != nil {
 		return m.Presence
 	}
@@ -290,7 +290,7 @@ func init() {
 	proto.RegisterType((*ChunkPyramidReq)(nil), "chunkinfo.ChunkPyramidReq")
 	proto.RegisterType((*ChunkInfoReq)(nil), "chunkinfo.ChunkInfoReq")
 	proto.RegisterType((*ChunkInfoResp)(nil), "chunkinfo.ChunkInfoResp")
-	proto.RegisterMapType((map[string]*Overlays)(nil), "chunkinfo.ChunkInfoResp.PresenceEntry")
+	proto.RegisterMapType((map[string][]byte)(nil), "chunkinfo.ChunkInfoResp.PresenceEntry")
 }
 
 func init() { proto.RegisterFile("chunkinfo.proto", fileDescriptor_373dbabb20101923) }
@@ -312,13 +312,13 @@ var fileDescriptor_373dbabb20101923 = []byte{
 	0x2c, 0xc4, 0xc3, 0xc5, 0x58, 0x26, 0xc1, 0xa8, 0xc0, 0xac, 0xc1, 0x13, 0xc4, 0x58, 0xa6, 0xe4,
 	0xcd, 0xc5, 0x8f, 0xea, 0x89, 0x42, 0x3c, 0x61, 0x29, 0xc7, 0xc5, 0xe5, 0x5c, 0x94, 0x9a, 0x58,
 	0x92, 0x1a, 0x92, 0x99, 0x0b, 0xb1, 0x9a, 0x39, 0x08, 0x49, 0x44, 0xc9, 0x83, 0x8b, 0x07, 0x6c,
-	0x98, 0x67, 0x5e, 0x5a, 0x3e, 0x65, 0x26, 0xed, 0x67, 0xe4, 0xe2, 0x45, 0x32, 0x8a, 0x40, 0x0c,
+	0x98, 0x67, 0x5e, 0x5a, 0x3e, 0x65, 0x26, 0xad, 0x62, 0xe4, 0xe2, 0x45, 0x32, 0x8a, 0x40, 0x0c,
 	0x73, 0x04, 0x14, 0xa5, 0x16, 0xa7, 0xe6, 0x25, 0xa7, 0x42, 0xa3, 0x58, 0x0d, 0x3d, 0x8a, 0x60,
-	0xa6, 0xe8, 0xc1, 0x14, 0x42, 0x22, 0x09, 0xae, 0x4f, 0x2a, 0x80, 0x8b, 0x17, 0x45, 0x8a, 0xe2,
-	0x20, 0x77, 0x92, 0x39, 0xf1, 0x48, 0x8e, 0xf1, 0xc2, 0x23, 0x39, 0xc6, 0x07, 0x8f, 0xe4, 0x18,
+	0xa6, 0xe8, 0xc1, 0x14, 0x42, 0x22, 0x09, 0xae, 0x4f, 0xca, 0x9a, 0x8b, 0x17, 0x45, 0x8a, 0x94,
+	0xa8, 0x72, 0x92, 0x39, 0xf1, 0x48, 0x8e, 0xf1, 0xc2, 0x23, 0x39, 0xc6, 0x07, 0x8f, 0xe4, 0x18,
 	0x27, 0x3c, 0x96, 0x63, 0xb8, 0xf0, 0x58, 0x8e, 0xe1, 0xc6, 0x63, 0x39, 0x86, 0x28, 0xa6, 0x82,
-	0xa4, 0x24, 0x36, 0x70, 0xb2, 0x36, 0x06, 0x04, 0x00, 0x00, 0xff, 0xff, 0x42, 0x9c, 0xb0, 0x0e,
-	0xe9, 0x02, 0x00, 0x00,
+	0xa4, 0x24, 0x36, 0x70, 0x0a, 0x36, 0x06, 0x04, 0x00, 0x00, 0xff, 0xff, 0x97, 0x92, 0x54, 0x6a,
+	0xd4, 0x02, 0x00, 0x00,
 }
 
 func (m *ChunkPyramidResp) Marshal() (dAtA []byte, err error) {
@@ -524,15 +524,10 @@ func (m *ChunkInfoResp) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 		for k := range m.Presence {
 			v := m.Presence[k]
 			baseI := i
-			if v != nil {
-				{
-					size, err := v.MarshalToSizedBuffer(dAtA[:i])
-					if err != nil {
-						return 0, err
-					}
-					i -= size
-					i = encodeVarintChunkinfo(dAtA, i, uint64(size))
-				}
+			if len(v) > 0 {
+				i -= len(v)
+				copy(dAtA[i:], v)
+				i = encodeVarintChunkinfo(dAtA, i, uint64(len(v)))
 				i--
 				dAtA[i] = 0x12
 			}
@@ -667,9 +662,8 @@ func (m *ChunkInfoResp) Size() (n int) {
 			_ = k
 			_ = v
 			l = 0
-			if v != nil {
-				l = v.Size()
-				l += 1 + sovChunkinfo(uint64(l))
+			if len(v) > 0 {
+				l = 1 + len(v) + sovChunkinfo(uint64(len(v)))
 			}
 			mapEntrySize := 1 + len(k) + sovChunkinfo(uint64(len(k))) + l
 			n += mapEntrySize + 1 + sovChunkinfo(uint64(mapEntrySize))
@@ -1406,10 +1400,10 @@ func (m *ChunkInfoResp) Unmarshal(dAtA []byte) error {
 				return io.ErrUnexpectedEOF
 			}
 			if m.Presence == nil {
-				m.Presence = make(map[string]*Overlays)
+				m.Presence = make(map[string][]byte)
 			}
 			var mapkey string
-			var mapvalue *Overlays
+			mapvalue := []byte{}
 			for iNdEx < postIndex {
 				entryPreIndex := iNdEx
 				var wire uint64
@@ -1458,7 +1452,7 @@ func (m *ChunkInfoResp) Unmarshal(dAtA []byte) error {
 					mapkey = string(dAtA[iNdEx:postStringIndexmapkey])
 					iNdEx = postStringIndexmapkey
 				} else if fieldNum == 2 {
-					var mapmsglen int
+					var mapbyteLen uint64
 					for shift := uint(0); ; shift += 7 {
 						if shift >= 64 {
 							return ErrIntOverflowChunkinfo
@@ -1468,26 +1462,25 @@ func (m *ChunkInfoResp) Unmarshal(dAtA []byte) error {
 						}
 						b := dAtA[iNdEx]
 						iNdEx++
-						mapmsglen |= int(b&0x7F) << shift
+						mapbyteLen |= uint64(b&0x7F) << shift
 						if b < 0x80 {
 							break
 						}
 					}
-					if mapmsglen < 0 {
+					intMapbyteLen := int(mapbyteLen)
+					if intMapbyteLen < 0 {
 						return ErrInvalidLengthChunkinfo
 					}
-					postmsgIndex := iNdEx + mapmsglen
-					if postmsgIndex < 0 {
+					postbytesIndex := iNdEx + intMapbyteLen
+					if postbytesIndex < 0 {
 						return ErrInvalidLengthChunkinfo
 					}
-					if postmsgIndex > l {
+					if postbytesIndex > l {
 						return io.ErrUnexpectedEOF
 					}
-					mapvalue = &Overlays{}
-					if err := mapvalue.Unmarshal(dAtA[iNdEx:postmsgIndex]); err != nil {
-						return err
-					}
-					iNdEx = postmsgIndex
+					mapvalue = make([]byte, mapbyteLen)
+					copy(mapvalue, dAtA[iNdEx:postbytesIndex])
+					iNdEx = postbytesIndex
 				} else {
 					iNdEx = entryPreIndex
 					skippy, err := skipChunkinfo(dAtA[iNdEx:])

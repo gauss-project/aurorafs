@@ -139,6 +139,7 @@ func (q *queue) isExists(pull Pull, overlay []byte) bool {
 
 // queueProcess
 func (ci *ChunkInfo) queueProcess(ctx context.Context, rootCid boson.Address, streamName string) {
+	// todo pyramid 不在走队列
 	q := ci.getQueue(rootCid.String())
 	// pulled + pulling >= pullMax
 	if q.len(Pulled)+q.len(Pulling) >= PullMax {
