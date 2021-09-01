@@ -22,22 +22,18 @@ import (
 	"time"
 
 	"github.com/gauss-project/aurorafs/pkg/boson"
+	"github.com/gauss-project/aurorafs/pkg/sctx"
 	"github.com/gauss-project/aurorafs/pkg/shed"
 	"github.com/gauss-project/aurorafs/pkg/storage"
 	"github.com/syndtr/goleveldb/leveldb"
 )
-
-type RootCIDKey struct{}
 
 // Put stores Chunks to database and depending
 // on the Putter mode, it updates required indexes.
 // Put is required to implement storage.Store
 // interface.
 func (db *DB) Put(ctx context.Context, mode storage.ModePut, chs ...boson.Chunk) (exist []bool, err error) {
-	rootCID, ok := ctx.Value(RootCIDKey{}).(boson.Address)
-	if !ok {
-		rootCID = boson.ZeroAddress
-	}
+	rootCID := sctx.GetRootCID(ctx)
 
 	db.metrics.ModePut.Inc()
 	defer totalTimeMetric(db.metrics.TotalTimePut, time.Now())

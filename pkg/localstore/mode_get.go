@@ -21,11 +21,11 @@ import (
 	"errors"
 	"time"
 
-	"github.com/syndtr/goleveldb/leveldb"
-
 	"github.com/gauss-project/aurorafs/pkg/boson"
+	"github.com/gauss-project/aurorafs/pkg/sctx"
 	"github.com/gauss-project/aurorafs/pkg/shed"
 	"github.com/gauss-project/aurorafs/pkg/storage"
+	"github.com/syndtr/goleveldb/leveldb"
 )
 
 // Get returns a chunk from the database. If the chunk is
@@ -33,7 +33,7 @@ import (
 // All required indexes will be updated required by the
 // Getter Mode. Get is required to implement chunk.Store
 // interface.
-func (db *DB) Get(ctx context.Context, mode storage.ModeGet, addr boson.Address, rootCid ...boson.Address) (ch boson.Chunk, err error) {
+func (db *DB) Get(ctx context.Context, mode storage.ModeGet, addr boson.Address) (ch boson.Chunk, err error) {
 	db.metrics.ModeGet.Inc()
 	defer totalTimeMetric(db.metrics.TotalTimeGet, time.Now())
 
@@ -43,7 +43,7 @@ func (db *DB) Get(ctx context.Context, mode storage.ModeGet, addr boson.Address,
 		}
 	}()
 
-	out, err := db.get(mode, addr, rootCid...)
+	out, err := db.get(mode, addr, sctx.GetRootCID(ctx))
 	if err != nil {
 		if errors.Is(err, leveldb.ErrNotFound) {
 			return nil, storage.ErrNotFound
@@ -55,7 +55,7 @@ func (db *DB) Get(ctx context.Context, mode storage.ModeGet, addr boson.Address,
 
 // get returns Item from the retrieval index
 // and updates other indexes.
-func (db *DB) get(mode storage.ModeGet, addr boson.Address, rootCID ...boson.Address) (out shed.Item, err error) {
+func (db *DB) get(mode storage.ModeGet, addr boson.Address, rootCID boson.Address) (out shed.Item, err error) {
 	item := addressToItem(addr)
 
 	out, err = db.retrievalDataIndex.Get(item)
@@ -65,8 +65,8 @@ func (db *DB) get(mode storage.ModeGet, addr boson.Address, rootCID ...boson.Add
 	switch mode {
 	// update the access timestamp and gc index
 	case storage.ModeGetRequest:
-		if len(rootCID) > 0 {
-			db.updateGCItems(addressToItem(rootCID[0]))
+		if !rootCID.IsZero() {
+			db.updateGCItems(addressToItem(rootCID))
 		} else {
 			db.updateGCItems(out)
 		}

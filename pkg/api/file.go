@@ -24,6 +24,7 @@ import (
 	"github.com/gauss-project/aurorafs/pkg/file"
 	"github.com/gauss-project/aurorafs/pkg/file/joiner"
 	"github.com/gauss-project/aurorafs/pkg/jsonhttp"
+	"github.com/gauss-project/aurorafs/pkg/sctx"
 	"github.com/gauss-project/aurorafs/pkg/storage"
 
 	"github.com/ethersphere/langos"
@@ -59,8 +60,6 @@ func (s *server) fileUploadHandler(w http.ResponseWriter, r *http.Request) {
 		jsonhttp.BadRequest(w, "invalid content-type header")
 		return
 	}
-
-
 
 	ctx := r.Context()
 
@@ -170,7 +169,6 @@ func (s *server) fileUploadHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-
 	mr, err := p(ctx, bytes.NewReader(metadataBytes), int64(len(metadataBytes)))
 	if err != nil {
 		logger.Debugf("file upload: metadata store, file %q: %v", fileName, err)
@@ -202,14 +200,14 @@ func (s *server) fileUploadHandler(w http.ResponseWriter, r *http.Request) {
 		jsonhttp.InternalServerError(w, "could not get trie data")
 		return
 	}
-	dataChunks ,_ := s.traversal.CheckTrieData(ctx, reference, a)
+	dataChunks, _ := s.traversal.CheckTrieData(ctx, reference, a)
 	if err != nil {
 		logger.Errorf("file upload: check trie data, file %q: %v", fileName, err)
 		jsonhttp.InternalServerError(w, "check trie data error")
 		return
 	}
-	for _,li := range dataChunks {
-		for _,b := range li {
+	for _, li := range dataChunks {
+		for _, b := range li {
 			s.chunkInfo.OnChunkTransferred(boson.NewAddress(b), reference, s.overlay)
 		}
 	}
@@ -242,6 +240,7 @@ func (s *server) fileDownloadHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	r = r.WithContext(sctx.SetRootCID(r.Context(), address))
 	if !s.chunkInfo.Init(r.Context(), nil, address) {
 		logger.Debugf("file download: chunkInfo init %s: %v", nameOrHex, err)
 		jsonhttp.NotFound(w, nil)
@@ -316,19 +315,19 @@ func (s *server) fileDownloadHandler(w http.ResponseWriter, r *http.Request) {
 		"Content-Type":        {metaData.MimeType},
 	}
 
-	s.downloadHandler(w, r, e.Reference(), additionalHeaders, true, address)
+	s.downloadHandler(w, r, e.Reference(), additionalHeaders, true)
 }
 
 // downloadHandler contains common logic for dowloading Swarm file from API
-func (s *server) downloadHandler(w http.ResponseWriter, r *http.Request, reference boson.Address, additionalHeaders http.Header, etag bool, rootCid ...boson.Address) {
+func (s *server) downloadHandler(w http.ResponseWriter, r *http.Request, reference boson.Address, additionalHeaders http.Header, etag bool) {
 	logger := tracing.NewLoggerWithTraceID(r.Context(), s.logger)
 
-
-	reader, l, err := joiner.New(r.Context(), s.storer, reference, rootCid...)
+	reader, l, err := joiner.New(r.Context(), s.storer, reference)
 	if err != nil {
 		if errors.Is(err, storage.ErrNotFound) {
-			if len(rootCid) > 0 {
-				s.chunkInfo.FindChunkInfo(r.Context(), nil, rootCid[0], []boson.Address{s.overlay})
+			rootCID := sctx.GetRootCID(r.Context())
+			if !rootCID.IsZero() {
+				s.chunkInfo.FindChunkInfo(r.Context(), nil, rootCID, []boson.Address{s.overlay})
 			}
 			logger.Debugf("api download: not found %s: %v", reference, err)
 			logger.Error("api download: not found")
@@ -358,7 +357,6 @@ func (s *server) downloadHandler(w http.ResponseWriter, r *http.Request, referen
 	w.Header().Set("Content-Length", fmt.Sprintf("%d", l))
 	w.Header().Set("Decompressed-Content-Length", fmt.Sprintf("%d", l))
 	w.Header().Set("Access-Control-Expose-Headers", "Content-Disposition")
-
 
 	http.ServeContent(w, r, "", time.Now(), langos.NewBufferedLangos(reader, lookaheadBufferSize(l)))
 }

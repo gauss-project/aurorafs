@@ -294,7 +294,7 @@ func newPyramid(trieData map[string][]byte) *pyramid {
 	}
 }
 
-func (p *pyramid) Get(ctx context.Context, mode storage.ModeGet, addr boson.Address, rootCid ...boson.Address) (ch boson.Chunk, err error) {
+func (p *pyramid) Get(ctx context.Context, mode storage.ModeGet, addr boson.Address) (ch boson.Chunk, err error) {
 	select {
 	case <-ctx.Done():
 		err = ctx.Err()
