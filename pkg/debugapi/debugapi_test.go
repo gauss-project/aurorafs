@@ -7,6 +7,7 @@ package debugapi_test
 import (
 	"crypto/ecdsa"
 	"encoding/hex"
+	"github.com/gauss-project/aurorafs/pkg/topology/lightnode"
 	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
@@ -58,12 +59,13 @@ type testServer struct {
 
 func newTestServer(t *testing.T, o testServerOptions) *testServer {
 	topologyDriver := topologymock.NewTopologyDriver(o.TopologyOpts...)
-	acc := accountingmock.NewAccounting(o.AccountingOpts...)
-	settlement := swapmock.New(o.SettlementOpts...)
-	chequebook := chequebookmock.NewChequebook(o.ChequebookOpts...)
-	swapserv := swapmock.NewApiInterface(o.SwapOpts...)
+	//acc := accountingmock.NewAccounting(o.AccountingOpts...)
+	//settlement := swapmock.New(o.SettlementOpts...)
+	//chequebook := chequebookmock.NewChequebook(o.ChequebookOpts...)
+	//swapserv := swapmock.NewApiInterface(o.SwapOpts...)
+	ln := lightnode.NewContainer(o.Overlay)
 	s := debugapi.New(o.Overlay, o.PublicKey, o.PSSPublicKey, o.EthereumAddress, logging.New(ioutil.Discard, 0), nil, o.CORSAllowedOrigins)
-	s.Configure(o.P2P, o.Pingpong, topologyDriver, o.Storer, acc, settlement, true, swapserv, chequebook)
+	s.Configure(o.P2P, o.Pingpong, topologyDriver,ln, o.Storer)
 	ts := httptest.NewServer(s)
 	t.Cleanup(ts.Close)
 
@@ -124,10 +126,11 @@ func TestServer_Configure(t *testing.T) {
 		})),
 	}
 	topologyDriver := topologymock.NewTopologyDriver(o.TopologyOpts...)
-	acc := accountingmock.NewAccounting(o.AccountingOpts...)
-	settlement := swapmock.New(o.SettlementOpts...)
-	chequebook := chequebookmock.NewChequebook(o.ChequebookOpts...)
-	swapserv := swapmock.NewApiInterface(o.SwapOpts...)
+	//acc := accountingmock.NewAccounting(o.AccountingOpts...)
+	//settlement := swapmock.New(o.SettlementOpts...)
+	//chequebook := chequebookmock.NewChequebook(o.ChequebookOpts...)
+	//swapserv := swapmock.NewApiInterface(o.SwapOpts...)
+	ln := lightnode.NewContainer(o.Overlay)
 	s := debugapi.New(o.Overlay, o.PublicKey, o.PSSPublicKey, o.EthereumAddress, logging.New(ioutil.Discard, 0), nil, nil)
 	ts := httptest.NewServer(s)
 	t.Cleanup(ts.Close)
@@ -160,7 +163,7 @@ func TestServer_Configure(t *testing.T) {
 		}),
 	)
 
-	s.Configure(o.P2P, o.Pingpong, topologyDriver, o.Storer,acc, settlement, true, swapserv, chequebook)
+	s.Configure(o.P2P, o.Pingpong, topologyDriver, ln, o.Storer)
 
 	testBasicRouter(t, client)
 	jsonhttptest.Request(t, client, http.MethodGet, "/readiness", http.StatusOK,

@@ -470,7 +470,7 @@ func NewBee(addr string, bosonAddress boson.Address, publicKey ecdsa.PublicKey, 
 		//}
 
 		// inject dependencies and configure full debug api http path routes
-		debugAPIService.Configure(p2ps, pingPong, kad, storer)
+		debugAPIService.Configure(p2ps, pingPong, kad, lightNodes, storer)
 	}
 
 	if err := kad.Start(p2pCtx); err != nil {
