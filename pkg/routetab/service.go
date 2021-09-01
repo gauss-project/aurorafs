@@ -3,10 +3,10 @@ package routetab
 import (
 	"context"
 	"fmt"
+	"github.com/gauss-project/aurorafs/pkg/kademlia"
 	"time"
 
 	"github.com/gauss-project/aurorafs/pkg/boson"
-	"github.com/gauss-project/aurorafs/pkg/kademlia"
 	"github.com/gauss-project/aurorafs/pkg/logging"
 	"github.com/gauss-project/aurorafs/pkg/p2p"
 	"github.com/gauss-project/aurorafs/pkg/p2p/protobuf"
@@ -15,10 +15,10 @@ import (
 )
 
 const (
-	protocolName        = "router"
-	protocolVersion     = "1.0.0"
-	streamFindRouteReq  = "FindRouteReq"
-	streamFindRouteResp = "FindRouteResp"
+	protocolName      = "router"
+	protocolVersion   = "1.0.0"
+	streamOnRouteReq  = "onRouteReq"
+	streamOnRouteResp = "onRouteResp"
 )
 
 type RouteTab interface {
@@ -95,18 +95,18 @@ func (s *Service) Protocol() p2p.ProtocolSpec {
 		Version: protocolVersion,
 		StreamSpecs: []p2p.StreamSpec{
 			{
-				Name:    streamFindRouteReq,
-				Handler: s.handlerFindRouteReq,
+				Name:    streamOnRouteReq,
+				Handler: s.onRouteReq,
 			},
 			{
-				Name:    streamFindRouteResp,
-				Handler: s.handlerFindRouteResp,
+				Name:    streamOnRouteResp,
+				Handler: s.onRouteResp,
 			},
 		},
 	}
 }
 
-func (s *Service) handlerFindRouteReq(ctx context.Context, p p2p.Peer, stream p2p.Stream) error {
+func (s *Service) onRouteReq(ctx context.Context, p p2p.Peer, stream p2p.Stream) error {
 	r := protobuf.NewReader(stream)
 	defer func() {
 		err := stream.FullClose()
@@ -144,7 +144,7 @@ func (s *Service) handlerFindRouteReq(ctx context.Context, p p2p.Peer, stream p2
 			s.logger.Debugf("route: handlerFindRouteReq dest= %s route not found", dest.String())
 			if !s.isNeighbor(dest) {
 				// forward
-				forward := s.getNeighbor()
+				forward := s.getNeighbor(dest, req.Alpha)
 				for _, v := range forward {
 					if !inPath(v.Bytes(), req.Path) {
 						// forward
@@ -169,7 +169,7 @@ func (s *Service) handlerFindRouteReq(ctx context.Context, p p2p.Peer, stream p2
 	return nil
 }
 
-func (s *Service) handlerFindRouteResp(ctx context.Context, p p2p.Peer, stream p2p.Stream) error {
+func (s *Service) onRouteResp(ctx context.Context, p p2p.Peer, stream p2p.Stream) error {
 	r := protobuf.NewReader(stream)
 	defer func() {
 		err := stream.FullClose()
@@ -200,7 +200,7 @@ func (s *Service) FindRoute(ctx context.Context, dest boson.Address) (routes []R
 			err = fmt.Errorf("route: FindRoute dest %s is neighbor", dest.String())
 			return
 		}
-		forward := s.getNeighbor()
+		forward := s.getNeighbor(dest, defaultNeighborAlpha)
 		if len(forward) > 0 {
 			ct, cancel := context.WithTimeout(ctx, PendingTimeout)
 			defer cancel()
@@ -264,24 +264,15 @@ func (s *Service) saveRespRouteItem(ctx context.Context, neighbor boson.Address,
 	}
 }
 
-func (s *Service) getNeighbor() (forward []boson.Address) {
-	forward = make([]boson.Address, 0)
-	depth := s.kad.NeighborhoodDepth()
-	cnt := 0
-	err := s.kad.EachPeer(func(address boson.Address, u uint8) (stop, jumpToNext bool, err error) {
-		if u >= depth {
-			// neighbor
-			forward = append(forward, address)
-			cnt++
-			if cnt >= neighborAlpha {
-				return true, false, nil
-			}
+func (s *Service) getNeighbor(target boson.Address, alpha int32) (forward []boson.Address) {
+	forward = make([]boson.Address, alpha)
+	for i := int32(0); i < alpha; i++ {
+		addr, err := s.kad.ClosestPeer(target, forward...)
+		if err != nil {
+			s.metrics.TotalErrors.Inc()
+			s.logger.Errorf("route: get neighbor: %s", err.Error())
 		}
-		return false, true, nil
-	})
-	if err != nil {
-		s.metrics.TotalErrors.Inc()
-		s.logger.Errorf("route: get neighbor: %s", err.Error())
+		forward = append(forward, addr)
 	}
 	return
 }
@@ -301,50 +292,20 @@ func (s *Service) isNeighbor(dest boson.Address) (has bool) {
 }
 
 func (s *Service) doReq(ctx context.Context, src boson.Address, peer p2p.Peer, target boson.Address, req *pb.FindRouteReq, ch chan struct{}) {
-	s.logger.Tracef("route: doReq dest %s to neighbor %s", target.String(), peer.Address.String())
-	stream, err1 := s.streamer.NewStream(ctx, peer.Address, nil, protocolName, protocolVersion, streamFindRouteReq)
-	if err1 != nil {
-		s.metrics.TotalErrors.Inc()
-		s.logger.Errorf("route: doReq NewStream: err1=%s", err1)
-		return
+	if req.Alpha == 0 {
+		req.Alpha = defaultNeighborAlpha
 	}
-	defer func() {
-		err := stream.FullClose()
-		if err != nil {
-			s.logger.Warningf("route: doReq stream.FullClose: %s", err.Error())
-		}
-	}()
-
 	err := s.pendingCalls.Add(target, src, ch)
 	if err != nil {
 		s.metrics.TotalErrors.Inc()
 		s.logger.Errorf("route: doReq pendingCalls.Add: %s", err.Error())
 		return
 	}
-
-	w := protobuf.NewWriter(stream)
-	err = w.WriteMsgWithContext(ctx, req)
-	if err != nil {
-		s.metrics.TotalErrors.Inc()
-		s.logger.Errorf("route: doReq write msg: err=%s", err)
-	}
+	s.sendDataToNode(ctx, peer, streamOnRouteReq, req)
 	s.metrics.FindRouteReqSentCount.Inc()
 }
 
 func (s *Service) doResp(ctx context.Context, peer p2p.Peer, dest boson.Address, routes []RouteItem) {
-	s.logger.Tracef("route: doResp dest %s to neighbor %s", dest.String(), peer.Address.String())
-	stream, err1 := s.streamer.NewStream(ctx, peer.Address, nil, protocolName, protocolVersion, streamFindRouteResp)
-	if err1 != nil {
-		s.metrics.TotalErrors.Inc()
-		s.logger.Errorf("route: doResp NewStream: err1=%s", err1)
-		return
-	}
-	defer func() {
-		err := stream.FullClose()
-		if err != nil {
-			s.logger.Warningf("route: doResp stream.FullClose: %s", err.Error())
-		}
-	}()
 	resp := &pb.FindRouteResp{
 		Dest: dest.Bytes(),
 		RouteItems: func() []*pb.RouteItem {
@@ -354,12 +315,29 @@ func (s *Service) doResp(ctx context.Context, peer p2p.Peer, dest boson.Address,
 			return []*pb.RouteItem{}
 		}(),
 	}
+	s.sendDataToNode(ctx, peer, streamOnRouteResp, resp)
+	s.metrics.FindRouteRespSentCount.Inc()
+}
 
+func (s *Service) sendDataToNode(ctx context.Context, peer p2p.Peer, streamName string, msg protobuf.Message) {
+	s.logger.Tracef("route: sendDataToNode dest %s ,handler %s", peer.Address.String(), streamName)
+	stream, err1 := s.streamer.NewStream(ctx, peer.Address, nil, protocolName, protocolVersion, streamName)
+	if err1 != nil {
+		s.metrics.TotalErrors.Inc()
+		s.logger.Errorf("route: sendDataToNode NewStream, err1=%s", err1)
+		return
+	}
+	defer func() {
+		err := stream.FullClose()
+		if err != nil {
+			s.logger.Warningf("route: sendDataToNode stream.FullClose, %s", err.Error())
+		}
+	}()
 	w := protobuf.NewWriter(stream)
-	err := w.WriteMsgWithContext(ctx, resp)
+	err := w.WriteMsgWithContext(ctx, msg)
 	if err != nil {
 		s.metrics.TotalErrors.Inc()
-		s.logger.Errorf("route: doResp write msg: err=%s", err)
+		s.logger.Errorf("route: sendDataToNode write msg, err=%s", err)
 	}
-	s.metrics.FindRouteRespSentCount.Inc()
+	return
 }

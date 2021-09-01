@@ -12,6 +12,7 @@ option go_package = "pb";
 message FindRouteReq {
     bytes Dest = 1;
     repeated bytes Path = 2;
+    int32 Alpha = 3;
 }
 // define FindRouteResp message struct here
 message FindRouteResp {
@@ -24,4 +25,9 @@ message RouteItem {
     uint32 ttl = 2;
     bytes neighbor = 3;
     repeated RouteItem nextHop = 4;
+}
+
+message SendData {
+    string Handler = 1;
+    bytes Data = 2;
 }

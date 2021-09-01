@@ -16,9 +16,9 @@ var (
 
 	MaxTTL uint8 = 7
 
-	neighborAlpha = 2
-	gcTime        = time.Minute * 10
-	gcInterval    = time.Minute
+	defaultNeighborAlpha int32 = 2
+	gcTime              = time.Minute * 10
+	gcInterval          = time.Minute
 )
 
 // RouteItem

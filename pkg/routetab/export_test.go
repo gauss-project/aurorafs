@@ -17,8 +17,8 @@ import (
 var (
 	ProtocolName        = protocolName
 	ProtocolVersion     = protocolVersion
-	StreamFindRouteReq  = streamFindRouteReq
-	StreamFindRouteResp = streamFindRouteResp
+	StreamFindRouteReq  = streamOnRouteReq
+	StreamFindRouteResp = streamOnRouteResp
 
 	CheckExpired      = checkExpired
 	MergeRouteList    = mergeRouteList
