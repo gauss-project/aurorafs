@@ -314,6 +314,6 @@ func (s *Service) checkAndAddPeers(ctx context.Context, peers pb.Peers) {
 	}
 }
 
-func (s *Service) DoFindNode(ctx context.Context, peer boson.Address, pos []int32, limit int32, ch chan boson.Address) (err error) {
-	return nil
+func (s *Service) DoFindNode(ctx context.Context, peer boson.Address, pos []int32, limit int32, ch chan boson.Address) (total int, err error) {
+	return 0, nil
 }

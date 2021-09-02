@@ -157,7 +157,7 @@ func (s *Service) onFindNode(ctx context.Context, peer p2p.Peer, stream p2p.Stre
 	return nil
 }
 
-func (s *Service) DoFindNode(ctx context.Context, peer boson.Address, pos []int32, limit int32, res chan boson.Address) (err error) {
+func (s *Service) DoFindNode(ctx context.Context, peer boson.Address, pos []int32, limit int32, res chan boson.Address) (total int, err error) {
 	s.metrics.DoFindNode.Inc()
 	stream, err := s.streamer.NewStream(ctx, peer, nil, protocolName, protocolVersion, streamFindNode)
 	if err != nil {
@@ -194,10 +194,10 @@ func (s *Service) DoFindNode(ctx context.Context, peer boson.Address, pos []int3
 		syncResult: res,
 	}:
 	case <-s.quit:
-		return errors.New("failed to process peers, shutting down hive2")
+		return 0, errors.New("failed to process peers, shutting down hive2")
 	}
 
-	return nil
+	return len(result.Peers), nil
 }
 
 func (s *Service) startCheckPeersHandler() {

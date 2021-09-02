@@ -569,31 +569,58 @@ func (k *Kad) manage() {
 
 // discover is a forever loop that manages the find to new peers
 func (k *Kad) discover() {
-	lookup := func() {
-		ch := make(chan boson.Address)
-		// 1. self
-		if !k.lookup(k.base, ch) {
-			// 2. random
+	defer k.wg.Done()
+	defer k.logger.Debugf("kademlia discover loop exited")
+
+	worker := func() {
+		stop, jumpNext, _ := k.startFindNode(k.base, 0)
+		if stop {
+			return
+		}
+		if jumpNext {
 			for i := 0; i < 3; i++ {
 				dest := test.RandomAddress()
-				if k.lookup(dest, ch) {
-					break
+				stop, jumpNext, _ = k.startFindNode(dest, 0)
+				if stop {
+					return
 				}
 			}
 		}
 	}
-	lookup()
+
+	worker()
 	for {
 		select {
 		case <-k.quit:
 			return
 		case <-time.After(30 * time.Minute):
-			lookup()
+			worker()
 		}
 	}
 }
 
-func (k *Kad) lookup(target boson.Address, ch chan boson.Address) (stop bool) {
+func (k *Kad) startFindNode(target boson.Address, total int) (stop bool, jumpNext bool, count int) {
+	ch := make(chan boson.Address)
+	defer close(ch)
+	stop, jumpNext, count = k.lookup(target, ch, total)
+	if stop || jumpNext {
+		return
+	}
+	for {
+		select {
+		case addr := <-ch:
+			if addr.IsZero() {
+				return
+			}
+			stop, jumpNext, count = k.startFindNode(addr, count)
+			if stop || jumpNext {
+				return
+			}
+		}
+	}
+}
+
+func (k *Kad) lookup(target boson.Address, ch chan boson.Address, total int) (stop bool, jumpNext bool, count int) {
 	stop = true
 	var lookupBin []uint8
 	for i := uint8(0); i < boson.MaxBins; i++ {
@@ -613,10 +640,14 @@ func (k *Kad) lookup(target boson.Address, ch chan boson.Address) (stop bool) {
 		for _, dest := range peers {
 			pos := lookupDistances(target, dest, lookupPoLimit, lookupBin)
 			if len(pos) > 0 {
-				_ = k.discovery.DoFindNode(context.Background(), dest, pos, findNodePeerLimit, ch)
+				cnt, _ := k.discovery.DoFindNode(context.Background(), dest, pos, findNodePeerLimit, ch)
+				count = total + cnt
+				if count >= findNodePeerLimit {
+					jumpNext = true
+					return
+				}
 			}
 		}
-		k.notifyManageLoop()
 	}
 	return
 }
@@ -624,6 +655,8 @@ func (k *Kad) lookup(target boson.Address, ch chan boson.Address) (stop bool) {
 func (k *Kad) Start(_ context.Context) error {
 	k.wg.Add(1)
 	go k.manage()
+
+	k.wg.Add(1)
 	go k.discover() // hive2
 
 	go func() {
