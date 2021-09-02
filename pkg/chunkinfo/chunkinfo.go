@@ -7,10 +7,12 @@ import (
 	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/logging"
 	"github.com/gauss-project/aurorafs/pkg/p2p"
+	"github.com/gauss-project/aurorafs/pkg/storage"
 	traversal "github.com/gauss-project/aurorafs/pkg/traversal"
 	"golang.org/x/sync/singleflight"
 	"io"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 )
@@ -22,14 +24,18 @@ type Interface interface {
 
 	CancelFindChunkInfo(rootCid boson.Address)
 
-	OnChunkTransferred(cid boson.Address, rootCid boson.Address, overlays boson.Address)
+	OnChunkTransferred(cid boson.Address, rootCid boson.Address, overlays boson.Address) error
 
 	Init(ctx context.Context, authInfo []byte, rootCid boson.Address) bool
+
+	GetChunkPyramid(rootCid boson.Address) []*boson.Address
+
+	IsDiscover(rootCid boson.Address) bool
 }
 
 // ChunkInfo
 type ChunkInfo struct {
-	// store
+	storer       storage.StateStorer
 	traversal    traversal.Service
 	streamer     p2p.Streamer
 	logger       logging.Logger
@@ -46,10 +52,11 @@ type ChunkInfo struct {
 }
 
 // New
-func New(streamer p2p.Streamer, logger logging.Logger, traversal traversal.Service, oracleUrl string) *ChunkInfo {
+func New(streamer p2p.Streamer, logger logging.Logger, traversal traversal.Service, storer storage.StateStorer, oracleUrl string) *ChunkInfo {
 	queues := make(map[string]*queue)
 	t := time.NewTimer(Time * time.Second)
 	return &ChunkInfo{
+		storer:    storer,
 		ct:        newChunkInfoTabNeighbor(),
 		cd:        newChunkInfoDiscover(),
 		cp:        newChunkPyramid(),
@@ -75,6 +82,24 @@ type Response struct {
 type RootCIDResponse struct {
 	RootCID   string   `json:"rootcid"`
 	Addresses []string `json:"addresses"`
+}
+
+type bitVector struct {
+	Len int    `json:"len"`
+	B   []byte `json:"b"`
+}
+
+func (ci *ChunkInfo) InitChunkInfo() error {
+	if err := ci.initChunkInfoTabNeighbor(); err != nil {
+		return err
+	}
+	if err := ci.initChunkInfoDiscover(); err != nil {
+		return err
+	}
+	if err := ci.initChunkInfoDiscover(); err != nil {
+		return err
+	}
+	return nil
 }
 
 func (ci *ChunkInfo) Init(ctx context.Context, authInfo []byte, rootCid boson.Address) bool {
@@ -122,21 +147,17 @@ func (ci *ChunkInfo) Init(ctx context.Context, authInfo []byte, rootCid boson.Ad
 		peersResults int
 		errorC       = make(chan error, count)
 	)
-
 	for {
-		if ci.cd.isExists(rootCid) {
-			if len(overlays) > 1 {
-				ci.FindChunkInfo(ctx, authInfo, rootCid, overlays[peerAttempt:])
+		if ci.cp.isExists(rootCid) {
+			ci.FindChunkInfo(ctx, authInfo, rootCid, overlays)
+			if ci.cd.isExists(rootCid) {
+				return true
 			}
-			return true
-		}
-		if peerAttempt < count {
+		} else if peerAttempt < count {
 			if ci.getQueue(rootCid.String()) == nil {
 				ci.newQueue(rootCid.String())
-				ci.getQueue(rootCid.String()).push(Pulling, overlays[peerAttempt].Bytes())
 			}
-			cpReq := ci.cp.createChunkPyramidReq(rootCid)
-			if err := ci.sendData(ctx, overlays[peerAttempt], streamPyramidReqName, cpReq); err != nil {
+			if err := ci.doFindChunkPyramid(ctx, nil, rootCid, overlays[peerAttempt]); err != nil {
 				errorC <- err
 			}
 			peerAttempt++
@@ -163,26 +184,19 @@ func (ci *ChunkInfo) FindChunkInfo(ctx context.Context, authInfo []byte, rootCid
 	if ci.getQueue(rootCid.String()) == nil {
 		ci.newQueue(rootCid.String())
 	}
-	if ci.cd.isExists(rootCid) {
-		for _, overlay := range overlays {
-			if ci.getQueue(rootCid.String()).isExists(Pulled, overlay.Bytes()) || ci.getQueue(rootCid.String()).isExists(Pulling, overlay.Bytes()) ||
-				ci.getQueue(rootCid.String()).isExists(UnPull, overlay.Bytes()) {
-				continue
-			}
-			ci.getQueue(rootCid.String()).push(UnPull, overlay.Bytes())
+	for _, overlay := range overlays {
+		if ci.getQueue(rootCid.String()).isExists(Pulled, overlay.Bytes()) || ci.getQueue(rootCid.String()).isExists(Pulling, overlay.Bytes()) ||
+			ci.getQueue(rootCid.String()).isExists(UnPull, overlay.Bytes()) {
+			continue
 		}
-		ci.doFindChunkInfo(ctx, authInfo, rootCid)
-	} else {
-		for _, overlay := range overlays {
-			ci.getQueue(rootCid.String()).push(UnPull, overlay.Bytes())
-		}
-		ci.doFindChunkPyramid(ctx, authInfo, rootCid, overlays)
+		ci.getQueue(rootCid.String()).push(UnPull, overlay.Bytes())
 	}
+	ci.doFindChunkInfo(ctx, authInfo, rootCid)
 }
 
 // GetChunkInfo
 func (ci *ChunkInfo) GetChunkInfo(rootCid boson.Address, cid boson.Address) [][]byte {
-	return ci.cd.getChunkInfo(rootCid, cid)
+	return ci.getChunkInfo(rootCid, cid)
 }
 
 // CancelFindChunkInfo
@@ -191,6 +205,44 @@ func (ci *ChunkInfo) CancelFindChunkInfo(rootCid boson.Address) {
 }
 
 // OnChunkTransferred
-func (ci *ChunkInfo) OnChunkTransferred(cid, rootCid boson.Address, overlay boson.Address) {
-	ci.ct.updateNeighborChunkInfo(rootCid, cid, overlay)
+func (ci *ChunkInfo) OnChunkTransferred(cid, rootCid boson.Address, overlay boson.Address) error {
+	return ci.updateNeighborChunkInfo(rootCid, cid, overlay)
+}
+
+func (ci *ChunkInfo) GetChunkPyramid(rootCid boson.Address) []*boson.Address {
+	return ci.cp.getChunkCid(rootCid)
+}
+
+func (ci *ChunkInfo) IsDiscover(rootCid boson.Address) bool {
+	q := ci.getQueue(rootCid.String())
+
+	if q.len(Pulled)+q.len(Pulling) >= PullMax {
+		return true
+	}
+	if !ci.cpd.getPendingFinder(rootCid) {
+		return true
+	}
+	if q.len(UnPull)+q.len(Pulling) == 0 {
+		return true
+	}
+
+	return false
+}
+
+func generateKey(keyPrefix string, rootCid, overlay boson.Address) string {
+	return keyPrefix + rootCid.String() + "-" + overlay.String()
+}
+
+func unmarshalKey(keyPrefix, key string) (boson.Address, boson.Address, error) {
+	addr := strings.TrimPrefix(key, keyPrefix)
+	keys := strings.Split(addr, "-")
+	rootCid, err := boson.ParseHexAddress(keys[0])
+	if err != nil {
+		return boson.ZeroAddress, boson.ZeroAddress, err
+	}
+	overlay, err := boson.ParseHexAddress(keys[1])
+	if err != nil {
+		return boson.ZeroAddress, boson.ZeroAddress, err
+	}
+	return rootCid, overlay, nil
 }

@@ -110,7 +110,7 @@ func (bv *BitVector) UnsetBytes(bs []byte) error {
 
 // String implements Stringer interface
 func (bv *BitVector) String() (s string) {
-	for i := 0; i < bv.len*8; i++ {
+	for i := 0; i < len(bv.b)*8; i++ {
 		if bv.Get(i) {
 			s += "1"
 		} else {
@@ -123,4 +123,8 @@ func (bv *BitVector) String() (s string) {
 // Bytes retrieves the underlying bytes of the bitvector
 func (bv *BitVector) Bytes() []byte {
 	return bv.b
+}
+
+func (bv *BitVector) Len() int {
+	return bv.len
 }

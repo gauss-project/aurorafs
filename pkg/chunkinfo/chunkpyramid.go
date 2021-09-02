@@ -4,47 +4,83 @@ import (
 	"context"
 	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/chunkinfo/pb"
+	"strings"
 	"sync"
-	"time"
 )
+
+var pyramidKeyPrefix = "pyramid-"
 
 // chunkPyramid Pyramid
 type chunkPyramid struct {
 	sync.RWMutex
 	// rootCid:cid
-	pyramid map[string]map[string]bool
+	pyramid map[string]map[string]int
 }
 
 func newChunkPyramid() *chunkPyramid {
-	return &chunkPyramid{pyramid: make(map[string]map[string]bool)}
+	return &chunkPyramid{pyramid: make(map[string]map[string]int)}
+}
+
+func (ci *ChunkInfo) initChunkPyramid() error {
+	if err := ci.storer.Iterate(pyramidKeyPrefix, func(k, v []byte) (bool, error) {
+		if !strings.HasPrefix(string(k), pyramidKeyPrefix) {
+			return true, nil
+		}
+		key := string(k)
+		rootCid, cid, err := unmarshalKey(pyramidKeyPrefix, key)
+		if err != nil {
+			return true, err
+		}
+		var sort int
+		if err := ci.storer.Get(key, &sort); err != nil {
+			return true, err
+		}
+		ci.cp.putChunkPyramid(rootCid, cid, sort)
+		return false, nil
+	}); err != nil {
+		return err
+	}
+	return nil
 }
 
 func (cp *chunkPyramid) checkPyramid(rootCid, cid boson.Address) bool {
 	cp.RLock()
 	defer cp.RUnlock()
 	if cp.pyramid[rootCid.String()] != nil {
-		return cp.pyramid[rootCid.String()][cid.String()]
+		_, ok := cp.pyramid[rootCid.String()][cid.String()]
+		return ok
 	}
 	return false
 }
 
-// updateChunkPyramid
-func (cp *chunkPyramid) updateChunkPyramid(rootCid boson.Address, pyramids [][][]byte) {
+func (cp *chunkPyramid) putChunkPyramid(rootCid, cid boson.Address, sort int) {
 	cp.Lock()
 	defer cp.Unlock()
-	py := make(map[string]bool)
-	for _, p := range pyramids {
-		for _, x := range p {
-			py[boson.NewAddress(x).String()] = true
-		}
+	rc := rootCid.String()
+	if _, ok := cp.pyramid[rc]; !ok {
+		cp.pyramid[rc] = make(map[string]int)
 	}
-	cp.pyramid[rootCid.String()] = py
+	cp.pyramid[rc][cid.String()] = sort
 }
 
-// createChunkPyramidReq
-func (cp *chunkPyramid) createChunkPyramidReq(rootCid boson.Address) pb.ChunkPyramidReq {
-	cpReq := pb.ChunkPyramidReq{RootCid: rootCid.Bytes(), CreateTime: time.Now().Unix()}
-	return cpReq
+// updateChunkPyramid
+func (ci *ChunkInfo) updateChunkPyramid(rootCid boson.Address, pyramids [][][]byte, hashs [][]byte) {
+	ci.cp.Lock()
+	defer ci.cp.Unlock()
+	py := make(map[string]int)
+	for i, p := range pyramids {
+		for _, x := range p {
+			py[boson.NewAddress(x).String()] = i
+			// db
+			ci.storer.Put(generateKey(pyramidKeyPrefix, rootCid, boson.NewAddress(x)), i)
+		}
+	}
+	for i, hash := range hashs {
+		py[boson.NewAddress(hash).String()] = i
+		// db
+		ci.storer.Put(generateKey(pyramidKeyPrefix, rootCid, boson.NewAddress(hash)), i)
+	}
+	ci.cp.pyramid[rootCid.String()] = py
 }
 
 // getChunkPyramid
@@ -56,12 +92,62 @@ func (ci *ChunkInfo) getChunkPyramid(cxt context.Context, rootCid boson.Address)
 	return v, nil
 }
 
-// createChunkPyramidResp
-func (cn *chunkInfoTabNeighbor) createChunkPyramidResp(rootCid boson.Address, cp map[string][]byte, ctn map[string]*pb.Overlays) pb.ChunkPyramidResp {
-	return pb.ChunkPyramidResp{RootCid: rootCid.Bytes(), Pyramid: cp, Ctn: ctn}
+func (cp *chunkPyramid) isExists(rootCid boson.Address) bool {
+	cp.RLock()
+	defer cp.RUnlock()
+	_, ok := cp.pyramid[rootCid.String()]
+	return ok
+}
+
+func (ci *ChunkInfo) getChunkPyramidHash(cxt context.Context, rootCid boson.Address) ([][]byte, error) {
+	v, err := ci.getChunkPyramid(cxt, rootCid)
+	if err != nil {
+		return nil, err
+	}
+	resp := make([][]byte, 0)
+	for k := range v {
+		resp = append(resp, []byte(k))
+	}
+	return resp, nil
+}
+
+func (ci *ChunkInfo) getChunkPyramidChunk(cxt context.Context, rootCid boson.Address, hash []byte) ([]byte, error) {
+	v, err := ci.getChunkPyramid(cxt, rootCid)
+	if err != nil {
+		return nil, err
+	}
+	return v[string(hash)], nil
 }
 
 // doFindChunkPyramid
-func (ci *ChunkInfo) doFindChunkPyramid(ctx context.Context, authInfo []byte, rootCid boson.Address, overlays []boson.Address) {
-	ci.queueProcess(ctx, rootCid, streamPyramidReqName)
+func (ci *ChunkInfo) doFindChunkPyramid(ctx context.Context, authInfo []byte, rootCid boson.Address, overlay boson.Address) error {
+	if ci.cp.isExists(rootCid) {
+		return nil
+	}
+	req := pb.ChunkPyramidHashReq{
+		RootCid: rootCid.Bytes(),
+	}
+	resp, err := ci.sendPyramid(ctx, overlay, streamPyramidHashName, req)
+	if err != nil {
+		return err
+	}
+	return ci.onChunkPyramidResp(ctx, nil, boson.NewAddress(req.RootCid), overlay, resp.(pb.ChunkPyramidHashResp))
+}
+
+func (cp *chunkPyramid) getChunkCid(rootCid boson.Address) []*boson.Address {
+	cp.RLock()
+	defer cp.RUnlock()
+	v := cp.pyramid[rootCid.String()]
+	cids := make([]*boson.Address, 0, len(v))
+	for overlay := range v {
+		over := boson.MustParseHexAddress(overlay)
+		cids = append(cids, &over)
+	}
+	return cids
+}
+
+func (cp *chunkPyramid) getCidStore(rootCid, cid boson.Address) int {
+	cp.RLock()
+	defer cp.RUnlock()
+	return cp.pyramid[rootCid.String()][cid.String()]
 }

@@ -136,11 +136,11 @@ func (s *Service) RetrieveChunk(ctx context.Context, root_addr, chunk_addr boson
 		select{
 		case <-ticker.C:
 			// break
-		case res := <-resultC :
-			if res.err != nil{
+		case res := <-resultC:
+			if res.err != nil {
 				s.logger.Debugf("retrieval: failed to get chunk (%s,%s) from peer %s: %v",
 					root_addr, chunk_addr, target_node, res.err)
-			}else{
+			} else {
 				s.rankNodeDownload(target_node, res.download_rate)
 				return res.chunk, nil
 			}
@@ -198,14 +198,7 @@ func (s *Service) retrieveChunk(ctx context.Context, target_node boson.Address, 
 		}
 	}
 
-	// cache remote chunk
-	exists, err := s.storer.Put(ctx, storage.ModePutRequest, chunk)
-	if err != nil {
-		return nil, -1, err
-	}
-	if !exists[0] {
-		s.chunkinfo.OnChunkTransferred(chunk_addr, root_addr, s.addr)
-	}
+	s.chunkinfo.OnChunkTransferred(chunk_addr, root_addr, s.addr)
 
 	// credit the peer after successful delivery
 	//err = s.accounting.Credit(peer, chunkPrice)
@@ -230,13 +223,13 @@ func (s *Service) handler(ctx context.Context, p p2p.Peer, stream p2p.Stream) (e
 	if err := r.ReadMsgWithContext(ctx, &req); err != nil {
 		return fmt.Errorf("read request: %w peer %s", err, p.Address.String())
 	}
-	span, _, ctx := s.tracer.StartSpanFromContext(ctx, "handle-retrieve-chunk",
+	span, _, ctx := s.tracer.StartSpanFromContext(ctx, "handle-retrieve-chunk", 
 		s.logger, opentracing.Tag{Key: "address", Value: fmt.Sprintf("%v,%v", boson.NewAddress(req.RootAddr).String(), boson.NewAddress(req.ChunkAddr).String())},
 	)
 	defer span.Finish()
 
 	ctx = context.WithValue(ctx, requestSourceContextKey{}, p.Address.String())
-	root_cid, chunk_addr := boson.NewAddress(req.RootAddr), boson.NewAddress(req.ChunkAddr)
+	_, chunk_addr := boson.NewAddress(req.RootAddr), boson.NewAddress(req.ChunkAddr)
 
 	chunk, err := s.storer.Get(ctx, storage.ModeGetRequest, chunk_addr)
 	if err != nil {
@@ -258,7 +251,6 @@ func (s *Service) handler(ctx context.Context, p p2p.Peer, stream p2p.Stream) (e
 		return fmt.Errorf("write delivery: %w peer %s", err, p.Address.String())
 	}
 
-	s.chunkinfo.OnChunkTransferred(chunk_addr, root_cid, p.Address)
 	s.logger.Tracef("retrieval protocol debiting peer %s", p.Address.String())
 
 	// compute the price we charge for this chunk and debit it from p's balance
