@@ -377,6 +377,7 @@ func (db *DB) Close() (err error) {
 		// wait for gc worker to
 		// return before closing the shed
 		<-db.collectGarbageWorkerDone
+		<-db.recycleGarbageWorkerDone
 		close(done)
 	}()
 	select {

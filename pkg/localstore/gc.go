@@ -202,21 +202,14 @@ func (db *DB) collectGarbage() (collectedCount uint64, done bool, err error) {
 func (db *DB) recycleGarbageWorker() {
 	defer close(db.recycleGarbageWorkerDone)
 
-rec:
 	for {
-		select {
-		case <-db.recycleGarbageTrigger:
-		case <-db.close:
-			return
-		}
-
 		for {
 			i, err := db.gcQueueIndex.First(nil)
 			if err != nil {
 				if !errors.Is(err, leveldb.ErrNotFound) {
 					db.logger.Errorf("localstore: recycle garbage: %v", err)
 				}
-				continue rec
+				break
 			}
 
 			_ = i
@@ -227,6 +220,12 @@ rec:
 				return
 			default:
 			}
+		}
+
+		select {
+		case <-db.recycleGarbageTrigger:
+		case <-db.close:
+			return
 		}
 	}
 }
