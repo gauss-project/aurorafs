@@ -19,13 +19,13 @@ package localstore
 import (
 	"encoding/binary"
 	"errors"
-	"github.com/gauss-project/aurorafs/pkg/chunkinfo"
 	"os"
 	"runtime/pprof"
 	"sync"
 	"time"
 
 	"github.com/gauss-project/aurorafs/pkg/boson"
+	"github.com/gauss-project/aurorafs/pkg/chunkinfo"
 	"github.com/gauss-project/aurorafs/pkg/logging"
 	"github.com/gauss-project/aurorafs/pkg/shed"
 	"github.com/gauss-project/aurorafs/pkg/storage"

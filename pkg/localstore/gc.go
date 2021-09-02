@@ -209,24 +209,26 @@ func (db *DB) recycleGarbageWorker() {
 	)
 
 	defer close(db.recycleGarbageWorkerDone)
-	defer db.metrics.GCWaitRemove.Sub(float64(recycleCount))
-	defer db.metrics.GCRemovedCounter.Add(float64(removeChunks))
 
 	for {
 		batch := new(leveldb.Batch)
 		candidates := make([]shed.Item, 0)
 
+		// iterate from large to small
 		err := db.gcQueueIndex.Iterate(func(item shed.Item) (stop bool, err error) {
 			if !db.discover.IsDiscover(boson.NewAddress(item.Address)) {
 				candidates = append(candidates, item)
 			}
 
 			return false, nil
-		}, nil)
+		}, &shed.IterateOptions{Reverse: true})
 		if err != nil {
 			db.logger.Errorf("localstore: recycle garbage: iterate gc queue: %v", err)
 			goto next
 		}
+
+		recycleCount = 0
+		removeChunks = 0
 
 		for _, item := range candidates {
 			chunks := db.discover.GetChunkPyramid(boson.NewAddress(item.Address))
@@ -265,6 +267,9 @@ func (db *DB) recycleGarbageWorker() {
 		if err != nil {
 			db.metrics.GCErrorCounter.Inc()
 			db.logger.Errorf("localstore: recycle garbage: %v", err)
+		} else {
+			db.metrics.GCWaitRemove.Sub(float64(recycleCount))
+			db.metrics.GCRemovedCounter.Add(float64(removeChunks))
 		}
 
 		if closed {
