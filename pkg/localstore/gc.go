@@ -204,7 +204,7 @@ func (db *DB) recycleGarbageWorker() {
 
 	for {
 		for {
-			i, err := db.gcQueueIndex.First(nil)
+			i, err := db.gcQueueIndex.Last(nil)
 			if err != nil {
 				if !errors.Is(err, leveldb.ErrNotFound) {
 					db.logger.Errorf("localstore: recycle garbage: %v", err)

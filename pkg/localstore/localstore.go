@@ -318,12 +318,16 @@ func New(path string, baseKey []byte, o *Options, logger logging.Logger) (db *DB
 	if err != nil {
 		return nil, err
 	}
-	db.gcQueueIndex, err = db.shed.NewIndex("Hash->nil", shed.IndexFuncs{
+	db.gcQueueIndex, err = db.shed.NewIndex("GCounter|Hash->nil", shed.IndexFuncs{
 		EncodeKey: func(fields shed.Item) (key []byte, err error) {
-			return fields.Address, nil
+			b := make([]byte, 8, 8 + len(fields.Address))
+			binary.BigEndian.PutUint64(b[:8], fields.GCounter)
+			key = append(b, fields.Address...)
+			return key, nil
 		},
 		DecodeKey: func(key []byte) (e shed.Item, err error) {
-			e.Address = key
+			e.GCounter = binary.BigEndian.Uint64(key[:8])
+			e.Address = key[8:]
 			return e, nil
 		},
 		EncodeValue: func(fields shed.Item) (value []byte, err error) {
