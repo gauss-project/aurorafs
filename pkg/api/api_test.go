@@ -53,7 +53,7 @@ func newTestServer(t *testing.T, o testServerOptions) (*http.Client, *websocket.
 	if o.WsPingPeriod == 0 {
 		o.WsPingPeriod = 60 * time.Second
 	}
-	s := api.New( o.Storer, o.Resolver, o.Traversal,  o.Logger, nil, api.Options{
+	s := api.New(o.Storer, o.Resolver, o.Traversal,  o.Logger, nil, api.Options{
 		CORSAllowedOrigins: o.CORSAllowedOrigins,
 		GatewayMode:        o.GatewayMode,
 		WsPingPeriod:       o.WsPingPeriod,
