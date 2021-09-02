@@ -207,7 +207,7 @@ func (s *server) fileUploadHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	for _, li := range dataChunks {
 		for _, b := range li {
-			s.chunkInfo.OnChunkTransferred(ctx, boson.NewAddress(b), reference, s.overlay)
+			s.chunkInfo.OnChunkTransferred(boson.NewAddress(b), reference, s.overlay)
 		}
 	}
 
@@ -324,7 +324,7 @@ func (s *server) downloadHandler(w http.ResponseWriter, r *http.Request, referen
 	if err != nil {
 		if errors.Is(err, storage.ErrNotFound) {
 			if len(rootCid) > 0 {
-				s.chunkInfo.FindChunkInfo(r.Context(), nil, rootCid[0], []boson.Address{s.overlay})
+				s.chunkInfo.Init(r.Context(), nil, rootCid[0])
 			}
 			logger.Debugf("api download: not found %s: %v", reference, err)
 			logger.Error("api download: not found")

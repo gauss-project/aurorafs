@@ -77,7 +77,7 @@ func (s *server) dirUploadHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	for _, li := range dataChunks {
 		for _, b := range li {
-			s.chunkInfo.OnChunkTransferred(ctx, boson.NewAddress(b), reference, s.overlay)
+			s.chunkInfo.OnChunkTransferred(boson.NewAddress(b), reference, s.overlay)
 		}
 	}
 

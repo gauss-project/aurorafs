@@ -197,7 +197,7 @@ func (s *Service) retrieveChunk(ctx context.Context, target_node boson.Address, 
 		}
 	}
 
-	s.chunkinfo.OnChunkTransferred(ctx, chunk_addr, root_addr, s.addr)
+	s.chunkinfo.OnChunkTransferred(chunk_addr, root_addr, s.addr)
 
 	// credit the peer after successful delivery
 	//err = s.accounting.Credit(peer, chunkPrice)

@@ -12,47 +12,51 @@ import (
 type chunkInfoTabNeighbor struct {
 	sync.RWMutex
 
+	presence map[string]map[string]*bitvector.BitVector
 	// rootcid-node : bitvector
-	presence map[string][]byte
+	//todo db presence map[string][]byte
 	// rootcid:nodes
-	overlays map[string][][]byte
+	overlays map[string][]boson.Address
 }
 
 func newChunkInfoTabNeighbor() *chunkInfoTabNeighbor {
-	return &chunkInfoTabNeighbor{overlays: make(map[string][][]byte), presence: make(map[string][]byte)}
+	return &chunkInfoTabNeighbor{overlays: make(map[string][]boson.Address), presence: make(map[string]map[string]*bitvector.BitVector)}
 }
 
 // todo init 从数据库添加数据
 
 // updateNeighborChunkInfo
-func (ci *ChunkInfo) updateNeighborChunkInfo(ctx context.Context, rootCid, cid boson.Address, overlay boson.Address) {
+func (ci *ChunkInfo) updateNeighborChunkInfo(rootCid, cid boson.Address, overlay boson.Address) {
 	ci.ct.Lock()
 	defer ci.ct.Unlock()
 	// todo levelDB
 	rc := rootCid.String()
-	_, ok := ci.ct.presence[rc]
+	exists := false
+	for _, over := range ci.ct.overlays[rootCid.String()] {
+		if over.Equal(overlay) {
+			exists = true
+			break
+		}
+	}
+	if !exists {
+		ci.ct.overlays[rc] = append(ci.ct.overlays[rc], overlay)
+		ci.ct.presence[rc] = make(map[string]*bitvector.BitVector)
+	}
+
+	vb, ok := ci.ct.presence[rc][overlay.String()]
 	if !ok {
-		ci.ct.overlays[rc] = make([][]byte, 0, 1)
+		v, _ := ci.getChunkPyramidHash(context.Background(), rootCid)
+		vb, _ = bitvector.New(len(v))
+		ci.ct.presence[rc][overlay.String()] = vb
 	}
-	key := rc + "_" + overlay.String()
-	_, pok := ci.ct.overlays[key]
-	if !pok {
-		ci.ct.presence[key] = make([]byte, 0, 1)
-	}
-	cids := ci.getChunkCid(ctx, rootCid)
-	// 获取rootCid 所有的cid
-	bv, _ := bitvector.New(len(cids))
-	bv.SetBytes(ci.ct.presence[key])
 	v := ci.cp.getCidStore(rootCid, cid)
-	bv.Set(v)
-	ci.ct.presence[key] = bv.Bytes()
-	ci.ct.overlays[key] = append(ci.ct.overlays[key], overlay.Bytes())
+	vb.Set(v)
 }
 
 func (cn *chunkInfoTabNeighbor) initNeighborChunkInfo(rootCid boson.Address) {
 	cn.Lock()
 	defer cn.Unlock()
-	v := make([][]byte, 0)
+	v := make([]boson.Address, 0)
 	cn.overlays[rootCid.String()] = v
 }
 
@@ -70,18 +74,15 @@ func (cn *chunkInfoTabNeighbor) getNeighborChunkInfo(rootCid boson.Address) map[
 	defer cn.RUnlock()
 	res := make(map[string][]byte)
 	rc := rootCid.String()
-	nodes := cn.overlays[rc]
-	for _, node := range nodes {
-		c := boson.NewAddress(node)
-		key := rc + "_" + c.String()
-		bv := cn.presence[key]
-		res[c.String()] = bv
+	overlays := cn.overlays[rc]
+	for _, overlay := range overlays {
+		bv := cn.presence[rc][overlay.String()]
+		res[overlay.String()] = bv.Bytes()
 	}
 	return res
 }
 
 // createChunkInfoResp
 func (cn *chunkInfoTabNeighbor) createChunkInfoResp(rootCid boson.Address, ctn map[string][]byte) pb.ChunkInfoResp {
-	// todo resp改变 bitvector
 	return pb.ChunkInfoResp{RootCid: rootCid.Bytes(), Presence: ctn}
 }
