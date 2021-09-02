@@ -19,6 +19,7 @@ package localstore
 import (
 	"encoding/binary"
 	"errors"
+	"github.com/gauss-project/aurorafs/pkg/chunkinfo"
 	"os"
 	"runtime/pprof"
 	"sync"
@@ -57,6 +58,7 @@ var (
 // database related objects.
 type DB struct {
 	shed *shed.DB
+	discover chunkinfo.Interface
 
 	// schema name of loaded data
 	schemaName shed.StringField
@@ -365,8 +367,16 @@ func New(path string, baseKey []byte, o *Options, logger logging.Logger) (db *DB
 
 	// start garbage collection worker
 	go db.collectGarbageWorker()
-	go db.recycleGarbageWorker()
+
 	return db, nil
+}
+
+// Config allow inject other module into db.
+func (db *DB) Config(c chunkinfo.Interface) {
+	db.discover = c
+
+	// wait chunkInfo start
+	go db.recycleGarbageWorker()
 }
 
 // Close closes the underlying database.

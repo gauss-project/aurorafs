@@ -169,7 +169,6 @@ func (s *server) fileUploadHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-
 	mr, err := p(ctx, bytes.NewReader(metadataBytes), int64(len(metadataBytes)))
 	if err != nil {
 		logger.Debugf("file upload: metadata store, file %q: %v", fileName, err)
@@ -315,11 +314,11 @@ func (s *server) fileDownloadHandler(w http.ResponseWriter, r *http.Request) {
 		"Content-Type":        {metaData.MimeType},
 	}
 
-	s.downloadHandler(w, r, e.Reference(), additionalHeaders, true, address)
+	s.downloadHandler(w, r, e.Reference(), additionalHeaders, true)
 }
 
 // downloadHandler contains common logic for dowloading Swarm file from API
-func (s *server) downloadHandler(w http.ResponseWriter, r *http.Request, reference boson.Address, additionalHeaders http.Header, etag bool, rootCid ...boson.Address) {
+func (s *server) downloadHandler(w http.ResponseWriter, r *http.Request, reference boson.Address, additionalHeaders http.Header, etag bool) {
 	logger := tracing.NewLoggerWithTraceID(r.Context(), s.logger)
 
 	reader, l, err := joiner.New(r.Context(), s.storer, reference)
@@ -327,7 +326,7 @@ func (s *server) downloadHandler(w http.ResponseWriter, r *http.Request, referen
 		if errors.Is(err, storage.ErrNotFound) {
 			rootCID := sctx.GetRootCID(r.Context())
 			if !rootCID.IsZero() {
-				s.chunkInfo.Init(r.Context(), nil, rootCID, []boson.Address{s.overlay})
+				s.chunkInfo.Init(r.Context(), nil, rootCID)
 			}
 			logger.Debugf("api download: not found %s: %v", reference, err)
 			logger.Error("api download: not found")
@@ -357,7 +356,6 @@ func (s *server) downloadHandler(w http.ResponseWriter, r *http.Request, referen
 	w.Header().Set("Content-Length", fmt.Sprintf("%d", l))
 	w.Header().Set("Decompressed-Content-Length", fmt.Sprintf("%d", l))
 	w.Header().Set("Access-Control-Expose-Headers", "Content-Disposition")
-
 
 	http.ServeContent(w, r, "", time.Now(), langos.NewBufferedLangos(reader, lookaheadBufferSize(l)))
 }

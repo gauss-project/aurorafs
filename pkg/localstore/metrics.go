@@ -25,6 +25,7 @@ type metrics struct {
 	GCErrorCounter           prometheus.Counter
 	GCCollectedCounter       prometheus.Counter
 	GCCommittedCounter       prometheus.Counter
+	GCRemovedCounter         prometheus.Counter
 	GCUpdate                 prometheus.Counter
 	GCUpdateError            prometheus.Counter
 
@@ -42,6 +43,7 @@ type metrics struct {
 	ModeHasMultiFailure           prometheus.Counter
 
 	GCSize                  prometheus.Gauge
+	GCWaitRemove            prometheus.Gauge
 	GCStoreTimeStamps       prometheus.Gauge
 	GCStoreAccessTimeStamps prometheus.Gauge
 }
@@ -134,6 +136,12 @@ func newMetrics() metrics {
 			Name:      "gc_committed_count",
 			Help:      "Number of gc items to commit.",
 		}),
+		GCRemovedCounter: prometheus.NewCounter(prometheus.CounterOpts{
+			Namespace: m.Namespace,
+			Subsystem: subsystem,
+			Name:      "gc_removed_count",
+			Help:      "Number of gc items to remove.",
+		}),
 		GCUpdate: prometheus.NewCounter(prometheus.CounterOpts{
 			Namespace: m.Namespace,
 			Subsystem: subsystem,
@@ -225,6 +233,12 @@ func newMetrics() metrics {
 			Subsystem: subsystem,
 			Name:      "gc_size",
 			Help:      "Number of elements in Garbage collection index.",
+		}),
+		GCWaitRemove: prometheus.NewGauge(prometheus.GaugeOpts{
+			Namespace: m.Namespace,
+			Subsystem: subsystem,
+			Name:      "gc_wait_remove",
+			Help:      "Number of elements in Garbage wait remove.",
 		}),
 		GCStoreTimeStamps: prometheus.NewGauge(prometheus.GaugeOpts{
 			Namespace: m.Namespace,
