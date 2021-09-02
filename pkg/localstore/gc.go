@@ -18,7 +18,6 @@ package localstore
 
 import (
 	"errors"
-	"sync"
 	"time"
 
 	"github.com/gauss-project/aurorafs/pkg/boson"
@@ -61,6 +60,8 @@ func (db *DB) collectGarbageWorker() {
 			// check if another gc run is needed
 			if !done {
 				db.triggerGarbageCollection()
+			} else {
+				db.triggerGarbageRecycling()
 			}
 
 			if testHookCollectGarbage != nil {
@@ -151,7 +152,6 @@ func (db *DB) collectGarbage() (collectedCount uint64, done bool, err error) {
 		return 0, false, err
 	}
 
-	var wg sync.WaitGroup
 	// get rid of dirty entries
 	for _, item := range candidates {
 		if boson.NewAddress(item.Address).MemberOf(db.dirtyAddresses) {
@@ -162,6 +162,10 @@ func (db *DB) collectGarbage() (collectedCount uint64, done bool, err error) {
 		db.metrics.GCStoreTimeStamps.Set(float64(item.StoreTimestamp))
 		db.metrics.GCStoreAccessTimeStamps.Set(float64(item.AccessTimestamp))
 
+		err = db.gcQueueIndex.PutInBatch(batch, item)
+		if err != nil {
+			return 0, false, err
+		}
 		// delete from retrieve, gc
 		err = db.retrievalDataIndex.DeleteInBatch(batch, item)
 		if err != nil {
@@ -175,14 +179,6 @@ func (db *DB) collectGarbage() (collectedCount uint64, done bool, err error) {
 		if err != nil {
 			return 0, false, err
 		}
-
-		// we run goroutine to delete related chunks
-		wg.Add(1)
-		go func(addr []byte, count uint64) {
-			defer wg.Done()
-			// TODO request chunkinfo
-			db.logger.Debugf("delete chunks related file %s count %d\n", boson.NewAddress(addr), item.GCounter)
-		}(item.Address, item.GCounter)
 	}
 	if gcSize-collectedCount > target {
 		done = false
@@ -197,8 +193,42 @@ func (db *DB) collectGarbage() (collectedCount uint64, done bool, err error) {
 		return 0, false, err
 	}
 
-	wg.Wait()
 	return collectedCount, done, nil
+}
+
+// recycleGarbageWorker really remove chunks in db, triggered when
+// garbage recycling is completed. This function only log a error. If
+// db report serious error, we check db.close is terminated.
+func (db *DB) recycleGarbageWorker() {
+	defer close(db.recycleGarbageWorkerDone)
+
+rec:
+	for {
+		select {
+		case <-db.recycleGarbageTrigger:
+		case <-db.close:
+			return
+		}
+
+		for {
+			i, err := db.gcQueueIndex.First(nil)
+			if err != nil {
+				if !errors.Is(err, leveldb.ErrNotFound) {
+					db.logger.Errorf("localstore: recycle garbage: %v", err)
+				}
+				continue rec
+			}
+
+			_ = i
+
+			select {
+			case <-db.close:
+				db.logger.Warningf("localstore: recycle garbage: stops in advance due to db closing")
+				return
+			default:
+			}
+		}
+	}
 }
 
 // gcTrigger retruns the absolute value for garbage collection
@@ -212,6 +242,16 @@ func (db *DB) gcTarget() (target uint64) {
 func (db *DB) triggerGarbageCollection() {
 	select {
 	case db.collectGarbageTrigger <- struct{}{}:
+	case <-db.close:
+	default:
+	}
+}
+
+// triggerGarbageRecycling signals recycleGarbageWorker
+// to call recycleGarbage
+func (db *DB) triggerGarbageRecycling() {
+	select {
+	case db.recycleGarbageTrigger <- struct{}{}:
 	case <-db.close:
 	default:
 	}

@@ -71,6 +71,7 @@ type DB struct {
 
 	// garbage collection index
 	gcIndex shed.Index
+	gcQueueIndex shed.Index
 
 	// pin files Index
 	pinIndex shed.Index
@@ -84,6 +85,9 @@ type DB struct {
 
 	// triggers garbage collection event loop
 	collectGarbageTrigger chan struct{}
+
+	// triggers garbage recycle event loop
+	recycleGarbageTrigger chan struct{}
 
 	// a buffered channel acting as a semaphore
 	// to limit the maximal number of goroutines
@@ -115,6 +119,7 @@ type DB struct {
 	// garbage collection and gc size write workers
 	// are done
 	collectGarbageWorkerDone chan struct{}
+	recycleGarbageWorkerDone chan struct{}
 
 	// wait for all subscriptions to finish before closing
 	// underlaying leveldb to prevent possible panics from
@@ -167,8 +172,10 @@ func New(path string, baseKey []byte, o *Options, logger logging.Logger) (db *DB
 		// to signal another event if it
 		// is triggered during already running function
 		collectGarbageTrigger:    make(chan struct{}, 1),
+		recycleGarbageTrigger:    make(chan struct{}, 1),
 		close:                    make(chan struct{}),
 		collectGarbageWorkerDone: make(chan struct{}),
+		recycleGarbageWorkerDone: make(chan struct{}),
 		metrics:                  newMetrics(),
 		logger:                   logger,
 	}
@@ -284,7 +291,7 @@ func New(path string, baseKey []byte, o *Options, logger logging.Logger) (db *DB
 		return nil, err
 	}
 	// gc index for removable chunk ordered by ascending last access time
-	db.gcIndex, err = db.shed.NewIndex("AccessTimestamp|BinID|Hash->nil", shed.IndexFuncs{
+	db.gcIndex, err = db.shed.NewIndex("AccessTimestamp|BinID|Hash->GCounter", shed.IndexFuncs{
 		EncodeKey: func(fields shed.Item) (key []byte, err error) {
 			b := make([]byte, 16, 16+len(fields.Address))
 			binary.BigEndian.PutUint64(b[:8], uint64(fields.AccessTimestamp))
@@ -299,6 +306,27 @@ func New(path string, baseKey []byte, o *Options, logger logging.Logger) (db *DB
 			return e, nil
 		},
 		EncodeValue: func(fields shed.Item) (value []byte, err error) {
+			b := make([]byte, 8)
+			binary.BigEndian.PutUint64(b, fields.GCounter)
+			return b, nil
+		},
+		DecodeValue: func(keyItem shed.Item, value []byte) (e shed.Item, err error) {
+			e.GCounter = binary.BigEndian.Uint64(value)
+			return e, nil
+		},
+	})
+	if err != nil {
+		return nil, err
+	}
+	db.gcQueueIndex, err = db.shed.NewIndex("Hash->nil", shed.IndexFuncs{
+		EncodeKey: func(fields shed.Item) (key []byte, err error) {
+			return fields.Address, nil
+		},
+		DecodeKey: func(key []byte) (e shed.Item, err error) {
+			e.Address = key
+			return e, nil
+		},
+		EncodeValue: func(fields shed.Item) (value []byte, err error) {
 			return nil, nil
 		},
 		DecodeValue: func(keyItem shed.Item, value []byte) (e shed.Item, err error) {
@@ -308,7 +336,6 @@ func New(path string, baseKey []byte, o *Options, logger logging.Logger) (db *DB
 	if err != nil {
 		return nil, err
 	}
-
 	// Create a index structure for storing pinned chunks and their pin counts
 	db.pinIndex, err = db.shed.NewIndex("Hash->PinCounter", shed.IndexFuncs{
 		EncodeKey: func(fields shed.Item) (key []byte, err error) {
@@ -334,6 +361,7 @@ func New(path string, baseKey []byte, o *Options, logger logging.Logger) (db *DB
 
 	// start garbage collection worker
 	go db.collectGarbageWorker()
+	go db.recycleGarbageWorker()
 	return db, nil
 }
 
