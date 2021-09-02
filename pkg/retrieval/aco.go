@@ -10,7 +10,7 @@ import (
 )
 
 const (
-	defaultRate int64 = 1_000_000
+	defaultRate int64 = 2_000_000
 )
 
 type route struct {
@@ -43,7 +43,7 @@ type acoServer struct{
 func newAcoServer() *acoServer{
 	return &acoServer{
 		routeMetric: make(map[routeKey]*routeMetric),
-		toZeroElapsed: 60*15,
+		toZeroElapsed: 20*60,		// 1200s
 		mutex: sync.Mutex{},
 	}
 }
@@ -141,7 +141,7 @@ func (s* acoServer) GetRouteAcoIndex(routeList []route) ([] int){
 	rand.Seed(time.Now().Unix())
 	selectRouteCount := 0
 	for {
-		curRouteIndex, curScore, curSum := 0, int64(0), int64(0)
+		selectRouteIndex, curScore, curSum := 0, int64(0), int64(0)
 
 		randNum := (rand.Int63()%(totalScore))+1
 		for k, v := range routeScoreList{
@@ -151,15 +151,16 @@ func (s* acoServer) GetRouteAcoIndex(routeList []route) ([] int){
 			}
 			nextSum := curSum + curScore
 			if curSum < randNum && randNum <= nextSum{
-				curRouteIndex = k
+				selectRouteIndex = k
 				break
 			} 
 			curSum = nextSum
 		}
 
 		// fmt.Printf("%v, index: %v\n", randNum, curRouteIndex)
-		routeIndexList = append(routeIndexList, curRouteIndex)
-		routeScoreList[curRouteIndex] = 0
+		routeIndexList = append(routeIndexList, selectRouteIndex)
+
+		routeScoreList[selectRouteIndex] = 0
 		totalScore -= curScore
 		selectRouteCount += 1
 		if selectRouteCount >= routeCount{
@@ -205,14 +206,20 @@ func (s *acoServer) getCurRouteScore(route route) int64{
 	elapsed := curUnixTs - (curRouteState.downloadDetail.endMs/1000)
 
 	if elapsed >= s.toZeroElapsed{
-		return defaultRate
+		return defaultRate/(curRouteState.downloadCount+1)
 	}
 
-	downloadStartTs := float64(curRouteState.downloadDetail.startMs)/1000.0
-	downloadEndTs := float64(curRouteState.downloadDetail.endMs)/1000.0
+	if curRouteState.downloadDetail.endMs == 0{
+		return defaultRate/(curRouteState.downloadCount+1)
+	}
 
-	downloadRate := int64(float64(curRouteState.downloadDetail.size)/(downloadEndTs-downloadStartTs))
+	downloadDuration := float64(curRouteState.downloadDetail.endMs-curRouteState.downloadDetail.startMs)/1000.
+	downloadSize := float64(curRouteState.downloadDetail.size)
+
+	// downloadRate := int64(float64(curRouteState.downloadDetail.size)/((downloadEndMs-downloadStartMs)/1000))
+	downloadRate := int64(downloadSize/downloadDuration)*8
 	weightedDownloadRate := downloadRate/(curRouteState.downloadCount+1)
+
 	reserveScale := 1.0 - (float64(elapsed)/float64(s.toZeroElapsed))
 
 	scoreAtCurrent := int64(float64(weightedDownloadRate - defaultRate)*reserveScale) + defaultRate
