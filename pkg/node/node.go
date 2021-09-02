@@ -12,6 +12,7 @@ import (
 	"crypto/ecdsa"
 	"fmt"
 	"github.com/gauss-project/aurorafs/pkg/chunkinfo"
+	"github.com/gauss-project/aurorafs/pkg/hive2"
 	"github.com/gauss-project/aurorafs/pkg/routetab"
 	"github.com/gauss-project/aurorafs/pkg/shed"
 	"github.com/gauss-project/aurorafs/pkg/topology"
@@ -30,7 +31,6 @@ import (
 	"github.com/gauss-project/aurorafs/pkg/debugapi"
 
 	"github.com/gauss-project/aurorafs/pkg/boson"
-	"github.com/gauss-project/aurorafs/pkg/hive"
 	"github.com/gauss-project/aurorafs/pkg/localstore"
 	"github.com/gauss-project/aurorafs/pkg/logging"
 	"github.com/gauss-project/aurorafs/pkg/metrics"
@@ -272,11 +272,6 @@ func NewBee(addr string, bosonAddress boson.Address, publicKey ecdsa.PublicKey, 
 		return nil, fmt.Errorf("pingpong service: %w", err)
 	}
 
-	hive := hive.New(p2ps, addressbook, networkID, logger)
-	if err = p2ps.AddProtocol(hive.Protocol()); err != nil {
-		return nil, fmt.Errorf("hive service: %w", err)
-	}
-
 	var bootnodes []ma.Multiaddr
 	if o.Standalone {
 		logger.Info("Starting node in standalone mode, no p2p connections will be made or accepted")
@@ -357,9 +352,14 @@ func NewBee(addr string, bosonAddress boson.Address, publicKey ecdsa.PublicKey, 
 		return nil, fmt.Errorf("unable to create metrics storage for kademlia: %w", err)
 	}
 
-	kad := kademlia.New(bosonAddress, addressbook, hive, p2ps, metricsDB, logger, kademlia.Options{Bootnodes: bootnodes, BootnodeMode: o.BootnodeMode})
+	hiveObj := hive2.New(p2ps, addressbook, networkID, logger)
+	if err = p2ps.AddProtocol(hiveObj.Protocol()); err != nil {
+		return nil, fmt.Errorf("hive service: %w", err)
+	}
+
+	kad := kademlia.New(bosonAddress, addressbook, hiveObj, p2ps, metricsDB, logger, kademlia.Options{Bootnodes: bootnodes, BootnodeMode: o.BootnodeMode})
 	b.topologyCloser = kad
-	hive.SetAddPeersHandler(kad.AddPeers)
+	hiveObj.SetAddPeersHandler(kad.AddPeers)
 	p2ps.SetPickyNotifier(kad)
 	addrs, err := p2ps.Addresses()
 	if err != nil {

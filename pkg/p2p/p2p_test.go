@@ -11,7 +11,7 @@ import (
 )
 
 func TestNewSwarmStreamName(t *testing.T) {
-	want := "/swarm/hive/1.2.0/peers"
+	want := "/boson/hive/1.2.0/peers"
 	got := p2p.NewSwarmStreamName("hive", "1.2.0", "peers")
 
 	if got != want {

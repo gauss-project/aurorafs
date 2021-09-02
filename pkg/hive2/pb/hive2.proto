@@ -4,7 +4,7 @@
 
 syntax = "proto3";
 
-package discovery;
+package hive;
 
 option go_package = "pb";
 
@@ -12,14 +12,13 @@ message Peers {
     repeated AuroraAddress peers = 1;
 }
 
-message FindNodeReq {
-    bytes Overlay = 1;
-    int32 Bin = 2;
-    int32 Max = 3;
-}
-
 message AuroraAddress {
     bytes Underlay = 1;
     bytes Signature = 2;
     bytes Overlay = 3;
+}
+
+message FindNodeReq {
+    repeated int32 Po = 1;
+    int32 Limit = 2;
 }

@@ -9,6 +9,7 @@ import (
 	random "crypto/rand"
 	"encoding/json"
 	"errors"
+	"github.com/gauss-project/aurorafs/pkg/boson/test"
 	"math"
 	"math/big"
 	"math/bits"
@@ -37,12 +38,16 @@ const (
 	addPeerBatchSize = 500
 
 	peerConnectionAttemptTimeout = 5 * time.Second // Timeout for establishing a new connection with peer.
+
+	lookupPoLimit           = 3 // the number of hive2 used to find node for near po count.
+	lookupNeighborPeerLimit = 3
+	findNodePeerLimit       = 16
 )
 
 var (
-	quickSaturationPeers        = 4
-	saturationPeers             = 8
-	overSaturationPeers         = 20
+	quickSaturationPeers        = 4  // cale depth
+	saturationPeers             = 8  // active connected neighbor max
+	overSaturationPeers         = 20 // every k bucket max connes
 	bootNodeOverSaturationPeers = 20
 	shortRetry                  = 30 * time.Second
 	timeToRetry                 = 2 * shortRetry
@@ -562,9 +567,64 @@ func (k *Kad) manage() {
 	}
 }
 
+// discover is a forever loop that manages the find to new peers
+func (k *Kad) discover() {
+	lookup := func() {
+		ch := make(chan boson.Address)
+		// 1. self
+		if !k.lookup(k.base, ch) {
+			// 2. random
+			for i := 0; i < 3; i++ {
+				dest := test.RandomAddress()
+				if k.lookup(dest, ch) {
+					break
+				}
+			}
+		}
+	}
+	lookup()
+	for {
+		select {
+		case <-k.quit:
+			return
+		case <-time.After(30 * time.Minute):
+			lookup()
+		}
+	}
+}
+
+func (k *Kad) lookup(target boson.Address, ch chan boson.Address) (stop bool) {
+	stop = true
+	var lookupBin []uint8
+	for i := uint8(0); i < boson.MaxBins; i++ {
+		if saturate, _ := k.saturationFunc(i, k.knownPeers, k.connectedPeers); saturate {
+			continue
+		}
+		stop = false
+		lookupBin = append(lookupBin, i)
+	}
+	if !stop {
+		// need discover
+		peers, err := k.ClosestPeers(target, lookupNeighborPeerLimit)
+		if err != nil {
+			k.logger.Warningf("ClosestPeers %s", err)
+			return
+		}
+		for _, dest := range peers {
+			pos := lookupDistances(target, dest, lookupPoLimit, lookupBin)
+			if len(pos) > 0 {
+				_ = k.discovery.DoFindNode(context.Background(), dest, pos, findNodePeerLimit, ch)
+			}
+		}
+		k.notifyManageLoop()
+	}
+	return
+}
+
 func (k *Kad) Start(_ context.Context) error {
 	k.wg.Add(1)
 	go k.manage()
+	go k.discover() // hive2
 
 	go func() {
 		select {
@@ -1018,12 +1078,23 @@ func closestPeerFunc(closest *boson.Address, addr boson.Address, spf sanctionedP
 	}
 }
 
+func isIn(a boson.Address, addresses []p2p.Peer) bool {
+	for _, v := range addresses {
+		if v.Address.Equal(a) {
+			return true
+		}
+	}
+	return false
+}
+
 // ClosestPeer returns the closest peer to a given address.
 func (k *Kad) ClosestPeer(addr boson.Address, includeSelf bool, skipPeers ...boson.Address) (boson.Address, error) {
 	if k.connectedPeers.Length() == 0 {
 		return boson.Address{}, topology.ErrNotFound
 	}
 
+	peers := k.p2p.Peers()
+	var peersToDisconnect []boson.Address
 	closest := boson.ZeroAddress
 
 	if includeSelf {
@@ -1040,6 +1111,13 @@ func (k *Kad) ClosestPeer(addr boson.Address, includeSelf bool, skipPeers ...bos
 
 		if closest.IsZero() {
 			closest = peer
+		}
+
+		// kludge: hotfix for topology peer inconsistencies bug
+		if !isIn(peer, peers) {
+			a := boson.NewAddress(peer.Bytes())
+			peersToDisconnect = append(peersToDisconnect, a)
+			return false, false, nil
 		}
 
 		dcmp, err := boson.DistanceCmp(addr.Bytes(), closest.Bytes(), peer.Bytes())
@@ -1066,12 +1144,32 @@ func (k *Kad) ClosestPeer(addr boson.Address, includeSelf bool, skipPeers ...bos
 		return boson.Address{}, topology.ErrNotFound // only for light nodes
 	}
 
+	for _, v := range peersToDisconnect {
+		k.Disconnected(p2p.Peer{Address: v})
+	}
+
 	// check if self
 	if closest.Equal(k.base) {
 		return boson.Address{}, topology.ErrWantSelf
 	}
 
 	return closest, nil
+}
+
+func (k *Kad) ClosestPeers(addr boson.Address, limit int, skipPeers ...boson.Address) ([]boson.Address, error) {
+	out := make([]boson.Address, 0)
+	for i := 0; i < limit; i++ {
+		peer, err := k.ClosestPeer(addr, false, skipPeers...)
+		if err != nil {
+			if errors.Is(err, topology.ErrNotFound) {
+				break
+			}
+			continue
+		}
+		out = append(out, peer)
+		skipPeers = append(skipPeers, peer)
+	}
+	return out, nil
 }
 
 // IsWithinDepth returns if an address is within the neighborhood depth of a node.
@@ -1371,4 +1469,29 @@ func createMetricsSnapshotView(ss *im.Snapshot) *topology.MetricSnapshotView {
 		SessionConnectionDuration:  ss.SessionConnectionDuration.Truncate(time.Second).Seconds(),
 		SessionConnectionDirection: string(ss.SessionConnectionDirection),
 	}
+}
+
+// e.g. lookupRequestLimit=3
+// for a target with Proximity(target, dest) = 5 the result is [5, 6, 4].
+func lookupDistances(target, dest boson.Address, lookupRequestLimit int, pick []uint8) (pos []int32) {
+	po := boson.Proximity(target.Bytes(), dest.Bytes())
+	pos = append(pos, int32(po))
+	for i := uint8(1); len(pos) < lookupRequestLimit; i++ {
+		if po+i <= boson.MaxPO && inArray(po+i, pick) {
+			pos = append(pos, int32(po+i))
+		}
+		if po-i > 0 && inArray(po-i, pick) {
+			pos = append(pos, int32(po-i))
+		}
+	}
+	return pos
+}
+
+func inArray(i uint8, pick []uint8) bool {
+	for _, v := range pick {
+		if v == i {
+			return true
+		}
+	}
+	return false
 }

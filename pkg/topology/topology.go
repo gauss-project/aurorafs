@@ -45,6 +45,7 @@ type ClosestPeerer interface {
 	// This function will ignore peers with addresses provided in skipPeers.
 	// Returns topology.ErrWantSelf in case base is the closest to the address.
 	ClosestPeer(addr boson.Address, includeSelf bool, skipPeers ...boson.Address) (peerAddr boson.Address, err error)
+	ClosestPeers(addr boson.Address, limit int, skipPeers ...boson.Address) ([]boson.Address, error)
 }
 
 type EachPeerer interface {

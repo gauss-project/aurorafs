@@ -7,7 +7,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/logging"
-	"github.com/gauss-project/aurorafs/pkg/p2p"
 	"github.com/gogf/gf/os/gmlock"
 )
 
@@ -82,7 +81,7 @@ func (pend *pendCallResTab) Forward(ctx context.Context, s *Service, target boso
 	for _, v := range res {
 		if !v.src.Equal(pend.addr) {
 			// forward
-			s.doResp(ctx, p2p.Peer{Address: v.src}, target, routes)
+			s.doRouteResp(ctx, v.src, target, routes)
 		} else if v.resCh != nil {
 			// sync return
 			v.resCh <- struct{}{}
