@@ -209,7 +209,6 @@ func (ci *ChunkInfo) onChunkInfoResp(ctx context.Context, authInfo []byte, overl
 }
 
 func (ci *ChunkInfo) onChunkPyramidHashReq(ctx context.Context, authInfo []byte, req pb.ChunkPyramidHashReq) ([][]byte, error) {
-	// 获取hashs
 	rootCid := boson.NewAddress(req.RootCid)
 	return ci.getChunkPyramidHash(ctx, rootCid)
 }
@@ -249,7 +248,7 @@ func (ci *ChunkInfo) onFindChunkPyramid(ctx context.Context, authInfo []byte, ro
 		ci.logger.Errorf("chunk pyramid: check pyramid error")
 		return err
 	}
-	ci.cp.updateChunkPyramid(rootCid, v)
+	ci.updateChunkPyramid(rootCid, v, hashs)
 	ci.ct.initNeighborChunkInfo(rootCid)
 	return nil
 }
@@ -260,7 +259,7 @@ func (ci *ChunkInfo) onFindChunkInfo(ctx context.Context, authInfo []byte, rootC
 	overlays := make([][]byte, 0, len(chunkInfo))
 	for over, bv := range chunkInfo {
 		overlays = append(overlays, boson.MustParseHexAddress(over).Bytes())
-		ci.cd.updateChunkInfo(rootCid, boson.MustParseHexAddress(over), bv)
+		ci.updateChunkInfo(rootCid, boson.MustParseHexAddress(over), bv)
 	}
 	ci.updateQueue(ctx, authInfo, rootCid, overlay, overlays)
 }

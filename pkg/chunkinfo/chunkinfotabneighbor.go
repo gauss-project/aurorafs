@@ -2,20 +2,22 @@ package chunkinfo
 
 import (
 	"context"
+	"fmt"
 	"github.com/gauss-project/aurorafs/pkg/bitvector"
 	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/chunkinfo/pb"
+	"strings"
 	"sync"
 )
+
+var keyPrefix = "chunk-"
 
 // chunkInfoTabNeighbor
 type chunkInfoTabNeighbor struct {
 	sync.RWMutex
-
+	// rootCid:node:bitvector
 	presence map[string]map[string]*bitvector.BitVector
-	// rootcid-node : bitvector
-	//todo db presence map[string][]byte
-	// rootcid:nodes
+	// rootCid:node
 	overlays map[string][]boson.Address
 }
 
@@ -23,14 +25,47 @@ func newChunkInfoTabNeighbor() *chunkInfoTabNeighbor {
 	return &chunkInfoTabNeighbor{overlays: make(map[string][]boson.Address), presence: make(map[string]map[string]*bitvector.BitVector)}
 }
 
-// todo init 从数据库添加数据
+func (ci *ChunkInfo) initChunkInfoTabNeighbor() error {
+	if err := ci.storer.Iterate(keyPrefix, func(k, v []byte) (bool, error) {
+		if !strings.HasPrefix(string(k), keyPrefix) {
+			return true, nil
+		}
+		key := string(k)
+		rootCid, overlay, err := unmarshalKey(keyPrefix, key)
+		if err != nil {
+			return true, err
+		}
+		var vb bitVector
+		if err := ci.storer.Get(key, &vb); err != nil {
+			return true, err
+		}
+		bit, _ := bitvector.NewFromBytes(vb.B, vb.Len)
+		ci.ct.putChunkInfoTabNeighbor(rootCid, overlay, *bit)
+		return false, nil
+	}); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (cn *chunkInfoTabNeighbor) putChunkInfoTabNeighbor(rootCid, overlay boson.Address, vector bitvector.BitVector) {
+	cn.Lock()
+	defer cn.Unlock()
+	rc := rootCid.String()
+	cn.overlays[rc] = append(cn.overlays[rc], overlay)
+	if _, ok := cn.presence[rc]; !ok {
+		cn.presence[rc] = make(map[string]*bitvector.BitVector)
+	}
+	cn.presence[rc][overlay.String()] = &vector
+}
 
 // updateNeighborChunkInfo
-func (ci *ChunkInfo) updateNeighborChunkInfo(rootCid, cid boson.Address, overlay boson.Address) {
+func (ci *ChunkInfo) updateNeighborChunkInfo(rootCid, cid boson.Address, overlay boson.Address) error {
 	ci.ct.Lock()
 	defer ci.ct.Unlock()
-	// todo levelDB
+
 	rc := rootCid.String()
+	over := overlay.String()
 	exists := false
 	for _, over := range ci.ct.overlays[rootCid.String()] {
 		if over.Equal(overlay) {
@@ -43,14 +78,17 @@ func (ci *ChunkInfo) updateNeighborChunkInfo(rootCid, cid boson.Address, overlay
 		ci.ct.presence[rc] = make(map[string]*bitvector.BitVector)
 	}
 
-	vb, ok := ci.ct.presence[rc][overlay.String()]
+	vb, ok := ci.ct.presence[rc][over]
 	if !ok {
 		v, _ := ci.getChunkPyramidHash(context.Background(), rootCid)
 		vb, _ = bitvector.New(len(v))
-		ci.ct.presence[rc][overlay.String()] = vb
+		ci.ct.presence[rc][over] = vb
 	}
 	v := ci.cp.getCidStore(rootCid, cid)
 	vb.Set(v)
+	fmt.Print(vb.String())
+	// db
+	return ci.storer.Put(generateKey(keyPrefix, rootCid, overlay), &bitVector{B: vb.Bytes(), Len: vb.Len()})
 }
 
 func (cn *chunkInfoTabNeighbor) initNeighborChunkInfo(rootCid boson.Address) {

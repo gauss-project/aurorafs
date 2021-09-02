@@ -5,22 +5,44 @@ import (
 	"github.com/gauss-project/aurorafs/pkg/bitvector"
 	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/chunkinfo/pb"
+	"strings"
 	"sync"
 	"time"
 )
+
+var discoverKeyPrefix = "discover-"
 
 // chunkInfoDiscover
 type chunkInfoDiscover struct {
 	sync.RWMutex
 	// rootcid:overlays:bitvector
 	presence map[string]map[string]*bitvector.BitVector
-	// rootcid_node : bitvector
-	// todo db presence map[string][]byte
 	// rootcid:nodes
 	overlays map[string][]boson.Address
 }
 
-// todo init 从数据库添加数据
+func (ci *ChunkInfo) initChunkInfoDiscover() error {
+	if err := ci.storer.Iterate(discoverKeyPrefix, func(k, v []byte) (bool, error) {
+		if !strings.HasPrefix(string(k), discoverKeyPrefix) {
+			return true, nil
+		}
+		key := string(k)
+		rootCid, overlay, err := unmarshalKey(discoverKeyPrefix, key)
+		if err != nil {
+			return true, err
+		}
+		var vb bitVector
+		if err := ci.storer.Get(key, &vb); err != nil {
+			return true, err
+		}
+		bit, _ := bitvector.NewFromBytes(vb.B, vb.Len)
+		ci.cd.putChunkInfoDiscover(rootCid, overlay, *bit)
+		return false, nil
+	}); err != nil {
+		return err
+	}
+	return nil
+}
 
 func newChunkInfoDiscover() *chunkInfoDiscover {
 	return &chunkInfoDiscover{overlays: make(map[string][]boson.Address), presence: make(map[string]map[string]*bitvector.BitVector)}
@@ -49,29 +71,47 @@ func (ci *ChunkInfo) getChunkInfo(rootCid, cid boson.Address) [][]byte {
 	return res
 }
 
-// updateChunkInfo
-func (cd *chunkInfoDiscover) updateChunkInfo(rootCid, overlay boson.Address, bv []byte) {
+func (cd *chunkInfoDiscover) putChunkInfoDiscover(rootCid, overlay boson.Address, vector bitvector.BitVector) {
 	cd.Lock()
 	defer cd.Unlock()
-	// todo leveDb
+	rc := rootCid.String()
+	cd.overlays[rc] = append(cd.overlays[rc], overlay)
+	if _, ok := cd.presence[rc]; !ok {
+		cd.presence[rc] = make(map[string]*bitvector.BitVector)
+	}
+	cd.presence[rc][overlay.String()] = &vector
+}
+
+// updateChunkInfo
+func (ci *ChunkInfo) updateChunkInfo(rootCid, overlay boson.Address, bv []byte) {
+	ci.cd.Lock()
+	defer ci.cd.Unlock()
+
 	exists := false
 	rc := rootCid.String()
-	for _, over := range cd.overlays[rc] {
+	for _, over := range ci.cd.overlays[rc] {
 		if over.Equal(overlay) {
 			exists = true
 			break
 		}
 	}
 	if !exists {
-		cd.overlays[rc] = append(cd.overlays[rc], overlay)
-		cd.presence[rc] = make(map[string]*bitvector.BitVector)
+		ci.cd.overlays[rc] = append(ci.cd.overlays[rc], overlay)
+		ci.cd.presence[rc] = make(map[string]*bitvector.BitVector)
 	}
-	vb, ok := cd.presence[rc][overlay.String()]
+	vb, ok := ci.cd.presence[rc][overlay.String()]
 	if !ok {
-		bv, _ := bitvector.NewFromBytes(bv, len(bv)*8)
-		cd.presence[rc][overlay.String()] = bv
+		v, _ := ci.getChunkPyramidHash(context.Background(), rootCid)
+		vb, _ = bitvector.NewFromBytes(bv, len(v))
+		ci.cd.presence[rc][overlay.String()] = vb
 	} else {
-		vb.SetBytes(bv)
+		if err := vb.SetBytes(bv); err != nil {
+			ci.logger.Errorf("chunk discover: set bit vector error")
+		}
+	}
+	// db
+	if err := ci.storer.Put(generateKey(discoverKeyPrefix, rootCid, overlay), &bitVector{B: vb.Bytes(), Len: vb.Len()}); err != nil {
+		ci.logger.Errorf("chunk discover: put store error")
 	}
 }
 

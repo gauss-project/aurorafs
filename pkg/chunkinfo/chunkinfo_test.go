@@ -8,6 +8,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"github.com/gauss-project/aurorafs/pkg/bitvector"
 	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/boson/test"
 	"github.com/gauss-project/aurorafs/pkg/chunkinfo/pb"
@@ -17,6 +18,7 @@ import (
 	"github.com/gauss-project/aurorafs/pkg/p2p"
 	"github.com/gauss-project/aurorafs/pkg/p2p/protobuf"
 	"github.com/gauss-project/aurorafs/pkg/p2p/streamtest"
+	smock "github.com/gauss-project/aurorafs/pkg/statestore/mock"
 	"github.com/gauss-project/aurorafs/pkg/storage"
 	"github.com/gauss-project/aurorafs/pkg/storage/mock"
 	"github.com/gauss-project/aurorafs/pkg/traversal"
@@ -134,8 +136,19 @@ func TestHandlerChunkInfoResp(t *testing.T) {
 	b.cpd.updatePendingFinder(rootCid)
 	tree, _ := b.getChunkPyramid(ctx, rootCid)
 	pram, _ := b.traversal.CheckTrieData(ctx, rootCid, tree)
-	b.OnChunkTransferred(boson.NewAddress(pram[0][0]), rootCid, clientAddress)
-
+	if err := b.initChunkInfoTabNeighbor(); err != nil {
+		t.Fatal(err)
+	}
+	if err := b.OnChunkTransferred(boson.NewAddress(pram[0][0]), rootCid, clientAddress); err != nil {
+		t.Fatal(err)
+	}
+	var vb bitVector
+	b.storer.Get(generateKey(keyPrefix, rootCid, clientAddress), &vb)
+	vf, err := bitvector.NewFromBytes(vb.B, vb.Len)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fmt.Println(vf.String())
 	a := mockChunkInfo(s, recorder)
 
 	req := a.cd.createChunkInfoReq(rootCid)
@@ -205,7 +218,11 @@ func TestHandlerPyramid(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-
+	cids := client.cp.getChunkCid(rootCid)
+	t.Log(cids)
+	if cids == nil || len(cids) == 0 {
+		t.Fatalf("chunk pyramid is nil")
+	}
 }
 
 func TestQueueProcess(t *testing.T) {
@@ -283,7 +300,9 @@ func mockUploadFile(t *testing.T) (boson.Address, traversal.Service) {
 
 func mockChunkInfo(traversal traversal.Service, r *streamtest.Recorder) *ChunkInfo {
 	logger := logging.New(ioutil.Discard, 0)
-	server := New(r, logger, traversal, "127.0.0.1:8000")
+	ret := smock.NewStateStore()
+	server := New(r, logger, traversal, ret, "127.0.0.1:8000")
+	server.InitChunkInfo()
 	return server
 }
 
