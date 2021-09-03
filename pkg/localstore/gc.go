@@ -122,6 +122,8 @@ func (db *DB) collectGarbage() (collectedCount uint64, done bool, err error) {
 			return true, nil
 		}
 
+		candidates = append(candidates, item)
+
 		collectedCount += item.GCounter
 		if collectedCount >= gcBatchSize {
 			// batch size limit reached, however we don't
