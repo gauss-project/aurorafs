@@ -9,14 +9,13 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/gauss-project/aurorafs/pkg/boson"
+	"github.com/gauss-project/aurorafs/pkg/jsonhttp"
+	"github.com/gauss-project/aurorafs/pkg/logging/httpaccess"
 	"github.com/gorilla/handlers"
 	"github.com/gorilla/mux"
 	"github.com/sirupsen/logrus"
 	"resenje.org/web"
-
-	"github.com/gauss-project/aurorafs/pkg/boson"
-	"github.com/gauss-project/aurorafs/pkg/jsonhttp"
-	"github.com/gauss-project/aurorafs/pkg/logging/httpaccess"
 )
 
 func (s *server) setupRouting() {
@@ -110,10 +109,6 @@ func (s *server) setupRouting() {
 			s.newTracingHandler("pin-files-delete"),
 			web.FinalHandlerFunc(s.unpinFile),
 		),
-		//"GET": web.ChainHandlers(
-		//	s.newTracingHandler("pin-files-Get"),
-		//	web.FinalHandlerFunc(s.unpinFile),
-		//	),
 	})
 	handle(router, "/pin/aurora/{address}", jsonhttp.MethodHandler{
 		"POST": web.ChainHandlers(

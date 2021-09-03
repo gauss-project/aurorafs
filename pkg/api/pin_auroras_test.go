@@ -2,6 +2,10 @@ package api_test
 
 import (
 	"context"
+	"io/ioutil"
+	"net/http"
+	"testing"
+
 	"github.com/gauss-project/aurorafs/pkg/api"
 	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/chunkinfo"
@@ -11,9 +15,6 @@ import (
 	"github.com/gauss-project/aurorafs/pkg/p2p/streamtest"
 	"github.com/gauss-project/aurorafs/pkg/storage/mock"
 	"github.com/gauss-project/aurorafs/pkg/traversal"
-	"io/ioutil"
-	"net/http"
-	"testing"
 )
 
 func TestPinAuroras(t *testing.T) {

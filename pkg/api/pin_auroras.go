@@ -2,12 +2,13 @@ package api
 
 import (
 	"errors"
+	"net/http"
+
 	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/jsonhttp"
 	"github.com/gauss-project/aurorafs/pkg/storage"
 	"github.com/gauss-project/aurorafs/pkg/traversal"
 	"github.com/gorilla/mux"
-	"net/http"
 )
 
 func (s *server) pinAuroras(w http.ResponseWriter, r *http.Request) {

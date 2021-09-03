@@ -6,12 +6,6 @@ package api_test
 
 import (
 	"errors"
-	"github.com/gauss-project/aurorafs/pkg/chunkinfo"
-
-	//"github.com/gauss-project/aurorafs/pkg/addressbook"
-	//"github.com/gauss-project/aurorafs/pkg/node"
-	//"github.com/gauss-project/aurorafs/pkg/p2p/libp2p"
-	//"github.com/gauss-project/aurorafs/pkg/retrieval"
 	"io"
 	"io/ioutil"
 	"net/http"
@@ -21,14 +15,12 @@ import (
 	"time"
 
 	"github.com/gauss-project/aurorafs/pkg/api"
-
-	"github.com/gauss-project/aurorafs/pkg/logging"
-
 	"github.com/gauss-project/aurorafs/pkg/boson"
+	"github.com/gauss-project/aurorafs/pkg/chunkinfo"
+	"github.com/gauss-project/aurorafs/pkg/logging"
 	"github.com/gauss-project/aurorafs/pkg/resolver"
 	resolverMock "github.com/gauss-project/aurorafs/pkg/resolver/mock"
 	"github.com/gauss-project/aurorafs/pkg/storage"
-
 	"github.com/gauss-project/aurorafs/pkg/traversal"
 	"github.com/gorilla/websocket"
 	"resenje.org/web"

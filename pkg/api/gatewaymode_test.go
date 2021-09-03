@@ -6,12 +6,11 @@ package api_test
 
 import (
 	"bytes"
-	"github.com/gauss-project/aurorafs/pkg/boson"
-
 	"net/http"
 	"testing"
 
 	"github.com/gauss-project/aurorafs/pkg/api"
+	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/jsonhttp"
 	"github.com/gauss-project/aurorafs/pkg/jsonhttp/jsonhttptest"
 	"github.com/gauss-project/aurorafs/pkg/storage/mock"
