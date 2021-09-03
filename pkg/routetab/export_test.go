@@ -7,6 +7,7 @@ package routetab
 import (
 	"context"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/gauss-project/aurorafs/pkg/aurora"
 	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/p2p"
 	"github.com/gauss-project/aurorafs/pkg/routetab/pb"
@@ -32,8 +33,8 @@ func (s *Service) DoReq(ctx context.Context, src boson.Address, peer p2p.Peer, d
 	s.doRouteReq(ctx, src, peer.Address, dest, req, ch)
 }
 
-func (s *Service) DoResp(ctx context.Context, peer p2p.Peer, dest boson.Address, routes []RouteItem) {
-	s.doRouteResp(ctx, peer.Address, dest, routes)
+func (s *Service) DoResp(ctx context.Context, peer p2p.Peer, target *aurora.Address, routes []RouteItem) {
+	s.doRouteResp(ctx, peer.Address, target, routes)
 }
 
 func (s *Service) RouteTab() *routeTable {

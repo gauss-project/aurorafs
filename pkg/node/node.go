@@ -15,7 +15,6 @@ import (
 	"github.com/gauss-project/aurorafs/pkg/hive2"
 	"github.com/gauss-project/aurorafs/pkg/routetab"
 	"github.com/gauss-project/aurorafs/pkg/shed"
-	"github.com/gauss-project/aurorafs/pkg/topology"
 	"github.com/gauss-project/aurorafs/pkg/topology/kademlia"
 	"github.com/gauss-project/aurorafs/pkg/topology/lightnode"
 	"io"
@@ -59,7 +58,6 @@ type Bee struct {
 	stateStoreCloser io.Closer
 	localstoreCloser io.Closer
 	topologyCloser   io.Closer
-	topologyHalter   topology.Halter
 
 	ethClientCloser func()
 	//recoveryHandleCleanup func()
@@ -170,7 +168,6 @@ func NewBee(addr string, bosonAddress boson.Address, publicKey ecdsa.PublicKey, 
 		return nil, err
 	}
 
-	addressbook := addressbook.New(stateStore)
 
 	//var swapBackend *ethclient.Client
 	//var overlayEthAddress common.Address
@@ -235,9 +232,10 @@ func NewBee(addr string, bosonAddress boson.Address, publicKey ecdsa.PublicKey, 
 	//	)
 	//}
 
+	addressBook := addressbook.New(stateStore)
 	lightNodes := lightnode.NewContainer(bosonAddress)
 
-	p2ps, err := libp2p.New(p2pCtx, signer, networkID, bosonAddress, addr, addressbook, stateStore, lightNodes, logger, tracer, libp2p.Options{
+	p2ps, err := libp2p.New(p2pCtx, signer, networkID, bosonAddress, addr, addressBook, stateStore, lightNodes, logger, tracer, libp2p.Options{
 		PrivateKey:     libp2pPrivateKey,
 		NATAddr:        o.NATAddr,
 		EnableWS:       o.EnableWS,
@@ -352,12 +350,12 @@ func NewBee(addr string, bosonAddress boson.Address, publicKey ecdsa.PublicKey, 
 		return nil, fmt.Errorf("unable to create metrics storage for kademlia: %w", err)
 	}
 
-	hiveObj := hive2.New(p2ps, addressbook, networkID, logger)
+	hiveObj := hive2.New(p2ps, addressBook, networkID, logger)
 	if err = p2ps.AddProtocol(hiveObj.Protocol()); err != nil {
 		return nil, fmt.Errorf("hive service: %w", err)
 	}
 
-	kad := kademlia.New(bosonAddress, addressbook, hiveObj, p2ps, metricsDB, logger, kademlia.Options{Bootnodes: bootnodes, BootnodeMode: o.BootnodeMode})
+	kad := kademlia.New(bosonAddress, addressBook, hiveObj, p2ps, metricsDB, logger, kademlia.Options{Bootnodes: bootnodes, BootnodeMode: o.BootnodeMode})
 	b.topologyCloser = kad
 	hiveObj.SetAddPeersHandler(kad.AddPeers)
 	p2ps.SetPickyNotifier(kad)

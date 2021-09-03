@@ -17,8 +17,8 @@ var (
 	MaxTTL uint8 = 7
 
 	defaultNeighborAlpha int32 = 2
-	gcTime              = time.Minute * 10
-	gcInterval          = time.Minute
+	gcTime                     = time.Minute * 10
+	gcInterval                 = time.Minute
 )
 
 // RouteItem
@@ -58,6 +58,16 @@ func newRouteTable(store storage.StateStorer, logger logging.Logger, met metrics
 		lockTimeout: time.Second * 5,
 		metrics:     met,
 	}
+}
+
+func (rt *routeTable) Remove(target boson.Address) {
+	dest := target.String()
+	key := rt.prefix + dest
+	rt.mu.Lock(key)
+	defer rt.mu.Unlock(key)
+
+	mKey := common.BytesToHash(target.Bytes())
+	delete(rt.items, mKey)
 }
 
 func (rt *routeTable) Set(target boson.Address, routes []RouteItem) error {

@@ -18,7 +18,7 @@ func convRouteToPbRouteList(srcList []RouteItem) []*pb.RouteItem {
 func convRouteItemToPbRoute(src RouteItem) *pb.RouteItem {
 	out := &pb.RouteItem{
 		CreateTime: src.CreateTime,
-		Ttl:        uint32(src.TTL),
+		TTL:        uint32(src.TTL),
 		Neighbor:   src.Neighbor.Bytes(),
 		NextHop:    make([]*pb.RouteItem, len(src.NextHop)),
 	}
@@ -39,7 +39,7 @@ func convPbToRouteList(srcList []*pb.RouteItem) []RouteItem {
 func convPbToRouteItem(src *pb.RouteItem) RouteItem {
 	out := RouteItem{
 		CreateTime: src.CreateTime,
-		TTL:        uint8(src.Ttl),
+		TTL:        uint8(src.TTL),
 		Neighbor:   boson.NewAddress(src.Neighbor),
 		NextHop:    make([]RouteItem, len(src.NextHop)),
 	}
@@ -149,4 +149,30 @@ func checkExpired(old []RouteItem, expire time.Duration) (now []RouteItem, updat
 		}
 	}
 	return
+}
+
+func minTTL(items []RouteItem) int {
+	ttl := MaxTTL
+	if len(items) == 0 {
+		ttl = 0
+	}
+	for _, v := range items {
+		if ttl > v.TTL {
+			ttl = v.TTL
+		}
+	}
+	return int(ttl)
+}
+
+func minTTLPb(items []*pb.RouteItem) uint8 {
+	ttl := MaxTTL
+	if len(items) == 0 {
+		ttl = 0
+	}
+	for _, v := range items {
+		if ttl > uint8(v.TTL) {
+			ttl = uint8(v.TTL)
+		}
+	}
+	return ttl
 }

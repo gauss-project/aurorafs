@@ -2,6 +2,7 @@ package routetab
 
 import (
 	"context"
+	"github.com/gauss-project/aurorafs/pkg/aurora"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -70,13 +71,13 @@ func (pend *pendCallResTab) Add(target, src boson.Address, resCh chan struct{}) 
 	return nil
 }
 
-func (pend *pendCallResTab) Forward(ctx context.Context, s *Service, target boson.Address, routes []RouteItem) error {
+func (pend *pendCallResTab) Forward(ctx context.Context, s *Service, target *aurora.Address, routes []RouteItem) error {
 	key := target.String()
 
 	pend.mu.Lock(key)
 	defer pend.mu.Unlock(key)
 
-	mKey := common.BytesToHash(target.Bytes())
+	mKey := common.BytesToHash(target.Overlay.Bytes())
 	res := pend.items[mKey]
 	for _, v := range res {
 		if !v.src.Equal(pend.addr) {

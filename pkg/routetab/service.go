@@ -3,6 +3,8 @@ package routetab
 import (
 	"context"
 	"fmt"
+	"github.com/gauss-project/aurorafs/pkg/addressbook"
+	"github.com/gauss-project/aurorafs/pkg/aurora"
 	"github.com/gauss-project/aurorafs/pkg/topology"
 	"time"
 
@@ -22,8 +24,8 @@ const (
 )
 
 type RouteTab interface {
-	GetRoute(ctx context.Context, dest boson.Address) (routes []RouteItem, err error)
-	FindRoute(ctx context.Context, dest boson.Address) (route []RouteItem, err error)
+	GetRoute(ctx context.Context, target boson.Address) (routes []RouteItem, err error)
+	FindRoute(ctx context.Context, target boson.Address) (route []RouteItem, err error)
 }
 
 type Service struct {
@@ -34,6 +36,12 @@ type Service struct {
 	pendingCalls *pendCallResTab
 	routeTable   *routeTable
 	topology     topology.Driver
+	config       Config
+}
+
+type Config struct {
+	AddressBook addressbook.Interface
+	NetworkID   uint64
 }
 
 func New(addr boson.Address, ctx context.Context, streamer p2p.Streamer, topology topology.Driver, store storage.StateStorer, logger logging.Logger) *Service {
@@ -55,6 +63,10 @@ func New(addr boson.Address, ctx context.Context, streamer p2p.Streamer, topolog
 		service.start(ctx)
 	}()
 	return service
+}
+
+func (s *Service) SetConfig(cfg Config) {
+	s.config = cfg
 }
 
 // Close implement for Closer Interface
@@ -139,34 +151,48 @@ func (s *Service) onRouteReq(ctx context.Context, p p2p.Peer, stream p2p.Stream)
 
 	target := boson.NewAddress(req.Dest)
 
-	if len(req.Path) <= int(MaxTTL) {
-		// need resp
-		routes, err := s.GetRoute(ctx, target)
-		if err != nil {
-			s.logger.Debugf("route: handlerFindRouteReq dest= %s route not found", target.String())
-			if !s.isNeighbor(target) {
-				// forward
-				forward := s.getNeighbor(target, req.Alpha)
-				for _, v := range forward {
-					if !inPath(v.Bytes(), req.Path) {
-						// forward
-						req.Path = append(req.Path, p.Address.Bytes())
-						s.doRouteReq(ctx, s.addr, v, target, &req, nil)
-						s.logger.Tracef("route: handlerFindRouteReq dest= %s forward ro %s", target.String(), v.String())
-					}
-					// discard
-					s.logger.Tracef("route: handlerFindRouteReq dest= %s discard", target.String())
-				}
-			} else {
-				// dest in neighbor then resp
-				s.doRouteResp(ctx, p.Address, target, routes)
-				s.logger.Tracef("route: handlerFindRouteReq dest= %s in neighbor", target.String())
-			}
-		} else {
-			// have route resp
-			s.doRouteResp(ctx, p.Address, target, routes)
-			s.logger.Tracef("route: handlerFindRouteReq dest= %s in route table", target.String())
+	if len(req.Path) > int(MaxTTL) {
+		// discard
+		s.logger.Tracef("route: handlerFindRouteReq dest= %s discard ttl= %d", target.String(), len(req.Path))
+		return nil
+	}
+	if inPath(s.addr.Bytes(), req.Path) {
+		// discard
+		s.logger.Tracef("route: handlerFindRouteReq dest= %s discard received path contains self", target.String())
+		return nil
+	}
+	// need resp
+	if s.isNeighbor(target) {
+		// dest in neighbor then resp
+		dest, _ := s.config.AddressBook.Get(target)
+		s.doRouteResp(ctx, p.Address, dest, []RouteItem{})
+		s.logger.Tracef("route: handlerFindRouteReq dest= %s in neighbor", target.String())
+		return nil
+	}
+	dest, routes, err := s.GetRoute(ctx, target)
+	if err == nil {
+		if len(req.Path)+minTTL(routes) > int(MaxTTL) {
+			// discard
+			s.logger.Tracef("route: handlerFindRouteReq dest= %s discard ttl= %d", target.String(), len(req.Path)+minTTL(routes))
+			return nil
 		}
+		// have route resp
+		s.doRouteResp(ctx, p.Address, dest, routes)
+		s.logger.Tracef("route: handlerFindRouteReq dest= %s in route table", target.String())
+		return nil
+	}
+	// forward
+	forward := s.getNeighbor(target, req.Alpha)
+	for _, v := range forward {
+		if !inPath(v.Bytes(), req.Path) {
+			// forward
+			req.Path = append(req.Path, p.Address.Bytes())
+			s.doRouteReq(ctx, s.addr, v, target, &req, nil)
+			s.logger.Tracef("route: handlerFindRouteReq dest= %s forward ro %s", target.String(), v.String())
+			continue
+		}
+		// discard
+		s.logger.Tracef("route: handlerFindRouteReq dest= %s discard forward= %s", target.String(), v.String())
 	}
 	return nil
 }
@@ -196,9 +222,9 @@ func (s *Service) onRouteResp(ctx context.Context, p p2p.Peer, stream p2p.Stream
 	return nil
 }
 
-func (s *Service) FindRoute(ctx context.Context, target boson.Address) (routes []RouteItem, err error) {
-	routes, err = s.GetRoute(ctx, target)
-	if err == ErrNotFound {
+func (s *Service) FindRoute(ctx context.Context, target boson.Address) (dest *aurora.Address, routes []RouteItem, err error) {
+	dest, routes, err = s.GetRoute(ctx, target)
+	if err != nil {
 		s.logger.Debugf("route: FindRoute dest %s", target.String(), err)
 		if s.isNeighbor(target) {
 			err = fmt.Errorf("route: FindRoute dest %s is neighbor", target.String())
@@ -223,7 +249,7 @@ func (s *Service) FindRoute(ctx context.Context, target boson.Address) (routes [
 				err = fmt.Errorf("route: FindRoute dest %s timeout %.0fs", target.String(), PendingTimeout.Seconds())
 				s.logger.Errorf(err.Error())
 			case <-resCh:
-				routes, err = s.GetRoute(ctx, target)
+				dest, routes, err = s.GetRoute(ctx, target)
 			}
 			return
 		}
@@ -234,33 +260,47 @@ func (s *Service) FindRoute(ctx context.Context, target boson.Address) (routes [
 	return
 }
 
-func (s *Service) GetRoute(_ context.Context, dest boson.Address) (routes []RouteItem, err error) {
-	return s.routeTable.Get(dest)
+func (s *Service) GetRoute(_ context.Context, target boson.Address) (dest *aurora.Address, routes []RouteItem, err error) {
+	routes, err = s.routeTable.Get(target)
+	if err != nil {
+		return
+	}
+	dest, err = s.config.AddressBook.Get(target)
+	if err != nil {
+		s.routeTable.Remove(target)
+	}
+	return
 }
 
 func (s *Service) saveRespRouteItem(ctx context.Context, neighbor boson.Address, resp pb.FindRouteResp) {
-	minTTL := MaxTTL
-	if len(resp.RouteItems) == 0 {
-		minTTL = 0
+	address, err := aurora.ParseAddress(resp.Underlay, resp.Dest, resp.Signature, s.config.NetworkID)
+	if err != nil {
+		s.metrics.TotalErrors.Inc()
+		s.logger.Errorf("route: target aurora.ParseAddress %s", err.Error())
+		return
 	}
-	for _, v := range resp.RouteItems {
-		if uint8(v.Ttl) < minTTL {
-			minTTL = uint8(v.Ttl)
-		}
+
+	target := boson.NewAddress(resp.Dest)
+
+	err = s.config.AddressBook.Put(target, *address)
+	if err != nil {
+		s.metrics.TotalErrors.Inc()
+		s.logger.Errorf("route: target addressBook.Put %s", err.Error())
+		return
 	}
+	s.topology.AddPeers(target)
+
 	now := []RouteItem{{
 		CreateTime: time.Now().Unix(),
-		TTL:        minTTL + 1,
+		TTL:        minTTLPb(resp.RouteItems) + 1,
 		Neighbor:   neighbor,
 		NextHop:    convPbToRouteList(resp.RouteItems),
 	}}
 
-	target := boson.NewAddress(resp.Dest)
-
 	_ = s.routeTable.Set(target, now)
 
 	// doing resp
-	err := s.pendingCalls.Forward(ctx, s, target, now)
+	err = s.pendingCalls.Forward(ctx, s, address, now)
 	if err != nil {
 		s.metrics.TotalErrors.Inc()
 		s.logger.Errorf("route: pendingCalls.Forward %s", err.Error())
@@ -301,9 +341,11 @@ func (s *Service) doRouteReq(ctx context.Context, src, peer, target boson.Addres
 	s.metrics.FindRouteReqSentCount.Inc()
 }
 
-func (s *Service) doRouteResp(ctx context.Context, peer boson.Address, dest boson.Address, routes []RouteItem) {
+func (s *Service) doRouteResp(ctx context.Context, peer boson.Address, target *aurora.Address, routes []RouteItem) {
 	resp := &pb.FindRouteResp{
-		Dest: dest.Bytes(),
+		Dest:      target.Overlay.Bytes(),
+		Underlay:  target.Underlay.Bytes(),
+		Signature: target.Signature,
 		RouteItems: func() []*pb.RouteItem {
 			if len(routes) > 0 {
 				return convRouteToPbRouteList(routes)
