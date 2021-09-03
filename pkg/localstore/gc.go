@@ -234,12 +234,20 @@ func (db *DB) recycleGarbageWorker() {
 		for _, item := range candidates {
 			chunks := db.discover.GetChunkPyramid(boson.NewAddress(item.Address))
 			for _, chunk := range chunks {
-				err = db.retrievalDataIndex.DeleteInBatch(batch, addressToItem(*chunk))
+				pin, err := db.pinIndex.Has(addressToItem(*chunk))
 				if err != nil {
-					db.logger.Errorf("localstore: recycle garbage: chunk data delete: %v", err)
-					break
+					db.metrics.ModeHasFailure.Inc()
+					db.logger.Errorf("localstore: recycle garbage: check pin failure: %v", err)
+					goto next
 				}
-				removeChunks++
+				if !pin {
+					err = db.retrievalDataIndex.DeleteInBatch(batch, addressToItem(*chunk))
+					if err != nil {
+						db.logger.Errorf("localstore: recycle garbage: chunk data delete: %v", err)
+						break
+					}
+					removeChunks++
+				}
 			}
 
 			err = db.gcQueueIndex.DeleteInBatch(batch, item)
