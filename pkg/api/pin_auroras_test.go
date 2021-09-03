@@ -13,7 +13,8 @@ import (
 	"github.com/gauss-project/aurorafs/pkg/jsonhttp/jsonhttptest"
 	"github.com/gauss-project/aurorafs/pkg/logging"
 	"github.com/gauss-project/aurorafs/pkg/p2p/streamtest"
-	"github.com/gauss-project/aurorafs/pkg/storage/mock"
+	statestore "github.com/gauss-project/aurorafs/pkg/statestore/mock"
+	localstore "github.com/gauss-project/aurorafs/pkg/storage/mock"
 	"github.com/gauss-project/aurorafs/pkg/traversal"
 )
 
@@ -23,7 +24,8 @@ func TestPinAuroras(t *testing.T) {
 		pinBzzResource        = "/v1/pin/aurora"
 		pinBzzAddressResource = func(addr string) string { return pinBzzResource + "/" + addr }
 
-		mockStorer       = mock.NewStorer()
+		mockStorer       = localstore.NewStorer()
+		mockStateStorer  = statestore.NewStateStore()
 		traversalService = traversal.NewService(mockStorer)
 		chunkinfo        = func() *chunkinfo.ChunkInfo {
 			logger := logging.New(ioutil.Discard, 0)
@@ -31,7 +33,7 @@ func TestPinAuroras(t *testing.T) {
 			recorder := streamtest.New(
 				streamtest.WithBaseAddr(serverAddress),
 			)
-			chuninfo := chunkinfo.New(recorder, logger, traversalService, "127.0.0.1:8000")
+			chuninfo := chunkinfo.New(recorder, logger, traversalService, mockStateStorer, "127.0.0.1:8000")
 			return chuninfo
 		}
 		client, _, _ = newTestServer(t, testServerOptions{
@@ -158,7 +160,7 @@ func AurorasfileUnpin(t *testing.T, client *http.Client, pinBzzAddressResource f
 	return nil
 }
 
-func Aurorascheckpin(addlist []boson.Address, mockStorer *mock.MockStorer) int {
+func Aurorascheckpin(addlist []boson.Address, mockStorer *localstore.MockStorer) int {
 	iresult := 0
 	for _, v := range addlist {
 		icount, err := mockStorer.PinCounter(v)
