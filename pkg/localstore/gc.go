@@ -122,8 +122,6 @@ func (db *DB) collectGarbage() (collectedCount uint64, done bool, err error) {
 			return true, nil
 		}
 
-		candidates = append(candidates, item)
-
 		collectedCount += item.GCounter
 		if collectedCount >= gcBatchSize {
 			// batch size limit reached, however we don't
@@ -156,6 +154,11 @@ func (db *DB) collectGarbage() (collectedCount uint64, done bool, err error) {
 	// get rid of dirty entries
 	for _, item := range candidates {
 		if boson.NewAddress(item.Address).MemberOf(db.dirtyAddresses) {
+			collectedCount -= item.GCounter
+			continue
+		}
+
+		if !db.discover.IsDiscover(boson.NewAddress(item.Address)) {
 			collectedCount -= item.GCounter
 			continue
 		}
@@ -216,9 +219,7 @@ func (db *DB) recycleGarbageWorker() {
 
 		// iterate from large to small
 		err := db.gcQueueIndex.Iterate(func(item shed.Item) (stop bool, err error) {
-			if !db.discover.IsDiscover(boson.NewAddress(item.Address)) {
-				candidates = append(candidates, item)
-			}
+			candidates = append(candidates, item)
 
 			return false, nil
 		}, &shed.IterateOptions{Reverse: true})
