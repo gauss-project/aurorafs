@@ -18,6 +18,8 @@ package localstore
 
 import (
 	"errors"
+	"fmt"
+	"os"
 	"time"
 
 	"github.com/gauss-project/aurorafs/pkg/boson"
@@ -63,7 +65,9 @@ func (db *DB) collectGarbageWorker() {
 			}
 
 			// start clean chunks
-			db.triggerGarbageRecycling()
+			if collectedCount > 0 {
+				db.triggerGarbageRecycling()
+			}
 
 			if testHookCollectGarbage != nil {
 				testHookCollectGarbage(collectedCount)
@@ -160,7 +164,7 @@ func (db *DB) collectGarbage() (collectedCount uint64, done bool, err error) {
 			continue
 		}
 
-		if !db.discover.IsDiscover(boson.NewAddress(item.Address)) {
+		if db.discover.IsDiscover(boson.NewAddress(item.Address)) {
 			collectedCount -= item.GCounter
 			continue
 		}
@@ -216,10 +220,12 @@ func (db *DB) recycleGarbageWorker() {
 	defer close(db.recycleGarbageWorkerDone)
 
 	for {
+		fmt.Fprintf(os.Stderr, "new recycle\n")
 		batch := new(leveldb.Batch)
 		candidates := make([]shed.Item, 0)
 
 		// iterate from large to small
+		fmt.Fprintf(os.Stderr, "start iterate\n")
 		err := db.gcQueueIndex.Iterate(func(item shed.Item) (stop bool, err error) {
 			candidates = append(candidates, item)
 
@@ -233,64 +239,69 @@ func (db *DB) recycleGarbageWorker() {
 		recycleCount = 0
 		removeChunks = 0
 
-		for _, item := range candidates {
-			chunks := db.discover.GetChunkPyramid(boson.NewAddress(item.Address))
-			for _, chunk := range chunks {
-				pin, err := db.pinIndex.Has(addressToItem(*chunk))
-				if err != nil {
-					db.metrics.ModeHasFailure.Inc()
-					db.logger.Errorf("localstore: recycle garbage: check pin failure: %v", err)
-					goto next
-				}
-				if !pin {
-					err = db.retrievalDataIndex.DeleteInBatch(batch, addressToItem(*chunk))
+		if len(candidates) > 0 {
+			for _, item := range candidates {
+				chunks := db.discover.GetChunkPyramid(boson.NewAddress(item.Address))
+				for _, chunk := range chunks {
+					pin, err := db.pinIndex.Has(addressToItem(*chunk))
 					if err != nil {
-						db.logger.Errorf("localstore: recycle garbage: chunk data delete: %v", err)
-						break
+						db.metrics.ModeHasFailure.Inc()
+						db.logger.Errorf("localstore: recycle garbage: check pin failure: %v", err)
+						goto next
 					}
-					removeChunks++
+					if !pin {
+						err = db.retrievalDataIndex.DeleteInBatch(batch, addressToItem(*chunk))
+						if err != nil {
+							db.logger.Errorf("localstore: recycle garbage: chunk data delete: %v", err)
+							break
+						}
+						removeChunks++
+					}
+				}
+
+				err = db.gcQueueIndex.DeleteInBatch(batch, item)
+				if err != nil {
+					db.logger.Errorf("localstore: recycle garbage: gc queue delete: %v", err)
+					break
+				}
+				recycleCount++
+
+				// skip and write to db
+				if removeChunks + recycleCount >= gcBatchSize {
+					goto writeBatch
+				}
+
+				select {
+				case <-db.close:
+					db.logger.Warningf("localstore: recycle garbage: stops in advance due to db closing")
+					closed = true
+					goto writeBatch
+				default:
 				}
 			}
 
-			err = db.gcQueueIndex.DeleteInBatch(batch, item)
+		writeBatch:
+			err = db.shed.WriteBatch(batch)
 			if err != nil {
-				db.logger.Errorf("localstore: recycle garbage: gc queue delete: %v", err)
-				break
-			}
-			recycleCount++
-
-			// skip and write to db
-			if removeChunks + recycleCount >= gcBatchSize {
-				goto writeBatch
+				db.metrics.GCErrorCounter.Inc()
+				db.logger.Errorf("localstore: recycle garbage: %v", err)
+			} else {
+				db.metrics.GCWaitRemove.Sub(float64(recycleCount))
+				db.metrics.GCRemovedCounter.Add(float64(removeChunks))
 			}
 
-			select {
-			case <-db.close:
-				db.logger.Warningf("localstore: recycle garbage: stops in advance due to db closing")
-				closed = true
-				goto writeBatch
-			default:
+			if closed {
+				return
 			}
-		}
-
-	writeBatch:
-		err = db.shed.WriteBatch(batch)
-		if err != nil {
-			db.metrics.GCErrorCounter.Inc()
-			db.logger.Errorf("localstore: recycle garbage: %v", err)
-		} else {
-			db.metrics.GCWaitRemove.Sub(float64(recycleCount))
-			db.metrics.GCRemovedCounter.Add(float64(removeChunks))
-		}
-
-		if closed {
-			return
 		}
 
 	next:
+		fmt.Fprintf(os.Stderr, "recycle end\n")
 		select {
 		case <-db.recycleGarbageTrigger:
+			fmt.Fprintf(os.Stderr, "start recycling\n")
 		case <-db.close:
+			fmt.Fprintf(os.Stderr, "db closed\n")
 			return
 		}
 	}
@@ -317,6 +328,7 @@ func (db *DB) triggerGarbageCollection() {
 func (db *DB) triggerGarbageRecycling() {
 	select {
 	case db.recycleGarbageTrigger <- struct{}{}:
+		fmt.Fprintf(os.Stderr, "trigger recycle\n")
 	case <-db.close:
 	default:
 	}

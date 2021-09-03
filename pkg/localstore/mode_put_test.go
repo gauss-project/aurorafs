@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"github.com/gauss-project/aurorafs/pkg/sctx"
 	"math/rand"
 	"strconv"
 	"sync"
@@ -164,7 +165,7 @@ func TestModePutUploadPin(t *testing.T) {
 			}
 
 			for _, file := range FileList {
-				ctx := context.WithValue(context.Background(), RootCIDKey{}, file)
+				ctx := sctx.SetRootCID(context.Background(), file)
 
 				_, err := db.Put(ctx, storage.ModePutUploadPin, chunks...)
 				if err != nil {

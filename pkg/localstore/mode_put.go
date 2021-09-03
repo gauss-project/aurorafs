@@ -142,40 +142,46 @@ func (db *DB) put(mode storage.ModePut, rootCID boson.Address, chs ...boson.Chun
 		item := addressToItem(rootCID)
 		i, err := db.retrievalAccessIndex.Get(item)
 		if err != nil {
-			if !errors.Is(err, storage.ErrNotFound) {
+			if !errors.Is(err, leveldb.ErrNotFound) {
+				return nil, err
+			}
+			i.Address = item.Address
+			i.AccessTimestamp = now()
+			err = db.retrievalAccessIndex.Put(i)
+			if err != nil {
+				return nil, err
+			}
+		}
+
+		item.AccessTimestamp = i.AccessTimestamp
+		i, err = db.retrievalDataIndex.Get(item)
+		if err != nil {
+			return nil, err
+		}
+		item.BinID = i.BinID
+		gcItem, err := db.gcIndex.Get(item)
+		if err != nil {
+			if errors.Is(err, leveldb.ErrNotFound) {
+				gcItem.BinID = item.BinID
+				gcItem.Address = item.Address
+				gcItem.AccessTimestamp = item.AccessTimestamp
+				gcItem.GCounter = uint64(gcSizeChange)
+			} else {
 				return nil, err
 			}
 		} else {
-			item.AccessTimestamp = i.AccessTimestamp
-			i, err = db.retrievalDataIndex.Get(item)
-			if err != nil {
-				return nil, err
-			}
-			item.BinID = i.BinID
-			gcItem, err := db.gcIndex.Get(item)
-			if err != nil {
-				if errors.Is(err, storage.ErrNotFound) {
-					gcItem.BinID = item.BinID
-					gcItem.Address = item.Address
-					gcItem.AccessTimestamp = item.AccessTimestamp
-					gcItem.GCounter = uint64(gcSizeChange)
-				} else {
-					return nil, err
-				}
+			if gcSizeChange >= 0 {
+				gcItem.GCounter += uint64(gcSizeChange)
 			} else {
-				if gcSizeChange >= 0 {
-					gcItem.GCounter += uint64(gcSizeChange)
+				c := uint64(-gcSizeChange)
+				if c > gcItem.GCounter {
+					gcItem.GCounter = 0
 				} else {
-					c := uint64(-gcSizeChange)
-					if c > gcItem.GCounter {
-						gcItem.GCounter = 0
-					} else {
-						gcItem.GCounter -= c
-					}
+					gcItem.GCounter -= c
 				}
 			}
-			db.gcIndex.PutInBatch(batch, gcItem)
 		}
+		db.gcIndex.PutInBatch(batch, gcItem)
 	}
 
 	err = db.incGCSizeInBatch(batch, gcSizeChange)
@@ -212,12 +218,6 @@ func (db *DB) putRequest(batch *leveldb.Batch, binIDs map[uint8]uint64, item she
 	}
 
 	err = db.retrievalDataIndex.PutInBatch(batch, item)
-	if err != nil {
-		return false,  err
-	}
-
-	item.AccessTimestamp = now()
-	err = db.retrievalAccessIndex.PutInBatch(batch, item)
 	if err != nil {
 		return false,  err
 	}

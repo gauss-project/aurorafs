@@ -19,6 +19,7 @@ package localstore
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"io/ioutil"
 	"math/rand"
@@ -27,10 +28,14 @@ import (
 	"testing"
 	"time"
 
+	"github.com/gauss-project/aurorafs/pkg/boson"
+	chunkinfo "github.com/gauss-project/aurorafs/pkg/chunkinfo/mock"
+	"github.com/gauss-project/aurorafs/pkg/collection/entry"
+	"github.com/gauss-project/aurorafs/pkg/file/pipeline/builder"
 	"github.com/gauss-project/aurorafs/pkg/logging"
 	"github.com/gauss-project/aurorafs/pkg/shed"
 	"github.com/gauss-project/aurorafs/pkg/storage"
-	"github.com/gauss-project/aurorafs/pkg/boson"
+	"github.com/gauss-project/aurorafs/pkg/traversal"
 	"github.com/syndtr/goleveldb/leveldb"
 )
 
@@ -71,26 +76,13 @@ func testDBCollectGarbageWorker(t *testing.T) {
 	})
 	closed = db.close
 
-	addrs := make([]boson.Address, 0)
+	// upload random file
+	ci := chunkinfo.New()
+	db.Config(ci)
+	reference, chunks := addRandomFile(t, chunkCount, db, ci)
 
-	// upload random chunks
-	for i := 0; i < chunkCount; i++ {
-		ch := generateTestRandomChunk()
-
-		_, err := db.Put(context.Background(), storage.ModePutUpload, ch)
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		err = db.Set(context.Background(), storage.ModeSetSync, ch.Address())
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		addrs = append(addrs, ch.Address())
-
-	}
-
+	// trigger gc
+	db.triggerGarbageCollection()
 	gcTarget := db.gcTarget()
 
 	for {
@@ -103,37 +95,31 @@ func testDBCollectGarbageWorker(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if gcSize == gcTarget {
+		if gcSize <= gcTarget {
 			break
 		}
 	}
 
-	t.Run("gc index count", newItemsCountTest(db.gcIndex, int(gcTarget)))
+	t.Run("gc index count", newItemsCountTest(db.gcIndex, 0))
 
 	t.Run("gc size", newIndexGCSizeTest(db))
 
-	// the first synced chunk should be removed
-	t.Run("get the first synced chunk", func(t *testing.T) {
-		_, err := db.Get(context.Background(), storage.ModeGetRequest, addrs[0])
+	// the file reference chunk should be removed
+	t.Run("get the file reference chunk", func(t *testing.T) {
+		_, err := db.Get(context.Background(), storage.ModeGetRequest, reference)
 		if !errors.Is(err, storage.ErrNotFound) {
 			t.Errorf("got error %v, want %v", err, storage.ErrNotFound)
 		}
 	})
 
-	t.Run("only first inserted chunks should be removed", func(t *testing.T) {
-		for i := 0; i < (chunkCount - int(gcTarget)); i++ {
-			_, err := db.Get(context.Background(), storage.ModeGetRequest, addrs[i])
+	time.Sleep(3 * time.Second)
+
+	t.Run("file related chunks should be removed", func(t *testing.T) {
+		for i := 0; i < chunkCount; i++ {
+			_, err := db.Get(context.Background(), storage.ModeGetRequest, chunks[i])
 			if !errors.Is(err, storage.ErrNotFound) {
 				t.Errorf("got error %v, want %v", err, storage.ErrNotFound)
 			}
-		}
-	})
-
-	// last synced chunk should not be removed
-	t.Run("get most recent synced chunk", func(t *testing.T) {
-		_, err := db.Get(context.Background(), storage.ModeGetRequest, addrs[len(addrs)-1])
-		if err != nil {
-			t.Fatal(err)
 		}
 	})
 }
@@ -706,6 +692,69 @@ func addRandomChunks(t *testing.T, count int, db *DB, pin bool) []boson.Chunk {
 		chunks = append(chunks, ch)
 	}
 	return chunks
+}
+
+func addRandomFile(t *testing.T, count int, db *DB, ci *chunkinfo.ChunkInfo) (reference boson.Address, chunkHashes []boson.Address) {
+	buf := new(bytes.Buffer)
+	for i := 0; i < count; i++ {
+		ch := generateTestRandomChunk()
+		buf.Write(ch.Data()[boson.SpanSize:])
+	}
+	ctx := context.Background()
+	pipe := builder.NewPipelineBuilder(ctx, db, storage.ModePutRequest, false)
+	fr, err := builder.FeedPipeline(ctx, pipe, buf, int64(buf.Len()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	meta := entry.NewMetadata(fr.String())
+	meta.MimeType = "text/plain; charset=utf-8"
+	metadata, err := json.Marshal(meta)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pipe = builder.NewPipelineBuilder(ctx, db, storage.ModePutRequest, false)
+	mr, err := builder.FeedPipeline(ctx, pipe, bytes.NewReader(metadata), int64(len(metadata)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	entries := entry.New(fr, mr)
+	entryBytes, err := entries.MarshalBinary()
+	if err != nil {
+		t.Fatal(err)
+	}
+	pipe = builder.NewPipelineBuilder(ctx, db, storage.ModePutRequest, false)
+	reference, err = builder.FeedPipeline(ctx, pipe, bytes.NewReader(entryBytes), int64(len(entryBytes)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	item := addressToItem(reference)
+	data, err := db.retrievalDataIndex.Get(item)
+	if err != nil {
+		t.Fatal(err)
+	}
+	traverser := traversal.NewService(db)
+	err = traverser.TraverseFileAddresses(ctx, reference, func(address boson.Address) error {
+		chunkHashes = append(chunkHashes, address)
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i, chunk := range chunkHashes {
+		ci.PutChunkPyramid(reference, chunk, i)
+	}
+	item.AccessTimestamp = now()
+	err = db.retrievalAccessIndex.Put(item)
+	if err != nil {
+		t.Fatal(err)
+	}
+	item.BinID = data.BinID
+	item.GCounter = uint64(len(chunkHashes))
+	err = db.gcIndex.Put(item)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return
 }
 
 // TestGC_NoEvictDirty checks that the garbage collection
