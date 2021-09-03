@@ -20,12 +20,14 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"math/rand"
+	"strconv"
 	"sync"
 	"testing"
 	"time"
 
-	"github.com/gauss-project/aurorafs/pkg/storage"
 	"github.com/gauss-project/aurorafs/pkg/boson"
+	"github.com/gauss-project/aurorafs/pkg/storage"
 	"github.com/syndtr/goleveldb/leveldb"
 )
 
@@ -155,17 +157,43 @@ func TestModePutUploadPin(t *testing.T) {
 
 			chunks := generateTestRandomChunks(tc.count)
 
+			//Add pin test by file
+			var FileList []boson.Address
+			for i := 0; i < 20; i++ {
+				FileList = append(FileList, boson.NewAddress([]byte(strconv.Itoa(rand.Int()))))
+			}
+
+			for _, file := range FileList {
+				ctx := context.WithValue(context.Background(), RootCIDKey{}, file)
+
+				_, err := db.Put(ctx, storage.ModePutUploadPin, chunks...)
+				if err != nil {
+					t.Fatal(err)
+				}
+
+				binIDs := make(map[uint8]uint64)
+
+				for _, ch := range chunks {
+					po := db.po(ch.Address())
+					binIDs[po]++
+
+					newRetrieveIndexesTest(db, ch, wantTimestamp, 0)(t)
+					err = newPinChunkValidateTest(db, ch, nil)
+					if err != nil {
+						t.Fatal(err)
+					}
+				}
+				//Test whether rootcid exists
+				chun := boson.NewChunk(file, nil)
+				newPinIndexTest(db, chun, nil)(t)
+			}
+
+			//Old business logic test
 			_, err := db.Put(context.Background(), storage.ModePutUploadPin, chunks...)
 			if err != nil {
 				t.Fatal(err)
 			}
-
-			binIDs := make(map[uint8]uint64)
-
 			for _, ch := range chunks {
-				po := db.po(ch.Address())
-				binIDs[po]++
-
 				newRetrieveIndexesTest(db, ch, wantTimestamp, 0)(t)
 				newPinIndexTest(db, ch, nil)(t)
 			}

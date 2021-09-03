@@ -103,7 +103,6 @@ func (db *DB) put(mode storage.ModePut, rootCID boson.Address, chs ...boson.Chun
 			}
 			exist[i] = exists
 			gcSizeChange++
-
 			if mode == storage.ModePutRequestPin {
 				err = db.setPin(batch, ch.Address())
 				if err != nil {

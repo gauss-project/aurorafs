@@ -235,23 +235,17 @@ func (db *DB) setRemove(batch *leveldb.Batch, addr boson.Address) (gcSizeChange 
 func (db *DB) setPin(batch *leveldb.Batch, addr boson.Address) (err error) {
 	item := addressToItem(addr)
 
-	_, err = db.pinIndex.Get(item)
-	if err != nil {
-		if !errors.Is(err, leveldb.ErrNotFound) {
-			return err
-		}
+	i, err := db.pinIndex.Get(item)
+	if !errors.Is(err, leveldb.ErrNotFound) {
+		return err
+	}
+	item.PinCounter = i.PinCounter
 
-		i, err := db.retrievalAccessIndex.Get(item)
-		if err != nil {
-			if !errors.Is(err, leveldb.ErrNotFound) {
-				return err
-			}
-		} else {
-			item.AccessTimestamp = i.AccessTimestamp
-			i, err = db.retrievalDataIndex.Get(item)
-			if err != nil {
-				return err
-			}
+	i, err = db.retrievalAccessIndex.Get(item)
+	if err == nil {
+		item.AccessTimestamp = i.AccessTimestamp
+		i, err := db.retrievalDataIndex.Get(item)
+		if err == nil {
 			item.StoreTimestamp = i.StoreTimestamp
 			item.BinID = i.BinID
 
@@ -260,11 +254,12 @@ func (db *DB) setPin(batch *leveldb.Batch, addr boson.Address) (err error) {
 				return err
 			}
 		}
+	}
 
-		err = db.pinIndex.PutInBatch(batch, item)
-		if err != nil {
-			return err
-		}
+	item.PinCounter++
+	err = db.pinIndex.PutInBatch(batch, item)
+	if err != nil {
+		return err
 	}
 
 	return nil
@@ -275,10 +270,17 @@ func (db *DB) setPin(batch *leveldb.Batch, addr boson.Address) (err error) {
 func (db *DB) setUnpin(batch *leveldb.Batch, addr boson.Address) (err error) {
 	item := addressToItem(addr)
 
-	// guarantee pin existing
-	_, err = db.pinIndex.Get(item)
+	// Get the existing pin counter of the chunk
+	i, err := db.pinIndex.Get(item)
 	if err != nil {
 		return err
+	}
+	item.PinCounter = i.PinCounter
+	// Decrement the pin counter or
+	// delete it from pin index if the pin counter has reached 0
+	if item.PinCounter > 1 {
+		item.PinCounter--
+		return db.pinIndex.PutInBatch(batch, item)
 	}
 
 	err = db.pinIndex.DeleteInBatch(batch, item)
@@ -286,12 +288,17 @@ func (db *DB) setUnpin(batch *leveldb.Batch, addr boson.Address) (err error) {
 		return err
 	}
 
-	i, err := db.retrievalDataIndex.Get(item)
+	i, err = db.retrievalDataIndex.Get(item)
 	if err != nil {
 		return err
 	}
 	item.StoreTimestamp = i.StoreTimestamp
 	item.BinID = i.BinID
+	//i, err = db.pushIndex.Get(item)
+	//if !errors.Is(err, leveldb.ErrNotFound) {
+	//	// err is either nil or not leveldb.ErrNotFound
+	//	return  err
+	//}
 
 	i, err = db.retrievalAccessIndex.Get(item)
 	if err != nil {

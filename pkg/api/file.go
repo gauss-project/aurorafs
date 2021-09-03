@@ -200,14 +200,14 @@ func (s *server) fileUploadHandler(w http.ResponseWriter, r *http.Request) {
 		jsonhttp.InternalServerError(w, "could not get trie data")
 		return
 	}
-	dataChunks ,_ := s.traversal.CheckTrieData(ctx, reference, a)
+	dataChunks, _ := s.traversal.CheckTrieData(ctx, reference, a)
 	if err != nil {
 		logger.Errorf("file upload: check trie data, file %q: %v", fileName, err)
 		jsonhttp.InternalServerError(w, "check trie data error")
 		return
 	}
-	for _,li := range dataChunks {
-		for _,b := range li {
+	for _, li := range dataChunks {
+		for _, b := range li {
 			s.chunkInfo.OnChunkTransferred(boson.NewAddress(b), reference, s.overlay)
 		}
 	}
