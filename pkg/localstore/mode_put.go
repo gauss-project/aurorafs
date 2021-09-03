@@ -96,7 +96,13 @@ func (db *DB) put(mode storage.ModePut, rootCID boson.Address, chs ...boson.Chun
 			}
 			exist[i] = exists
 			gcSizeChange += c
+			if mode == storage.ModePutRequestPin {
+				err = db.setPin(batch, ch.Address())
 
+				if err != nil {
+					return nil, err
+				}
+			}
 		}
 
 	case storage.ModePutUpload, storage.ModePutUploadPin:
@@ -111,6 +117,14 @@ func (db *DB) put(mode storage.ModePut, rootCID boson.Address, chs ...boson.Chun
 			}
 			exist[i] = exists
 			gcSizeChange += c
+
+			if mode == storage.ModePutUploadPin {
+				err = db.setPin(batch, ch.Address())
+
+				if err != nil {
+					return nil, err
+				}
+			}
 
 		}
 
@@ -130,14 +144,6 @@ func (db *DB) put(mode storage.ModePut, rootCID boson.Address, chs ...boson.Chun
 
 	default:
 		return nil, ErrInvalidMode
-	}
-
-	if mode == storage.ModePutUploadPin || mode == storage.ModePutRequestPin {
-		err = db.setPin(batch, rootCID)
-
-		if err != nil {
-			return nil, err
-		}
 	}
 
 	for po, id := range binIDs {
