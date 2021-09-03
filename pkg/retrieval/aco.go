@@ -1,7 +1,7 @@
 package retrieval
 
 import (
-	// "fmt"
+	"fmt"
 	"math/rand"
 	"sync"
 	"time"
@@ -10,7 +10,7 @@ import (
 )
 
 const (
-	defaultRate int64 = 2_000_000
+	defaultRate int64 = 2_000_000/8
 )
 
 type route struct {
@@ -18,12 +18,11 @@ type route struct {
 	targetNode boson.Address
 }
 
-type routeKey struct {
-	linkNodeStr 	string
-	targetNodeStr	string
+func (r *route) ToString() string{
+	return fmt.Sprintf("%v,%v", r.linkNode.String(), r.targetNode.String())
 }
 
-type downloadDetail struct{
+type DownloadDetail struct{
 	startMs int64
 	endMs 	int64
 	size	int64
@@ -31,28 +30,25 @@ type downloadDetail struct{
 
 type routeMetric struct{
 	downloadCount	int64
-	downloadDetail	*downloadDetail
+	downloadDetail	*DownloadDetail
 }
 
 type acoServer struct{
-	routeMetric map[routeKey]*routeMetric
+	routeMetric map[string]*routeMetric
 	toZeroElapsed int64
 	mutex	sync.Mutex
 }
 
 func newAcoServer() *acoServer{
 	return &acoServer{
-		routeMetric: make(map[routeKey]*routeMetric),
+		routeMetric: make(map[string]*routeMetric),
 		toZeroElapsed: 20*60,		// 1200s
 		mutex: sync.Mutex{},
 	}
 }
 
 func (s *acoServer) OnDownloadStart(route route){
-	routeKey := routeKey{
-		linkNodeStr: route.linkNode.String(),
-		targetNodeStr: route.targetNode.String(),
-	}
+	routeKey := route.ToString()
 
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
@@ -61,18 +57,15 @@ func (s *acoServer) OnDownloadStart(route route){
 	}else{
 		s.routeMetric[routeKey] = &routeMetric{
 			downloadCount: 1,
-			downloadDetail: &downloadDetail{
+			downloadDetail: &DownloadDetail{
 				0,0,0,
 			},
 		}
 	}
 }
 
-func (s *acoServer) OnDownloadEnd(route route){
-	routeKey := routeKey{
-		linkNodeStr: route.linkNode.String(),
-		targetNodeStr: route.targetNode.String(),
-	}
+func (s *acoServer) onDownloadEnd(route route){
+	routeKey := route.ToString()
 
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
@@ -83,10 +76,25 @@ func (s *acoServer) OnDownloadEnd(route route){
 	}
 }
 
-func (s *acoServer) OnDownloadTaskFinish(route route, startMs int64, endMs int64, size int64){
-	routeKey := routeKey{
-		linkNodeStr: route.linkNode.String(),
-		targetNodeStr: route.targetNode.String(),
+func (s *acoServer) OnDownloadFinish(route route, downloadDetail *DownloadDetail){
+	if downloadDetail == nil{
+		s.onDownloadEnd(route)
+		return
+	}else{
+		s.onDownloadTaskFinish(route, downloadDetail.startMs, downloadDetail.endMs, downloadDetail.size)
+	}
+}
+
+func (s *acoServer) onDownloadTaskFinish(route route, startMs int64, endMs int64, size int64){
+	routeKey := route.ToString()
+	var retStartMs, retEndMs int64
+
+	if startMs < endMs{
+		retStartMs, retEndMs = startMs, endMs
+	}else if startMs == endMs{
+		retStartMs, retEndMs = startMs, endMs+10
+	}else{
+		retStartMs, retEndMs = endMs, startMs
 	}
 
 	s.mutex.Lock()
@@ -95,9 +103,9 @@ func (s *acoServer) OnDownloadTaskFinish(route route, startMs int64, endMs int64
 	if _, exist := s.routeMetric[routeKey]; !exist{
 		s.routeMetric[routeKey] = &routeMetric{
 			downloadCount: 0,
-			downloadDetail: &downloadDetail{
-				startMs: startMs,
-				endMs: endMs,
+			downloadDetail: &DownloadDetail{
+				startMs: retStartMs,
+				endMs: retEndMs,
 				size: size,
 			},
 		}
@@ -108,7 +116,7 @@ func (s *acoServer) OnDownloadTaskFinish(route route, startMs int64, endMs int64
 		if endMs < recordStartMs{
 			return
 		}else if recordEndMs < startMs{
-			s.routeMetric[routeKey].downloadDetail = &downloadDetail{
+			s.routeMetric[routeKey].downloadDetail = &DownloadDetail{
 				startMs: startMs,
 				endMs: endMs,
 				size: size,
@@ -157,7 +165,6 @@ func (s* acoServer) GetRouteAcoIndex(routeList []route) ([] int){
 			curSum = nextSum
 		}
 
-		// fmt.Printf("%v, index: %v\n", randNum, curRouteIndex)
 		routeIndexList = append(routeIndexList, selectRouteIndex)
 
 		routeScoreList[selectRouteIndex] = 0
@@ -168,10 +175,6 @@ func (s* acoServer) GetRouteAcoIndex(routeList []route) ([] int){
 		}
 	}
 	return routeIndexList
-}
-
-func (s *acoServer) GetRouteListScore(routeList []route)([]int64){
-	return s.getSelectRouteListScore(routeList)
 }
 
 func (s *acoServer) getSelectRouteListScore(routeList []route)([]int64){
@@ -186,15 +189,11 @@ func (s *acoServer) getSelectRouteListScore(routeList []route)([]int64){
 		routeIndex := k
 		routeScoreList[routeIndex] = curRouteScore
 	}
-
 	return routeScoreList
 }
 
 func (s *acoServer) getCurRouteScore(route route) int64{
-	routeKey := routeKey{
-		linkNodeStr: route.linkNode.String(),
-		targetNodeStr: route.targetNode.String(),
-	}
+	routeKey := route.ToString()
 
 	curRouteState, exist := s.routeMetric[routeKey]
 
@@ -204,6 +203,9 @@ func (s *acoServer) getCurRouteScore(route route) int64{
 
 	curUnixTs := time.Now().Unix()
 	elapsed := curUnixTs - (curRouteState.downloadDetail.endMs/1000)
+	if elapsed < 0{
+		elapsed = 0
+	}
 
 	if elapsed >= s.toZeroElapsed{
 		return defaultRate/(curRouteState.downloadCount+1)
@@ -216,8 +218,7 @@ func (s *acoServer) getCurRouteScore(route route) int64{
 	downloadDuration := float64(curRouteState.downloadDetail.endMs-curRouteState.downloadDetail.startMs)/1000.
 	downloadSize := float64(curRouteState.downloadDetail.size)
 
-	// downloadRate := int64(float64(curRouteState.downloadDetail.size)/((downloadEndMs-downloadStartMs)/1000))
-	downloadRate := int64(downloadSize/downloadDuration)*8
+	downloadRate := int64(downloadSize/downloadDuration)
 	weightedDownloadRate := downloadRate/(curRouteState.downloadCount+1)
 
 	reserveScale := 1.0 - (float64(elapsed)/float64(s.toZeroElapsed))

@@ -198,6 +198,14 @@ func (s *Service) retrieveChunk(ctx context.Context, target_node boson.Address, 
 		}
 	}
 
+	exists, err := s.storer.Put(ctx, storage.ModePutRequest, chunk)
+	if err != nil {
+		return nil, -1, err
+	}
+	if !exists[0] {
+		s.chunkinfo.OnChunkTransferred(chunk_addr, root_addr, s.addr)
+	}
+
 	s.chunkinfo.OnChunkTransferred(chunk_addr, root_addr, s.addr)
 
 	// credit the peer after successful delivery
@@ -219,6 +227,7 @@ func (s *Service) handler(ctx context.Context, p p2p.Peer, stream p2p.Stream) (e
 			_ = stream.FullClose()
 		}
 	}()
+
 	var req pb.RequestChunk
 	if err := r.ReadMsgWithContext(ctx, &req); err != nil {
 		return fmt.Errorf("read request: %w peer %s", err, p.Address.String())
@@ -229,7 +238,7 @@ func (s *Service) handler(ctx context.Context, p p2p.Peer, stream p2p.Stream) (e
 	defer span.Finish()
 
 	ctx = context.WithValue(ctx, requestSourceContextKey{}, p.Address.String())
-	_, chunk_addr := boson.NewAddress(req.RootAddr), boson.NewAddress(req.ChunkAddr)
+	root_addr, chunk_addr := boson.NewAddress(req.RootAddr), boson.NewAddress(req.ChunkAddr)
 
 	chunk, err := s.storer.Get(ctx, storage.ModeGetRequest, chunk_addr)
 	if err != nil {
@@ -251,6 +260,7 @@ func (s *Service) handler(ctx context.Context, p p2p.Peer, stream p2p.Stream) (e
 		return fmt.Errorf("write delivery: %w peer %s", err, p.Address.String())
 	}
 
+	s.chunkinfo.OnChunkTransferred(chunk_addr, root_addr, p.Address)
 	s.logger.Tracef("retrieval protocol debiting peer %s", p.Address.String())
 
 	// compute the price we charge for this chunk and debit it from p's balance
