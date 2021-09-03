@@ -573,6 +573,9 @@ func (k *Kad) discover() {
 	defer k.logger.Debugf("kademlia discover loop exited")
 
 	worker := func() {
+		start := time.Now()
+		k.logger.Debugf("kademlia discover start...")
+		defer k.logger.Debugf("kademlia discover end. %d ms", time.Since(start).Milliseconds())
 		stop, jumpNext, _ := k.startFindNode(k.base, 0)
 		if stop {
 			return
@@ -580,7 +583,7 @@ func (k *Kad) discover() {
 		if jumpNext {
 			for i := 0; i < 3; i++ {
 				dest := test.RandomAddress()
-				stop, jumpNext, _ = k.startFindNode(dest, 0)
+				stop, _, _ = k.startFindNode(dest, 0)
 				if stop {
 					return
 				}
@@ -591,6 +594,8 @@ func (k *Kad) discover() {
 	worker()
 	for {
 		select {
+		case <-k.halt:
+			return
 		case <-k.quit:
 			return
 		case <-time.After(30 * time.Minute):
@@ -600,27 +605,21 @@ func (k *Kad) discover() {
 }
 
 func (k *Kad) startFindNode(target boson.Address, total int) (stop bool, jumpNext bool, count int) {
-	ch := make(chan boson.Address)
-	defer close(ch)
-	stop, jumpNext, count = k.lookup(target, ch, total)
+	var ch chan boson.Address
+	ch, stop, jumpNext, count = k.lookup(target, total)
 	if stop || jumpNext {
 		return
 	}
-	for {
-		select {
-		case addr := <-ch:
-			if addr.IsZero() {
-				return
-			}
-			stop, jumpNext, count = k.startFindNode(addr, count)
-			if stop || jumpNext {
-				return
-			}
+	for addr := <-ch; !addr.IsZero(); {
+		stop, jumpNext, count = k.startFindNode(addr, count)
+		if stop || jumpNext {
+			return
 		}
 	}
+	return
 }
 
-func (k *Kad) lookup(target boson.Address, ch chan boson.Address, total int) (stop bool, jumpNext bool, count int) {
+func (k *Kad) lookup(target boson.Address, total int) (ch chan boson.Address, stop bool, jumpNext bool, count int) {
 	stop = true
 	var lookupBin []uint8
 	for i := uint8(0); i < boson.MaxBins; i++ {
@@ -640,7 +639,8 @@ func (k *Kad) lookup(target boson.Address, ch chan boson.Address, total int) (st
 		for _, dest := range peers {
 			pos := lookupDistances(target, dest, lookupPoLimit, lookupBin)
 			if len(pos) > 0 {
-				cnt, _ := k.discovery.DoFindNode(context.Background(), dest, pos, findNodePeerLimit, ch)
+				var cnt int
+				ch, cnt, _ = k.discovery.DoFindNode(context.Background(), dest, pos, findNodePeerLimit)
 				count = total + cnt
 				if count >= findNodePeerLimit {
 					jumpNext = true
@@ -648,6 +648,7 @@ func (k *Kad) lookup(target boson.Address, ch chan boson.Address, total int) (st
 				}
 			}
 		}
+		jumpNext = true
 	}
 	return
 }

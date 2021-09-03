@@ -16,5 +16,5 @@ type Driver interface {
 	BroadcastPeers(ctx context.Context, addressee boson.Address, peers ...boson.Address) error
 
 	// DoFindNode hive2 implement
-	DoFindNode(ctx context.Context, peer boson.Address, pos []int32, limit int32, ch chan boson.Address) (total int, err error)
+	DoFindNode(ctx context.Context, peer boson.Address, pos []int32, limit int32) (res chan boson.Address, total int, err error)
 }
