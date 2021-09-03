@@ -294,11 +294,6 @@ func (db *DB) setUnpin(batch *leveldb.Batch, addr boson.Address) (err error) {
 	}
 	item.StoreTimestamp = i.StoreTimestamp
 	item.BinID = i.BinID
-	//i, err = db.pushIndex.Get(item)
-	//if !errors.Is(err, leveldb.ErrNotFound) {
-	//	// err is either nil or not leveldb.ErrNotFound
-	//	return  err
-	//}
 
 	i, err = db.retrievalAccessIndex.Get(item)
 	if err != nil {
