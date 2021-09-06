@@ -107,10 +107,6 @@ func (ci *ChunkInfo) Init(ctx context.Context, authInfo []byte, rootCid boson.Ad
 		return true
 	}
 
-	if ci.cd.isExists(rootCid) {
-		return true
-	}
-
 	r, err := http.Get(fmt.Sprintf("http://%s/api/v1.0/rcid/%s", ci.oracleUrl, rootCid.String()))
 	if err != nil {
 		return false
@@ -153,10 +149,10 @@ func (ci *ChunkInfo) Init(ctx context.Context, authInfo []byte, rootCid boson.Ad
 	)
 	for {
 		if ci.cp.isExists(rootCid) {
+			ci.FindChunkInfo(ctx, authInfo, rootCid, overlays)
 			if ci.cd.isExists(rootCid) {
 				return true
 			}
-			ci.FindChunkInfo(ctx, authInfo, rootCid, overlays)
 		} else if peerAttempt < count {
 			if err := ci.doFindChunkPyramid(ctx, nil, rootCid, overlays[peerAttempt]); err != nil {
 				errorC <- err
