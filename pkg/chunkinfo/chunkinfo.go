@@ -103,6 +103,10 @@ func (ci *ChunkInfo) InitChunkInfo() error {
 }
 
 func (ci *ChunkInfo) Init(ctx context.Context, authInfo []byte, rootCid boson.Address) bool {
+	if ci.ct.isExists(rootCid) {
+		return true
+	}
+
 	if ci.cd.isExists(rootCid) {
 		return true
 	}
