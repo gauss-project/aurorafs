@@ -216,13 +216,13 @@ func (ci *ChunkInfo) GetChunkPyramid(rootCid boson.Address) []*boson.Address {
 func (ci *ChunkInfo) IsDiscover(rootCid boson.Address) bool {
 	q := ci.getQueue(rootCid.String())
 
+	if ci.cpd.getPendingFinder(rootCid) {
+		return true
+	}
 	if q.len(Pulled)+q.len(Pulling) >= PullMax {
 		return true
 	}
-	if !ci.cpd.getPendingFinder(rootCid) {
-		return true
-	}
-	if q.len(UnPull)+q.len(Pulling) == 0 {
+	if q.len(UnPull)+q.len(Pulling) == 0 && q.len(Pulled) > 0 {
 		return true
 	}
 
