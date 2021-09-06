@@ -400,7 +400,10 @@ func NewBee(addr string, bosonAddress boson.Address, publicKey ecdsa.PublicKey, 
 
 	traversalService := traversal.NewService(ns)
 
-	chunkInfo := chunkinfo.New(p2ps, logger, traversalService, o.OracleEndpoint)
+	chunkInfo := chunkinfo.New(p2ps, logger, traversalService, stateStore, o.OracleEndpoint)
+	if err := chunkInfo.InitChunkInfo(); err != nil {
+		return nil, fmt.Errorf("chunk info init: %w", err)
+	}
 	if err = p2ps.AddProtocol(chunkInfo.Protocol()); err != nil {
 		return nil, fmt.Errorf("chunkInfo service: %w", err)
 	}
