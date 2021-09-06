@@ -241,6 +241,7 @@ func NewBee(addr string, bosonAddress boson.Address, publicKey ecdsa.PublicKey, 
 		EnableWS:       o.EnableWS,
 		EnableQUIC:     o.EnableQUIC,
 		WelcomeMessage: o.WelcomeMessage,
+		FullNode:       o.FullNode,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("p2p service: %w", err)
