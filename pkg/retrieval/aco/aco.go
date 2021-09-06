@@ -1,4 +1,4 @@
-package retrieval
+package aco
 
 import (
 	"fmt"
@@ -13,19 +13,26 @@ const (
 	defaultRate int64 = 2_000_000/8
 )
 
-type route struct {
-	linkNode boson.Address
-	targetNode boson.Address
+type Route struct {
+	LinkNode boson.Address
+	TargetNode boson.Address
 }
 
-func (r *route) ToString() string{
-	return fmt.Sprintf("%v,%v", r.linkNode.String(), r.targetNode.String())
+func NewRoute(linkAddr boson.Address, targetAddr boson.Address) Route{
+	return Route{
+		LinkNode: linkAddr,
+		TargetNode: targetAddr,
+	}
 }
 
 type DownloadDetail struct{
-	startMs int64
-	endMs 	int64
-	size	int64
+	StartMs int64
+	EndMs 	int64
+	Size	int64
+}
+
+func (r *Route) ToString() string{
+	return fmt.Sprintf("%v,%v", r.LinkNode.String(), r.TargetNode.String())
 }
 
 type routeMetric struct{
@@ -33,21 +40,21 @@ type routeMetric struct{
 	downloadDetail	*DownloadDetail
 }
 
-type acoServer struct{
+type AcoServer struct{
 	routeMetric map[string]*routeMetric
 	toZeroElapsed int64
 	mutex	sync.Mutex
 }
 
-func newAcoServer() *acoServer{
-	return &acoServer{
+func NewAcoServer() AcoServer{
+	return AcoServer{
 		routeMetric: make(map[string]*routeMetric),
 		toZeroElapsed: 20*60,		// 1200s
 		mutex: sync.Mutex{},
 	}
 }
 
-func (s *acoServer) OnDownloadStart(route route){
+func (s *AcoServer) OnDownloadStart(route Route){
 	routeKey := route.ToString()
 
 	s.mutex.Lock()
@@ -64,7 +71,7 @@ func (s *acoServer) OnDownloadStart(route route){
 	}
 }
 
-func (s *acoServer) onDownloadEnd(route route){
+func (s *AcoServer) onDownloadEnd(route Route){
 	routeKey := route.ToString()
 
 	s.mutex.Lock()
@@ -76,16 +83,16 @@ func (s *acoServer) onDownloadEnd(route route){
 	}
 }
 
-func (s *acoServer) OnDownloadFinish(route route, downloadDetail *DownloadDetail){
+func (s *AcoServer) OnDownloadFinish(route Route, downloadDetail *DownloadDetail){
 	if downloadDetail == nil{
 		s.onDownloadEnd(route)
 		return
 	}else{
-		s.onDownloadTaskFinish(route, downloadDetail.startMs, downloadDetail.endMs, downloadDetail.size)
+		s.onDownloadTaskFinish(route, downloadDetail.StartMs, downloadDetail.EndMs, downloadDetail.Size)
 	}
 }
 
-func (s *acoServer) onDownloadTaskFinish(route route, startMs int64, endMs int64, size int64){
+func (s *AcoServer) onDownloadTaskFinish(route Route, startMs int64, endMs int64, size int64){
 	routeKey := route.ToString()
 	var retStartMs, retEndMs int64
 
@@ -104,37 +111,49 @@ func (s *acoServer) onDownloadTaskFinish(route route, startMs int64, endMs int64
 		s.routeMetric[routeKey] = &routeMetric{
 			downloadCount: 0,
 			downloadDetail: &DownloadDetail{
-				startMs: retStartMs,
-				endMs: retEndMs,
-				size: size,
+				StartMs: retStartMs,
+				EndMs: retEndMs,
+				Size: size,
 			},
 		}
 	// route exists, need update routeMetric
 	}else{
-		recordStartMs, recordEndMs := s.routeMetric[routeKey].downloadDetail.startMs, s.routeMetric[routeKey].downloadDetail.endMs
+		recordStartMs, recordEndMs := s.routeMetric[routeKey].downloadDetail.StartMs, s.routeMetric[routeKey].downloadDetail.EndMs
 
 		if endMs < recordStartMs{
 			return
 		}else if recordEndMs < startMs{
 			s.routeMetric[routeKey].downloadDetail = &DownloadDetail{
-				startMs: startMs,
-				endMs: endMs,
-				size: size,
+				StartMs: startMs,
+				EndMs: endMs,
+				Size: size,
 			}
 		}else{
 			if startMs < recordStartMs{
-				s.routeMetric[routeKey].downloadDetail.startMs = startMs
+				s.routeMetric[routeKey].downloadDetail.StartMs = startMs
 			}
 			if endMs > recordEndMs{
-				s.routeMetric[routeKey].downloadDetail.endMs = endMs
+				s.routeMetric[routeKey].downloadDetail.EndMs = endMs
 			}
-			s.routeMetric[routeKey].downloadDetail.size += size
+			s.routeMetric[routeKey].downloadDetail.Size += size
 		}
 	}
 }
 
-func (s* acoServer) GetRouteAcoIndex(routeList []route) ([] int){
+func (s* AcoServer) GetRouteAcoIndex(routeList []Route, count ...int) ([]int){
 	routeCount := len(routeList)
+	if routeCount == 0{
+		return []int{}
+	}
+
+	maxSelectCount := routeCount
+	if len(count)>0{
+		setCount := count[0]
+		if setCount < routeCount{
+			maxSelectCount = setCount
+		}
+	}
+
 	// get the score for each route
 	routeScoreList := s.getSelectRouteListScore(routeList)
 
@@ -145,6 +164,7 @@ func (s* acoServer) GetRouteAcoIndex(routeList []route) ([] int){
 	for _, v := range routeScoreList{
 		totalScore += v
 	}
+
 
 	rand.Seed(time.Now().Unix())
 	selectRouteCount := 0
@@ -170,14 +190,15 @@ func (s* acoServer) GetRouteAcoIndex(routeList []route) ([] int){
 		routeScoreList[selectRouteIndex] = 0
 		totalScore -= curScore
 		selectRouteCount += 1
-		if selectRouteCount >= routeCount{
+
+		if selectRouteCount >= maxSelectCount{
 			break
 		}
 	}
 	return routeIndexList
 }
 
-func (s *acoServer) getSelectRouteListScore(routeList []route)([]int64){
+func (s *AcoServer) getSelectRouteListScore(routeList []Route)([]int64){
 	routeCount := len(routeList)
 	routeScoreList := make([]int64, routeCount)
 
@@ -192,7 +213,7 @@ func (s *acoServer) getSelectRouteListScore(routeList []route)([]int64){
 	return routeScoreList
 }
 
-func (s *acoServer) getCurRouteScore(route route) int64{
+func (s *AcoServer) getCurRouteScore(route Route) int64{
 	routeKey := route.ToString()
 
 	curRouteState, exist := s.routeMetric[routeKey]
@@ -202,7 +223,7 @@ func (s *acoServer) getCurRouteScore(route route) int64{
 	}
 
 	curUnixTs := time.Now().Unix()
-	elapsed := curUnixTs - (curRouteState.downloadDetail.endMs/1000)
+	elapsed := curUnixTs - (curRouteState.downloadDetail.EndMs/1000)
 	if elapsed < 0{
 		elapsed = 0
 	}
@@ -211,12 +232,12 @@ func (s *acoServer) getCurRouteScore(route route) int64{
 		return defaultRate/(curRouteState.downloadCount+1)
 	}
 
-	if curRouteState.downloadDetail.endMs == 0{
+	if curRouteState.downloadDetail.EndMs == 0{
 		return defaultRate/(curRouteState.downloadCount+1)
 	}
 
-	downloadDuration := float64(curRouteState.downloadDetail.endMs-curRouteState.downloadDetail.startMs)/1000.
-	downloadSize := float64(curRouteState.downloadDetail.size)
+	downloadDuration := float64(curRouteState.downloadDetail.EndMs-curRouteState.downloadDetail.StartMs)/1000.
+	downloadSize := float64(curRouteState.downloadDetail.Size)
 
 	downloadRate := int64(downloadSize/downloadDuration)
 	weightedDownloadRate := downloadRate/(curRouteState.downloadCount+1)

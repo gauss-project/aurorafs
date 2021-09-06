@@ -1,4 +1,4 @@
-package retrieval
+package aco
 
 import (
 	"fmt"
@@ -9,17 +9,18 @@ import (
 	"math/rand"
 
 	"github.com/gauss-project/aurorafs/pkg/boson"
+	// "github.com/gauss-project/aurorafs/pkg/retrieval/aco"
 )
 
 func TestUsingCount(t *testing.T) {
 	t.Run("OnDownloadStart and OnDownloadEnd", func(t *testing.T) {
-		server := newAcoServer()
+		server := NewAcoServer()
 		addr1 := boson.MustParseHexAddress("01")
 		addr2 := boson.MustParseHexAddress("02")
 
-		route1 := route{
-			linkNode:   addr1,
-			targetNode: addr2,
+		route1 := Route{
+			LinkNode:   addr1,
+			TargetNode: addr2,
 		}
 
 		// route1Key := routeKey{
@@ -69,19 +70,19 @@ func TestUsingCount(t *testing.T) {
 func TestRouteScore(t *testing.T) {
 	// existed routes score test
 	t.Run("simple score test", func(t *testing.T) {
-		server := newAcoServer()
+		server := NewAcoServer()
 
 		addr1 := boson.MustParseHexAddress("01")
 		addr2 := boson.MustParseHexAddress("02")
 		// addr3 := boson.MustParseHexAddress("03")
 
-		route1 := route{
-			linkNode:   addr1,
-			targetNode: addr2,
+		route1 := Route{
+			LinkNode:   addr1,
+			TargetNode: addr2,
 		}
 
 		// new route, default score
-		scoreList := server.getSelectRouteListScore([]route{route1})
+		scoreList := server.getSelectRouteListScore([]Route{route1})
 		defaultScore := scoreList[0]
 		t.Logf("default score: %v\n", defaultScore)
 		if defaultScore != defaultRate {
@@ -95,7 +96,7 @@ func TestRouteScore(t *testing.T) {
 		downloadDetail := DownloadDetail{startMs, endMs, size}
 		server.OnDownloadFinish(route1, &downloadDetail)
 		// server.OnDownloadTaskFinish(route1, startTs, endTs, int64(size))
-		scoreList = server.getSelectRouteListScore([]route{route1})
+		scoreList = server.getSelectRouteListScore([]Route{route1})
 		passtimeScore := scoreList[0]
 		t.Logf("outdate  score: %v\n", passtimeScore)
 		if passtimeScore != defaultRate {
@@ -103,16 +104,16 @@ func TestRouteScore(t *testing.T) {
 		}
 
 		// time not pass, default passtime: 15*60
-		route2 := route{
-			linkNode: addr1,
-			targetNode: addr1,
+		route2 := Route{
+			LinkNode: addr1,
+			TargetNode: addr1,
 		}
 		endMs = (time.Now().Unix() - server.toZeroElapsed/2)*1000
 		startMs = endMs - 5*60*1000
 		size = defaultRate * 2 * ((endMs - startMs)/1000)
 		downloadDetail = DownloadDetail{startMs, endMs, size}
 		server.OnDownloadFinish(route2, &downloadDetail)
-		scoreList = server.getSelectRouteListScore([]route{route2})
+		scoreList = server.getSelectRouteListScore([]Route{route2})
 		curScore := scoreList[0]
 
 		timeFromEnd := (time.Now().Unix()*1000 - endMs)/1000
@@ -128,17 +129,17 @@ func TestRouteScore(t *testing.T) {
 
 	// multi download at same time
 	t.Run("complex score test 01", func(t *testing.T) {
-		server := newAcoServer()
+		server := NewAcoServer()
 
 		addr1 := boson.MustParseHexAddress("01")
 		addr2 := boson.MustParseHexAddress("02")
 		// addr3 := boson.MustParseHexAddress("03")
 
-		route1 := route{
-			linkNode:   addr1,
-			targetNode: addr2,
+		route1 := Route{
+			LinkNode:   addr1,
+			TargetNode: addr2,
 		}
-		routeList := []route{route1}
+		routeList := []Route{route1}
 
 		endMs := time.Now().UnixNano() / 1e6
 		startMs := endMs - 5*60*1000
@@ -182,15 +183,15 @@ func TestRouteScore(t *testing.T) {
 
 	// overlap download score test
 	t.Run("complex score test 02", func(t *testing.T) {
-		server := newAcoServer()
+		server := NewAcoServer()
 
 		addr1 := boson.MustParseHexAddress("01")
 		addr2 := boson.MustParseHexAddress("02")
 		// addr3 := boson.MustParseHexAddress("03")
 
-		route1 := route{
-			linkNode:   addr1,
-			targetNode: addr2,
+		route1 := Route{
+			LinkNode:   addr1,
+			TargetNode: addr2,
 		}
 
 		endMs := time.Now().UnixNano() /1e6
@@ -202,7 +203,7 @@ func TestRouteScore(t *testing.T) {
 		server.OnDownloadFinish(route1, &DownloadDetail{overlapStartMs1, overlapEndMs1, size})
 		server.OnDownloadFinish(route1, &DownloadDetail{overlapStartMs2, overlapEndMs2, size})
 
-		scoreList := server.getSelectRouteListScore([]route{route1})
+		scoreList := server.getSelectRouteListScore([]Route{route1})
 		curScore := scoreList[0]
 		singleScore := defaultRate * 2
 		t.Logf("overlap download 1:%v, 2: %v, sum(same time): %v", singleScore, singleScore, curScore)
@@ -210,9 +211,9 @@ func TestRouteScore(t *testing.T) {
 			t.Fatalf("overlap score error: want %v, got %v\n", curScore, (singleScore + singleScore))
 		}
 
-		route2 := route{
-			linkNode:   addr2,
-			targetNode: addr1,
+		route2 := Route{
+			LinkNode:   addr2,
+			TargetNode: addr1,
 		}
 		endMs1 := (time.Now().Unix() - 10*60)*1000
 		startMs1 := endMs1 - 5*60*1000
@@ -224,7 +225,7 @@ func TestRouteScore(t *testing.T) {
 		server.OnDownloadFinish(route2, &DownloadDetail{startMs2, endMs2, size2})
 
 		d1, d2 := defaultRate*3, defaultRate*2
-		scoreList = server.getSelectRouteListScore([]route{route2})
+		scoreList = server.getSelectRouteListScore([]Route{route2})
 		curScore = scoreList[0]
 		t.Logf("nonoverlap download: d1: %v, d2: %v, resultScore: %v\n", d1, d2, curScore)
 		if curScore != d2 {
@@ -234,15 +235,15 @@ func TestRouteScore(t *testing.T) {
 
 	// several non-overlap downloads
 	t.Run("complex score test 03", func(t *testing.T) {
-		server := newAcoServer()
+		server := NewAcoServer()
 
 		addr1 := boson.MustParseHexAddress("01")
 		addr2 := boson.MustParseHexAddress("02")
 		// addr3 := boson.MustParseHexAddress("03")
 
-		route1 := route{
-			linkNode:   addr1,
-			targetNode: addr2,
+		route1 := Route{
+			LinkNode:   addr1,
+			TargetNode: addr2,
 		}
 
 		taskCount := 20
@@ -257,7 +258,7 @@ func TestRouteScore(t *testing.T) {
 			startMs := endMs - 30*1000
 			size := mockRate * ((endMs - startMs)/1000)
 			server.OnDownloadFinish(route1, &DownloadDetail{startMs, endMs, size})
-			scoreList := server.getSelectRouteListScore([]route{route1})
+			scoreList := server.getSelectRouteListScore([]Route{route1})
 			curScore := scoreList[0]
 			t.Logf("task %v: %v\n", i, curScore)
 
@@ -306,7 +307,7 @@ func TestAcoSortAlgrithm(t *testing.T){
 
 func TestAcoEffectiveness(t *testing.T) {
 
-	acoServer := newAcoServer()
+	acoServer := NewAcoServer()
 	chunkSize := CHUNK_SIZE
 
 	routeCount, chunkCount := 10, 400
@@ -317,7 +318,7 @@ func TestAcoEffectiveness(t *testing.T) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	metricRecord := make(map[int][]int64)
-	go recordAcoMetricSnap(ctx, mockNet.getAllRouteList(), acoServer, metricRecord)
+	go recordAcoMetricSnap(ctx, mockNet.getAllRouteList(), &acoServer, metricRecord)
 	// go recordClientDownloadRate(ctx, &mockClient)
 
 	bandwidthStatic := mockNet.getBandwidthStatic()
@@ -409,7 +410,7 @@ func generateRouteMtricReport(metricRecord map[int][]int64) string {
 	return result
 }
 
-func recordAcoMetricSnap(ctx context.Context, routeList []route, acoServer *acoServer, metricRecordMap map[int][]int64) {
+func recordAcoMetricSnap(ctx context.Context, routeList []Route, acoServer *AcoServer, metricRecordMap map[int][]int64) {
 	i := 0
 	step := 10
 
@@ -454,7 +455,7 @@ const CHUNK_SIZE int64 = 256_000
 type mockNet struct {
 	routeCount         int
 	chunkCount         int
-	routeList          []route
+	routeList          []Route
 	routeBandwidthList []int64
 	routeChunkBitmap   [][]int8
 }
@@ -488,10 +489,10 @@ func NewMockNet(routeCount int, chunkCount int) mockNet {
 
 	routeBandwidthList := generateRandomBandwidth(routeCount)
 
-	routeList := make([]route, routeCount)
+	routeList := make([]Route, routeCount)
 	for i := 0; i < routeCount; i++ {
-		routeList[i].linkNode = boson.MustParseHexAddress(fmt.Sprintf("%02d", i))
-		routeList[i].targetNode = boson.MustParseHexAddress(fmt.Sprintf("%02d", i))
+		routeList[i].LinkNode = boson.MustParseHexAddress(fmt.Sprintf("%02d", i))
+		routeList[i].TargetNode = boson.MustParseHexAddress(fmt.Sprintf("%02d", i))
 	}
 
 	return mockNet{
@@ -503,10 +504,10 @@ func NewMockNet(routeCount int, chunkCount int) mockNet {
 	}
 }
 
-func (n *mockNet) queryRouteBandwidth(route route) int64 {
+func (n *mockNet) queryRouteBandwidth(route Route) int64 {
 	routeIndex := -1
 	for i := 0; i< n.routeCount; i++{
-		if n.routeList[i].linkNode.Equal(route.linkNode) && n.routeList[i].targetNode.Equal(route.targetNode) {
+		if n.routeList[i].LinkNode.Equal(route.LinkNode) && n.routeList[i].TargetNode.Equal(route.TargetNode) {
 			routeIndex = i
 			break
 		}
@@ -515,11 +516,11 @@ func (n *mockNet) queryRouteBandwidth(route route) int64 {
 	return n.routeBandwidthList[routeIndex]
 }
 
-func (n *mockNet) getAllRouteList() []route {
+func (n *mockNet) getAllRouteList() []Route {
 	return n.routeList
 }
 
-func (n *mockNet) getRouteListByChunkId(chunkId int) []route {
+func (n *mockNet) getRouteListByChunkId(chunkId int) []Route {
 	routeIndexList := make([]int, 0)
 
 	for routeIndex := 0; routeIndex < n.routeCount; routeIndex++ {
@@ -529,7 +530,7 @@ func (n *mockNet) getRouteListByChunkId(chunkId int) []route {
 		}
 	}
 
-	routeList := make([]route, len(routeIndexList))
+	routeList := make([]Route, len(routeIndexList))
 	for k, v := range routeIndexList {
 		curRoute := n.routeList[v]
 		routeList[k] = curRoute
@@ -606,7 +607,7 @@ func (c *mockClient) ConfigTask(net mockNet) {
 	}
 }
 
-func (c *mockClient) TryDownloadChunk(route route, chunkId int, routeBandwidth int64) bool {
+func (c *mockClient) TryDownloadChunk(route Route, chunkId int, routeBandwidth int64) bool {
 	if c.isUsingThisRoute(route) {
 		return false
 	}
@@ -638,8 +639,8 @@ func (c *mockClient) TryDownloadChunk(route route, chunkId int, routeBandwidth i
 	return true
 }
 
-func (c *mockClient) isUsingThisRoute(route route) bool {
-	routeKey := fmt.Sprintf("%v:%v", route.linkNode.String(), route.targetNode.String())
+func (c *mockClient) isUsingThisRoute(route Route) bool {
+	routeKey := fmt.Sprintf("%v:%v", route.LinkNode.String(), route.TargetNode.String())
 	if v, exist := c.usingRouteMap[routeKey]; exist {
 		return v
 	} else {
@@ -647,13 +648,13 @@ func (c *mockClient) isUsingThisRoute(route route) bool {
 	}
 }
 
-func (c *mockClient) appendUsingRoute(route route) {
-	routeKey := fmt.Sprintf("%v:%v", route.linkNode.String(), route.targetNode.String())
+func (c *mockClient) appendUsingRoute(route Route) {
+	routeKey := fmt.Sprintf("%v:%v", route.LinkNode.String(), route.TargetNode.String())
 	c.usingRouteMap[routeKey] = true
 }
 
-func (c *mockClient) deleteUsingRoute(route route) {
-	routeKey := fmt.Sprintf("%v:%v", route.linkNode.String(), route.targetNode.String())
+func (c *mockClient) deleteUsingRoute(route Route) {
+	routeKey := fmt.Sprintf("%v:%v", route.LinkNode.String(), route.TargetNode.String())
 	c.usingRouteMap[routeKey] = false
 }
 
