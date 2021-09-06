@@ -50,7 +50,7 @@ type resultChan struct {
 }
 
 type Config struct {
-	kad topology.Driver
+	Kad topology.Driver
 }
 
 func New(streamer p2p.StreamerPinger, addressBook addressbook.GetPutter, networkID uint64, logger logging.Logger) *Service {
@@ -127,7 +127,7 @@ func (s *Service) onFindNode(ctx context.Context, peer p2p.Peer, stream p2p.Stre
 	}
 	resp :=&pb.Peers{}
 
-	_ = s.config.kad.EachPeerRev(func(address boson.Address, u uint8) (stop, jumpToNext bool, err error) {
+	_ = s.config.Kad.EachPeerRev(func(address boson.Address, u uint8) (stop, jumpToNext bool, err error) {
 		for _, v := range req.Po {
 			if uint8(v) == u {
 				p, _ := s.addressBook.Get(address)

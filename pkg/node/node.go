@@ -359,6 +359,8 @@ func NewBee(addr string, bosonAddress boson.Address, publicKey ecdsa.PublicKey, 
 	kad := kademlia.New(bosonAddress, addressBook, hiveObj, p2ps, metricsDB, logger, kademlia.Options{Bootnodes: bootnodes, BootnodeMode: o.BootnodeMode})
 	b.topologyCloser = kad
 	hiveObj.SetAddPeersHandler(kad.AddPeers)
+	hiveObj.SetConfig(hive2.Config{Kad: kad}) // hive2
+
 	p2ps.SetPickyNotifier(kad)
 	addrs, err := p2ps.Addresses()
 	if err != nil {

@@ -591,14 +591,18 @@ func (k *Kad) discover() {
 		}
 	}
 
-	worker()
+	tick := time.NewTicker(time.Minute * 30)
+	firstRun := time.NewTicker(time.Second * 2)
 	for {
 		select {
 		case <-k.halt:
 			return
 		case <-k.quit:
 			return
-		case <-time.After(30 * time.Minute):
+		case <-firstRun.C:
+			worker()
+			firstRun.Stop()
+		case <-tick.C:
 			worker()
 		}
 	}
