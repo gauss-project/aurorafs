@@ -46,15 +46,8 @@ func (s *store) Get(ctx context.Context, mode storage.ModeGet, addr boson.Addres
 			// request from network
 			ch, err = s.retrieval.RetrieveChunk(ctx, rootCid[0], addr)
 			if err != nil {
-
 				return nil, storage.ErrNotFound
 			}
-
-			_, err = s.Storer.Put(ctx, storage.ModePutRequest, ch)
-			if err != nil {
-				return nil, fmt.Errorf("netstore retrieve put: %w", err)
-			}
-			return ch, nil
 		}
 		return nil, fmt.Errorf("netstore get: %w", err)
 	}

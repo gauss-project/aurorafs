@@ -21,6 +21,7 @@ import (
 	"github.com/opentracing/opentracing-go"
 
 	"github.com/gauss-project/aurorafs/pkg/chunkinfo"
+
 	// "golang.org/x/sync/singleflight"
 )
 
@@ -197,7 +198,14 @@ func (s *Service) retrieveChunk(ctx context.Context, target_node boson.Address, 
 		}
 	}
 
-	s.chunkinfo.OnChunkTransferred(chunk_addr, root_addr, s.addr)
+	// cache remote chunk
+	exists, err := s.storer.Put(ctx, storage.ModePutRequest, chunk)
+	if err != nil {
+		return nil, -1, err
+	}
+	if !exists[0] {
+		s.chunkinfo.OnChunkTransferred(chunk_addr, root_addr, s.addr)
+	}
 
 	// credit the peer after successful delivery
 	//err = s.accounting.Credit(peer, chunkPrice)
@@ -228,7 +236,7 @@ func (s *Service) handler(ctx context.Context, p p2p.Peer, stream p2p.Stream) (e
 	defer span.Finish()
 
 	ctx = context.WithValue(ctx, requestSourceContextKey{}, p.Address.String())
-	_, chunk_addr := boson.NewAddress(req.RootAddr), boson.NewAddress(req.ChunkAddr)
+	root_cid, chunk_addr := boson.NewAddress(req.RootAddr), boson.NewAddress(req.ChunkAddr)
 
 	chunk, err := s.storer.Get(ctx, storage.ModeGetRequest, chunk_addr)
 	if err != nil {
@@ -250,6 +258,7 @@ func (s *Service) handler(ctx context.Context, p p2p.Peer, stream p2p.Stream) (e
 		return fmt.Errorf("write delivery: %w peer %s", err, p.Address.String())
 	}
 
+	s.chunkinfo.OnChunkTransferred(chunk_addr, root_cid, p.Address)
 	s.logger.Tracef("retrieval protocol debiting peer %s", p.Address.String())
 
 	// compute the price we charge for this chunk and debit it from p's balance
