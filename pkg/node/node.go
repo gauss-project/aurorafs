@@ -96,6 +96,7 @@ type Options struct {
 	SwapFactoryAddress       string
 	SwapInitialDeposit       string
 	SwapEnable               bool
+	FullNode                 bool
 }
 
 func NewBee(addr string, bosonAddress boson.Address, publicKey ecdsa.PublicKey, signer crypto.Signer, networkID uint64, logger logging.Logger, libp2pPrivateKey, pssPrivateKey *ecdsa.PrivateKey, o Options) (b *Bee, err error) {
@@ -167,7 +168,6 @@ func NewBee(addr string, bosonAddress boson.Address, publicKey ecdsa.PublicKey, 
 	if err != nil {
 		return nil, err
 	}
-
 
 	//var swapBackend *ethclient.Client
 	//var overlayEthAddress common.Address

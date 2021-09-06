@@ -8,6 +8,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/gauss-project/aurorafs/pkg/bitvector"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -35,6 +36,7 @@ const (
 	// MaxWelcomeMessageLength is maximum number of characters allowed in the welcome message.
 	MaxWelcomeMessageLength = 140
 	handshakeTimeout        = 15 * time.Second
+	bitVictorNodeModeLen    = 1
 )
 
 var (
@@ -64,7 +66,7 @@ type Service struct {
 	signer                crypto.Signer
 	advertisableAddresser AdvertisableAddressResolver
 	overlay               boson.Address
-	fullNode              bool
+	nodeMode              Model
 	networkID             uint64
 	welcomeMessage        atomic.Value
 	receivedHandshakes    map[libp2ppeer.ID]struct{}
@@ -74,14 +76,31 @@ type Service struct {
 	network.Notifiee // handshake service can be the receiver for network.Notify
 }
 
+type Model struct {
+	Bv *bitvector.BitVector
+}
+
+func (m Model) IsFull() bool {
+	return m.Bv.Get(FullNode)
+}
+
+func (m Model) IsLight() bool {
+	return m.Bv.Get(LightNode)
+}
+
+const (
+	FullNode = iota
+	LightNode
+)
+
 // Info contains the information received from the handshake.
 type Info struct {
 	BzzAddress *aurora.Address
-	FullNode   bool
+	NodeMode   Model
 }
 
 func (i *Info) LightString() string {
-	if !i.FullNode {
+	if i.NodeMode.IsLight() {
 		return " (light)"
 	}
 
@@ -94,18 +113,24 @@ func New(signer crypto.Signer, advertisableAddresser AdvertisableAddressResolver
 		return nil, ErrWelcomeMessageLength
 	}
 
+	bv, _ := bitvector.New(bitVictorNodeModeLen)
 	svc := &Service{
 		signer:                signer,
 		advertisableAddresser: advertisableAddresser,
 		overlay:               overlay,
 		networkID:             networkID,
-		fullNode:              fullNode,
+		nodeMode:              Model{Bv: bv},
 		receivedHandshakes:    make(map[libp2ppeer.ID]struct{}),
 		logger:                logger,
 		Notifiee:              new(network.NoopNotifiee),
 	}
 	svc.welcomeMessage.Store(welcomeMessage)
 
+	if fullNode {
+		svc.nodeMode.Bv.Set(FullNode)
+	} else {
+		svc.nodeMode.Bv.Set(LightNode)
+	}
 	return svc, nil
 }
 
@@ -174,7 +199,7 @@ func (s *Service) Handshake(ctx context.Context, stream p2p.Stream, peerMultiadd
 			Signature: bzzAddress.Signature,
 		},
 		NetworkID:      s.networkID,
-		FullNode:       s.fullNode,
+		NodeMode:       s.nodeMode.Bv.Bytes(),
 		WelcomeMessage: welcomeMessage,
 	}); err != nil {
 		return nil, fmt.Errorf("write ack message: %w", err)
@@ -185,9 +210,10 @@ func (s *Service) Handshake(ctx context.Context, stream p2p.Stream, peerMultiadd
 		s.logger.Infof("greeting \"%s\" from peer: %s", resp.Ack.WelcomeMessage, remoteBzzAddress.Overlay.String())
 	}
 
+	bv, _ := bitvector.NewFromBytes(resp.Ack.NodeMode, bitVictorNodeModeLen)
 	return &Info{
 		BzzAddress: remoteBzzAddress,
-		FullNode:   resp.Ack.FullNode,
+		NodeMode:   Model{Bv: bv},
 	}, nil
 }
 
@@ -253,7 +279,7 @@ func (s *Service) Handle(ctx context.Context, stream p2p.Stream, remoteMultiaddr
 				Signature: bzzAddress.Signature,
 			},
 			NetworkID:      s.networkID,
-			FullNode:       s.fullNode,
+			NodeMode:       s.nodeMode.Bv.Bytes(),
 			WelcomeMessage: welcomeMessage,
 		},
 	}); err != nil {
@@ -279,9 +305,10 @@ func (s *Service) Handle(ctx context.Context, stream p2p.Stream, remoteMultiaddr
 		s.logger.Infof("greeting \"%s\" from peer: %s", ack.WelcomeMessage, remoteBzzAddress.Overlay.String())
 	}
 
+	bv, _ := bitvector.NewFromBytes(ack.NodeMode, bitVictorNodeModeLen)
 	return &Info{
 		BzzAddress: remoteBzzAddress,
-		FullNode:   ack.FullNode,
+		NodeMode:   Model{Bv: bv},
 	}, nil
 }
 

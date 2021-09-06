@@ -48,6 +48,7 @@ const (
 	optionNamePaymentEarly              = "payment-early"
 	optionNameResolverEndpoints         = "resolver-options"
 	optionNameBootnodeMode              = "bootnode-mode"
+	optionNameFullNode                  = "full-node"
 	optionNameGatewayMode               = "gateway-mode"
 	optionNameClefSignerEnable          = "clef-signer-enable"
 	optionNameClefSignerEndpoint        = "clef-signer-endpoint"
@@ -222,4 +223,5 @@ func (c *command) setAllFlags(cmd *cobra.Command) {
 	cmd.Flags().String(optionNameSwapFactoryAddress, "", "swap factory address")
 	cmd.Flags().String(optionNameSwapInitialDeposit, "100000000000000000", "initial deposit if deploying a new chequebook")
 	cmd.Flags().Bool(optionNameSwapEnable, true, "enable swap")
+	cmd.Flags().Bool(optionNameFullNode, true, "full node")
 }

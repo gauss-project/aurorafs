@@ -329,15 +329,22 @@ func (s *Service) handleIncoming(stream network.Stream) {
 	}
 
 	if s.notifier != nil {
-		if !s.notifier.Pick(p2p.Peer{Address: overlay, FullNode: i.FullNode}) {
+		if !s.notifier.Pick(p2p.Peer{Address: overlay, FullNode: i.NodeMode.IsFull()}) {
 			s.logger.Warningf("stream handler: don't want incoming peer %s. disconnecting", overlay)
+			_ = handshakeStream.Reset()
+			_ = s.host.Network().ClosePeer(peerID)
+			return
+		}
+		// hive2
+		if !i.NodeMode.IsFull() && s.lightNodes.Count() >= s.lightNodeLimit {
+			s.logger.Warningf("stream handler: light node upper limit %d, don't want incoming peer %s. disconnecting", s.lightNodeLimit, overlay)
 			_ = handshakeStream.Reset()
 			_ = s.host.Network().ClosePeer(peerID)
 			return
 		}
 	}
 
-	if exists := s.peers.addIfNotExists(stream.Conn(), overlay, i.FullNode); exists {
+	if exists := s.peers.addIfNotExists(stream.Conn(), overlay, i.NodeMode.IsFull()); exists {
 		s.logger.Debugf("stream handler: peer %s already exists", overlay)
 		if err = handshakeStream.FullClose(); err != nil {
 			s.logger.Debugf("stream handler: could not close stream %s: %v", overlay, err)
@@ -354,7 +361,7 @@ func (s *Service) handleIncoming(stream network.Stream) {
 		return
 	}
 
-	if i.FullNode {
+	if i.NodeMode.IsFull() {
 		err = s.addressbook.Put(i.BzzAddress.Overlay, *i.BzzAddress)
 		if err != nil {
 			s.logger.Debugf("stream handler: addressbook put error %s: %v", peerID, err)
@@ -364,7 +371,7 @@ func (s *Service) handleIncoming(stream network.Stream) {
 		}
 	}
 
-	peer := p2p.Peer{Address: overlay, FullNode: i.FullNode}
+	peer := p2p.Peer{Address: overlay, FullNode: i.NodeMode.IsFull()}
 
 	s.protocolsmu.RLock()
 	for _, tn := range s.protocols {
@@ -380,10 +387,10 @@ func (s *Service) handleIncoming(stream network.Stream) {
 	s.protocolsmu.RUnlock()
 
 	if s.notifier != nil {
-		if !i.FullNode {
+		if !i.NodeMode.IsFull() {
 			s.lightNodes.Connected(s.ctx, peer)
 			// light node announces explicitly
-			if err := s.notifier.Announce(s.ctx, peer.Address, i.FullNode); err != nil {
+			if err := s.notifier.Announce(s.ctx, peer.Address, i.NodeMode.IsFull()); err != nil {
 				s.logger.Debugf("stream handler: notifier.Announce: %s: %v", peer.Address.String(), err)
 			}
 
@@ -424,7 +431,7 @@ func (s *Service) handleIncoming(stream network.Stream) {
 					if err := s.notifier.AnnounceTo(s.ctx, addressee, peer, fullnode); err != nil {
 						s.logger.Debugf("stream handler: notifier.Announce to light node %s %s: %v", addressee.String(), peer.String(), err)
 					}
-				}(addr, peer.Address, i.FullNode)
+				}(addr, peer.Address, i.NodeMode.IsFull())
 				return false, false, nil
 			})
 		}
@@ -626,7 +633,7 @@ func (s *Service) Connect(ctx context.Context, addr ma.Multiaddr) (address *auro
 		return nil, fmt.Errorf("handshake: %w", err)
 	}
 
-	if !i.FullNode {
+	if !i.NodeMode.IsFull() {
 		_ = handshakeStream.Reset()
 		_ = s.host.Network().ClosePeer(info.ID)
 		return nil, p2p.ErrDialLightNode
@@ -650,7 +657,7 @@ func (s *Service) Connect(ctx context.Context, addr ma.Multiaddr) (address *auro
 		return nil, fmt.Errorf("peer blocklisted")
 	}
 
-	if exists := s.peers.addIfNotExists(stream.Conn(), overlay, i.FullNode); exists {
+	if exists := s.peers.addIfNotExists(stream.Conn(), overlay, i.NodeMode.IsFull()); exists {
 		if err := handshakeStream.FullClose(); err != nil {
 			_ = s.Disconnect(overlay)
 			return nil, fmt.Errorf("peer exists, full close: %w", err)
@@ -664,7 +671,7 @@ func (s *Service) Connect(ctx context.Context, addr ma.Multiaddr) (address *auro
 		return nil, fmt.Errorf("connect full close %w", err)
 	}
 
-	if i.FullNode {
+	if i.NodeMode.IsFull() {
 		err = s.addressbook.Put(overlay, *i.BzzAddress)
 		if err != nil {
 			_ = s.Disconnect(overlay)
@@ -675,7 +682,7 @@ func (s *Service) Connect(ctx context.Context, addr ma.Multiaddr) (address *auro
 	s.protocolsmu.RLock()
 	for _, tn := range s.protocols {
 		if tn.ConnectOut != nil {
-			if err := tn.ConnectOut(ctx, p2p.Peer{Address: overlay, FullNode: i.FullNode}); err != nil {
+			if err := tn.ConnectOut(ctx, p2p.Peer{Address: overlay, FullNode: i.NodeMode.IsFull()}); err != nil {
 				s.logger.Debugf("connectOut: protocol: %s, version:%s, peer: %s: %v", tn.Name, tn.Version, overlay, err)
 				_ = s.Disconnect(overlay)
 				s.protocolsmu.RUnlock()
