@@ -55,7 +55,7 @@ func (db *DB) Get(ctx context.Context, mode storage.ModeGet, addr boson.Address)
 
 // get returns Item from the retrieval index
 // and updates other indexes.
-func (db *DB) get(mode storage.ModeGet, addr boson.Address, rootCID boson.Address) (out shed.Item, err error) {
+func (db *DB) get(mode storage.ModeGet, addr, rootAddr boson.Address) (out shed.Item, err error) {
 	item := addressToItem(addr)
 
 	out, err = db.retrievalDataIndex.Get(item)
@@ -65,8 +65,8 @@ func (db *DB) get(mode storage.ModeGet, addr boson.Address, rootCID boson.Addres
 	switch mode {
 	// update the access timestamp and gc index
 	case storage.ModeGetRequest:
-		if !rootCID.IsZero() {
-			db.updateGCItems(addressToItem(rootCID))
+		if !rootAddr.IsZero() {
+			db.updateGCItems(addressToItem(rootAddr))
 		} else {
 			db.updateGCItems(out)
 		}
@@ -163,24 +163,28 @@ func (db *DB) updateGC(item shed.Item) (err error) {
 	if err != nil {
 		return err
 	}
+	// update the gc item timestamp in case
+	// it exists
+	var gcItem shed.Item
+	gcItem, err = db.gcIndex.Get(item)
+	item.GCounter = gcItem.GCounter
 	// update access timestamp
 	item.AccessTimestamp = now()
-	// update retrieve access index
-	err = db.retrievalAccessIndex.PutInBatch(batch, item)
-	if err != nil {
-		return err
-	}
-
-	// add new entry to gc index ONLY if it is not present in pinIndex
-	ok, err := db.pinIndex.Has(item)
-	if err != nil {
-		return err
-	}
-	if !ok {
+	if err == nil {
 		err = db.gcIndex.PutInBatch(batch, item)
 		if err != nil {
 			return err
 		}
+	} else {
+		if !errors.Is(err, leveldb.ErrNotFound) {
+			return err
+		}
+	}
+
+	// update retrieve access index
+	err = db.retrievalAccessIndex.PutInBatch(batch, item)
+	if err != nil {
+		return err
 	}
 
 	return db.shed.WriteBatch(batch)
