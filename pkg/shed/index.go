@@ -70,6 +70,9 @@ func (i Item) Merge(i2 Item) Item {
 	if i.PinCounter == 0 {
 		i.PinCounter = i2.PinCounter
 	}
+	if i.GCounter == 0 {
+		i.GCounter = i2.GCounter
+	}
 	if i.Tag == 0 {
 		i.Tag = i2.Tag
 	}
