@@ -68,17 +68,19 @@ func (ci *ChunkInfo) updateChunkPyramid(rootCid boson.Address, pyramids [][][]by
 	ci.cp.Lock()
 	defer ci.cp.Unlock()
 	py := make(map[string]int)
-	for i, p := range pyramids {
+	var i int
+	for _, p := range pyramids {
 		for _, x := range p {
 			py[boson.NewAddress(x).String()] = i
 			// db
 			ci.storer.Put(generateKey(pyramidKeyPrefix, rootCid, boson.NewAddress(x)), i)
+			i++
 		}
 	}
-	for i, hash := range hashs {
-		py[boson.NewAddress(hash).String()] = i
+	for _, hash := range hashs {
+		py[boson.NewAddress(hash).String()] = -1
 		// db
-		ci.storer.Put(generateKey(pyramidKeyPrefix, rootCid, boson.NewAddress(hash)), i)
+		ci.storer.Put(generateKey(pyramidKeyPrefix, rootCid, boson.NewAddress(hash)), -1)
 	}
 	ci.cp.pyramid[rootCid.String()] = py
 }

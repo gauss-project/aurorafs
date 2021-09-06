@@ -136,25 +136,25 @@ func TestHandlerChunkInfoResp(t *testing.T) {
 	b.cpd.updatePendingFinder(rootCid)
 	tree, _ := b.getChunkPyramid(ctx, rootCid)
 	pram, _ := b.traversal.CheckTrieData(ctx, rootCid, tree)
-	if err := b.initChunkInfoTabNeighbor(); err != nil {
-		t.Fatal(err)
-	}
 	if err := b.OnChunkTransferred(boson.NewAddress(pram[0][0]), rootCid, clientAddress); err != nil {
 		t.Fatal(err)
 	}
-	var vb bitVector
-	b.storer.Get(generateKey(keyPrefix, rootCid, clientAddress), &vb)
-	vf, err := bitvector.NewFromBytes(vb.B, vb.Len)
-	if err != nil {
-		t.Fatal(err)
-	}
-	fmt.Println(vf.String())
 	a := mockChunkInfo(s, recorder)
 
 	req := a.cd.createChunkInfoReq(rootCid)
 
 	if err := b.onChunkInfoReq(ctx, nil, clientAddress, req); err != nil {
 		t.Fatal(err)
+	}
+
+	var vb bitVector
+	server1.storer.Get(generateKey(discoverKeyPrefix, rootCid, clientAddress), &vb)
+	vf, err := bitvector.NewFromBytes(vb.B, vb.Len)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if vf.String() != "10000000" {
+		t.Fatalf("got %v records, want %v", vf.String(), 10000000)
 	}
 
 	respRecords, err := recorder1.Records(clientAddress, "chunkinfo", "1.0.0", "chunkinforesp")
@@ -185,10 +185,14 @@ func TestHandlerChunkInfoResp(t *testing.T) {
 func TestHandlerPyramid(t *testing.T) {
 	serverAddress := boson.MustParseHexAddress("02")
 	clientAddress := boson.MustParseHexAddress("01")
-	cid := boson.MustParseHexAddress("03")
+	ctx := context.Background()
 	rootCid, s := mockUploadFile(t)
 	server := mockChunkInfo(s, nil)
-	server.OnChunkTransferred(cid, rootCid, serverAddress)
+	tree, _ := server.getChunkPyramid(ctx, rootCid)
+	pram, _ := server.traversal.CheckTrieData(ctx, rootCid, tree)
+	if err := server.OnChunkTransferred(boson.NewAddress(pram[0][1]), rootCid, serverAddress); err != nil {
+		t.Fatal(err)
+	}
 	recorder := streamtest.New(
 		streamtest.WithProtocols(server.Protocol()),
 		streamtest.WithBaseAddr(clientAddress),
@@ -199,6 +203,11 @@ func TestHandlerPyramid(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	var sort int
+	client.storer.Get(generateKey(pyramidKeyPrefix, rootCid, boson.NewAddress(pram[0][0])), &sort)
+	if sort == 0 {
+		t.Fatalf("got %v records, want %v", sort, 10)
+	}
 	records, err := recorder.Records(serverAddress, "chunkinfo", "1.0.0", "chunkpyramidhash")
 	if err != nil {
 		t.Fatal(err)
@@ -215,9 +224,22 @@ func TestHandlerPyramid(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Log(messages)
+
+	recordsChunk, err := recorder.Records(serverAddress, "chunkinfo", "1.0.0", "chunkpyramidchunk")
 	if err != nil {
 		t.Fatal(err)
 	}
+	recordChunk := recordsChunk[0]
+	chunkMessage, err := protobuf.ReadMessages(
+		bytes.NewReader(recordChunk.Out()),
+		func() protobuf.Message { return new(pb.ChunkPyramidChunkResp) },
+	)
+
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Log(chunkMessage)
+
 	cids := client.cp.getChunkCid(rootCid)
 	t.Log(cids)
 	if cids == nil || len(cids) == 0 {

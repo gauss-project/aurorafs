@@ -2,7 +2,6 @@ package chunkinfo
 
 import (
 	"context"
-	"fmt"
 	"github.com/gauss-project/aurorafs/pkg/bitvector"
 	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/chunkinfo/pb"
@@ -86,7 +85,6 @@ func (ci *ChunkInfo) updateNeighborChunkInfo(rootCid, cid boson.Address, overlay
 	}
 	v := ci.cp.getCidStore(rootCid, cid)
 	vb.Set(v)
-	fmt.Print(vb.String())
 	// db
 	return ci.storer.Put(generateKey(keyPrefix, rootCid, overlay), &bitVector{B: vb.Bytes(), Len: vb.Len()})
 }
