@@ -96,14 +96,14 @@ func (ci *ChunkInfo) InitChunkInfo() error {
 	if err := ci.initChunkInfoDiscover(); err != nil {
 		return err
 	}
-	if err := ci.initChunkInfoDiscover(); err != nil {
+	if err := ci.initChunkPyramid(); err != nil {
 		return err
 	}
 	return nil
 }
 
 func (ci *ChunkInfo) Init(ctx context.Context, authInfo []byte, rootCid boson.Address) bool {
-	if ci.ct.isExists(rootCid) {
+	if ci.cd.isExists(rootCid) {
 		return true
 	}
 
@@ -149,10 +149,10 @@ func (ci *ChunkInfo) Init(ctx context.Context, authInfo []byte, rootCid boson.Ad
 	)
 	for {
 		if ci.cp.isExists(rootCid) {
-			ci.FindChunkInfo(ctx, authInfo, rootCid, overlays)
 			if ci.cd.isExists(rootCid) {
 				return true
 			}
+			ci.FindChunkInfo(ctx, authInfo, rootCid, overlays)
 		} else if peerAttempt < count {
 			if err := ci.doFindChunkPyramid(ctx, nil, rootCid, overlays[peerAttempt]); err != nil {
 				errorC <- err
