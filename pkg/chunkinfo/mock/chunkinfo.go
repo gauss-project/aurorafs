@@ -2,8 +2,8 @@ package mock
 
 import (
 	"context"
-
 	"github.com/gauss-project/aurorafs/pkg/boson"
+	"github.com/gauss-project/aurorafs/pkg/chunkinfo"
 )
 
 type chunkPyramid struct {
@@ -15,13 +15,26 @@ func newChunkPyramid() *chunkPyramid {
 	return &chunkPyramid{pyramid: make(map[string]map[string]int)}
 }
 
+type pendingFinderInfo struct {
+	// rootCid
+	finder map[string]struct{}
+}
+
+func newPendingFinderInfo() *pendingFinderInfo {
+	return &pendingFinderInfo{finder: make(map[string]struct{})}
+}
+
 type ChunkInfo struct {
-	cp *chunkPyramid
+	cp  *chunkPyramid
+	cpd *pendingFinderInfo
+	queue map[string]chunkinfo.Pull
 }
 
 func New() *ChunkInfo {
 	return &ChunkInfo{
-		cp: newChunkPyramid(),
+		cp:  newChunkPyramid(),
+		cpd: newPendingFinderInfo(),
+		queue: make(map[string]chunkinfo.Pull),
 	}
 }
 
@@ -34,7 +47,13 @@ func (ci *ChunkInfo) GetChunkInfo(rootCid boson.Address, cid boson.Address) [][]
 }
 
 func (ci *ChunkInfo) CancelFindChunkInfo(rootCid boson.Address) {
-	panic("not implemented")
+	if _, ok := ci.cpd.finder[rootCid.String()]; ok {
+		delete(ci.cpd.finder, rootCid.String())
+	}
+
+	if _, ok := ci.queue[rootCid.String()]; ok {
+		delete(ci.queue, rootCid.String())
+	}
 }
 
 func (ci *ChunkInfo) OnChunkTransferred(cid boson.Address, rootCid boson.Address, overlays boson.Address) error {
@@ -56,6 +75,15 @@ func (ci *ChunkInfo) GetChunkPyramid(rootCid boson.Address) []*boson.Address {
 }
 
 func (ci *ChunkInfo) IsDiscover(rootCid boson.Address) bool {
+	if _, ok := ci.cpd.finder[rootCid.String()]; ok {
+		return true
+	}
+
+	status, ok := ci.queue[rootCid.String()]
+	if ok && status != chunkinfo.Pulled {
+		return true
+	}
+
 	return false
 }
 
@@ -65,4 +93,16 @@ func (ci *ChunkInfo) PutChunkPyramid(rootCid, cid boson.Address, sort int) {
 		ci.cp.pyramid[rc] = make(map[string]int)
 	}
 	ci.cp.pyramid[rc][cid.String()] = sort
+}
+
+func (ci *ChunkInfo) ChangeDiscoverStatus(rootCid boson.Address, s chunkinfo.Pull) {
+	if _, ok := ci.queue[rootCid.String()]; !ok {
+		ci.queue[rootCid.String()] = s
+	}
+
+	if s != chunkinfo.Pulled {
+		ci.cpd.finder[rootCid.String()] = struct{}{}
+	} else {
+		ci.CancelFindChunkInfo(rootCid)
+	}
 }

@@ -58,16 +58,23 @@ func TestDB_collectGarbageWorker_multipleBatches(t *testing.T) {
 }
 
 // testDBCollectGarbageWorker is a helper test function to test
-// garbage collection runs by uploading and syncing a number of chunks.
+// garbage collection runs by put request a number of chunks.
 func testDBCollectGarbageWorker(t *testing.T) {
 
 	chunkCount := 150
 
 	var closed chan struct{}
 	testHookCollectGarbageChan := make(chan uint64)
-	t.Cleanup(setTestHookCollectGarbage(func(collectedCount uint64) {
+	testHookRecycleGarbageChan := make(chan uint64)
+	t.Cleanup(setTestHook(&testHookCollectGarbage, func(collectedCount uint64) {
 		select {
 		case testHookCollectGarbageChan <- collectedCount:
+		case <-closed:
+		}
+	}))
+	t.Cleanup(setTestHook(&testHookRecycleGarbage, func(recycledCount uint64) {
+		select {
+		case testHookRecycleGarbageChan <- recycledCount:
 		case <-closed:
 		}
 	}))
@@ -112,7 +119,26 @@ func testDBCollectGarbageWorker(t *testing.T) {
 		}
 	})
 
-	time.Sleep(3 * time.Second)
+	var prevChunkSize int
+
+	for {
+		select {
+		case <-testHookRecycleGarbageChan:
+		case <-time.After(10 * time.Second):
+			t.Error("recycle garbage timeout")
+		}
+		chunkSize, err := db.retrievalDataIndex.Count()
+		if err != nil {
+			t.Fatal(err)
+		}
+		prevChunkSize = chunkSize
+		if chunkSize == 0 {
+			break
+		}
+		if prevChunkSize > 0 && prevChunkSize < chunkSize {
+			t.Errorf("got current chunk size %d, but prev chunk size (%d) small than this\n", chunkSize, prevChunkSize)
+		}
+	}
 
 	t.Run("file related chunks should be removed", func(t *testing.T) {
 		for i := 0; i < chunkCount; i++ {
@@ -134,7 +160,7 @@ func TestPinGC(t *testing.T) {
 
 	var closed chan struct{}
 	testHookCollectGarbageChan := make(chan uint64)
-	t.Cleanup(setTestHookCollectGarbage(func(collectedCount uint64) {
+	t.Cleanup(setTestHook(&testHookCollectGarbage, func(collectedCount uint64) {
 		select {
 		case testHookCollectGarbageChan <- collectedCount:
 		case <-closed:
@@ -285,7 +311,7 @@ func TestDB_collectGarbageWorker_withRequests(t *testing.T) {
 	})
 
 	testHookCollectGarbageChan := make(chan uint64)
-	defer setTestHookCollectGarbage(func(collectedCount uint64) {
+	defer setTestHook(&testHookCollectGarbage, func(collectedCount uint64) {
 		testHookCollectGarbageChan <- collectedCount
 	})()
 
@@ -449,20 +475,20 @@ func TestDB_gcSize(t *testing.T) {
 	t.Run("gc index size", newIndexGCSizeTest(db))
 }
 
-// setTestHookCollectGarbage sets testHookCollectGarbage and
+// setTestHook sets gc hook and
 // returns a function that will reset it to the
 // value before the change.
-func setTestHookCollectGarbage(h func(collectedCount uint64)) (reset func()) {
-	current := testHookCollectGarbage
+func setTestHook(hook *func(uint64), f func(collectedCount uint64)) (reset func()) {
+	current := *hook
 	reset = func() { testHookCollectGarbage = current }
-	testHookCollectGarbage = h
+	*hook = f
 	return reset
 }
 
 // TestSetTestHookCollectGarbage tests if setTestHookCollectGarbage changes
 // testHookCollectGarbage function correctly and if its reset function
 // resets the original function.
-func TestSetTestHookCollectGarbage(t *testing.T) {
+func TestSetTestHook(t *testing.T) {
 	// Set the current function after the test finishes.
 	defer func(h func(collectedCount uint64)) { testHookCollectGarbage = h }(testHookCollectGarbage)
 
@@ -488,7 +514,7 @@ func TestSetTestHookCollectGarbage(t *testing.T) {
 	}
 
 	// set the new function
-	reset := setTestHookCollectGarbage(func(_ uint64) {
+	reset := setTestHook(&testHookCollectGarbage, func(_ uint64) {
 		got = changed
 	})
 
@@ -599,7 +625,7 @@ func generateAndPinAChunk(t *testing.T, db *DB) boson.Chunk {
 func TestPinSyncAndAccessPutSetChunkMultipleTimes(t *testing.T) {
 	var closed chan struct{}
 	testHookCollectGarbageChan := make(chan uint64)
-	t.Cleanup(setTestHookCollectGarbage(func(collectedCount uint64) {
+	t.Cleanup(setTestHook(&testHookCollectGarbage, func(collectedCount uint64) {
 		select {
 		case testHookCollectGarbageChan <- collectedCount:
 		case <-closed:
@@ -773,7 +799,7 @@ func TestGC_NoEvictDirty(t *testing.T) {
 	})
 
 	testHookCollectGarbageChan := make(chan uint64)
-	t.Cleanup(setTestHookCollectGarbage(func(collectedCount uint64) {
+	t.Cleanup(setTestHook(&testHookCollectGarbage, func(collectedCount uint64) {
 		// don't trigger if we haven't collected anything - this may
 		// result in a race condition when we inspect the gcsize below,
 		// causing the database to shut down while the cleanup to happen
