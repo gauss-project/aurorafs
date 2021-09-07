@@ -161,9 +161,16 @@ func TestPinGC(t *testing.T) {
 
 	var closed chan struct{}
 	testHookCollectGarbageChan := make(chan uint64)
+	testHookRecycleGarbageChan := make(chan uint64)
 	t.Cleanup(setTestHook(&testHookCollectGarbage, func(collectedCount uint64) {
 		select {
 		case testHookCollectGarbageChan <- collectedCount:
+		case <-closed:
+		}
+	}))
+	t.Cleanup(setTestHook(&testHookRecycleGarbage, func(collectedCount uint64) {
+		select {
+		case testHookRecycleGarbageChan <- collectedCount:
 		case <-closed:
 		}
 	}))
@@ -176,7 +183,20 @@ func TestPinGC(t *testing.T) {
 	// upload random file
 	ci := chunkinfo.New()
 	db.Config(ci)
-	reference, chunks, _ := addRandomFile(t, chunkCount, db, ci, true)
+
+	_, chunksA, addGC1 := addRandomFile(t, int(dbCapacity)-4, db, ci, false)
+	addGC1(t)
+	pinReference, pinChunks, _ := addRandomFile(t, chunkCount, db, ci, true)
+	_, chunksB, addGC2 := addRandomFile(t, 5, db, ci, false)
+	addGC2(t)
+
+	curSize, err := db.gcSize.Get()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if curSize < db.capacity {
+		t.Fatalf("current db not trigger gc， cur gc size = %d\n", curSize)
+	}
 
 	db.triggerGarbageCollection()
 	gcTarget := db.gcTarget()
@@ -196,15 +216,38 @@ func TestPinGC(t *testing.T) {
 		}
 	}
 
-	t.Run("pin Index count", newItemsCountTest(db.pinIndex, len(chunks)))
+	t.Run("pin Index count", newItemsCountTest(db.pinIndex, len(pinChunks)))
 
-	t.Run("gc index count", newItemsCountTest(db.gcIndex, 0))
+	t.Run("gc index count", newItemsCountTest(db.gcIndex, 1))
 
-	t.Run("gc size", newIndexGCSizeTest(db))
+	t.Run("gc size", func(t *testing.T) {
+		got, err := db.gcSize.Get()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got != uint64(len(chunksB)) {
+			t.Errorf("got gc size %v, want %v", got, len(chunksB))
+		}
+	})
+
+	select {
+	case <-testHookRecycleGarbageChan:
+	case <-time.After(10 * time.Second):
+		t.Error("recycle garbage timeout")
+	}
+
+	t.Run("first upload chunk was removed from gc index", func(t *testing.T) {
+		for _, hash := range chunksA {
+			_, err := db.Get(context.Background(), storage.ModeGetRequest, hash)
+			if !errors.Is(err, storage.ErrNotFound) {
+				t.Fatal(err)
+			}
+		}
+	})
 
 	t.Run("pinned chunk not in gc Index", func(t *testing.T) {
 		err := db.gcIndex.Iterate(func(item shed.Item) (stop bool, err error) {
-			if bytes.Equal(reference.Bytes(), item.Address) {
+			if bytes.Equal(pinReference.Bytes(), item.Address) {
 				t.Fatal("pin chunk present in gcIndex")
 			}
 			return false, nil
@@ -215,7 +258,16 @@ func TestPinGC(t *testing.T) {
 	})
 
 	t.Run("pinned chunks exists", func(t *testing.T) {
-		for _, hash := range chunks {
+		for _, hash := range pinChunks {
+			_, err := db.Get(context.Background(), storage.ModeGetRequest, hash)
+			if err != nil {
+				t.Fatal(err)
+			}
+		}
+	})
+
+	t.Run("second upload chunks exists", func(t *testing.T) {
+		for _, hash := range chunksB {
 			_, err := db.Get(context.Background(), storage.ModeGetRequest, hash)
 			if err != nil {
 				t.Fatal(err)
@@ -743,7 +795,11 @@ func addRandomFile(t *testing.T, count int, db *DB, ci *chunkinfo.ChunkInfo, pin
 			if err != nil {
 				t2.Fatal(err)
 			}
-			err = db.gcSize.Put(uint64(len(chunkHashes)))
+			curSize, err := db.gcSize.Get()
+			if err != nil {
+				t2.Fatal(err)
+			}
+			err = db.gcSize.Put(curSize+uint64(len(chunkHashes)))
 			if err != nil {
 				t2.Fatal(err)
 			}

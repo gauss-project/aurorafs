@@ -100,17 +100,12 @@ func (db *DB) put(mode storage.ModePut, rootAddr boson.Address, chs ...boson.Chu
 				exist[i] = true
 				continue
 			}
-			exists, c, err := db.putRequest(batch, binIDs, chunkToItem(ch), rootItem)
+			pin := mode == storage.ModePutRequestPin
+			exists, c, err := db.putRequest(batch, binIDs, chunkToItem(ch), rootItem, pin)
 			if err != nil {
 				return nil, err
 			}
 			exist[i] = exists
-			if mode == storage.ModePutRequestPin {
-				c, err = db.setPin(batch, ch.Address(), rootAddr)
-				if err != nil {
-					return nil, err
-				}
-			}
 			gcSizeChange += c
 		}
 
@@ -120,13 +115,14 @@ func (db *DB) put(mode storage.ModePut, rootAddr boson.Address, chs ...boson.Chu
 				exist[i] = true
 				continue
 			}
+			item := chunkToItem(ch)
 			exists, err := db.putUpload(batch, binIDs, chunkToItem(ch))
 			if err != nil {
 				return nil, err
 			}
 			exist[i] = exists
 			if mode == storage.ModePutUploadPin {
-				_, err = db.setPin(batch, ch.Address(), rootAddr)
+				_, err = db.setPin(batch, item, addressToItem(rootAddr))
 				if err != nil {
 					return nil, err
 				}
@@ -159,7 +155,7 @@ func (db *DB) put(mode storage.ModePut, rootAddr boson.Address, chs ...boson.Chu
 //  - it does not enter the syncpool
 // The batch can be written to the database.
 // Provided batch and binID map are updated.
-func (db *DB) putRequest(batch *leveldb.Batch, binIDs map[uint8]uint64, item, rootItem shed.Item) (exists bool, gcSizeChange int64, err error) {
+func (db *DB) putRequest(batch *leveldb.Batch, binIDs map[uint8]uint64, item, rootItem shed.Item, forcePin bool) (exists bool, gcSizeChange int64, err error) {
 	has, err := db.retrievalDataIndex.Has(item)
 	if err != nil {
 		return false, 0, err
@@ -183,7 +179,7 @@ func (db *DB) putRequest(batch *leveldb.Batch, binIDs map[uint8]uint64, item, ro
 		rootItem.BinID = item.BinID
 	}
 
-	gcSizeChange, err = db.setGC(batch, rootItem)
+	gcSizeChange, err = db.preserveOrCache(batch, item, rootItem, forcePin)
 	if err != nil {
 		return false, gcSizeChange, err
 	}
@@ -245,6 +241,16 @@ func (db *DB) putSync(batch *leveldb.Batch, binIDs map[uint8]uint64, item shed.I
 	}
 
 	return false, gcSizeChange, nil
+}
+
+// preserveOrCache is a helper function used to add chunks to either a pinned reserve or gc cache
+// (the retrieval access index and the gc index)
+func (db *DB) preserveOrCache(batch *leveldb.Batch, item, rootItem shed.Item, forcePin bool) (gcSizeChange int64, err error) {
+	if forcePin {
+		return db.setPin(batch, item, rootItem)
+	}
+
+	return db.setGC(batch, rootItem)
 }
 
 // setGC is a helper function used to add chunks to the retrieval access
