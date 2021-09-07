@@ -7,6 +7,7 @@ import (
 	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/logging"
 	"github.com/gauss-project/aurorafs/pkg/p2p"
+	"github.com/gauss-project/aurorafs/pkg/routetab"
 	"github.com/gauss-project/aurorafs/pkg/storage"
 	traversal "github.com/gauss-project/aurorafs/pkg/traversal"
 	"golang.org/x/sync/singleflight"
@@ -37,6 +38,7 @@ type Interface interface {
 type ChunkInfo struct {
 	storer       storage.StateStorer
 	traversal    traversal.Service
+	route        routetab.RouteTab
 	streamer     p2p.Streamer
 	logger       logging.Logger
 	t            *time.Timer

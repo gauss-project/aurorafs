@@ -47,6 +47,9 @@ func (ci *ChunkInfo) Protocol() p2p.ProtocolSpec {
 func (ci *ChunkInfo) sendData(ctx context.Context, address boson.Address, streamName string, msg interface{}) error {
 	ctx, cancel := context.WithTimeout(ctx, TimeOut*time.Second)
 	defer cancel()
+	if err := ci.route.Connect(ctx, address); err != nil {
+		return err
+	}
 	stream, err := ci.streamer.NewStream(ctx, address, nil, protocolName, protocolVersion, streamName)
 	if err != nil {
 		ci.logger.Errorf("new stream: %w", err)
@@ -82,6 +85,9 @@ func (ci *ChunkInfo) sendData(ctx context.Context, address boson.Address, stream
 func (ci *ChunkInfo) sendPyramid(ctx context.Context, address boson.Address, streamName string, msg interface{}) (interface{}, error) {
 	ctx, cancel := context.WithTimeout(ctx, TimeOut*time.Second)
 	defer cancel()
+	if err := ci.route.Connect(ctx, address); err != nil {
+		return nil, err
+	}
 	stream, err := ci.streamer.NewStream(ctx, address, nil, protocolName, protocolVersion, streamName)
 	if err != nil {
 		ci.logger.Errorf("new stream: %w", err)
