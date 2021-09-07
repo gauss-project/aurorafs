@@ -258,28 +258,23 @@ func (s *Service) handler(ctx context.Context, p p2p.Peer, stream p2p.Stream) (e
 	ctx = context.WithValue(ctx, requestSourceContextKey{}, p.Address.String())
 	_, rootAddr, chunkAddr := boson.NewAddress(req.TargetAddr), boson.NewAddress(req.RootAddr), boson.NewAddress(req.ChunkAddr)
 
-	// var (
-	// 	chunk boson.Chunk
-	// )
-
-	// if targetAddr.Equal(s.addr){
-	// 	chunk, err = s.storer.Get(ctx, storage.ModeGetRequest, chunkAddr)
-	// }else{
-	// 	chunk, err = s.RetrieveChunk(ctx, rootAddr, chunkAddr)
-	// }
-
+	forward := false
 	chunk, err := s.storer.Get(ctx, storage.ModeGetRequest, chunkAddr)
 	if err != nil {
 		if errors.Is(err, storage.ErrNotFound) {
 			// forward the request
-			chunk, err = s.RetrieveChunk(ctx, rootAddr, chunkAddr)
-			if err != nil {
-				return fmt.Errorf("retrieve chunk: %w", err)
-			}
+			// if !s.addr.Equal(targetAddr){
+				chunk, err = s.RetrieveChunk(ctx, rootAddr, chunkAddr)
+				if err != nil {
+					return fmt.Errorf("retrieve chunk: %w", err)
+				}
+				forward = true
+			// }else{
+			// 	return fmt.Errorf("get from store: %w", err)
+			// }
 		} else {
 			return fmt.Errorf("get from store: %w", err)
 		}
-		// return fmt.Errorf("get from store: %w", err)
 	}
 
 	if err := w.WriteMsgWithContext(ctx, &pb.Delivery{
@@ -288,24 +283,17 @@ func (s *Service) handler(ctx context.Context, p p2p.Peer, stream p2p.Stream) (e
 		return fmt.Errorf("write delivery: %w peer %s", err, p.Address.String())
 	}
 
-	// exists, err := s.storer.Put(ctx, storage.ModePutRequest, chunk)
-	// if err != nil {
-	// 	s.metrics.TotalErrors.Inc()
-	// 	return nil, nil, err
-	// }
-	// if !exists[0] {
-	// 	s.chunkinfo.OnChunkTransferred(chunkAddr, rootAddr, s.addr)
-	// }
-
-	_, err = s.storer.Put(ctx, storage.ModePutRequest, chunk)
-	if err != nil{
-		return fmt.Errorf("retrieve cache put :%w", err)
-	}
-
 	if s.chunkinfo != nil{
 		s.chunkinfo.OnChunkTransferred(chunkAddr, rootAddr, p.Address)
 	}
-	// s.chunkinfo.OnChunkTransferred(chunkAddr, rootAddr, p.Address)
+
+	if forward{
+		_, err = s.storer.Put(ctx, storage.ModePutRequest, chunk)
+		if err != nil{
+			return fmt.Errorf("retrieve cache put :%w", err)
+		}
+	}
+
 	s.logger.Tracef("retrieval protocol debiting peer %s", p.Address.String())
 
 	return nil
