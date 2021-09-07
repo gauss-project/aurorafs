@@ -9,7 +9,7 @@ import (
 	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/retrieval/pb"
 	"github.com/gauss-project/aurorafs/pkg/retrieval/aco"
-	// "github.com/gauss-project/aurorafs/pkg/routetab"
+	"github.com/gauss-project/aurorafs/pkg/routetab"
 
 	"github.com/gauss-project/aurorafs/pkg/logging"
 	"github.com/gauss-project/aurorafs/pkg/p2p"
@@ -51,6 +51,7 @@ type Service struct {
 	tracer  			*tracing.Tracer
 	chunkinfo     		chunkinfo.Interface
 	acoServer			*aco.AcoServer
+	routeTab        	routetab.RouteTab
 }
 
 type retrievalResult struct {
@@ -65,7 +66,7 @@ const (
 	retrieveRetryIntervalDuration = 5 * time.Second
 )
 
-func New(addr boson.Address, streamer p2p.Streamer, chunkPeerer topology.EachPeerer, storer storage.Storer, logger logging.Logger, tracer *tracing.Tracer) *Service {
+func New(addr boson.Address, streamer p2p.Streamer, chunkPeerer topology.EachPeerer, routeTable routetab.RouteTab, storer storage.Storer, logger logging.Logger, tracer *tracing.Tracer) *Service {
 	acoServer := aco.NewAcoServer()
 	return &Service{
 		addr:          addr,
@@ -76,10 +77,11 @@ func New(addr boson.Address, streamer p2p.Streamer, chunkPeerer topology.EachPee
 		metrics: newMetrics(),
 		tracer:  tracer,
 		acoServer: &acoServer,
+		routeTab: routeTable,
 	}
 }
 
-func (s *Service) Config(chunkInfo chunkinfo.Interface)  {
+func (s *Service) Config(chunkInfo chunkinfo.Interface){
 	s.chunkinfo = chunkInfo
 }
 
@@ -171,6 +173,9 @@ func (s *Service) RetrieveChunk(ctx context.Context, rootAddr, chunkAddr boson.A
 func (s *Service) retrieveChunk(ctx context.Context, route aco.Route, rootAddr, chunkAddr boson.Address) (boson.Chunk, *aco.DownloadDetail, error){
 	if	!route.LinkNode.Equal(route.TargetNode){
 		return nil, nil, fmt.Errorf("not direct link, %v,%v(not same)", route.LinkNode.String(), route.TargetNode.String())
+	}
+	if err := s.routeTab.Connect(ctx, route.LinkNode); err != nil{
+		return nil, nil, fmt.Errorf("connect failed");
 	}
 
 	stream, err := s.streamer.NewStream(ctx, route.LinkNode, nil, protocolName, protocolVersion, streamName)
