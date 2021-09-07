@@ -124,7 +124,6 @@ func (s *Service) RetrieveChunk(ctx context.Context, rootAddr, chunkAddr boson.A
 		// } 
 	}
 
-
 	acoRouteIndexList := s.acoServer.GetRouteAcoIndex(routeList, totalRouteCount)
 
 	for _, routeIndex := range acoRouteIndexList{
@@ -153,7 +152,7 @@ func (s *Service) RetrieveChunk(ctx context.Context, rootAddr, chunkAddr boson.A
 				s.logger.Debugf("retrieval: failed to get chunk (%s,%s) from route %s: %v", 
 					rootAddr, chunkAddr, retrievalRoute, result.err)
 				s.acoServer.OnDownloadFinish(retrievalRoute, nil)
-				return nil, result.err
+				// return nil, result.err
 			}else{
 				s.acoServer.OnDownloadFinish(retrievalRoute, result.downloadDetail)
 				s.chunkinfo.OnChunkTransferred(chunkAddr, rootAddr, s.addr)
@@ -161,7 +160,7 @@ func (s *Service) RetrieveChunk(ctx context.Context, rootAddr, chunkAddr boson.A
 			}
 		case <-ctx.Done():
 			s.acoServer.OnDownloadFinish(retrievalRoute, nil)
-			s.logger.Tracef("retrieval: failed to get chunk (%s:%s): %v", rootAddr, chunkAddr, ctx.Err())
+			s.logger.Tracef("retrieval: failed to get chunk: ctx.Done() (%s:%s): %v", rootAddr, chunkAddr, ctx.Err())
 			return nil, fmt.Errorf("retrieval: %w", ctx.Err())
 		}
 	}
@@ -245,6 +244,7 @@ func (s *Service) handler(ctx context.Context, p p2p.Peer, stream p2p.Stream) (e
 			_ = stream.FullClose()
 		}
 	}()
+	fmt.Printf("handler addr: %v\n", s.addr.String())
 
 	var req pb.RequestChunk
 	if err := r.ReadMsgWithContext(ctx, &req); err != nil {

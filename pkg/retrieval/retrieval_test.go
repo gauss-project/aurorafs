@@ -367,7 +367,7 @@ func TestRetrievePreemptiveRetry(t *testing.T){
 	chunk := fixtureChunks["c8ea"]
 	chunkRootAddr := boson.MustParseHexAddress("c8ea")
 
-	// someOtherChunk := fixtureChunks["2989"]
+	someOtherChunk := fixtureChunks["2989"]
 	// someOtherChunkRootAddr := boson.MustParseHexAddress("2989")
 
 	clientAddress := boson.MustParseHexAddress("1010")
@@ -383,8 +383,8 @@ func TestRetrievePreemptiveRetry(t *testing.T){
 	serverStorer2 := storemock.NewStorer()
 
 	// we put some other chunk on server 1
-	_, err := serverStorer1.Put(context.Background(), storage.ModePutUpload, chunk)
-	// _, err := serverStorer1.Put(context.Background(), storage.ModePutUpload, someOtherChunk)
+	// _, err := serverStorer1.Put(context.Background(), storage.ModePutUpload, chunk)
+	_, err := serverStorer1.Put(context.Background(), storage.ModePutUpload, someOtherChunk)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -402,7 +402,7 @@ func TestRetrievePreemptiveRetry(t *testing.T){
 	server2ChunkInfo := NewMockChunkInfo()
 	server2.Config(server2ChunkInfo)
 
-	t.Run("peer not reachable", func(t *testing.T) {
+	t.Run("peer does not have chunk", func(t *testing.T) {
 		ranOnce := true
 		ranMux := sync.Mutex{}
 		recorder := streamtest.New(
@@ -415,26 +415,24 @@ func TestRetrievePreemptiveRetry(t *testing.T){
 					return func(ctx context.Context, peer p2p.Peer, stream p2p.Stream) error {
 						ranMux.Lock()
 						defer ranMux.Unlock()
-						// NOTE: return error for peer1
 						if ranOnce {
 							ranOnce = false
-							return fmt.Errorf("peer not reachable: %s", peer.Address.String())
+							return server1.Handler(ctx, peer, stream)
 						}
 
 						return server2.Handler(ctx, peer, stream)
 					}
 				},
 			),
-			streamtest.WithBaseAddr(clientAddress),
 		)
 
-		// client := retrieval.New(clientAddress, nil, recorder, peerSuggesterFn(peers...), logger, accountingmock.NewAccounting(), pricerMock, nil, false, noopStampValidator)
 		client := retrieval.New(clientAddress, recorder, nil, nil, logger, nil)
-
 		clientChunkInfo := NewMockChunkInfo()
+
 		clientChunkInfo.OnChunkTransferred(chunk.Address(), chunkRootAddr, serverAddress1)
-		clientChunkInfo.OnChunkTransferred(chunk.Address(), chunkRootAddr, serverAddress2)
+		// clientChunkInfo.OnChunkTransferred(chunk.Address(), chunkRootAddr, serverAddress2)
 		client.Config(clientChunkInfo)
+		// client := retrieval.New(clientAddress, nil, recorder, peerSuggesterFn(peers...), logger, accountingmock.NewAccounting(), pricerMock, nil, false, noopStampValidator)
 
 		got, err := client.RetrieveChunk(context.Background(), chunkRootAddr, chunk.Address())
 		if err != nil {
@@ -445,6 +443,51 @@ func TestRetrievePreemptiveRetry(t *testing.T){
 			t.Fatalf("got data %x, want %x", got.Data(), chunk.Data())
 		}
 	})
+
+	// t.Run("peer not reachable", func(t *testing.T) {
+	// 	ranOnce := true
+	// 	ranMux := sync.Mutex{}
+	// 	recorder := streamtest.New(
+	// 		streamtest.WithProtocols(
+	// 			server1.Protocol(),
+	// 			server2.Protocol(),
+	// 		),
+	// 		streamtest.WithMiddlewares(
+	// 			func(h p2p.HandlerFunc) p2p.HandlerFunc {
+	// 				return func(ctx context.Context, peer p2p.Peer, stream p2p.Stream) error {
+	// 					ranMux.Lock()
+	// 					defer ranMux.Unlock()
+	// 					// NOTE: return error for peer1
+	// 					if ranOnce {
+	// 						ranOnce = false
+	// 						return fmt.Errorf("peer not reachable: %s", peer.Address.String())
+	// 					}
+
+	// 					return server2.Handler(ctx, peer, stream)
+	// 				}
+	// 			},
+	// 		),
+	// 		streamtest.WithBaseAddr(clientAddress),
+	// 	)
+
+	// 	// client := retrieval.New(clientAddress, nil, recorder, peerSuggesterFn(peers...), logger, accountingmock.NewAccounting(), pricerMock, nil, false, noopStampValidator)
+	// 	client := retrieval.New(clientAddress, recorder, nil, nil, logger, nil)
+
+	// 	clientChunkInfo := NewMockChunkInfo()
+	// 	clientChunkInfo.OnChunkTransferred(chunk.Address(), chunkRootAddr, serverAddress1)
+	// 	clientChunkInfo.OnChunkTransferred(chunk.Address(), chunkRootAddr, serverAddress2)
+	// 	client.Config(clientChunkInfo)
+
+	// 	got, err := client.RetrieveChunk(context.Background(), chunkRootAddr, chunk.Address())
+	// 	if err != nil {
+	// 		t.Fatal(err)
+	// 	}
+
+	// 	if !bytes.Equal(got.Data(), chunk.Data()) {
+	// 		t.Fatalf("got data %x, want %x", got.Data(), chunk.Data())
+	// 	}
+	// })
+
 }
 
 
