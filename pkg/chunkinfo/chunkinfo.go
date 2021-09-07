@@ -54,11 +54,12 @@ type ChunkInfo struct {
 }
 
 // New
-func New(streamer p2p.Streamer, logger logging.Logger, traversal traversal.Service, storer storage.StateStorer, oracleUrl string) *ChunkInfo {
+func New(streamer p2p.Streamer, logger logging.Logger, traversal traversal.Service, storer storage.StateStorer, route routetab.RouteTab, oracleUrl string) *ChunkInfo {
 	queues := make(map[string]*queue)
 	t := time.NewTimer(Time * time.Second)
 	return &ChunkInfo{
 		storer:    storer,
+		route:     route,
 		ct:        newChunkInfoTabNeighbor(),
 		cd:        newChunkInfoDiscover(),
 		cp:        newChunkPyramid(),
