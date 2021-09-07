@@ -160,7 +160,7 @@ func (ci *ChunkInfo) queueProcess(ctx context.Context, rootCid boson.Address) {
 		q.push(Pulling, *unNode)
 		ci.tt.updateTimeOutTrigger(rootCid.Bytes(), *unNode)
 		ciReq := ci.cd.createChunkInfoReq(rootCid)
-		ci.sendData(ctx, boson.NewAddress(*unNode), streamChunkInfoReqName, ciReq)
+		go ci.sendData(ctx, boson.NewAddress(*unNode), streamChunkInfoReqName, ciReq)
 	}
 }
 

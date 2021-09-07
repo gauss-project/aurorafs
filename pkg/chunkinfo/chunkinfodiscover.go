@@ -124,5 +124,5 @@ func (cd *chunkInfoDiscover) createChunkInfoReq(rootCid boson.Address) pb.ChunkI
 
 // doFindChunkInfo
 func (ci *ChunkInfo) doFindChunkInfo(ctx context.Context, authInfo []byte, rootCid boson.Address) {
-	ci.queueProcess(ctx, rootCid)
+	go ci.queueProcess(ctx, rootCid)
 }

@@ -145,13 +145,17 @@ func (ci *ChunkInfo) Init(ctx context.Context, authInfo []byte, rootCid boson.Ad
 	var (
 		peerAttempt  int
 		peersResults int
-		errorC       = make(chan error, count)
+		errorC            = make(chan error, count)
+		first        bool = true
 	)
 	for {
 		if ci.cp.isExists(rootCid) {
-			ci.FindChunkInfo(ctx, authInfo, rootCid, overlays)
 			if ci.cd.isExists(rootCid) {
 				return true
+			}
+			if first {
+				ci.FindChunkInfo(ctx, authInfo, rootCid, overlays)
+				first = false
 			}
 		} else if peerAttempt < count {
 			if err := ci.doFindChunkPyramid(ctx, nil, rootCid, overlays[peerAttempt]); err != nil {
@@ -169,7 +173,6 @@ func (ci *ChunkInfo) Init(ctx context.Context, authInfo []byte, rootCid boson.Ad
 		}
 		if peersResults >= count {
 			return false
-
 		}
 	}
 }
@@ -188,7 +191,7 @@ func (ci *ChunkInfo) FindChunkInfo(ctx context.Context, authInfo []byte, rootCid
 		}
 		ci.getQueue(rootCid.String()).push(UnPull, overlay.Bytes())
 	}
-	ci.doFindChunkInfo(ctx, authInfo, rootCid)
+	go ci.doFindChunkInfo(ctx, authInfo, rootCid)
 }
 
 // GetChunkInfo
