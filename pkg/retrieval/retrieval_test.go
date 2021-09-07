@@ -523,15 +523,24 @@ func (c *mockChunkInfo) GetChunkInfo(rootCid boson.Address, cid boson.Address) [
 
 func (c *mockChunkInfo) CancelFindChunkInfo(rootCid boson.Address){}
 
-func (c *mockChunkInfo) OnChunkTransferred(cid boson.Address, rootCid boson.Address, overlays boson.Address){
+func (c *mockChunkInfo) OnChunkTransferred(cid boson.Address, rootCid boson.Address, overlays boson.Address) error{
 	mapKey := fmt.Sprintf("%v,%v", rootCid.String(), cid.String())
 	if _, exist := c.chunkMap[mapKey]; !exist{
 		c.chunkMap[mapKey] = make([][]byte, 0)
 	}
 	c.chunkMap[mapKey] = append(c.chunkMap[mapKey], overlays.Bytes())
+	return nil
 }
 
 func (c *mockChunkInfo) Init(ctx context.Context, authInfo []byte, rootCid boson.Address) bool{
+	return false
+}
+
+func (c *mockChunkInfo)GetChunkPyramid(rootCid boson.Address) []*boson.Address{
+	return []*boson.Address{}
+}
+
+func (c *mockChunkInfo)IsDiscover(rootCid boson.Address) bool{
 	return false
 }
 
