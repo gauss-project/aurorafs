@@ -12,11 +12,10 @@ import (
 	"testing"
 	"time"
 
-	// "github.com/gauss-project/aurorafs/pkg/cac"
 	"github.com/gauss-project/aurorafs/pkg/aurora"
 	"github.com/gauss-project/aurorafs/pkg/logging"
 	"github.com/gauss-project/aurorafs/pkg/routetab"
-
+	// "github.com/gauss-project/aurorafs/pkg/cac"
 	// "github.com/gauss-project/aurorafs/pkg/soc"
 
 	"github.com/gauss-project/aurorafs/pkg/bmtpool"
@@ -29,6 +28,10 @@ import (
 	"github.com/gauss-project/aurorafs/pkg/storage"
 	storemock "github.com/gauss-project/aurorafs/pkg/storage/mock"
 	"github.com/gauss-project/aurorafs/pkg/topology"
+
+	// "io"
+	// "os"
+	// "github.com/sirupsen/logrus"
 )
 
 var (
@@ -61,10 +64,8 @@ func TestDelivery(t *testing.T) {
 	}
 
 	// create the server that will handle the request and will serve the response
-	// server := retrieval.New(swarm.MustParseHexAddress("0034"), mockStorer, nil, nil, logger, serverMockAccounting, pricerMock, nil, false, noopStampValidator)
 	mockRouteTable := NewMockRouteTable()
-	server := retrieval.New(serverAddr, nil, nil, &mockRouteTable, mockStorer, logger, nil)
-	// server := retrieval.New(serverAddr, nil, nil, mockStorer, logger, nil)
+	server := retrieval.New(serverAddr, nil, &mockRouteTable, mockStorer, logger, nil)
 	serverMockChunkInfo := NewMockChunkInfo()
 	server.Config(serverMockChunkInfo)
 
@@ -88,8 +89,7 @@ func TestDelivery(t *testing.T) {
 	mockChunkInfo := NewMockChunkInfo()
 	mockChunkInfo.OnChunkTransferred(chunk.Address(), rootAddr, serverAddr)
 
-	// client := retrieval.New(clientAddr, clientMockStorer, recorder, ps, logger, clientMockAccounting, pricerMock, nil, false, noopStampValidator)
-	client := retrieval.New(clientAddr, recorder, nil, &mockRouteTable,clientMockStorer, logger, nil)
+	client := retrieval.New(clientAddr, recorder, &mockRouteTable,clientMockStorer, logger, nil)
 	client.Config(mockChunkInfo)
 	ctx, cancel := context.WithTimeout(context.Background(), testTimeout)
 	defer cancel()
@@ -186,7 +186,7 @@ func TestRetrievaeChunk(t *testing.T){
 
 		serverMockChunkInfo := NewMockChunkInfo()
 		mockRouteTable := NewMockRouteTable()
-		server := retrieval.New(serverAddress, nil, nil, &mockRouteTable, serverStorer, logger, nil)
+		server := retrieval.New(serverAddress, nil, &mockRouteTable, serverStorer, logger, nil)
 		server.Config(serverMockChunkInfo)
 
 		// recorder := streamtest.New(streamtest.WithProtocols(server.Protocol()))
@@ -203,7 +203,7 @@ func TestRetrievaeChunk(t *testing.T){
 		clientStorer := storemock.NewStorer()
 		clientMockChunkInfo := NewMockChunkInfo()
 		clientMockChunkInfo.OnChunkTransferred(chunk.Address(), rootAddr, serverAddress)
-		client := retrieval.New(clientAddress, recorder, nil, &mockRouteTable, clientStorer, logger, nil)
+		client := retrieval.New(clientAddress, recorder, &mockRouteTable, clientStorer, logger, nil)
 		client.Config(clientMockChunkInfo)
 		// client := retrieval.New(clientAddress, nil, recorder, clientSuggester, logger, accountingmock.NewAccounting(), pricer, nil, false, noopStampValidator)
 
@@ -236,7 +236,7 @@ func TestRetrievaeChunk(t *testing.T){
 			t.Fatal(err)
 		}
 		mockRouteTable := NewMockRouteTable()
-		server := retrieval.New(serverAddress, nil, nil, &mockRouteTable, serverStorer, logger, nil)
+		server := retrieval.New(serverAddress, nil, &mockRouteTable, serverStorer, logger, nil)
 
 		serverChunkInfo := NewMockChunkInfo()
 		server.Config(serverChunkInfo)
@@ -247,7 +247,7 @@ func TestRetrievaeChunk(t *testing.T){
 			streamtest.WithBaseAddr(forwarderAddress),
 		)
 		forwarderStorer := storemock.NewStorer()
-		forwarder := retrieval.New(forwarderAddress, f2sRecorder, nil, &mockRouteTable, forwarderStorer, logger, nil)
+		forwarder := retrieval.New(forwarderAddress, f2sRecorder, &mockRouteTable, forwarderStorer, logger, nil)
 
 		forwarderChunkInfo := NewMockChunkInfo()
 		forwarderChunkInfo.OnChunkTransferred(chunk.Address(), rootAddr, serverAddress)
@@ -259,7 +259,7 @@ func TestRetrievaeChunk(t *testing.T){
 			streamtest.WithBaseAddr(clientAddress),
 		)
 		clientStorer := storemock.NewStorer()
-		client := retrieval.New(clientAddress, c2fRecorder, nil, &mockRouteTable, clientStorer, logger, nil)
+		client := retrieval.New(clientAddress, c2fRecorder, &mockRouteTable, clientStorer, logger, nil)
 
 		clientChunkInfo := NewMockChunkInfo()
 		clientChunkInfo.OnChunkTransferred(chunk.Address(), rootAddr, forwarderAddress)
@@ -284,7 +284,14 @@ func TestRetrievaeChunk(t *testing.T){
 }
 
 func TestRetrievePreemptiveRetry(t *testing.T){
+	// logger := logging.New(io.MultiWriter(os.Stdout), 6)
+	// logFormater := logrus.TextFormatter{
+	// 	DisableTimestamp: true,
+	// 	ForceColors: true,
+	// }
+	// logger.NewEntry().Logger.SetFormatter(&logFormater)
 	logger := logging.New(ioutil.Discard, 0)
+
 	var fixtureChunks = map[string]boson.Chunk{
 		"c8ea": boson.NewChunk(
 			boson.MustParseHexAddress("c8eaf98c8a8d62c6591d00f9d7b306805c5c0953b706d9ce8c66b90ba230687b"),
@@ -304,9 +311,6 @@ func TestRetrievePreemptiveRetry(t *testing.T){
 		),
 	}
 
-	// address := boson.MustParseHexAddress("8a74889a73c23fe2be037886c6b709e3175b95b8deea9c95eeda0dbc60740bd8")
-	// data := []uint8{3,0,0,0,0,0,0,0,102,111,111}
-	// chunk := boson.NewChunk(address, data)
 	chunk := fixtureChunks["c8ea"]
 	chunkRootAddr := boson.MustParseHexAddress("c8ea")
 
@@ -317,10 +321,6 @@ func TestRetrievePreemptiveRetry(t *testing.T){
 
 	serverAddress1 := boson.MustParseHexAddress("111111")
 	serverAddress2 := boson.MustParseHexAddress("222222")
-	// peers := []boson.Address{
-	// 	serverAddress1,
-	// 	serverAddress2,
-	// }
 
 	serverStorer1 := storemock.NewStorer()
 	serverStorer2 := storemock.NewStorer()
@@ -338,11 +338,11 @@ func TestRetrievePreemptiveRetry(t *testing.T){
 	}
 
 	mockRouteTable := NewMockRouteTable()
-	server1 := retrieval.New(serverAddress1, nil, nil, &mockRouteTable, serverStorer1, logger, nil)
+	server1 := retrieval.New(serverAddress1, nil, &mockRouteTable, serverStorer1, logger, nil)
 	server1ChunkInfo := NewMockChunkInfo()
 	server1.Config(server1ChunkInfo)
 
-	server2 := retrieval.New(serverAddress2, nil, nil, &mockRouteTable, serverStorer2, logger, nil)
+	server2 := retrieval.New(serverAddress2, nil, &mockRouteTable, serverStorer2, logger, nil)
 	server2ChunkInfo := NewMockChunkInfo()
 	server2.Config(server2ChunkInfo)
 
@@ -361,24 +361,26 @@ func TestRetrievePreemptiveRetry(t *testing.T){
 						defer ranMux.Unlock()
 						if ranOnce {
 							ranOnce = false
+							// logger.Trace("Round 1\n")
+							// return fmt.Errorf("peer not reachable: %s", peer.Address.String())
 							return server1.Handler(ctx, peer, stream)
 						}
+						// logger.Trace("Round 2\n")
 						return server2.Handler(ctx, peer, stream)
 					}
 				},
 			),
 		)
 
-		client := retrieval.New(clientAddress, recorder, nil, &mockRouteTable, nil, logger, nil)
+		client := retrieval.New(clientAddress, recorder, &mockRouteTable, nil, logger, nil)
 		clientChunkInfo := NewMockChunkInfo()
 
 		clientChunkInfo.OnChunkTransferred(chunk.Address(), chunkRootAddr, serverAddress1)
-		// clientChunkInfo.OnChunkTransferred(chunk.Address(), chunkRootAddr, serverAddress2)
+		clientChunkInfo.OnChunkTransferred(chunk.Address(), chunkRootAddr, serverAddress2)
 		client.Config(clientChunkInfo)
-		// client := retrieval.New(clientAddress, nil, recorder, peerSuggesterFn(peers...), logger, accountingmock.NewAccounting(), pricerMock, nil, false, noopStampValidator)
 
 		got, err := client.RetrieveChunk(context.Background(), chunkRootAddr, chunk.Address())
-		got, err = client.RetrieveChunk(context.Background(), chunkRootAddr, chunk.Address())
+		// got, err = client.RetrieveChunk(context.Background(), chunkRootAddr, chunk.Address())
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -388,49 +390,50 @@ func TestRetrievePreemptiveRetry(t *testing.T){
 		}
 	})
 
-	// t.Run("peer not reachable", func(t *testing.T) {
-	// 	ranOnce := true
-	// 	ranMux := sync.Mutex{}
-	// 	recorder := streamtest.New(
-	// 		streamtest.WithProtocols(
-	// 			server1.Protocol(),
-	// 			server2.Protocol(),
-	// 		),
-	// 		streamtest.WithMiddlewares(
-	// 			func(h p2p.HandlerFunc) p2p.HandlerFunc {
-	// 				return func(ctx context.Context, peer p2p.Peer, stream p2p.Stream) error {
-	// 					ranMux.Lock()
-	// 					defer ranMux.Unlock()
-	// 					// NOTE: return error for peer1
-	// 					if ranOnce {
-	// 						ranOnce = false
-	// 						return fmt.Errorf("peer not reachable: %s", peer.Address.String())
-	// 					}
+	t.Run("peer not reachable", func(t *testing.T) {
+		ranOnce := true
+		ranMux := sync.Mutex{}
+		recorder := streamtest.New(
+			streamtest.WithProtocols(
+				server1.Protocol(),
+				server2.Protocol(),
+			),
+			streamtest.WithMiddlewares(
+				func(h p2p.HandlerFunc) p2p.HandlerFunc {
+					return func(ctx context.Context, peer p2p.Peer, stream p2p.Stream) error {
+						ranMux.Lock()
+						defer ranMux.Unlock()
+						// NOTE: return error for peer1
+						if ranOnce {
+							ranOnce = false
+							return fmt.Errorf("peer not reachable: %s", peer.Address.String())
+						}
 
-	// 					return server2.Handler(ctx, peer, stream)
-	// 				}
-	// 			},
-	// 		),
-	// 		streamtest.WithBaseAddr(clientAddress),
-	// 	)
+						return server2.Handler(ctx, peer, stream)
+					}
+				},
+			),
+			streamtest.WithBaseAddr(clientAddress),
+		)
 
-	// 	// client := retrieval.New(clientAddress, nil, recorder, peerSuggesterFn(peers...), logger, accountingmock.NewAccounting(), pricerMock, nil, false, noopStampValidator)
-	// 	client := retrieval.New(clientAddress, recorder, nil, nil, logger, nil)
+		// client := retrieval.New(clientAddress, nil, recorder, peerSuggesterFn(peers...), logger, accountingmock.NewAccounting(), pricerMock, nil, false, noopStampValidator)
+		mockRouteTable := NewMockRouteTable()
+		client := retrieval.New(clientAddress, recorder, &mockRouteTable, nil, logger, nil)
 
-	// 	clientChunkInfo := NewMockChunkInfo()
-	// 	clientChunkInfo.OnChunkTransferred(chunk.Address(), chunkRootAddr, serverAddress1)
-	// 	clientChunkInfo.OnChunkTransferred(chunk.Address(), chunkRootAddr, serverAddress2)
-	// 	client.Config(clientChunkInfo)
+		clientChunkInfo := NewMockChunkInfo()
+		clientChunkInfo.OnChunkTransferred(chunk.Address(), chunkRootAddr, serverAddress1)
+		clientChunkInfo.OnChunkTransferred(chunk.Address(), chunkRootAddr, serverAddress2)
+		client.Config(clientChunkInfo)
 
-	// 	got, err := client.RetrieveChunk(context.Background(), chunkRootAddr, chunk.Address())
-	// 	if err != nil {
-	// 		t.Fatal(err)
-	// 	}
+		got, err := client.RetrieveChunk(context.Background(), chunkRootAddr, chunk.Address())
+		if err != nil {
+			t.Fatal(err)
+		}
 
-	// 	if !bytes.Equal(got.Data(), chunk.Data()) {
-	// 		t.Fatalf("got data %x, want %x", got.Data(), chunk.Data())
-	// 	}
-	// })
+		if !bytes.Equal(got.Data(), chunk.Data()) {
+			t.Fatalf("got data %x, want %x", got.Data(), chunk.Data())
+		}
+	})
 
 }
 
