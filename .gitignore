@@ -17,4 +17,4 @@
 # vendor/
 aufs.yaml
 /data
-./main
+main
