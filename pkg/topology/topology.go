@@ -32,6 +32,8 @@ type Driver interface {
 	io.Closer
 	Halter
 	Snapshot() *KadParams
+
+	EachKnownPeerer
 }
 
 type PeerAdder interface {
@@ -53,6 +55,13 @@ type EachPeerer interface {
 	EachPeer(EachPeerFunc) error
 	// EachPeerRev iterates from farthest bin to closest
 	EachPeerRev(EachPeerFunc) error
+}
+
+type EachKnownPeerer interface {
+	// EachKnownPeer iterates from closest bin to farthest
+	EachKnownPeer(EachPeerFunc) error
+	// EachKnownPeerRev iterates from farthest bin to closest
+	EachKnownPeerRev(EachPeerFunc) error
 }
 
 type EachNeighbor interface {

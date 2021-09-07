@@ -2,10 +2,11 @@ package routetab
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"github.com/gauss-project/aurorafs/pkg/addressbook"
 	"github.com/gauss-project/aurorafs/pkg/aurora"
-	"github.com/gauss-project/aurorafs/pkg/topology"
+	"github.com/gauss-project/aurorafs/pkg/topology/kademlia"
 	"time"
 
 	"github.com/gauss-project/aurorafs/pkg/boson"
@@ -21,21 +22,29 @@ const (
 	protocolVersion   = "1.0.0"
 	streamOnRouteReq  = "onRouteReq"
 	streamOnRouteResp = "onRouteResp"
+
+	peerConnectionAttemptTimeout = 5 * time.Second // Timeout for establishing a new connection with peer.
+)
+
+var (
+	errOverlayMismatch = errors.New("overlay mismatch")
+	errPruneEntry      = errors.New("prune entry")
 )
 
 type RouteTab interface {
 	GetRoute(ctx context.Context, target boson.Address) (dest *aurora.Address, routes []RouteItem, err error)
 	FindRoute(ctx context.Context, target boson.Address) (dest *aurora.Address, route []RouteItem, err error)
+	Connect(ctx context.Context, target boson.Address) error
 }
 
 type Service struct {
 	addr         boson.Address
-	streamer     p2p.Streamer
+	p2ps         p2p.StreamerConnect
 	logger       logging.Logger
 	metrics      metrics
 	pendingCalls *pendCallResTab
 	routeTable   *routeTable
-	topology     topology.Driver
+	kad          *kademlia.Kad
 	config       Config
 }
 
@@ -44,16 +53,16 @@ type Config struct {
 	NetworkID   uint64
 }
 
-func New(addr boson.Address, ctx context.Context, streamer p2p.Streamer, topology topology.Driver, store storage.StateStorer, logger logging.Logger) *Service {
+func New(addr boson.Address, ctx context.Context, p2ps p2p.StreamerConnect, kad *kademlia.Kad, store storage.StateStorer, logger logging.Logger) *Service {
 	// load route table from db only those valid item will be loaded
 
 	met := newMetrics()
 
 	service := &Service{
 		addr:         addr,
-		streamer:     streamer,
+		p2ps:         p2ps,
 		logger:       logger,
-		topology:     topology,
+		kad:          kad,
 		pendingCalls: newPendCallResTab(addr, logger, met),
 		routeTable:   newRouteTable(store, logger, met),
 		metrics:      met,
@@ -272,6 +281,75 @@ func (s *Service) GetRoute(_ context.Context, target boson.Address) (dest *auror
 	return
 }
 
+func (s *Service) Connect(ctx context.Context, target boson.Address) error {
+	var isConnected bool
+	_ = s.kad.EachPeer(func(address boson.Address, u uint8) (stop, jumpToNext bool, err error) {
+		if target.Equal(address) {
+			isConnected = true
+			return true, false, nil
+		}
+		return false, false, nil
+	})
+	if isConnected {
+		return nil
+	}
+	return s.connect(ctx, target)
+}
+
+func (s *Service) connect(ctx context.Context, peer boson.Address) (err error) {
+	var needFindUnderlay bool
+	auroraAddr, err := s.config.AddressBook.Get(peer)
+	switch {
+	case errors.Is(err, addressbook.ErrNotFound):
+		s.logger.Debugf("route: empty address book entry for peer %q", peer)
+		s.kad.KnownPeer().Remove(peer)
+		needFindUnderlay = true
+	case err != nil:
+		s.logger.Debugf("route: failed to get address book entry for peer %q: %v", peer, err)
+		needFindUnderlay = true
+	}
+	remove := func(peer boson.Address) {
+		s.kad.KnownPeer().Remove(peer)
+		if err := s.config.AddressBook.Remove(peer); err != nil {
+			s.logger.Debugf("route: could not remove peer %q from addressBook", peer)
+		}
+	}
+	if needFindUnderlay {
+		auroraAddr, _, err = s.FindRoute(ctx, peer)
+		if err != nil {
+			return err
+		}
+	}
+	s.logger.Infof("route: attempting to connect to peer %q", peer)
+
+	ctx, cancel := context.WithTimeout(ctx, peerConnectionAttemptTimeout)
+	defer cancel()
+
+	s.metrics.TotalOutboundConnectionAttempts.Inc()
+
+	switch i, err := s.p2ps.Connect(ctx, auroraAddr.Underlay); {
+	case errors.Is(err, p2p.ErrDialLightNode):
+		return errPruneEntry
+	case errors.Is(err, p2p.ErrAlreadyConnected):
+		if !i.Overlay.Equal(peer) {
+			return errOverlayMismatch
+		}
+		return nil
+	case errors.Is(err, context.Canceled):
+		return err
+	case err != nil:
+		s.logger.Debugf("could not connect to peer %q: %v", peer, err)
+		s.metrics.TotalOutboundConnectionFailedAttempts.Inc()
+		remove(peer)
+		return err
+	case !i.Overlay.Equal(peer):
+		_ = s.p2ps.Disconnect(peer)
+		_ = s.p2ps.Disconnect(i.Overlay)
+		return errOverlayMismatch
+	}
+	return nil
+}
+
 func (s *Service) saveRespRouteItem(ctx context.Context, neighbor boson.Address, resp pb.FindRouteResp) {
 	address, err := aurora.ParseAddress(resp.Underlay, resp.Dest, resp.Signature, s.config.NetworkID)
 	if err != nil {
@@ -288,7 +366,7 @@ func (s *Service) saveRespRouteItem(ctx context.Context, neighbor boson.Address,
 		s.logger.Errorf("route: target addressBook.Put %s", err.Error())
 		return
 	}
-	s.topology.AddPeers(target)
+	s.kad.AddPeers(target)
 
 	now := []RouteItem{{
 		CreateTime: time.Now().Unix(),
@@ -309,12 +387,12 @@ func (s *Service) saveRespRouteItem(ctx context.Context, neighbor boson.Address,
 }
 
 func (s *Service) getNeighbor(target boson.Address, alpha int32) (forward []boson.Address) {
-	forward, _ = s.topology.ClosestPeers(target, int(alpha))
+	forward, _ = s.kad.ClosestPeers(target, int(alpha))
 	return
 }
 
 func (s *Service) isNeighbor(dest boson.Address) (has bool) {
-	err := s.topology.EachPeer(func(address boson.Address, u uint8) (stop, jumpToNext bool, err error) {
+	err := s.kad.EachPeer(func(address boson.Address, u uint8) (stop, jumpToNext bool, err error) {
 		if dest.Equal(address) {
 			has = true
 			return
@@ -359,7 +437,7 @@ func (s *Service) doRouteResp(ctx context.Context, peer boson.Address, target *a
 
 func (s *Service) sendDataToNode(ctx context.Context, peer boson.Address, streamName string, msg protobuf.Message) {
 	s.logger.Tracef("route: sendDataToNode dest %s ,handler %s", peer.String(), streamName)
-	stream, err1 := s.streamer.NewStream(ctx, peer, nil, protocolName, protocolVersion, streamName)
+	stream, err1 := s.p2ps.NewStream(ctx, peer, nil, protocolName, protocolVersion, streamName)
 	if err1 != nil {
 		s.metrics.TotalErrors.Inc()
 		s.logger.Errorf("route: sendDataToNode NewStream, err1=%s", err1)

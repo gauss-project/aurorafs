@@ -51,6 +51,7 @@ type Node struct {
 	*routetab.Service
 	signer crypto.Signer
 	book   addressbook.Interface
+	p2ps   *streamtest.RecorderDisconnecter
 }
 
 type Network struct {
@@ -65,7 +66,7 @@ func newNetwork(t *testing.T) *Network {
 	ctx := context.Background()
 	serverAddr, kad, signer, ab := newTestKademlia(t)
 
-	serverStream := streamtest.New(streamtest.WithBaseAddr(serverAddr))
+	serverStream := streamtest.NewRecorderDisconnecter(streamtest.New(streamtest.WithBaseAddr(serverAddr)))
 	r1 := routetab.New(serverAddr, ctx, serverStream, kad, mockstate.NewStateStore(), nopLogger)
 	r1.SetConfig(routetab.Config{
 		AddressBook: ab,
@@ -74,10 +75,10 @@ func newNetwork(t *testing.T) *Network {
 
 	clientAddr, kad2, signer1, ab1 := newTestKademlia(t)
 
-	clientStream := streamtest.New(
+	clientStream := streamtest.NewRecorderDisconnecter(streamtest.New(
 		streamtest.WithProtocols(r1.Protocol()),
 		streamtest.WithBaseAddr(clientAddr),
-	) // connect to server
+	)) // connect to server
 
 	r2 := routetab.New(clientAddr, ctx, clientStream, kad2, mockstate.NewStateStore(), nopLogger)
 	r2.SetConfig(routetab.Config{
@@ -85,7 +86,7 @@ func newNetwork(t *testing.T) *Network {
 		NetworkID:   netWorkId,
 	})
 	serverStream.SetProtocols(r2.Protocol()) // connect to client
-	ns := &Network{ctx: ctx, server: Node{r1, signer, ab}, client: Node{r2, signer1, ab1}}
+	ns := &Network{ctx: ctx, server: Node{r1, signer, ab, serverStream}, client: Node{r2, signer1, ab1, clientStream}}
 
 	ns.server.addOne(t, clientAddr, signer)
 	ns.client.addOne(t, serverAddr, signer1)
@@ -812,7 +813,7 @@ func TestBusyNetworkResponse(t *testing.T) {
 		streamtest.WithBaseAddr(beforeClient),
 	)
 
-	ns.client.P2P().(*streamtest.Recorder).SetProtocols(beforeClientService.Protocol())
+	ns.client.p2ps.SetProtocols(beforeClientService.Protocol())
 
 	paths := make([]string, 3)
 	for i := 0; i < len(paths); i++ {
