@@ -103,7 +103,7 @@ func (s *Service) RetrieveChunk(ctx context.Context, rootAddr, chunkAddr boson.A
 	var (
 		totalRouteCount int = 5
 		resultC = make(chan retrievalResult, totalRouteCount)
-		// resultC = make(chan retrievalResult, totalRouteCount)
+		maxRequestAttemp int = 3
 	)
 
 	chunkResult := s.chunkinfo.GetChunkInfo(rootAddr, chunkAddr)
@@ -112,55 +112,55 @@ func (s *Service) RetrieveChunk(ctx context.Context, rootAddr, chunkAddr boson.A
 	}
 
 	routeList := make([]aco.Route, 0)
-	// routeCount := 0
 	for _, v := range chunkResult {
 		addr := boson.NewAddress(v)
 		newRoute := aco.NewRoute(addr, addr)
 		routeList = append(routeList, newRoute)
-		// routeCount += 1
-		// if routeCount >= totalRouteCount{
-		// 	break
-		// } 
 	}
 
 	acoRouteIndexList := s.acoServer.GetRouteAcoIndex(routeList, totalRouteCount)
 
-	for _, routeIndex := range acoRouteIndexList{
-		retrievalRoute := routeList[routeIndex]
+	requestAttemp := 0
+	for requestAttemp < maxRequestAttemp{
+		requestAttemp ++
 
-		s.metrics.PeerRequestCounter.Inc()
+		for _, routeIndex := range acoRouteIndexList{
+			retrievalRoute := routeList[routeIndex]
 
-		go func(){
-			s.acoServer.OnDownloadStart(retrievalRoute)
-			chunk, downloadDetail, err := s.retrieveChunk(ctx, retrievalRoute, rootAddr, chunkAddr)
-			select {
-			case resultC <- retrievalResult{
-				chunk:     			chunk,
-				downloadDetail: 	downloadDetail,
-				err:       			err,
-			}:
+			s.metrics.PeerRequestCounter.Inc()
+
+			go func(){
+				s.acoServer.OnDownloadStart(retrievalRoute)
+				chunk, downloadDetail, err := s.retrieveChunk(ctx, retrievalRoute, rootAddr, chunkAddr)
+				select {
+				case resultC <- retrievalResult{
+					chunk:     			chunk,
+					downloadDetail: 	downloadDetail,
+					err:       			err,
+				}:
+				case <-ctx.Done():
+				}
+			}()
+
+			select{
+			case <-ticker.C:
+				// continue next route
+			case result := <-resultC :
+				if result.err != nil{
+					s.logger.Debugf("retrieval: failed to get chunk (%s,%s) from route %s: %v", 
+						rootAddr, chunkAddr, retrievalRoute, result.err)
+					s.acoServer.OnDownloadFinish(retrievalRoute, nil)
+					// return nil, result.err
+				}else{
+					s.acoServer.OnDownloadFinish(retrievalRoute, result.downloadDetail)
+					s.chunkinfo.OnChunkTransferred(chunkAddr, rootAddr, s.addr)
+					return result.chunk, nil
+				}
 			case <-ctx.Done():
-			}
-		}()
-
-		select{
-		case <-ticker.C:
-			// continue next route
-		case result := <-resultC :
-			if result.err != nil{
-				s.logger.Debugf("retrieval: failed to get chunk (%s,%s) from route %s: %v", 
-					rootAddr, chunkAddr, retrievalRoute, result.err)
 				s.acoServer.OnDownloadFinish(retrievalRoute, nil)
-				// return nil, result.err
-			}else{
-				s.acoServer.OnDownloadFinish(retrievalRoute, result.downloadDetail)
-				s.chunkinfo.OnChunkTransferred(chunkAddr, rootAddr, s.addr)
-				return result.chunk, nil
+				s.logger.Tracef("retrieval: failed to get chunk: ctx.Done() (%s:%s): %v", rootAddr, chunkAddr, ctx.Err())
+				return nil, fmt.Errorf("retrieval: %w", ctx.Err())
 			}
-		case <-ctx.Done():
-			s.acoServer.OnDownloadFinish(retrievalRoute, nil)
-			s.logger.Tracef("retrieval: failed to get chunk: ctx.Done() (%s:%s): %v", rootAddr, chunkAddr, ctx.Err())
-			return nil, fmt.Errorf("retrieval: %w", ctx.Err())
 		}
 	}
 
@@ -223,16 +223,6 @@ func (s *Service) retrieveChunk(ctx context.Context, route aco.Route, rootAddr, 
 		}
 	}
 
-	// exists, err := s.storer.Put(ctx, storage.ModePutRequest, chunk)
-	// if err != nil {
-	// 	s.metrics.TotalErrors.Inc()
-	// 	return nil, nil, err
-	// }
-	// if !exists[0] {
-	// 	s.chunkinfo.OnChunkTransferred(chunkAddr, rootAddr, s.addr)
-	// }
-	// s.chunkinfo.OnChunkTransferred(chunkAddr, rootAddr, s.addr)
-
 	return chunk, &downloadDetail, nil 
 }
 
@@ -246,7 +236,7 @@ func (s *Service) handler(ctx context.Context, p p2p.Peer, stream p2p.Stream) (e
 			_ = stream.FullClose()
 		}
 	}()
-	fmt.Printf("handler addr: %v\n", s.addr.String())
+	s.logger.Tracef("handler addr: %v\n", s.addr.String())
 
 	var req pb.RequestChunk
 	if err := r.ReadMsgWithContext(ctx, &req); err != nil {
