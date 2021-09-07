@@ -110,6 +110,13 @@ func (ci *ChunkInfo) getChunkSize(cxt context.Context, rootCid boson.Address) (i
 	if err != nil {
 		return 0, err
 	}
+	if ci.cp.pyramid[rootCid.String()] == nil {
+		hashs := make([][]byte, 0)
+		for k := range v {
+			hashs = append(hashs, []byte(k))
+		}
+		ci.updateChunkPyramid(rootCid, trie, hashs)
+	}
 	var i int
 	for _, t := range trie {
 		for _, _ = range t {
