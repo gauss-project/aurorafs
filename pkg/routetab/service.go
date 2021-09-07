@@ -236,10 +236,7 @@ func (s *Service) FindRoute(ctx context.Context, target boson.Address) (dest *au
 	if err != nil {
 		s.logger.Debugf("route: FindRoute dest %s", target.String(), err)
 		if s.isNeighbor(target) {
-			dest, err = s.config.AddressBook.Get(target)
-			if err != nil {
-				return nil, nil, err
-			}
+			err = fmt.Errorf("route: FindRoute dest %s is neighbor", target.String())
 			return
 		}
 		forward := s.getNeighbor(target, defaultNeighborAlpha)
@@ -400,7 +397,7 @@ func (s *Service) isNeighbor(dest boson.Address) (has bool) {
 			has = true
 			return
 		}
-		return false, true, nil
+		return false, false, nil
 	})
 	if err != nil {
 		s.logger.Warningf("route: isNeighbor %s", err.Error())
