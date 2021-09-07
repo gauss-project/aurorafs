@@ -8,9 +8,9 @@ import (
 	"errors"
 	"net/http"
 
+	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/jsonhttp"
 	"github.com/gauss-project/aurorafs/pkg/p2p"
-	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gorilla/mux"
 	"github.com/multiformats/go-multiaddr"
 )
@@ -31,14 +31,6 @@ func (s *Service) peerConnectHandler(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		s.logger.Debugf("debug api: peer connect %s: %v", addr, err)
 		s.logger.Errorf("unable to connect to peer %s", addr)
-		jsonhttp.InternalServerError(w, err)
-		return
-	}
-
-	err = s.topologyDriver.AddPeers(r.Context(), bzzAddr.Overlay)
-	if err != nil {
-		s.logger.Debugf("debug api: kademlia add peer %s: %v", bzzAddr.Overlay, err)
-		s.logger.Errorf("debug api: kademlia add peer %s", bzzAddr.Overlay)
 		jsonhttp.InternalServerError(w, err)
 		return
 	}
