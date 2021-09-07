@@ -683,7 +683,7 @@ func (k *Kad) connect(ctx context.Context, peer boson.Address, ma ma.Multiaddr) 
 	case errors.Is(err, context.Canceled):
 		return err
 	case err != nil:
-		k.logger.Debugf("could not connect to peer %q: %v", peer, err)
+		k.logger.Debugf("kademlia: could not connect to peer %q: %v", peer, err)
 
 		retryTime := time.Now().Add(timeToRetry)
 		var e *p2p.ConnectionBackoffError

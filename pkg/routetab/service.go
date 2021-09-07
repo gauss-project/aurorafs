@@ -234,7 +234,7 @@ func (s *Service) onRouteResp(ctx context.Context, p p2p.Peer, stream p2p.Stream
 func (s *Service) FindRoute(ctx context.Context, target boson.Address) (dest *aurora.Address, routes []RouteItem, err error) {
 	dest, routes, err = s.GetRoute(ctx, target)
 	if err != nil {
-		s.logger.Debugf("route: FindRoute dest %s", target.String(), err)
+		s.logger.Debugf("route: FindRoute dest %s %s", target.String(), err.Error())
 		if s.isNeighbor(target) {
 			err = fmt.Errorf("route: FindRoute dest %s is neighbor", target.String())
 			return
@@ -338,7 +338,7 @@ func (s *Service) connect(ctx context.Context, peer boson.Address) (err error) {
 	case errors.Is(err, context.Canceled):
 		return err
 	case err != nil:
-		s.logger.Debugf("could not connect to peer %q: %v", peer, err)
+		s.logger.Debugf("route: could not connect to peer %q: %v", peer, err)
 		s.metrics.TotalOutboundConnectionFailedAttempts.Inc()
 		remove(peer)
 		return err
