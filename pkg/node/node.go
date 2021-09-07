@@ -375,6 +375,10 @@ func NewBee(addr string, bosonAddress boson.Address, publicKey ecdsa.PublicKey, 
 	if err = p2ps.AddProtocol(route.Protocol()); err != nil {
 		return nil, fmt.Errorf("routetab service: %w", err)
 	}
+	route.SetConfig(routetab.Config{
+		AddressBook: addressBook,
+		NetworkID:   networkID,
+	})
 
 	var path string
 
