@@ -2,13 +2,13 @@ package retrieval
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
-	"errors"
 
 	"github.com/gauss-project/aurorafs/pkg/boson"
-	"github.com/gauss-project/aurorafs/pkg/retrieval/pb"
 	"github.com/gauss-project/aurorafs/pkg/retrieval/aco"
+	"github.com/gauss-project/aurorafs/pkg/retrieval/pb"
 	"github.com/gauss-project/aurorafs/pkg/routetab"
 
 	"github.com/gauss-project/aurorafs/pkg/logging"
@@ -18,7 +18,6 @@ import (
 	"github.com/gauss-project/aurorafs/pkg/p2p/protobuf"
 	"github.com/gauss-project/aurorafs/pkg/soc"
 	"github.com/gauss-project/aurorafs/pkg/storage"
-	"github.com/gauss-project/aurorafs/pkg/topology"
 	"github.com/gauss-project/aurorafs/pkg/tracing"
 	"github.com/opentracing/opentracing-go"
 
@@ -44,7 +43,6 @@ type Interface interface {
 type Service struct {
 	addr          		boson.Address
 	streamer      		p2p.Streamer
-	peerSuggester 		topology.EachPeerer
 	storer        		storage.Storer
 	logger        		logging.Logger
 	metrics 			metrics
@@ -66,12 +64,11 @@ const (
 	retrieveRetryIntervalDuration = 5 * time.Second
 )
 
-func New(addr boson.Address, streamer p2p.Streamer, chunkPeerer topology.EachPeerer, routeTable routetab.RouteTab, storer storage.Storer, logger logging.Logger, tracer *tracing.Tracer) *Service {
+func New(addr boson.Address, streamer p2p.Streamer, routeTable routetab.RouteTab, storer storage.Storer, logger logging.Logger, tracer *tracing.Tracer) *Service {
 	acoServer := aco.NewAcoServer()
 	return &Service{
 		addr:          addr,
 		streamer:      streamer,
-		peerSuggester: chunkPeerer,
 		storer:        storer,
 		logger:        logger,
 		metrics: newMetrics(),
