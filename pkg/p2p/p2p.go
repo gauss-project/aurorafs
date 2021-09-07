@@ -8,10 +8,10 @@ package p2p
 
 import (
 	"context"
+	"github.com/gauss-project/aurorafs/pkg/aurora"
 	"io"
 	"time"
 
-	"github.com/gauss-project/aurorafs/pkg/aurora"
 	"github.com/gauss-project/aurorafs/pkg/boson"
 	ma "github.com/multiformats/go-multiaddr"
 )
@@ -19,14 +19,18 @@ import (
 // Service provides methods to handle p2p Peers and Protocols.
 type Service interface {
 	AddProtocol(ProtocolSpec) error
-	// Connect to a peer but do not notify topology about the established connection.
-	Connect(ctx context.Context, addr ma.Multiaddr) (address *aurora.Address, err error)
+	Connect
 	Disconnecter
 	Peers() []Peer
 	BlocklistedPeers() ([]Peer, error)
 	Addresses() ([]ma.Multiaddr, error)
 	SetPickyNotifier(PickyNotifier)
 	Halter
+}
+
+type Connect interface {
+	// Connect to a peer but do not notify topology about the established connection.
+	Connect(ctx context.Context, addr ma.Multiaddr) (address *aurora.Address, err error)
 }
 
 type Disconnecter interface {
@@ -68,6 +72,12 @@ type Streamer interface {
 
 type StreamerDisconnecter interface {
 	Streamer
+	Disconnecter
+}
+
+type StreamerConnect interface {
+	Streamer
+	Connect
 	Disconnecter
 }
 
