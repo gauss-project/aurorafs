@@ -107,6 +107,12 @@ func (c *command) initStartCmd() (err error) {
 				return err
 			}
 
+			bootNode := c.config.GetBool(optionNameBootnodeMode)
+			fullNode := c.config.GetBool(optionNameFullNode)
+			if fullNode {
+				logger.Info("start node mode full.")
+			}
+
 			b, err := node.NewBee(c.config.GetString(optionNameP2PAddr), signerConfig.address, *signerConfig.publicKey, signerConfig.signer, c.config.GetUint64(optionNameNetworkID), logger, signerConfig.libp2pPrivateKey, signerConfig.pssPrivateKey, node.Options{
 				DataDir:                  c.config.GetString(optionNameDataDir),
 				DBCapacity:               c.config.GetUint64(optionNameDBCapacity),
@@ -122,6 +128,7 @@ func (c *command) initStartCmd() (err error) {
 				EnableQUIC:               c.config.GetBool(optionNameP2PQUICEnable),
 				WelcomeMessage:           c.config.GetString(optionWelcomeMessage),
 				Bootnodes:                c.config.GetStringSlice(optionNameBootnodes),
+				FullNode:                 fullNode,
 				OracleEndpoint:           c.config.GetString(optionNameOracleAPIAddr),
 				CORSAllowedOrigins:       c.config.GetStringSlice(optionCORSAllowedOrigins),
 				Standalone:               c.config.GetBool(optionNameStandalone),
@@ -135,7 +142,7 @@ func (c *command) initStartCmd() (err error) {
 				PaymentEarly:             c.config.GetString(optionNamePaymentEarly),
 				ResolverConnectionCfgs:   resolverCfgs,
 				GatewayMode:              c.config.GetBool(optionNameGatewayMode),
-				BootnodeMode:             c.config.GetBool(optionNameBootnodeMode),
+				BootnodeMode:             bootNode,
 				SwapEndpoint:             c.config.GetString(optionNameSwapEndpoint),
 				SwapFactoryAddress:       c.config.GetString(optionNameSwapFactoryAddress),
 				SwapInitialDeposit:       c.config.GetString(optionNameSwapInitialDeposit),

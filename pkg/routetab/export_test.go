@@ -6,19 +6,19 @@ package routetab
 
 import (
 	"context"
-
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/gauss-project/aurorafs/pkg/aurora"
 	"github.com/gauss-project/aurorafs/pkg/boson"
-	"github.com/gauss-project/aurorafs/pkg/kademlia"
 	"github.com/gauss-project/aurorafs/pkg/p2p"
 	"github.com/gauss-project/aurorafs/pkg/routetab/pb"
+	"github.com/gauss-project/aurorafs/pkg/topology"
 )
 
 var (
 	ProtocolName        = protocolName
 	ProtocolVersion     = protocolVersion
-	StreamFindRouteReq  = streamFindRouteReq
-	StreamFindRouteResp = streamFindRouteResp
+	StreamFindRouteReq  = streamOnRouteReq
+	StreamFindRouteResp = streamOnRouteResp
 
 	CheckExpired      = checkExpired
 	MergeRouteList    = mergeRouteList
@@ -30,11 +30,11 @@ var (
 )
 
 func (s *Service) DoReq(ctx context.Context, src boson.Address, peer p2p.Peer, dest boson.Address, req *pb.FindRouteReq, ch chan struct{}) {
-	s.doReq(ctx, src, peer, dest, req, ch)
+	s.doRouteReq(ctx, src, peer.Address, dest, req, ch)
 }
 
-func (s *Service) DoResp(ctx context.Context, peer p2p.Peer, dest boson.Address, routes []RouteItem) {
-	s.doResp(ctx, peer, dest, routes)
+func (s *Service) DoResp(ctx context.Context, peer p2p.Peer, target *aurora.Address, routes []RouteItem) {
+	s.doRouteResp(ctx, peer.Address, target, routes)
 }
 
 func (s *Service) RouteTab() *routeTable {
@@ -45,8 +45,8 @@ func (s *Service) Address() boson.Address {
 	return s.addr
 }
 
-func (s *Service) Kad() *kademlia.Kad {
-	return s.kad
+func (s *Service) Kad() topology.Driver {
+	return s.topology
 }
 
 func (s *Service) P2P() p2p.Streamer {

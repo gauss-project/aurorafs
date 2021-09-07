@@ -26,7 +26,9 @@ type Interface interface {
 	Remover
 	// Overlays returns a list of all overlay addresses saved in addressbook.
 	Overlays() ([]boson.Address, error)
-	// Addresses returns a list of all aurora.Address-es saved in addressbook.
+	// IterateOverlays exposes overlays in a form of an iterator.
+	IterateOverlays(func(boson.Address) (bool, error)) error
+	// Addresses returns a list of all bzz.Address-es saved in addressbook.
 	Addresses() ([]aurora.Address, error)
 }
 
@@ -36,12 +38,12 @@ type GetPutter interface {
 }
 
 type Getter interface {
-	// Get returns pointer to saved aurora.Address for requested overlay address.
+	// Get returns pointer to saved bzz.Address for requested overlay address.
 	Get(overlay boson.Address) (addr *aurora.Address, err error)
 }
 
 type Putter interface {
-	// Put saves relation between peer overlay address and aurora.Address address.
+	// Put saves relation between peer overlay address and bzz.Address address.
 	Put(overlay boson.Address, addr aurora.Address) (err error)
 }
 
@@ -84,8 +86,8 @@ func (s *store) Remove(overlay boson.Address) error {
 	return s.store.Delete(keyPrefix + overlay.String())
 }
 
-func (s *store) Overlays() (overlays []boson.Address, err error) {
-	err = s.store.Iterate(keyPrefix, func(key, _ []byte) (stop bool, err error) {
+func (s *store) IterateOverlays(cb func(boson.Address) (bool, error)) error {
+	return s.store.Iterate(keyPrefix, func(key, _ []byte) (stop bool, err error) {
 		k := string(key)
 		if !strings.HasPrefix(k, keyPrefix) {
 			return true, nil
@@ -98,6 +100,19 @@ func (s *store) Overlays() (overlays []boson.Address, err error) {
 		if err != nil {
 			return true, err
 		}
+		stop, err = cb(addr)
+		if err != nil {
+			return true, err
+		}
+		if stop {
+			return true, nil
+		}
+		return false, nil
+	})
+}
+
+func (s *store) Overlays() (overlays []boson.Address, err error) {
+	err = s.IterateOverlays(func(addr boson.Address) (stop bool, err error) {
 		overlays = append(overlays, addr)
 		return false, nil
 	})

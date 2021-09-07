@@ -9,6 +9,7 @@ import (
 	"sync"
 
 	"github.com/gauss-project/aurorafs/pkg/boson"
+	"github.com/gauss-project/aurorafs/pkg/p2p"
 	"github.com/gauss-project/aurorafs/pkg/topology"
 )
 
@@ -60,11 +61,23 @@ func NewMockKademlia(o ...Option) *Mock {
 
 // AddPeers is called when a peers are added to the topology backlog
 // for further processing by connectivity strategy.
-func (m *Mock) AddPeers(ctx context.Context, addr ...boson.Address) error {
+func (m *Mock) AddPeers(addr ...boson.Address) {
 	panic("not implemented") // TODO: Implement
 }
 
-func (m *Mock) ClosestPeer(addr boson.Address, skipPeers ...boson.Address) (peerAddr boson.Address, err error) {
+func (m *Mock) ClosestPeer(addr boson.Address, _ bool, skipPeers ...boson.Address) (peerAddr boson.Address, err error) {
+	panic("not implemented") // TODO: Implement
+}
+
+func (m *Mock) IsWithinDepth(adr boson.Address) bool {
+	panic("not implemented") // TODO: Implement
+}
+
+func (m *Mock) EachNeighbor(topology.EachPeerFunc) error {
+	panic("not implemented") // TODO: Implement
+}
+
+func (m *Mock) EachNeighborRev(topology.EachPeerFunc) error {
 	panic("not implemented") // TODO: Implement
 }
 
@@ -113,17 +126,34 @@ func (m *Mock) NeighborhoodDepth() uint8 {
 }
 
 // Connected is called when a peer dials in.
-func (m *Mock) Connected(_ context.Context, addr boson.Address) error {
+func (m *Mock) Connected(_ context.Context, peer p2p.Peer, _ bool) error {
 	m.mtx.Lock()
-	m.peers = append(m.peers, addr)
+	m.peers = append(m.peers, peer.Address)
 	m.mtx.Unlock()
 	m.Trigger()
 	return nil
 }
 
 // Disconnected is called when a peer disconnects.
-func (m *Mock) Disconnected(_ boson.Address) {
+func (m *Mock) Disconnected(peer p2p.Peer) {
+	m.mtx.Lock()
+	defer m.mtx.Unlock()
+
+	for i, addr := range m.peers {
+		if addr.Equal(peer.Address) {
+			m.peers = append(m.peers[:i], m.peers[i+1:]...)
+			break
+		}
+	}
 	m.Trigger()
+}
+
+func (m *Mock) Announce(_ context.Context, _ boson.Address, _ bool) error {
+	return nil
+}
+
+func (m *Mock) AnnounceTo(_ context.Context, _, _ boson.Address, _ bool) error {
+	return nil
 }
 
 func (m *Mock) SubscribePeersChange() (c <-chan struct{}, unsubscribe func()) {
@@ -170,7 +200,10 @@ func (m *Mock) ResetPeers() {
 	m.eachPeerRev = nil
 }
 
-func (m *Mock) Close() error {
+func (m *Mock) Halt()        {}
+func (m *Mock) Close() error { return nil }
+
+func (m *Mock) Snapshot() *topology.KadParams {
 	panic("not implemented") // TODO: Implement
 }
 
