@@ -116,7 +116,9 @@ func (cn *chunkInfoTabNeighbor) getNeighborChunkInfo(rootCid boson.Address) map[
 	overlays := cn.overlays[rc]
 	for _, overlay := range overlays {
 		bv := cn.presence[rc][overlay.String()]
-		res[overlay.String()] = bv.Bytes()
+		if bv != nil {
+			res[overlay.String()] = bv.Bytes()
+		}
 	}
 	return res
 }
