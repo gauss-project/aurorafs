@@ -203,11 +203,6 @@ func TestHandlerPyramid(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	var sort int
-	client.storer.Get(generateKey(pyramidKeyPrefix, rootCid, boson.NewAddress(pram[0][0])), &sort)
-	if sort == 0 {
-		t.Fatalf("got %v records, want %v", sort, 10)
-	}
 	records, err := recorder.Records(serverAddress, "chunkinfo", "1.0.0", "chunkpyramidhash")
 	if err != nil {
 		t.Fatal(err)
@@ -323,7 +318,7 @@ func mockUploadFile(t *testing.T) (boson.Address, traversal.Service) {
 func mockChunkInfo(traversal traversal.Service, r *streamtest.Recorder) *ChunkInfo {
 	logger := logging.New(ioutil.Discard, 0)
 	ret := smock.NewStateStore()
-	server := New(r, logger, traversal, ret, "127.0.0.1:8000")
+	server := New(r, logger, traversal, ret, nil, "127.0.0.1:8000")
 	server.InitChunkInfo()
 	return server
 }
