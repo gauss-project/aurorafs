@@ -125,7 +125,7 @@ func (ci *ChunkInfo) Init(ctx context.Context, authInfo []byte, rootCid boson.Ad
 		return false
 	}
 	if resp.StatusCode != 400 {
-		ci.logger.Errorf("expected %d response, got %d", http.StatusOK, r.StatusCode)
+		ci.logger.Errorf("expected %d response, got %d", 400, resp.StatusCode)
 		return false
 	}
 	addrs := resp.Body.Addresses

@@ -2,10 +2,10 @@ package routetab
 
 import (
 	"context"
-	"github.com/gauss-project/aurorafs/pkg/aurora"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/gauss-project/aurorafs/pkg/aurora"
 	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/logging"
 	"github.com/gogf/gf/os/gmlock"

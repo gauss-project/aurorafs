@@ -19,6 +19,7 @@ import (
 	"github.com/gauss-project/aurorafs/pkg/storage"
 	"github.com/gauss-project/aurorafs/pkg/tracing"
 	"github.com/opentracing/opentracing-go"
+	"resenje.org/singleflight"
 )
 
 type requestSourceContextKey struct{}
@@ -36,15 +37,16 @@ type Interface interface {
 }
 
 type Service struct {
-	addr      boson.Address
-	streamer  p2p.Streamer
-	storer    storage.Storer
-	logger    logging.Logger
-	metrics   metrics
-	tracer    *tracing.Tracer
-	chunkinfo chunkinfo.Interface
-	acoServer *aco.AcoServer
-	routeTab  routetab.RouteTab
+	addr          		boson.Address
+	streamer      		p2p.Streamer
+	storer        		storage.Storer
+	logger        		logging.Logger
+	metrics 			metrics
+	tracer  			*tracing.Tracer
+	chunkinfo     		chunkinfo.Interface
+	acoServer			*aco.AcoServer
+	routeTab        	routetab.RouteTab
+	singleflight  		singleflight.Group
 }
 
 type retrievalResult struct {
@@ -92,82 +94,92 @@ func (s *Service) Protocol() p2p.ProtocolSpec {
 
 func (s *Service) RetrieveChunk(ctx context.Context, rootAddr, chunkAddr boson.Address) (chunk boson.Chunk, err error) {
 	s.metrics.RequestCounter.Inc()
-	ticker := time.NewTicker(retrieveRetryIntervalDuration)
-	defer ticker.Stop()
 
-	var (
-		totalRouteCount  int = 5
-		resultC              = make(chan retrievalResult, totalRouteCount)
-		maxRequestAttemp int = 3
-	)
+	flightRoute := fmt.Sprintf("%v,%v", rootAddr, chunkAddr)
 
-	chunkResult := s.chunkinfo.GetChunkInfo(rootAddr, chunkAddr)
-	if len(chunkResult) == 0 {
-		return nil, fmt.Errorf("no result from chunkinfo")
-	}
+	v, _, err := s.singleflight.Do(ctx,flightRoute, func(ctx context.Context) (interface{}, error) {
+		var (
+			maxRequestAttemp int = 3
+			totalRouteCount int = 5
+			resultC = make(chan retrievalResult, totalRouteCount)
+		)
 
-	routeList := make([]aco.Route, 0)
-	for _, v := range chunkResult {
-		addr := boson.NewAddress(v)
-		newRoute := aco.NewRoute(addr, addr)
-		routeList = append(routeList, newRoute)
-	}
+		ticker := time.NewTicker(retrieveRetryIntervalDuration)
+		defer ticker.Stop()
 
-	acoRouteIndexList := s.acoServer.GetRouteAcoIndex(routeList, totalRouteCount)
+		chunkResult := s.chunkinfo.GetChunkInfo(rootAddr, chunkAddr)
+		if len(chunkResult) == 0{
+			return nil, fmt.Errorf("no result from chunkinfo")
+		}
 
-	requestAttemp := 0
-	for requestAttemp < maxRequestAttemp {
-		requestAttemp++
+		routeList := make([]aco.Route, 0)
+		for _, v := range chunkResult {
+			addr := boson.NewAddress(v)
+			newRoute := aco.NewRoute(addr, addr)
+			routeList = append(routeList, newRoute)
+		}
 
-		for _, routeIndex := range acoRouteIndexList {
-			retrievalRoute := routeList[routeIndex]
+		acoRouteIndexList := s.acoServer.GetRouteAcoIndex(routeList, totalRouteCount)
 
-			s.metrics.PeerRequestCounter.Inc()
+		requestAttemp := 0
+		for requestAttemp < maxRequestAttemp{
+			requestAttemp ++
 
-			go func() {
-				s.acoServer.OnDownloadStart(retrievalRoute)
-				chunk, downloadDetail, err := s.retrieveChunk(ctx, retrievalRoute, rootAddr, chunkAddr)
-				select {
-				case resultC <- retrievalResult{
-					chunk:          chunk,
-					downloadDetail: downloadDetail,
-					err:            err,
-				}:
+			for _, routeIndex := range acoRouteIndexList{
+				retrievalRoute := routeList[routeIndex]
+
+				s.metrics.PeerRequestCounter.Inc()
+
+				go func(){
+					s.acoServer.OnDownloadStart(retrievalRoute)
+					chunk, downloadDetail, err := s.retrieveChunk(ctx, retrievalRoute, rootAddr, chunkAddr)
+					select {
+					case resultC <- retrievalResult{
+						chunk:     			chunk,
+						downloadDetail: 	downloadDetail,
+						err:       			err,
+					}:
+					case <-ctx.Done():
+					}
+				}()
+
+				select{
+				case <-ticker.C:
+					// continue next route
+				case result := <-resultC :
+					if result.err != nil{
+						s.logger.Debugf("retrieval: failed to get chunk (%s,%s) from route %s: %v", 
+							rootAddr, chunkAddr, retrievalRoute, result.err)
+						s.acoServer.OnDownloadFinish(retrievalRoute, nil)
+						// return nil, result.err
+					}else{
+						s.acoServer.OnDownloadFinish(retrievalRoute, result.downloadDetail)
+						s.chunkinfo.OnChunkTransferred(chunkAddr, rootAddr, s.addr)
+						return result.chunk, nil
+					}
 				case <-ctx.Done():
-				}
-			}()
-
-			select {
-			case <-ticker.C:
-				// continue next route
-			case result := <-resultC:
-				if result.err != nil {
-					s.logger.Debugf("retrieval: failed to get chunk (%s,%s) from route %s: %v",
-						rootAddr, chunkAddr, retrievalRoute, result.err)
 					s.acoServer.OnDownloadFinish(retrievalRoute, nil)
-					// return nil, result.err
-				} else {
-					s.acoServer.OnDownloadFinish(retrievalRoute, result.downloadDetail)
-					s.chunkinfo.OnChunkTransferred(chunkAddr, rootAddr, s.addr)
-					return result.chunk, nil
+					s.logger.Tracef("retrieval: failed to get chunk: ctx.Done() (%s:%s): %v", rootAddr, chunkAddr, ctx.Err())
+					return nil, fmt.Errorf("retrieval: %w", ctx.Err())
 				}
-			case <-ctx.Done():
-				s.acoServer.OnDownloadFinish(retrievalRoute, nil)
-				s.logger.Tracef("retrieval: failed to get chunk: ctx.Done() (%s:%s): %v", rootAddr, chunkAddr, ctx.Err())
-				return nil, fmt.Errorf("retrieval: %w", ctx.Err())
 			}
 		}
-	}
 
-	return nil, storage.ErrNotFound
+		return nil, storage.ErrNotFound
+	})
+
+	if err != nil{
+		return nil, err
+	}
+	return v.(boson.Chunk), nil
 }
 
 func (s *Service) retrieveChunk(ctx context.Context, route aco.Route, rootAddr, chunkAddr boson.Address) (boson.Chunk, *aco.DownloadDetail, error) {
 	if !route.LinkNode.Equal(route.TargetNode) {
 		return nil, nil, fmt.Errorf("not direct link, %v,%v(not same)", route.LinkNode.String(), route.TargetNode.String())
 	}
-	if err := s.routeTab.Connect(ctx, route.LinkNode); err != nil {
-		return nil, nil, fmt.Errorf("connect failed")
+	if err := s.routeTab.Connect(ctx, route.LinkNode); err != nil{
+		return nil, nil, fmt.Errorf("connect failed, peer: %v", route.LinkNode.String());
 	}
 
 	stream, err := s.streamer.NewStream(ctx, route.LinkNode, nil, protocolName, protocolVersion, streamName)

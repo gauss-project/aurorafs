@@ -398,6 +398,7 @@ type RecorderDisconnecter struct {
 func NewRecorderDisconnecter(r *Recorder) *RecorderDisconnecter {
 	return &RecorderDisconnecter{
 		Recorder:     r,
+		connected:    make(map[string]struct{}),
 		disconnected: make(map[string]struct{}),
 		blocklisted:  make(map[string]time.Duration),
 	}

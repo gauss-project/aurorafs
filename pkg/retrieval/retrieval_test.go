@@ -375,7 +375,6 @@ func TestRetrievePreemptiveRetry(t *testing.T){
 		client := retrieval.New(clientAddress, recorder, &mockRouteTable, nil, logger, nil)
 		clientChunkInfo := NewMockChunkInfo()
 
-		clientChunkInfo.OnChunkTransferred(chunk.Address(), chunkRootAddr, serverAddress1)
 		clientChunkInfo.OnChunkTransferred(chunk.Address(), chunkRootAddr, serverAddress2)
 		client.Config(clientChunkInfo)
 
