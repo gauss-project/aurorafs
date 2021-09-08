@@ -18,6 +18,7 @@ import (
 	"github.com/gauss-project/aurorafs/pkg/p2p"
 	"github.com/gauss-project/aurorafs/pkg/p2p/protobuf"
 	"github.com/gauss-project/aurorafs/pkg/p2p/streamtest"
+	"github.com/gauss-project/aurorafs/pkg/routetab"
 	smock "github.com/gauss-project/aurorafs/pkg/statestore/mock"
 	"github.com/gauss-project/aurorafs/pkg/storage"
 	"github.com/gauss-project/aurorafs/pkg/storage/mock"
@@ -318,7 +319,8 @@ func mockUploadFile(t *testing.T) (boson.Address, traversal.Service) {
 func mockChunkInfo(traversal traversal.Service, r *streamtest.Recorder) *ChunkInfo {
 	logger := logging.New(ioutil.Discard, 0)
 	ret := smock.NewStateStore()
-	server := New(r, logger, traversal, ret, nil, "127.0.0.1:8000")
+	route := routetab.New(boson.ZeroAddress, context.Background(), nil, nil, ret, logger)
+	server := New(r, logger, traversal, ret, route, "127.0.0.1:8000")
 	server.InitChunkInfo()
 	return server
 }
