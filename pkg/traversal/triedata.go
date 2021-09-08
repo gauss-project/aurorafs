@@ -16,6 +16,7 @@ import (
 	"github.com/gauss-project/aurorafs/pkg/file/pipeline"
 	"github.com/gauss-project/aurorafs/pkg/file/pipeline/bmt"
 	"github.com/gauss-project/aurorafs/pkg/manifest"
+	"github.com/gauss-project/aurorafs/pkg/sctx"
 	"github.com/gauss-project/aurorafs/pkg/storage"
 )
 
@@ -429,12 +430,19 @@ func (s *traversalService) CheckTrieData(ctx context.Context, reference boson.Ad
 	}
 
 	// here we can put those data into localstore.
+	rctx := sctx.SetRootCID(ctx, reference)
+	// first we put root chunk
+	_, err = s.storer.Put(rctx, storage.ModePutRequest, boson.NewChunk(reference, trieData[reference.String()]))
+	if err != nil {
+		return
+	}
+	delete(p.seen, reference.String())
 	for k := range p.seen {
 		addr, err = boson.ParseHexAddress(k)
 		if err != nil {
 			return
 		}
-		_, err = s.storer.Put(ctx, storage.ModePutUpload, boson.NewChunk(addr, trieData[k]))
+		_, err = s.storer.Put(rctx, storage.ModePutRequest, boson.NewChunk(addr, trieData[k]))
 		if err != nil {
 			return
 		}

@@ -8,9 +8,9 @@ import (
 	"errors"
 	"net/http"
 
+	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/jsonhttp"
 	"github.com/gauss-project/aurorafs/pkg/p2p"
-	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gorilla/mux"
 	"github.com/multiformats/go-multiaddr"
 )
@@ -70,18 +70,5 @@ type peersResponse struct {
 func (s *Service) peersHandler(w http.ResponseWriter, r *http.Request) {
 	jsonhttp.OK(w, peersResponse{
 		Peers: s.p2p.Peers(),
-	})
-}
-
-func (s *Service) blocklistedPeersHandler(w http.ResponseWriter, r *http.Request) {
-	peers, err := s.p2p.BlocklistedPeers()
-	if err != nil {
-		s.logger.Debugf("debug api: blocklisted peers: %v", err)
-		jsonhttp.InternalServerError(w, nil)
-		return
-	}
-
-	jsonhttp.OK(w, peersResponse{
-		Peers: peers,
 	})
 }

@@ -10,6 +10,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/syndtr/goleveldb/leveldb"
 	"io"
 
 	"github.com/gauss-project/aurorafs/pkg/boson"
@@ -58,8 +59,8 @@ func (m ModePut) String() string {
 	switch m {
 	case ModePutRequest:
 		return "Request"
-	case ModePutSync:
-		return "Sync"
+	case ModePutRequestPin:
+		return "RequestPin"
 	case ModePutUpload:
 		return "Upload"
 	case ModePutUploadPin:
@@ -73,8 +74,6 @@ func (m ModePut) String() string {
 const (
 	// ModePutRequest: when a chunk is received as a result of retrieve request and delivery
 	ModePutRequest ModePut = iota
-	// ModePutSync: when a chunk is received via syncing
-	ModePutSync
 	// ModePutUpload: when a chunk is created by local upload
 	ModePutUpload
 	// ModePutUploadPin: the same as ModePutUpload but also pin the chunk atomically with the put
@@ -175,6 +174,8 @@ type StateStorer interface {
 	Put(key string, i interface{}) (err error)
 	Delete(key string) (err error)
 	Iterate(prefix string, iterFunc StateIterFunc) (err error)
+	// DB returns the underlying DB storage.
+	DB() *leveldb.DB
 	io.Closer
 }
 

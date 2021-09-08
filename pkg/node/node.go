@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-// Package node defines the concept of a Bee node
+// Package node defines the concept of a Aurora node
 // by bootstrapping and injecting all necessary
 // dependencies.
 package node
@@ -11,42 +11,33 @@ import (
 	"context"
 	"crypto/ecdsa"
 	"fmt"
+	"github.com/gauss-project/aurorafs/pkg/chunkinfo"
+	"github.com/gauss-project/aurorafs/pkg/hive2"
+	"github.com/gauss-project/aurorafs/pkg/routetab"
+	"github.com/gauss-project/aurorafs/pkg/shed"
+	"github.com/gauss-project/aurorafs/pkg/topology/kademlia"
+	"github.com/gauss-project/aurorafs/pkg/topology/lightnode"
 	"io"
 	"log"
-	"math/big"
 	"net"
 	"net/http"
 	"path/filepath"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/ethclient"
-	"github.com/gauss-project/aurorafs/pkg/accounting"
 	"github.com/gauss-project/aurorafs/pkg/addressbook"
 	"github.com/gauss-project/aurorafs/pkg/api"
 	"github.com/gauss-project/aurorafs/pkg/crypto"
 	"github.com/gauss-project/aurorafs/pkg/debugapi"
 
-	"github.com/gauss-project/aurorafs/pkg/hive"
-	"github.com/gauss-project/aurorafs/pkg/kademlia"
+	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/localstore"
 	"github.com/gauss-project/aurorafs/pkg/logging"
 	"github.com/gauss-project/aurorafs/pkg/metrics"
 	"github.com/gauss-project/aurorafs/pkg/netstore"
 	"github.com/gauss-project/aurorafs/pkg/p2p/libp2p"
 	"github.com/gauss-project/aurorafs/pkg/pingpong"
-	"github.com/gauss-project/aurorafs/pkg/pricing"
-
-	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/resolver/multiresolver"
 	"github.com/gauss-project/aurorafs/pkg/retrieval"
-	settlement "github.com/gauss-project/aurorafs/pkg/settlement"
-	"github.com/gauss-project/aurorafs/pkg/settlement/pseudosettle"
-	"github.com/gauss-project/aurorafs/pkg/settlement/swap"
-	"github.com/gauss-project/aurorafs/pkg/settlement/swap/chequebook"
-	"github.com/gauss-project/aurorafs/pkg/settlement/swap/transaction"
-	"github.com/gauss-project/aurorafs/pkg/storage"
-
 	"github.com/gauss-project/aurorafs/pkg/tracing"
 	"github.com/gauss-project/aurorafs/pkg/traversal"
 	ma "github.com/multiformats/go-multiaddr"
@@ -55,20 +46,20 @@ import (
 )
 
 type Bee struct {
-	p2pService            io.Closer
-	p2pCancel             context.CancelFunc
-	apiCloser             io.Closer
-	apiServer             *http.Server
-	debugAPIServer        *http.Server
-	resolverCloser        io.Closer
-	errorLogWriter        *io.PipeWriter
-	tracerCloser          io.Closer
+	p2pService     io.Closer
+	p2pCancel      context.CancelFunc
+	apiCloser      io.Closer
+	apiServer      *http.Server
+	debugAPIServer *http.Server
+	resolverCloser io.Closer
+	errorLogWriter *io.PipeWriter
+	tracerCloser   io.Closer
 
-	stateStoreCloser      io.Closer
-	localstoreCloser      io.Closer
-	topologyCloser        io.Closer
+	stateStoreCloser io.Closer
+	localstoreCloser io.Closer
+	topologyCloser   io.Closer
 
-	ethClientCloser       func()
+	ethClientCloser func()
 	//recoveryHandleCleanup func()
 }
 
@@ -87,9 +78,11 @@ type Options struct {
 	EnableQUIC               bool
 	WelcomeMessage           string
 	Bootnodes                []string
+	OracleEndpoint           string
 	CORSAllowedOrigins       []string
 	Logger                   logging.Logger
 	Standalone               bool
+	IsDev                    bool
 	TracingEnabled           bool
 	TracingEndpoint          string
 	TracingServiceName       string
@@ -104,6 +97,7 @@ type Options struct {
 	SwapFactoryAddress       string
 	SwapInitialDeposit       string
 	SwapEnable               bool
+	FullNode                 bool
 }
 
 func NewBee(addr string, bosonAddress boson.Address, publicKey ecdsa.PublicKey, signer crypto.Signer, networkID uint64, logger logging.Logger, libp2pPrivateKey, pssPrivateKey *ecdsa.PrivateKey, o Options) (b *Bee, err error) {
@@ -176,78 +170,79 @@ func NewBee(addr string, bosonAddress boson.Address, publicKey ecdsa.PublicKey, 
 		return nil, err
 	}
 
-	addressbook := addressbook.New(stateStore)
+	//var swapBackend *ethclient.Client
+	//var overlayEthAddress common.Address
+	//var chainID int64
+	//var transactionService transaction.Service
+	//var chequebookFactory chequebook.Factory
+	//var chequebookService chequebook.Service
+	//var chequeStore chequebook.ChequeStore
+	//var cashoutService chequebook.CashoutService
 
-	var swapBackend *ethclient.Client
-	var overlayEthAddress common.Address
-	var chainID int64
-	var transactionService transaction.Service
-	var chequebookFactory chequebook.Factory
-	var chequebookService chequebook.Service
-	var chequeStore chequebook.ChequeStore
-	var cashoutService chequebook.CashoutService
+	//if o.SwapEnable {
+	//	swapBackend, overlayEthAddress, chainID, transactionService, err = InitChain(
+	//		p2pCtx,
+	//		logger,
+	//		stateStore,
+	//		o.SwapEndpoint,
+	//		signer,
+	//	)
+	//	if err != nil {
+	//		return nil, err
+	//	}
+	//	b.ethClientCloser = swapBackend.Close
+	//
+	//	chequebookFactory, err = InitChequebookFactory(
+	//		logger,
+	//		swapBackend,
+	//		chainID,
+	//		transactionService,
+	//		o.SwapFactoryAddress,
+	//	)
+	//	if err != nil {
+	//		return nil, err
+	//	}
+	//
+	//	if err = chequebookFactory.VerifyBytecode(p2pCtx); err != nil {
+	//		return nil, fmt.Errorf("factory fail: %w", err)
+	//	}
+	//
+	//	chequebookService, err = InitChequebookService(
+	//		p2pCtx,
+	//		logger,
+	//		stateStore,
+	//		signer,
+	//		chainID,
+	//		swapBackend,
+	//		overlayEthAddress,
+	//		transactionService,
+	//		chequebookFactory,
+	//		o.SwapInitialDeposit,
+	//	)
+	//	if err != nil {
+	//		return nil, err
+	//	}
+	//
+	//	chequeStore, cashoutService = initChequeStoreCashout(
+	//		stateStore,
+	//		swapBackend,
+	//		chequebookFactory,
+	//		chainID,
+	//		overlayEthAddress,
+	//		transactionService,
+	//	)
+	//}
 
-	if o.SwapEnable {
-		swapBackend, overlayEthAddress, chainID, transactionService, err = InitChain(
-			p2pCtx,
-			logger,
-			stateStore,
-			o.SwapEndpoint,
-			signer,
-		)
-		if err != nil {
-			return nil, err
-		}
-		b.ethClientCloser = swapBackend.Close
+	addressBook := addressbook.New(stateStore)
+	lightNodes := lightnode.NewContainer(bosonAddress)
 
-		chequebookFactory, err = InitChequebookFactory(
-			logger,
-			swapBackend,
-			chainID,
-			transactionService,
-			o.SwapFactoryAddress,
-		)
-		if err != nil {
-			return nil, err
-		}
-
-		if err = chequebookFactory.VerifyBytecode(p2pCtx); err != nil {
-			return nil, fmt.Errorf("factory fail: %w", err)
-		}
-
-		chequebookService, err = InitChequebookService(
-			p2pCtx,
-			logger,
-			stateStore,
-			signer,
-			chainID,
-			swapBackend,
-			overlayEthAddress,
-			transactionService,
-			chequebookFactory,
-			o.SwapInitialDeposit,
-		)
-		if err != nil {
-			return nil, err
-		}
-
-		chequeStore, cashoutService = initChequeStoreCashout(
-			stateStore,
-			swapBackend,
-			chequebookFactory,
-			chainID,
-			overlayEthAddress,
-			transactionService,
-		)
-	}
-
-	p2ps, err := libp2p.New(p2pCtx, signer, networkID, bosonAddress, addr, addressbook, stateStore, logger, tracer, libp2p.Options{
+	p2ps, err := libp2p.New(p2pCtx, signer, networkID, bosonAddress, addr, addressBook, stateStore, lightNodes, logger, tracer, libp2p.Options{
 		PrivateKey:     libp2pPrivateKey,
 		NATAddr:        o.NATAddr,
 		EnableWS:       o.EnableWS,
 		EnableQUIC:     o.EnableQUIC,
-		Standalone:     o.Standalone,
 		WelcomeMessage: o.WelcomeMessage,
+		FullNode:       o.FullNode,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("p2p service: %w", err)
@@ -277,11 +272,6 @@ func NewBee(addr string, bosonAddress boson.Address, publicKey ecdsa.PublicKey, 
 		return nil, fmt.Errorf("pingpong service: %w", err)
 	}
 
-	hive := hive.New(p2ps, addressbook, networkID, logger)
-	if err = p2ps.AddProtocol(hive.Protocol()); err != nil {
-		return nil, fmt.Errorf("hive service: %w", err)
-	}
-
 	var bootnodes []ma.Multiaddr
 	if o.Standalone {
 		logger.Info("Starting node in standalone mode, no p2p connections will be made or accepted")
@@ -298,68 +288,83 @@ func NewBee(addr string, bosonAddress boson.Address, publicKey ecdsa.PublicKey, 
 		}
 	}
 
-	var settlement settlement.Interface
-	var swapService *swap.Service
+	//var settlement settlement.Interface
+	//var swapService *swap.Service
 
-	if o.SwapEnable {
-		swapService, err = InitSwap(
-			p2ps,
-			logger,
-			stateStore,
-			networkID,
-			overlayEthAddress,
-			chequebookService,
-			chequeStore,
-			cashoutService,
-		)
-		if err != nil {
-			return nil, err
-		}
-		settlement = swapService
-	} else {
-		pseudosettleService := pseudosettle.New(p2ps, logger, stateStore)
-		if err = p2ps.AddProtocol(pseudosettleService.Protocol()); err != nil {
-			return nil, fmt.Errorf("pseudosettle service: %w", err)
-		}
-		settlement = pseudosettleService
-	}
+	//if o.SwapEnable {
+	//	swapService, err = InitSwap(
+	//		p2ps,
+	//		logger,
+	//		stateStore,
+	//		networkID,
+	//		overlayEthAddress,
+	//		chequebookService,
+	//		chequeStore,
+	//		cashoutService,
+	//	)
+	//	if err != nil {
+	//		return nil, err
+	//	}
+	//	settlement = swapService
+	//} else {
+	//	pseudosettleService := pseudosettle.New(p2ps, logger, stateStore)
+	//	if err = p2ps.AddProtocol(pseudosettleService.Protocol()); err != nil {
+	//		return nil, fmt.Errorf("pseudosettle service: %w", err)
+	//	}
+	//	settlement = pseudosettleService
+	//}
 
-	paymentThreshold, ok := new(big.Int).SetString(o.PaymentThreshold, 10)
-	if !ok {
-		return nil, fmt.Errorf("invalid payment threshold: %s", paymentThreshold)
-	}
-	pricing := pricing.New(p2ps, logger, paymentThreshold)
-	if err = p2ps.AddProtocol(pricing.Protocol()); err != nil {
-		return nil, fmt.Errorf("pricing service: %w", err)
-	}
+	//paymentThreshold, ok := new(big.Int).SetString(o.PaymentThreshold, 10)
+	//if !ok {
+	//	return nil, fmt.Errorf("invalid payment threshold: %s", paymentThreshold)
+	//}
+	//pricing := pricing.New(p2ps, logger, paymentThreshold)
+	//if err = p2ps.AddProtocol(pricing.Protocol()); err != nil {
+	//	return nil, fmt.Errorf("pricing service: %w", err)
+	//}
 
-	paymentTolerance, ok := new(big.Int).SetString(o.PaymentTolerance, 10)
-	if !ok {
-		return nil, fmt.Errorf("invalid payment tolerance: %s", paymentTolerance)
-	}
-	paymentEarly, ok := new(big.Int).SetString(o.PaymentEarly, 10)
-	if !ok {
-		return nil, fmt.Errorf("invalid payment early: %s", paymentEarly)
-	}
-	acc, err := accounting.NewAccounting(
-		paymentThreshold,
-		paymentTolerance,
-		paymentEarly,
-		logger,
-		stateStore,
-		settlement,
-		pricing,
-	)
+	//paymentTolerance, ok := new(big.Int).SetString(o.PaymentTolerance, 10)
+	//if !ok {
+	//	return nil, fmt.Errorf("invalid payment tolerance: %s", paymentTolerance)
+	//}
+	//paymentEarly, ok := new(big.Int).SetString(o.PaymentEarly, 10)
+	//if !ok {
+	//	return nil, fmt.Errorf("invalid payment early: %s", paymentEarly)
+	//}
+	//acc, err := accounting.NewAccounting(
+	//	paymentThreshold,
+	//	paymentTolerance,
+	//	paymentEarly,
+	//	logger,
+	//	stateStore,
+	//	settlement,
+	//	pricing,
+	//)
+	//if err != nil {
+	//	return nil, fmt.Errorf("accounting: %w", err)
+	//}
+
+	//settlement.SetNotifyPaymentFunc(acc.AsyncNotifyPayment)
+	//pricing.SetPaymentThresholdObserver(acc)
+
+	metricsDB, err := shed.NewDBWrap(stateStore.DB())
 	if err != nil {
-		return nil, fmt.Errorf("accounting: %w", err)
+		return nil, fmt.Errorf("unable to create metrics storage for kademlia: %w", err)
 	}
 
-	settlement.SetNotifyPaymentFunc(acc.AsyncNotifyPayment)
-	pricing.SetPaymentThresholdObserver(acc)
+	hiveObj := hive2.New(p2ps, addressBook, networkID, logger)
+	if err = p2ps.AddProtocol(hiveObj.Protocol()); err != nil {
+		return nil, fmt.Errorf("hive service: %w", err)
+	}
+	if !o.IsDev {
+		hiveObj.Start() // must start before kademlia
+	}
 
-	kad := kademlia.New(bosonAddress, addressbook, hive, p2ps, logger, kademlia.Options{Bootnodes: bootnodes, StandaloneMode: o.Standalone, BootnodeMode: o.BootnodeMode})
+	kad := kademlia.New(bosonAddress, addressBook, hiveObj, p2ps, metricsDB, logger, kademlia.Options{Bootnodes: bootnodes, BootnodeMode: o.BootnodeMode})
 	b.topologyCloser = kad
-	hive.SetAddPeersHandler(kad.AddPeers)
+	hiveObj.SetAddPeersHandler(kad.AddPeers)
+	hiveObj.SetConfig(hive2.Config{Kad: kad}) // hive2
+
 	p2ps.SetPickyNotifier(kad)
 	addrs, err := p2ps.Addresses()
 	if err != nil {
@@ -369,6 +374,15 @@ func NewBee(addr string, bosonAddress boson.Address, publicKey ecdsa.PublicKey, 
 	for _, addr := range addrs {
 		logger.Debugf("p2p address: %s", addr)
 	}
+
+	route := routetab.New(bosonAddress, p2pCtx, p2ps, kad, stateStore, logger)
+	if err = p2ps.AddProtocol(route.Protocol()); err != nil {
+		return nil, fmt.Errorf("routetab service: %w", err)
+	}
+	route.SetConfig(routetab.Config{
+		AddressBook: addressBook,
+		NetworkID:   networkID,
+	})
 
 	var path string
 
@@ -388,20 +402,24 @@ func NewBee(addr string, bosonAddress boson.Address, publicKey ecdsa.PublicKey, 
 	}
 	b.localstoreCloser = storer
 
-	retrieve := retrieval.New(bosonAddress, storer, p2ps, kad, logger, acc, accounting.NewFixedPricer(bosonAddress, 1000000000), tracer)
-
-
+	retrieve := retrieval.New(bosonAddress, p2ps, route, storer, logger, tracer)
 	if err = p2ps.AddProtocol(retrieve.Protocol()); err != nil {
 		return nil, fmt.Errorf("retrieval service: %w", err)
 	}
 
-
-	var ns storage.Storer
-		ns = netstore.New(storer,  retrieve, logger)
+	ns := netstore.New(storer, retrieve, logger)
 
 	traversalService := traversal.NewService(ns)
 
-
+	chunkInfo := chunkinfo.New(p2ps, logger, traversalService, stateStore, route, o.OracleEndpoint)
+	if err := chunkInfo.InitChunkInfo(); err != nil {
+		return nil, fmt.Errorf("chunk info init: %w", err)
+	}
+	if err = p2ps.AddProtocol(chunkInfo.Protocol()); err != nil {
+		return nil, fmt.Errorf("chunkInfo service: %w", err)
+	}
+	storer.Config(chunkInfo)
+	retrieve.Config(chunkInfo)
 
 	multiResolver := multiresolver.NewMultiResolver(
 		multiresolver.WithConnectionConfigs(o.ResolverConnectionCfgs),
@@ -413,7 +431,7 @@ func NewBee(addr string, bosonAddress boson.Address, publicKey ecdsa.PublicKey, 
 	if o.APIAddr != "" {
 		// API server
 
-		apiService = api.New( ns, multiResolver,  traversalService,  logger, tracer, api.Options{
+		apiService = api.New(ns, multiResolver, bosonAddress, chunkInfo, traversalService, logger, tracer, api.Options{
 			CORSAllowedOrigins: o.CORSAllowedOrigins,
 			GatewayMode:        o.GatewayMode,
 			WsPingPeriod:       60 * time.Second,
@@ -447,12 +465,10 @@ func NewBee(addr string, bosonAddress boson.Address, publicKey ecdsa.PublicKey, 
 		// register metrics from components
 		debugAPIService.MustRegisterMetrics(p2ps.Metrics()...)
 		debugAPIService.MustRegisterMetrics(pingPong.Metrics()...)
-		debugAPIService.MustRegisterMetrics(acc.Metrics()...)
+		//debugAPIService.MustRegisterMetrics(acc.Metrics()...)
 		debugAPIService.MustRegisterMetrics(storer.Metrics()...)
 
 		debugAPIService.MustRegisterMetrics(retrieve.Metrics()...)
-
-
 
 		if apiService != nil {
 			debugAPIService.MustRegisterMetrics(apiService.Metrics()...)
@@ -461,12 +477,12 @@ func NewBee(addr string, bosonAddress boson.Address, publicKey ecdsa.PublicKey, 
 			debugAPIService.MustRegisterMetrics(l.Metrics()...)
 		}
 
-		if l, ok := settlement.(metrics.Collector); ok {
-			debugAPIService.MustRegisterMetrics(l.Metrics()...)
-		}
+		//if l, ok := settlement.(metrics.Collector); ok {
+		//	debugAPIService.MustRegisterMetrics(l.Metrics()...)
+		//}
 
 		// inject dependencies and configure full debug api http path routes
-		debugAPIService.Configure(p2ps, pingPong, kad, storer,  acc, settlement, o.SwapEnable, swapService, chequebookService)
+		debugAPIService.Configure(p2ps, pingPong, kad, lightNodes, storer)
 	}
 
 	if err := kad.Start(p2pCtx); err != nil {
@@ -508,8 +524,6 @@ func (b *Bee) Shutdown(ctx context.Context) error {
 		errs.add(err)
 	}
 
-
-
 	b.p2pCancel()
 	if err := b.p2pService.Close(); err != nil {
 		errs.add(fmt.Errorf("p2p server: %w", err))
@@ -522,8 +536,6 @@ func (b *Bee) Shutdown(ctx context.Context) error {
 	if err := b.tracerCloser.Close(); err != nil {
 		errs.add(fmt.Errorf("tracer: %w", err))
 	}
-
-
 
 	if err := b.stateStoreCloser.Close(); err != nil {
 		errs.add(fmt.Errorf("statestore: %w", err))

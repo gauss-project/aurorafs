@@ -33,10 +33,12 @@ const (
 	optionNameDebugAPIEnable            = "debug-api-enable"
 	optionNameDebugAPIAddr              = "debug-api-addr"
 	optionNameBootnodes                 = "bootnode"
+	optionNameOracleAPIAddr             = "oracle-api-addr"
 	optionNameNetworkID                 = "network-id"
 	optionWelcomeMessage                = "welcome-message"
 	optionCORSAllowedOrigins            = "cors-allowed-origins"
 	optionNameStandalone                = "standalone"
+	optionNameDevMode                   = "dev-mode"
 	optionNameTracingEnabled            = "tracing-enable"
 	optionNameTracingEndpoint           = "tracing-endpoint"
 	optionNameTracingServiceName        = "tracing-service-name"
@@ -47,6 +49,7 @@ const (
 	optionNamePaymentEarly              = "payment-early"
 	optionNameResolverEndpoints         = "resolver-options"
 	optionNameBootnodeMode              = "bootnode-mode"
+	optionNameFullNode                  = "full-node"
 	optionNameGatewayMode               = "gateway-mode"
 	optionNameClefSignerEnable          = "clef-signer-enable"
 	optionNameClefSignerEndpoint        = "clef-signer-endpoint"
@@ -75,7 +78,7 @@ func newCommand(opts ...option) (c *command, err error) {
 	c = &command{
 		root: &cobra.Command{
 			Use:           "aurorafs",
-			Short:         "Ethereum Swarm Bee",
+			Short:         "aurora file system node",
 			SilenceErrors: true,
 			SilenceUsage:  true,
 			PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
@@ -195,12 +198,14 @@ func (c *command) setAllFlags(cmd *cobra.Command) {
 	cmd.Flags().String(optionNameNATAddr, "", "NAT exposed address")
 	cmd.Flags().Bool(optionNameP2PWSEnable, false, "enable P2P WebSocket transport")
 	cmd.Flags().Bool(optionNameP2PQUICEnable, false, "enable P2P QUIC transport")
-	cmd.Flags().StringSlice(optionNameBootnodes, []string{"/dnsaddr/bootnode.ethswarm.org"}, "initial nodes to connect to")
+	cmd.Flags().StringSlice(optionNameBootnodes, []string{}, "initial nodes to connect to")
+	cmd.Flags().String(optionNameOracleAPIAddr, "", "link to oracle api service")
 	cmd.Flags().Bool(optionNameDebugAPIEnable, false, "enable debug HTTP API")
 	cmd.Flags().String(optionNameDebugAPIAddr, ":1635", "debug HTTP API listen address")
 	cmd.Flags().Uint64(optionNameNetworkID, 1, "ID of the Swarm network")
 	cmd.Flags().StringSlice(optionCORSAllowedOrigins, []string{}, "origins with CORS headers enabled")
 	cmd.Flags().Bool(optionNameStandalone, false, "whether we want the node to start with no listen addresses for p2p")
+	cmd.Flags().Bool(optionNameDevMode, false, "run dev mode")
 	cmd.Flags().Bool(optionNameTracingEnabled, false, "enable tracing")
 	cmd.Flags().String(optionNameTracingEndpoint, "127.0.0.1:6831", "endpoint to send tracing data")
 	cmd.Flags().String(optionNameTracingServiceName, "aurorafs", "service name identifier for tracing")
@@ -220,4 +225,5 @@ func (c *command) setAllFlags(cmd *cobra.Command) {
 	cmd.Flags().String(optionNameSwapFactoryAddress, "", "swap factory address")
 	cmd.Flags().String(optionNameSwapInitialDeposit, "100000000000000000", "initial deposit if deploying a new chequebook")
 	cmd.Flags().Bool(optionNameSwapEnable, true, "enable swap")
+	cmd.Flags().Bool(optionNameFullNode, true, "full node")
 }

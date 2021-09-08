@@ -15,9 +15,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/p2p"
 	"github.com/gauss-project/aurorafs/pkg/p2p/streamtest"
-	"github.com/gauss-project/aurorafs/pkg/boson"
+	ma "github.com/multiformats/go-multiaddr"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -577,6 +578,207 @@ func TestRecorder_recordErr(t *testing.T) {
 			"resp\n",
 		},
 	}, testErr)
+}
+
+func TestRecorder_withPeerProtocols(t *testing.T) {
+	peer1 := boson.MustParseHexAddress("1000000000000000000000000000000000000000000000000000000000000000")
+	peer2 := boson.MustParseHexAddress("2000000000000000000000000000000000000000000000000000000000000000")
+	recorder := streamtest.New(
+		streamtest.WithPeerProtocols(map[string]p2p.ProtocolSpec{
+			peer1.String(): newTestProtocol(func(_ context.Context, peer p2p.Peer, stream p2p.Stream) error {
+				rw := bufio.NewReadWriter(bufio.NewReader(stream), bufio.NewWriter(stream))
+
+				if _, err := rw.ReadString('\n'); err != nil {
+					return err
+				}
+				if _, err := rw.WriteString("handler 1\n"); err != nil {
+					return err
+				}
+				if err := rw.Flush(); err != nil {
+					return err
+				}
+
+				return nil
+			}),
+			peer2.String(): newTestProtocol(func(_ context.Context, peer p2p.Peer, stream p2p.Stream) error {
+				rw := bufio.NewReadWriter(bufio.NewReader(stream), bufio.NewWriter(stream))
+
+				if _, err := rw.ReadString('\n'); err != nil {
+					return err
+				}
+				if _, err := rw.WriteString("handler 2\n"); err != nil {
+					return err
+				}
+				if err := rw.Flush(); err != nil {
+					return err
+				}
+
+				return nil
+			}),
+		}),
+	)
+
+	request := func(ctx context.Context, s p2p.Streamer, address boson.Address) error {
+		stream, err := s.NewStream(ctx, address, nil, testProtocolName, testProtocolVersion, testStreamName)
+		if err != nil {
+			return fmt.Errorf("new stream: %w", err)
+		}
+		defer stream.Close()
+
+		rw := bufio.NewReadWriter(bufio.NewReader(stream), bufio.NewWriter(stream))
+
+		if _, err := rw.WriteString("req\n"); err != nil {
+			return err
+		}
+		if err := rw.Flush(); err != nil {
+			return err
+		}
+		_, err = rw.ReadString('\n')
+		return err
+	}
+
+	err := request(context.Background(), recorder, peer1)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	records, err := recorder.Records(peer1, testProtocolName, testProtocolVersion, testStreamName)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	testRecords(t, records, [][2]string{
+		{
+			"req\n",
+			"handler 1\n",
+		},
+	}, nil)
+
+	err = request(context.Background(), recorder, peer2)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	records, err = recorder.Records(peer2, testProtocolName, testProtocolVersion, testStreamName)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	testRecords(t, records, [][2]string{
+		{
+			"req\n",
+			"handler 2\n",
+		},
+	}, nil)
+}
+
+func TestRecorder_withStreamError(t *testing.T) {
+	peer1 := boson.MustParseHexAddress("1000000000000000000000000000000000000000000000000000000000000000")
+	peer2 := boson.MustParseHexAddress("2000000000000000000000000000000000000000000000000000000000000000")
+	testErr := errors.New("dummy stream error")
+	recorder := streamtest.New(
+		streamtest.WithPeerProtocols(map[string]p2p.ProtocolSpec{
+			peer1.String(): newTestProtocol(func(_ context.Context, peer p2p.Peer, stream p2p.Stream) error {
+				rw := bufio.NewReadWriter(bufio.NewReader(stream), bufio.NewWriter(stream))
+
+				if _, err := rw.ReadString('\n'); err != nil {
+					return err
+				}
+				if _, err := rw.WriteString("handler 1\n"); err != nil {
+					return err
+				}
+				if err := rw.Flush(); err != nil {
+					return err
+				}
+
+				return nil
+			}),
+			peer2.String(): newTestProtocol(func(_ context.Context, peer p2p.Peer, stream p2p.Stream) error {
+				rw := bufio.NewReadWriter(bufio.NewReader(stream), bufio.NewWriter(stream))
+
+				if _, err := rw.ReadString('\n'); err != nil {
+					return err
+				}
+				if _, err := rw.WriteString("handler 2\n"); err != nil {
+					return err
+				}
+				if err := rw.Flush(); err != nil {
+					return err
+				}
+
+				return nil
+			}),
+		}),
+		streamtest.WithStreamError(func(addr boson.Address, _, _, _ string) error {
+			if addr.String() == peer1.String() {
+				return testErr
+			}
+			return nil
+		}),
+	)
+
+	request := func(ctx context.Context, s p2p.Streamer, address boson.Address) error {
+		stream, err := s.NewStream(ctx, address, nil, testProtocolName, testProtocolVersion, testStreamName)
+		if err != nil {
+			return fmt.Errorf("new stream: %w", err)
+		}
+		defer stream.Close()
+
+		rw := bufio.NewReadWriter(bufio.NewReader(stream), bufio.NewWriter(stream))
+
+		if _, err := rw.WriteString("req\n"); err != nil {
+			return err
+		}
+		if err := rw.Flush(); err != nil {
+			return err
+		}
+		_, err = rw.ReadString('\n')
+		return err
+	}
+
+	err := request(context.Background(), recorder, peer1)
+	if err == nil {
+		t.Fatal("expected error on NewStream for peer")
+	}
+
+	err = request(context.Background(), recorder, peer2)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	records, err := recorder.Records(peer2, testProtocolName, testProtocolVersion, testStreamName)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	testRecords(t, records, [][2]string{
+		{
+			"req\n",
+			"handler 2\n",
+		},
+	}, nil)
+}
+
+func TestRecorder_ping(t *testing.T) {
+	testAddr, _ := ma.NewMultiaddr("/ip4/0.0.0.0/tcp/0")
+
+	rec := streamtest.New()
+
+	_, err := rec.Ping(context.Background(), testAddr)
+	if err != nil {
+		t.Fatalf("unable to ping err: %s", err.Error())
+	}
+
+	rec2 := streamtest.New(
+		streamtest.WithPingErr(func(_ ma.Multiaddr) (rtt time.Duration, err error) {
+			return rtt, errors.New("fail")
+		}),
+	)
+
+	_, err = rec2.Ping(context.Background(), testAddr)
+	if err == nil {
+		t.Fatal("expected ping err")
+	}
 }
 
 const (

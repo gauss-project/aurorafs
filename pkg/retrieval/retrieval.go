@@ -1,33 +1,25 @@
-// Copyright 2020 The Swarm Authors. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
-
-// Package retrieval provides the retrieval protocol
-// implementation. The protocol is used to retrieve
-// chunks over the network using forwarding-kademlia
-// routing.
 package retrieval
 
 import (
 	"context"
 	"errors"
 	"fmt"
-	"strconv"
 	"time"
 
-	"github.com/gauss-project/aurorafs/pkg/accounting"
+	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/cac"
+	"github.com/gauss-project/aurorafs/pkg/chunkinfo"
 	"github.com/gauss-project/aurorafs/pkg/logging"
 	"github.com/gauss-project/aurorafs/pkg/p2p"
 	"github.com/gauss-project/aurorafs/pkg/p2p/protobuf"
-	pb "github.com/gauss-project/aurorafs/pkg/retrieval/pb"
+	"github.com/gauss-project/aurorafs/pkg/retrieval/aco"
+	"github.com/gauss-project/aurorafs/pkg/retrieval/pb"
+	"github.com/gauss-project/aurorafs/pkg/routetab"
 	"github.com/gauss-project/aurorafs/pkg/soc"
 	"github.com/gauss-project/aurorafs/pkg/storage"
-	"github.com/gauss-project/aurorafs/pkg/boson"
-	"github.com/gauss-project/aurorafs/pkg/topology"
 	"github.com/gauss-project/aurorafs/pkg/tracing"
 	"github.com/opentracing/opentracing-go"
-	"golang.org/x/sync/singleflight"
+	"resenje.org/singleflight"
 )
 
 type requestSourceContextKey struct{}
@@ -41,34 +33,50 @@ const (
 var _ Interface = (*Service)(nil)
 
 type Interface interface {
-	RetrieveChunk(ctx context.Context, addr boson.Address) (chunk boson.Chunk, err error)
+	RetrieveChunk(ctx context.Context, rootAddr, chunkAddr boson.Address) (chunk boson.Chunk, err error)
 }
 
 type Service struct {
-	addr     boson.Address
-	streamer p2p.Streamer
-	peerSuggester topology.EachPeerer
-	storer        storage.Storer
-	singleflight  singleflight.Group
-	logger        logging.Logger
-	accounting    accounting.Interface
-	pricer        accounting.Pricer
-	metrics       metrics
-	tracer        *tracing.Tracer
+	addr          		boson.Address
+	streamer      		p2p.Streamer
+	storer        		storage.Storer
+	logger        		logging.Logger
+	metrics 			metrics
+	tracer  			*tracing.Tracer
+	chunkinfo     		chunkinfo.Interface
+	acoServer			*aco.AcoServer
+	routeTab        	routetab.RouteTab
+	singleflight  		singleflight.Group
 }
 
-func New(addr boson.Address, storer storage.Storer, streamer p2p.Streamer, chunkPeerer topology.EachPeerer, logger logging.Logger, accounting accounting.Interface, pricer accounting.Pricer, tracer *tracing.Tracer) *Service {
+type retrievalResult struct {
+	chunk          boson.Chunk
+	downloadDetail *aco.DownloadDetail
+	err            error
+}
+
+const (
+	maxPeers                      = 5
+	retrieveChunkTimeout          = 10 * time.Second
+	retrieveRetryIntervalDuration = 5 * time.Second
+)
+
+func New(addr boson.Address, streamer p2p.Streamer, routeTable routetab.RouteTab, storer storage.Storer, logger logging.Logger, tracer *tracing.Tracer) *Service {
+	acoServer := aco.NewAcoServer()
 	return &Service{
-		addr:          addr,
-		streamer:      streamer,
-		peerSuggester: chunkPeerer,
-		storer:        storer,
-		logger:        logger,
-		accounting:    accounting,
-		pricer:        pricer,
-		metrics:       newMetrics(),
-		tracer:        tracer,
+		addr:      addr,
+		streamer:  streamer,
+		storer:    storer,
+		logger:    logger,
+		metrics:   newMetrics(),
+		tracer:    tracer,
+		acoServer: &acoServer,
+		routeTab:  routeTable,
 	}
+}
+
+func (s *Service) Config(chunkInfo chunkinfo.Interface) {
+	s.chunkinfo = chunkInfo
 }
 
 func (s *Service) Protocol() p2p.ProtocolSpec {
@@ -84,236 +92,145 @@ func (s *Service) Protocol() p2p.ProtocolSpec {
 	}
 }
 
-const (
-	maxPeers             = 5
-	retrieveChunkTimeout = 10 * time.Second
-
-	retrieveRetryIntervalDuration = 5 * time.Second
-)
-
-func (s *Service) RetrieveChunk(ctx context.Context, addr boson.Address) (boson.Chunk, error) {
+func (s *Service) RetrieveChunk(ctx context.Context, rootAddr, chunkAddr boson.Address) (chunk boson.Chunk, err error) {
 	s.metrics.RequestCounter.Inc()
 
-	v, err, _ := s.singleflight.Do(addr.String(), func() (interface{}, error) {
-		span, logger, ctx := s.tracer.StartSpanFromContext(ctx, "retrieve-chunk", s.logger, opentracing.Tag{Key: "address", Value: addr.String()})
-		defer span.Finish()
+	flightRoute := fmt.Sprintf("%v,%v", rootAddr, chunkAddr)
 
-		sp := newSkipPeers()
+	v, _, err := s.singleflight.Do(ctx,flightRoute, func(ctx context.Context) (interface{}, error) {
+		var (
+			maxRequestAttemp int = 3
+			totalRouteCount int = 5
+			resultC = make(chan retrievalResult, totalRouteCount)
+		)
 
 		ticker := time.NewTicker(retrieveRetryIntervalDuration)
 		defer ticker.Stop()
 
-		var (
-			peerAttempt  int
-			peersResults int
-			resultC      = make(chan boson.Chunk, maxPeers)
-			errC         = make(chan error, maxPeers)
-		)
+		chunkResult := s.chunkinfo.GetChunkInfo(rootAddr, chunkAddr)
+		if len(chunkResult) == 0{
+			return nil, fmt.Errorf("no result from chunkinfo")
+		}
 
-		for {
-			if peerAttempt < maxPeers {
-				peerAttempt++
+		routeList := make([]aco.Route, 0)
+		for _, v := range chunkResult {
+			addr := boson.NewAddress(v)
+			newRoute := aco.NewRoute(addr, addr)
+			routeList = append(routeList, newRoute)
+		}
+
+		acoRouteIndexList := s.acoServer.GetRouteAcoIndex(routeList, totalRouteCount)
+
+		requestAttemp := 0
+		for requestAttemp < maxRequestAttemp{
+			requestAttemp ++
+
+			for _, routeIndex := range acoRouteIndexList{
+				retrievalRoute := routeList[routeIndex]
 
 				s.metrics.PeerRequestCounter.Inc()
 
-				go func() {
-					chunk, peer, err := s.retrieveChunk(ctx, addr, sp)
-					if err != nil {
-						if !peer.IsZero() {
-							logger.Debugf("retrieval: failed to get chunk %s from peer %s: %v", addr, peer, err)
-						}
-
-						errC <- err
-						return
+				go func(){
+					s.acoServer.OnDownloadStart(retrievalRoute)
+					chunk, downloadDetail, err := s.retrieveChunk(ctx, retrievalRoute, rootAddr, chunkAddr)
+					select {
+					case resultC <- retrievalResult{
+						chunk:     			chunk,
+						downloadDetail: 	downloadDetail,
+						err:       			err,
+					}:
+					case <-ctx.Done():
 					}
-
-					resultC <- chunk
 				}()
-			} else {
-				ticker.Stop()
-			}
 
-			select {
-			case <-ticker.C:
-				// break
-			case chunk := <-resultC:
-				return chunk, nil
-			case <-errC:
-				peersResults++
-			case <-ctx.Done():
-				logger.Tracef("retrieval: failed to get chunk %s: %v", addr, ctx.Err())
-				return nil, fmt.Errorf("retrieval: %w", ctx.Err())
-			}
-
-			// all results received
-			if peersResults >= maxPeers {
-				logger.Tracef("retrieval: failed to get chunk %s", addr)
-				return nil, storage.ErrNotFound
+				select{
+				case <-ticker.C:
+					// continue next route
+				case result := <-resultC :
+					if result.err != nil{
+						s.logger.Debugf("retrieval: failed to get chunk (%s,%s) from route %s: %v", 
+							rootAddr, chunkAddr, retrievalRoute, result.err)
+						s.acoServer.OnDownloadFinish(retrievalRoute, nil)
+						// return nil, result.err
+					}else{
+						s.acoServer.OnDownloadFinish(retrievalRoute, result.downloadDetail)
+						s.chunkinfo.OnChunkTransferred(chunkAddr, rootAddr, s.addr)
+						return result.chunk, nil
+					}
+				case <-ctx.Done():
+					s.acoServer.OnDownloadFinish(retrievalRoute, nil)
+					s.logger.Tracef("retrieval: failed to get chunk: ctx.Done() (%s:%s): %v", rootAddr, chunkAddr, ctx.Err())
+					return nil, fmt.Errorf("retrieval: %w", ctx.Err())
+				}
 			}
 		}
+
+		return nil, storage.ErrNotFound
 	})
-	if err != nil {
+
+	if err != nil{
 		return nil, err
 	}
-
 	return v.(boson.Chunk), nil
 }
 
-func (s *Service) retrieveChunk(ctx context.Context, addr boson.Address, sp *skipPeers) (chunk boson.Chunk, peer boson.Address, err error) {
-	startTimer := time.Now()
-
-	v := ctx.Value(requestSourceContextKey{})
-	sourcePeerAddr := boson.Address{}
-	// allow upstream requests if this node is the source of the request
-	// i.e. the request was not forwarded, to improve retrieval
-	// if this node is the closest to he chunk but still does not contain it
-	allowUpstream := true
-	if src, ok := v.(string); ok {
-		sourcePeerAddr, err = boson.ParseHexAddress(src)
-		if err == nil {
-			sp.Add(sourcePeerAddr)
-		}
-		// do not allow upstream requests if the request was forwarded to this node
-		// to avoid the request loops
-		allowUpstream = false
+func (s *Service) retrieveChunk(ctx context.Context, route aco.Route, rootAddr, chunkAddr boson.Address) (boson.Chunk, *aco.DownloadDetail, error) {
+	if !route.LinkNode.Equal(route.TargetNode) {
+		return nil, nil, fmt.Errorf("not direct link, %v,%v(not same)", route.LinkNode.String(), route.TargetNode.String())
+	}
+	if err := s.routeTab.Connect(ctx, route.LinkNode); err != nil{
+		return nil, nil, fmt.Errorf("connect failed, peer: %v", route.LinkNode.String());
 	}
 
-	ctx, cancel := context.WithTimeout(ctx, retrieveChunkTimeout)
-	defer cancel()
-	peer, err = s.closestPeer(addr, sp.All(), allowUpstream)
-	if err != nil {
-		return nil, peer, fmt.Errorf("get closest for address %s, allow upstream %v: %w", addr.String(), allowUpstream, err)
-	}
-
-	peerPO := boson.Proximity(s.addr.Bytes(), peer.Bytes())
-
-	if !sourcePeerAddr.IsZero() {
-		// is forwarded request
-		sourceAddrPO := boson.Proximity(sourcePeerAddr.Bytes(), addr.Bytes())
-		addrPO := boson.Proximity(peer.Bytes(), addr.Bytes())
-
-		poGain := int(addrPO) - int(sourceAddrPO)
-
-		s.metrics.RetrieveChunkPOGainCounter.
-			WithLabelValues(strconv.Itoa(poGain)).
-			Inc()
-	}
-
-	sp.Add(peer)
-
-	// compute the price we pay for this chunk and reserve it for the rest of this function
-	chunkPrice := s.pricer.PeerPrice(peer, addr)
-	err = s.accounting.Reserve(ctx, peer, chunkPrice)
-	if err != nil {
-		return nil, peer, err
-	}
-	defer s.accounting.Release(peer, chunkPrice)
-
-	s.logger.Tracef("retrieval: requesting chunk %s from peer %s", addr, peer)
-	stream, err := s.streamer.NewStream(ctx, peer, nil, protocolName, protocolVersion, streamName)
+	stream, err := s.streamer.NewStream(ctx, route.LinkNode, nil, protocolName, protocolVersion, streamName)
 	if err != nil {
 		s.metrics.TotalErrors.Inc()
-		return nil, peer, fmt.Errorf("new stream: %w", err)
+		s.logger.Errorf("new stream: %w", err)
+		return nil, nil, err
 	}
 	defer func() {
 		if err != nil {
 			_ = stream.Reset()
 		} else {
-			go stream.FullClose()
+			_ = stream.FullClose()
 		}
 	}()
 
+	startMs := time.Now().UnixNano() / 1e6
 	w, r := protobuf.NewWriterAndReader(stream)
-	if err := w.WriteMsgWithContext(ctx, &pb.Request{
-		Addr: addr.Bytes(),
+	if err := w.WriteMsgWithContext(ctx, &pb.RequestChunk{
+		TargetAddr: route.TargetNode.Bytes(),
+		RootAddr:   rootAddr.Bytes(),
+		ChunkAddr:  chunkAddr.Bytes(),
 	}); err != nil {
 		s.metrics.TotalErrors.Inc()
-		return nil, peer, fmt.Errorf("write request: %w peer %s", err, peer.String())
+		return nil, nil, fmt.Errorf("write request: %w route %v,%v", err, route.LinkNode.String(), route.TargetNode.String())
 	}
 
 	var d pb.Delivery
 	if err := r.ReadMsgWithContext(ctx, &d); err != nil {
 		s.metrics.TotalErrors.Inc()
-		return nil, peer, fmt.Errorf("read delivery: %w peer %s", err, peer.String())
+		return nil, nil, fmt.Errorf("read delivery: %w route %v,%v", err, route.LinkNode.String(), route.TargetNode.String())
 	}
-	s.metrics.RetrieveChunkPeerPOTimer.
-		WithLabelValues(strconv.Itoa(int(peerPO))).
-		Observe(time.Since(startTimer).Seconds())
-	s.metrics.TotalRetrieved.Inc()
+	endMs := time.Now().UnixNano() / 1e6
+	dataSize := d.Size()
 
-	chunk = boson.NewChunk(addr, d.Data)
+	downloadDetail := aco.DownloadDetail{
+		StartMs: startMs,
+		EndMs:   endMs,
+		Size:    int64(dataSize),
+	}
+
+	chunk := boson.NewChunk(chunkAddr, d.Data)
 	if !cac.Valid(chunk) {
 		if !soc.Valid(chunk) {
 			s.metrics.InvalidChunkRetrieved.Inc()
 			s.metrics.TotalErrors.Inc()
-			return nil, peer, boson.ErrInvalidChunk
+			return nil, nil, boson.ErrInvalidChunk
 		}
 	}
 
-	// credit the peer after successful delivery
-	err = s.accounting.Credit(peer, chunkPrice)
-	if err != nil {
-		return nil, peer, err
-	}
-	s.metrics.ChunkPrice.Observe(float64(chunkPrice))
-
-	return chunk, peer, err
-}
-
-// closestPeer returns address of the peer that is closest to the chunk with
-// provided address addr. This function will ignore peers with addresses
-// provided in skipPeers and if allowUpstream is true, peers that are further of
-// the chunk than this node is, could also be returned, allowing the upstream
-// retrieve request.
-func (s *Service) closestPeer(addr boson.Address, skipPeers []boson.Address, allowUpstream bool) (boson.Address, error) {
-	closest := boson.Address{}
-	err := s.peerSuggester.EachPeerRev(func(peer boson.Address, po uint8) (bool, bool, error) {
-		for _, a := range skipPeers {
-			if a.Equal(peer) {
-				return false, false, nil
-			}
-		}
-		if closest.IsZero() {
-			closest = peer
-			return false, false, nil
-		}
-		dcmp, err := boson.DistanceCmp(addr.Bytes(), closest.Bytes(), peer.Bytes())
-		if err != nil {
-			return false, false, fmt.Errorf("distance compare error. addr %s closest %s peer %s: %w", addr.String(), closest.String(), peer.String(), err)
-		}
-		switch dcmp {
-		case 0:
-			// do nothing
-		case -1:
-			// current peer is closer
-			closest = peer
-		case 1:
-			// closest is already closer to chunk
-			// do nothing
-		}
-		return false, false, nil
-	})
-	if err != nil {
-		return boson.Address{}, err
-	}
-
-	// check if found
-	if closest.IsZero() {
-		return boson.Address{}, topology.ErrNotFound
-	}
-	if allowUpstream {
-		return closest, nil
-	}
-
-	dcmp, err := boson.DistanceCmp(addr.Bytes(), closest.Bytes(), s.addr.Bytes())
-	if err != nil {
-		return boson.Address{}, fmt.Errorf("distance compare addr %s closest %s base address %s: %w", addr.String(), closest.String(), s.addr.String(), err)
-	}
-	if dcmp != 1 {
-		return boson.Address{}, topology.ErrNotFound
-	}
-
-	return closest, nil
+	return chunk, &downloadDetail, nil
 }
 
 func (s *Service) handler(ctx context.Context, p p2p.Peer, stream p2p.Stream) (err error) {
@@ -325,23 +242,34 @@ func (s *Service) handler(ctx context.Context, p p2p.Peer, stream p2p.Stream) (e
 			_ = stream.FullClose()
 		}
 	}()
-	var req pb.Request
+	s.logger.Tracef("handler addr: %v\n", s.addr.String())
+
+	var req pb.RequestChunk
 	if err := r.ReadMsgWithContext(ctx, &req); err != nil {
 		return fmt.Errorf("read request: %w peer %s", err, p.Address.String())
 	}
-	span, _, ctx := s.tracer.StartSpanFromContext(ctx, "handle-retrieve-chunk", s.logger, opentracing.Tag{Key: "address", Value: boson.NewAddress(req.Addr).String()})
+	span, _, ctx := s.tracer.StartSpanFromContext(ctx, "handle-retrieve-chunk",
+		s.logger, opentracing.Tag{Key: "address", Value: fmt.Sprintf("%v,%v", boson.NewAddress(req.RootAddr).String(), boson.NewAddress(req.ChunkAddr).String())},
+	)
 	defer span.Finish()
 
 	ctx = context.WithValue(ctx, requestSourceContextKey{}, p.Address.String())
-	addr := boson.NewAddress(req.Addr)
-	chunk, err := s.storer.Get(ctx, storage.ModeGetRequest, addr)
+	_, rootAddr, chunkAddr := boson.NewAddress(req.TargetAddr), boson.NewAddress(req.RootAddr), boson.NewAddress(req.ChunkAddr)
+
+	forward := false
+	chunk, err := s.storer.Get(ctx, storage.ModeGetRequest, chunkAddr)
 	if err != nil {
 		if errors.Is(err, storage.ErrNotFound) {
 			// forward the request
-			chunk, err = s.RetrieveChunk(ctx, addr)
+			// if !s.addr.Equal(targetAddr){
+			chunk, err = s.RetrieveChunk(ctx, rootAddr, chunkAddr)
 			if err != nil {
 				return fmt.Errorf("retrieve chunk: %w", err)
 			}
+			forward = true
+			// }else{
+			// 	return fmt.Errorf("get from store: %w", err)
+			// }
 		} else {
 			return fmt.Errorf("get from store: %w", err)
 		}
@@ -353,14 +281,18 @@ func (s *Service) handler(ctx context.Context, p p2p.Peer, stream p2p.Stream) (e
 		return fmt.Errorf("write delivery: %w peer %s", err, p.Address.String())
 	}
 
-	s.logger.Tracef("retrieval protocol debiting peer %s", p.Address.String())
-
-	// compute the price we charge for this chunk and debit it from p's balance
-	chunkPrice := s.pricer.Price(chunk.Address())
-	err = s.accounting.Debit(p.Address, chunkPrice)
-	if err != nil {
-		return err
+	if s.chunkinfo != nil {
+		s.chunkinfo.OnChunkTransferred(chunkAddr, rootAddr, p.Address)
 	}
+
+	if forward {
+		_, err = s.storer.Put(ctx, storage.ModePutRequest, chunk)
+		if err != nil {
+			return fmt.Errorf("retrieve cache put :%w", err)
+		}
+	}
+
+	s.logger.Tracef("retrieval protocol debiting peer %s", p.Address.String())
 
 	return nil
 }

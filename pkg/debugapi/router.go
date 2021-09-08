@@ -83,9 +83,6 @@ func (s *Service) newRouter() *mux.Router {
 	router.Handle("/peers", jsonhttp.MethodHandler{
 		"GET": http.HandlerFunc(s.peersHandler),
 	})
-	router.Handle("/blocklist", jsonhttp.MethodHandler{
-		"GET": http.HandlerFunc(s.blocklistedPeersHandler),
-	})
 
 	router.Handle("/peers/{address}", jsonhttp.MethodHandler{
 		"DELETE": http.HandlerFunc(s.peerDisconnectHandler),
@@ -105,30 +102,29 @@ func (s *Service) newRouter() *mux.Router {
 		),
 	})
 
-	router.Handle("/balances", jsonhttp.MethodHandler{
-		"GET": http.HandlerFunc(s.compensatedBalancesHandler),
-	})
+	//router.Handle("/balances", jsonhttp.MethodHandler{
+	//	"GET": http.HandlerFunc(s.compensatedBalancesHandler),
+	//})
+	//
+	//router.Handle("/balances/{peer}", jsonhttp.MethodHandler{
+	//	"GET": http.HandlerFunc(s.compensatedPeerBalanceHandler),
+	//})
+	//
+	//router.Handle("/consumed", jsonhttp.MethodHandler{
+	//	"GET": http.HandlerFunc(s.balancesHandler),
+	//})
+	//
+	//router.Handle("/consumed/{peer}", jsonhttp.MethodHandler{
+	//	"GET": http.HandlerFunc(s.peerBalanceHandler),
+	//})
 
-	router.Handle("/balances/{peer}", jsonhttp.MethodHandler{
-		"GET": http.HandlerFunc(s.compensatedPeerBalanceHandler),
-	})
-
-	router.Handle("/consumed", jsonhttp.MethodHandler{
-		"GET": http.HandlerFunc(s.balancesHandler),
-	})
-
-	router.Handle("/consumed/{peer}", jsonhttp.MethodHandler{
-		"GET": http.HandlerFunc(s.peerBalanceHandler),
-	})
-
-	router.Handle("/settlements", jsonhttp.MethodHandler{
-		"GET": http.HandlerFunc(s.settlementsHandler),
-	})
-
-	router.Handle("/settlements/{peer}", jsonhttp.MethodHandler{
-		"GET": http.HandlerFunc(s.peerSettlementsHandler),
-	})
-
+	//router.Handle("/settlements", jsonhttp.MethodHandler{
+	//	"GET": http.HandlerFunc(s.settlementsHandler),
+	//})
+	//
+	//router.Handle("/settlements/{peer}", jsonhttp.MethodHandler{
+	//	"GET": http.HandlerFunc(s.peerSettlementsHandler),
+	//})
 
 	return router
 }

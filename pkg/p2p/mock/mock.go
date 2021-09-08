@@ -10,8 +10,8 @@ import (
 	"time"
 
 	"github.com/gauss-project/aurorafs/pkg/aurora"
-	"github.com/gauss-project/aurorafs/pkg/p2p"
 	"github.com/gauss-project/aurorafs/pkg/boson"
+	"github.com/gauss-project/aurorafs/pkg/p2p"
 	ma "github.com/multiformats/go-multiaddr"
 )
 
@@ -165,6 +165,8 @@ func (s *Service) GetWelcomeMessage() string {
 	}
 	return s.welcomeMessage
 }
+
+func (s *Service) Halt() {}
 
 func (s *Service) Blocklist(overlay boson.Address, duration time.Duration) error {
 	if s.blocklistFunc == nil {

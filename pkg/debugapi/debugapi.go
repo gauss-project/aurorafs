@@ -9,18 +9,15 @@ package debugapi
 
 import (
 	"crypto/ecdsa"
+	"github.com/gauss-project/aurorafs/pkg/topology/lightnode"
 	"net/http"
 	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/gauss-project/aurorafs/pkg/accounting"
 	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/logging"
 	"github.com/gauss-project/aurorafs/pkg/p2p"
 	"github.com/gauss-project/aurorafs/pkg/pingpong"
-	"github.com/gauss-project/aurorafs/pkg/settlement"
-	"github.com/gauss-project/aurorafs/pkg/settlement/swap"
-	"github.com/gauss-project/aurorafs/pkg/settlement/swap/chequebook"
 	"github.com/gauss-project/aurorafs/pkg/storage"
 
 	"github.com/gauss-project/aurorafs/pkg/topology"
@@ -30,22 +27,23 @@ import (
 
 // Service implements http.Handler interface to be used in HTTP server.
 type Service struct {
-	overlay   boson.Address
-	publicKey ecdsa.PublicKey
-	pssPublicKey       ecdsa.PublicKey
-	ethereumAddress    common.Address
-	p2p                p2p.DebugService
-	pingpong           pingpong.Interface
-	topologyDriver     topology.Driver
-	storer             storage.Storer
-	logger             logging.Logger
-	tracer             *tracing.Tracer
+	overlay         boson.Address
+	publicKey       ecdsa.PublicKey
+	pssPublicKey    ecdsa.PublicKey
+	ethereumAddress common.Address
+	p2p             p2p.DebugService
+	pingpong        pingpong.Interface
+	topologyDriver  topology.Driver
+	storer          storage.Storer
+	logger          logging.Logger
+	tracer          *tracing.Tracer
+	lightNodes      *lightnode.Container
 
-	accounting         accounting.Interface
-	settlement         settlement.Interface
-	chequebookEnabled  bool
-	chequebook         chequebook.Service
-	swap               swap.ApiInterface
+	//accounting         accounting.Interface
+	//settlement         settlement.Interface
+	//chequebookEnabled  bool
+	//chequebook         chequebook.Service
+	//swap               swap.ApiInterface
 	corsAllowedOrigins []string
 	metricsRegistry    *prometheus.Registry
 	// handler is changed in the Configure method
@@ -76,16 +74,17 @@ func New(overlay boson.Address, publicKey, pssPublicKey ecdsa.PublicKey, ethereu
 // Configure injects required dependencies and configuration parameters and
 // constructs HTTP routes that depend on them. It is intended and safe to call
 // this method only once.
-func (s *Service) Configure(p2p p2p.DebugService, pingpong pingpong.Interface, topologyDriver topology.Driver, storer storage.Storer,  accounting accounting.Interface, settlement settlement.Interface, chequebookEnabled bool, swap swap.ApiInterface, chequebook chequebook.Service) {
+func (s *Service) Configure(p2p p2p.DebugService, pingpong pingpong.Interface, topologyDriver topology.Driver, lightNodes *lightnode.Container, storer storage.Storer) {
 	s.p2p = p2p
 	s.pingpong = pingpong
 	s.topologyDriver = topologyDriver
 	s.storer = storer
-	s.accounting = accounting
-	s.settlement = settlement
-	s.chequebookEnabled = chequebookEnabled
-	s.chequebook = chequebook
-	s.swap = swap
+	s.lightNodes = lightNodes
+	//s.accounting = accounting
+	//s.settlement = settlement
+	//s.chequebookEnabled = chequebookEnabled
+	//s.chequebook = chequebook
+	//s.swap = swap
 
 	s.setRouter(s.newRouter())
 }

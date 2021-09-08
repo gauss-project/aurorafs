@@ -22,6 +22,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/gauss-project/aurorafs"
+	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/crypto"
 	"github.com/gauss-project/aurorafs/pkg/crypto/clef"
 	"github.com/gauss-project/aurorafs/pkg/keystore"
@@ -30,7 +31,6 @@ import (
 	"github.com/gauss-project/aurorafs/pkg/logging"
 	"github.com/gauss-project/aurorafs/pkg/node"
 	"github.com/gauss-project/aurorafs/pkg/resolver/multiresolver"
-	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/kardianos/service"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
@@ -92,22 +92,9 @@ func (c *command) initStartCmd() (err error) {
 				}
 			}
 
-			beeASCII := `
-Welcome to the Swarm.... Bzzz Bzzzz Bzzzz
-                \     /
-            \    o ^ o    /
-              \ (     ) /
-   ____________(%%%%%%%)____________
-  (     /   /  )%%%%%%%(  \   \     )
-  (___/___/__/           \__\___\___)
-     (     /  /(%%%%%%%)\  \     )
-      (__/___/ (%%%%%%%) \___\__)
-              /(       )\
-            /   (%%%%%)   \
-                 (%%%)
-                   !                   `
+			aufsASCII := `Welcome to aurora file system`
 
-			fmt.Println(beeASCII)
+			fmt.Println(aufsASCII)
 			logger.Infof("version: %v", bee.Version)
 
 			debugAPIAddr := c.config.GetString(optionNameDebugAPIAddr)
@@ -118,6 +105,12 @@ Welcome to the Swarm.... Bzzz Bzzzz Bzzzz
 			signerConfig, err := c.configureSigner(cmd, logger)
 			if err != nil {
 				return err
+			}
+
+			bootNode := c.config.GetBool(optionNameBootnodeMode)
+			fullNode := c.config.GetBool(optionNameFullNode)
+			if fullNode {
+				logger.Info("start node mode full.")
 			}
 
 			b, err := node.NewBee(c.config.GetString(optionNameP2PAddr), signerConfig.address, *signerConfig.publicKey, signerConfig.signer, c.config.GetUint64(optionNameNetworkID), logger, signerConfig.libp2pPrivateKey, signerConfig.pssPrivateKey, node.Options{
@@ -135,8 +128,11 @@ Welcome to the Swarm.... Bzzz Bzzzz Bzzzz
 				EnableQUIC:               c.config.GetBool(optionNameP2PQUICEnable),
 				WelcomeMessage:           c.config.GetString(optionWelcomeMessage),
 				Bootnodes:                c.config.GetStringSlice(optionNameBootnodes),
+				FullNode:                 fullNode,
+				OracleEndpoint:           c.config.GetString(optionNameOracleAPIAddr),
 				CORSAllowedOrigins:       c.config.GetStringSlice(optionCORSAllowedOrigins),
 				Standalone:               c.config.GetBool(optionNameStandalone),
+				IsDev:                    c.config.GetBool(optionNameDevMode),
 				TracingEnabled:           c.config.GetBool(optionNameTracingEnabled),
 				TracingEndpoint:          c.config.GetString(optionNameTracingEndpoint),
 				TracingServiceName:       c.config.GetString(optionNameTracingServiceName),
@@ -147,7 +143,7 @@ Welcome to the Swarm.... Bzzz Bzzzz Bzzzz
 				PaymentEarly:             c.config.GetString(optionNamePaymentEarly),
 				ResolverConnectionCfgs:   resolverCfgs,
 				GatewayMode:              c.config.GetBool(optionNameGatewayMode),
-				BootnodeMode:             c.config.GetBool(optionNameBootnodeMode),
+				BootnodeMode:             bootNode,
 				SwapEndpoint:             c.config.GetString(optionNameSwapEndpoint),
 				SwapFactoryAddress:       c.config.GetString(optionNameSwapFactoryAddress),
 				SwapInitialDeposit:       c.config.GetString(optionNameSwapInitialDeposit),
@@ -242,9 +238,9 @@ func (p *program) Stop(s service.Service) error {
 }
 
 type signerConfig struct {
-	signer    crypto.Signer
-	address   boson.Address
-	publicKey *ecdsa.PublicKey
+	signer           crypto.Signer
+	address          boson.Address
+	publicKey        *ecdsa.PublicKey
 	libp2pPrivateKey *ecdsa.PrivateKey
 	pssPrivateKey    *ecdsa.PrivateKey
 }

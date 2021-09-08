@@ -50,8 +50,6 @@ func (s *server) dirUploadHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-
-
 	// Add the tag to the context
 	ctx := r.Context()
 	p := requestPipelineFn(s.storer, r)
@@ -63,6 +61,24 @@ func (s *server) dirUploadHandler(w http.ResponseWriter, r *http.Request) {
 		logger.Errorf("dir upload: store dir")
 		jsonhttp.InternalServerError(w, "could not store dir")
 		return
+	}
+
+	a, err := s.traversal.GetTrieData(ctx, reference)
+	if err != nil {
+		logger.Errorf("dir upload: get trie data err: %v", err)
+		jsonhttp.InternalServerError(w, "could not get trie data")
+		return
+	}
+	dataChunks, _ := s.traversal.CheckTrieData(ctx, reference, a)
+	if err != nil {
+		logger.Errorf("dir upload: check trie data err: %v", err)
+		jsonhttp.InternalServerError(w, "check trie data error")
+		return
+	}
+	for _, li := range dataChunks {
+		for _, b := range li {
+			s.chunkInfo.OnChunkTransferred(boson.NewAddress(b), reference, s.overlay)
+		}
 	}
 
 	jsonhttp.OK(w, fileUploadResponse{
@@ -196,7 +212,6 @@ func storeDir(ctx context.Context, encrypt bool, reader io.ReadCloser, log loggi
 		return boson.ZeroAddress, fmt.Errorf("metadata marshal: %w", err)
 	}
 
-
 	mr, err := p(ctx, bytes.NewReader(metadataBytes), int64(len(metadataBytes)))
 	if err != nil {
 		return boson.ZeroAddress, fmt.Errorf("split metadata: %w", err)
@@ -238,7 +253,6 @@ func storeFile(ctx context.Context, fileInfo *fileUploadInfo, p pipelineFunc, en
 	if err != nil {
 		return boson.ZeroAddress, fmt.Errorf("metadata marshal: %w", err)
 	}
-
 
 	mr, err := p(ctx, bytes.NewReader(metadataBytes), int64(len(metadataBytes)))
 	if err != nil {

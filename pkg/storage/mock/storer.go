@@ -9,8 +9,8 @@ import (
 	"errors"
 	"sync"
 
-	"github.com/gauss-project/aurorafs/pkg/storage"
 	"github.com/gauss-project/aurorafs/pkg/boson"
+	"github.com/gauss-project/aurorafs/pkg/storage"
 )
 
 var _ storage.Storer = (*MockStorer)(nil)
