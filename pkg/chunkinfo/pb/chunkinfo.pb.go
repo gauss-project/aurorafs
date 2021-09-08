@@ -22,24 +22,22 @@ var _ = math.Inf
 // proto package needs to be updated.
 const _ = proto.GoGoProtoPackageIsVersion3 // please upgrade the proto package
 
-type ChunkPyramidResp struct {
-	RootCid []byte               `protobuf:"bytes,1,opt,name=RootCid,proto3" json:"RootCid,omitempty"`
-	Pyramid map[string][]byte    `protobuf:"bytes,2,rep,name=Pyramid,proto3" json:"Pyramid,omitempty" protobuf_key:"bytes,1,opt,name=key,proto3" protobuf_val:"bytes,2,opt,name=value,proto3"`
-	Ctn     map[string]*Overlays `protobuf:"bytes,3,rep,name=Ctn,proto3" json:"Ctn,omitempty" protobuf_key:"bytes,1,opt,name=key,proto3" protobuf_val:"bytes,2,opt,name=value,proto3"`
+type ChunkPyramidHashReq struct {
+	RootCid []byte `protobuf:"bytes,1,opt,name=RootCid,proto3" json:"RootCid,omitempty"`
 }
 
-func (m *ChunkPyramidResp) Reset()         { *m = ChunkPyramidResp{} }
-func (m *ChunkPyramidResp) String() string { return proto.CompactTextString(m) }
-func (*ChunkPyramidResp) ProtoMessage()    {}
-func (*ChunkPyramidResp) Descriptor() ([]byte, []int) {
+func (m *ChunkPyramidHashReq) Reset()         { *m = ChunkPyramidHashReq{} }
+func (m *ChunkPyramidHashReq) String() string { return proto.CompactTextString(m) }
+func (*ChunkPyramidHashReq) ProtoMessage()    {}
+func (*ChunkPyramidHashReq) Descriptor() ([]byte, []int) {
 	return fileDescriptor_373dbabb20101923, []int{0}
 }
-func (m *ChunkPyramidResp) XXX_Unmarshal(b []byte) error {
+func (m *ChunkPyramidHashReq) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
 }
-func (m *ChunkPyramidResp) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+func (m *ChunkPyramidHashReq) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	if deterministic {
-		return xxx_messageInfo_ChunkPyramidResp.Marshal(b, m, deterministic)
+		return xxx_messageInfo_ChunkPyramidHashReq.Marshal(b, m, deterministic)
 	} else {
 		b = b[:cap(b)]
 		n, err := m.MarshalToSizedBuffer(b)
@@ -49,55 +47,41 @@ func (m *ChunkPyramidResp) XXX_Marshal(b []byte, deterministic bool) ([]byte, er
 		return b[:n], nil
 	}
 }
-func (m *ChunkPyramidResp) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_ChunkPyramidResp.Merge(m, src)
+func (m *ChunkPyramidHashReq) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_ChunkPyramidHashReq.Merge(m, src)
 }
-func (m *ChunkPyramidResp) XXX_Size() int {
+func (m *ChunkPyramidHashReq) XXX_Size() int {
 	return m.Size()
 }
-func (m *ChunkPyramidResp) XXX_DiscardUnknown() {
-	xxx_messageInfo_ChunkPyramidResp.DiscardUnknown(m)
+func (m *ChunkPyramidHashReq) XXX_DiscardUnknown() {
+	xxx_messageInfo_ChunkPyramidHashReq.DiscardUnknown(m)
 }
 
-var xxx_messageInfo_ChunkPyramidResp proto.InternalMessageInfo
+var xxx_messageInfo_ChunkPyramidHashReq proto.InternalMessageInfo
 
-func (m *ChunkPyramidResp) GetRootCid() []byte {
+func (m *ChunkPyramidHashReq) GetRootCid() []byte {
 	if m != nil {
 		return m.RootCid
 	}
 	return nil
 }
 
-func (m *ChunkPyramidResp) GetPyramid() map[string][]byte {
-	if m != nil {
-		return m.Pyramid
-	}
-	return nil
+type ChunkPyramidHashResp struct {
+	Hash [][]byte `protobuf:"bytes,1,rep,name=Hash,proto3" json:"Hash,omitempty"`
 }
 
-func (m *ChunkPyramidResp) GetCtn() map[string]*Overlays {
-	if m != nil {
-		return m.Ctn
-	}
-	return nil
-}
-
-type Overlays struct {
-	V [][]byte `protobuf:"bytes,1,rep,name=v,proto3" json:"v,omitempty"`
-}
-
-func (m *Overlays) Reset()         { *m = Overlays{} }
-func (m *Overlays) String() string { return proto.CompactTextString(m) }
-func (*Overlays) ProtoMessage()    {}
-func (*Overlays) Descriptor() ([]byte, []int) {
+func (m *ChunkPyramidHashResp) Reset()         { *m = ChunkPyramidHashResp{} }
+func (m *ChunkPyramidHashResp) String() string { return proto.CompactTextString(m) }
+func (*ChunkPyramidHashResp) ProtoMessage()    {}
+func (*ChunkPyramidHashResp) Descriptor() ([]byte, []int) {
 	return fileDescriptor_373dbabb20101923, []int{1}
 }
-func (m *Overlays) XXX_Unmarshal(b []byte) error {
+func (m *ChunkPyramidHashResp) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
 }
-func (m *Overlays) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+func (m *ChunkPyramidHashResp) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	if deterministic {
-		return xxx_messageInfo_Overlays.Marshal(b, m, deterministic)
+		return xxx_messageInfo_ChunkPyramidHashResp.Marshal(b, m, deterministic)
 	} else {
 		b = b[:cap(b)]
 		n, err := m.MarshalToSizedBuffer(b)
@@ -107,42 +91,42 @@ func (m *Overlays) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 		return b[:n], nil
 	}
 }
-func (m *Overlays) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_Overlays.Merge(m, src)
+func (m *ChunkPyramidHashResp) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_ChunkPyramidHashResp.Merge(m, src)
 }
-func (m *Overlays) XXX_Size() int {
+func (m *ChunkPyramidHashResp) XXX_Size() int {
 	return m.Size()
 }
-func (m *Overlays) XXX_DiscardUnknown() {
-	xxx_messageInfo_Overlays.DiscardUnknown(m)
+func (m *ChunkPyramidHashResp) XXX_DiscardUnknown() {
+	xxx_messageInfo_ChunkPyramidHashResp.DiscardUnknown(m)
 }
 
-var xxx_messageInfo_Overlays proto.InternalMessageInfo
+var xxx_messageInfo_ChunkPyramidHashResp proto.InternalMessageInfo
 
-func (m *Overlays) GetV() [][]byte {
+func (m *ChunkPyramidHashResp) GetHash() [][]byte {
 	if m != nil {
-		return m.V
+		return m.Hash
 	}
 	return nil
 }
 
-type ChunkPyramidReq struct {
-	RootCid    []byte `protobuf:"bytes,1,opt,name=RootCid,proto3" json:"RootCid,omitempty"`
-	CreateTime int64  `protobuf:"varint,2,opt,name=CreateTime,proto3" json:"CreateTime,omitempty"`
+type ChunkPyramidChunkReq struct {
+	Hash    []byte `protobuf:"bytes,1,opt,name=Hash,proto3" json:"Hash,omitempty"`
+	RootCid []byte `protobuf:"bytes,2,opt,name=RootCid,proto3" json:"RootCid,omitempty"`
 }
 
-func (m *ChunkPyramidReq) Reset()         { *m = ChunkPyramidReq{} }
-func (m *ChunkPyramidReq) String() string { return proto.CompactTextString(m) }
-func (*ChunkPyramidReq) ProtoMessage()    {}
-func (*ChunkPyramidReq) Descriptor() ([]byte, []int) {
+func (m *ChunkPyramidChunkReq) Reset()         { *m = ChunkPyramidChunkReq{} }
+func (m *ChunkPyramidChunkReq) String() string { return proto.CompactTextString(m) }
+func (*ChunkPyramidChunkReq) ProtoMessage()    {}
+func (*ChunkPyramidChunkReq) Descriptor() ([]byte, []int) {
 	return fileDescriptor_373dbabb20101923, []int{2}
 }
-func (m *ChunkPyramidReq) XXX_Unmarshal(b []byte) error {
+func (m *ChunkPyramidChunkReq) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
 }
-func (m *ChunkPyramidReq) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+func (m *ChunkPyramidChunkReq) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	if deterministic {
-		return xxx_messageInfo_ChunkPyramidReq.Marshal(b, m, deterministic)
+		return xxx_messageInfo_ChunkPyramidChunkReq.Marshal(b, m, deterministic)
 	} else {
 		b = b[:cap(b)]
 		n, err := m.MarshalToSizedBuffer(b)
@@ -152,30 +136,74 @@ func (m *ChunkPyramidReq) XXX_Marshal(b []byte, deterministic bool) ([]byte, err
 		return b[:n], nil
 	}
 }
-func (m *ChunkPyramidReq) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_ChunkPyramidReq.Merge(m, src)
+func (m *ChunkPyramidChunkReq) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_ChunkPyramidChunkReq.Merge(m, src)
 }
-func (m *ChunkPyramidReq) XXX_Size() int {
+func (m *ChunkPyramidChunkReq) XXX_Size() int {
 	return m.Size()
 }
-func (m *ChunkPyramidReq) XXX_DiscardUnknown() {
-	xxx_messageInfo_ChunkPyramidReq.DiscardUnknown(m)
+func (m *ChunkPyramidChunkReq) XXX_DiscardUnknown() {
+	xxx_messageInfo_ChunkPyramidChunkReq.DiscardUnknown(m)
 }
 
-var xxx_messageInfo_ChunkPyramidReq proto.InternalMessageInfo
+var xxx_messageInfo_ChunkPyramidChunkReq proto.InternalMessageInfo
 
-func (m *ChunkPyramidReq) GetRootCid() []byte {
+func (m *ChunkPyramidChunkReq) GetHash() []byte {
+	if m != nil {
+		return m.Hash
+	}
+	return nil
+}
+
+func (m *ChunkPyramidChunkReq) GetRootCid() []byte {
 	if m != nil {
 		return m.RootCid
 	}
 	return nil
 }
 
-func (m *ChunkPyramidReq) GetCreateTime() int64 {
-	if m != nil {
-		return m.CreateTime
+type ChunkPyramidChunkResp struct {
+	Chunk []byte `protobuf:"bytes,1,opt,name=Chunk,proto3" json:"Chunk,omitempty"`
+}
+
+func (m *ChunkPyramidChunkResp) Reset()         { *m = ChunkPyramidChunkResp{} }
+func (m *ChunkPyramidChunkResp) String() string { return proto.CompactTextString(m) }
+func (*ChunkPyramidChunkResp) ProtoMessage()    {}
+func (*ChunkPyramidChunkResp) Descriptor() ([]byte, []int) {
+	return fileDescriptor_373dbabb20101923, []int{3}
+}
+func (m *ChunkPyramidChunkResp) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *ChunkPyramidChunkResp) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_ChunkPyramidChunkResp.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalToSizedBuffer(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
 	}
-	return 0
+}
+func (m *ChunkPyramidChunkResp) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_ChunkPyramidChunkResp.Merge(m, src)
+}
+func (m *ChunkPyramidChunkResp) XXX_Size() int {
+	return m.Size()
+}
+func (m *ChunkPyramidChunkResp) XXX_DiscardUnknown() {
+	xxx_messageInfo_ChunkPyramidChunkResp.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_ChunkPyramidChunkResp proto.InternalMessageInfo
+
+func (m *ChunkPyramidChunkResp) GetChunk() []byte {
+	if m != nil {
+		return m.Chunk
+	}
+	return nil
 }
 
 type ChunkInfoReq struct {
@@ -187,7 +215,7 @@ func (m *ChunkInfoReq) Reset()         { *m = ChunkInfoReq{} }
 func (m *ChunkInfoReq) String() string { return proto.CompactTextString(m) }
 func (*ChunkInfoReq) ProtoMessage()    {}
 func (*ChunkInfoReq) Descriptor() ([]byte, []int) {
-	return fileDescriptor_373dbabb20101923, []int{3}
+	return fileDescriptor_373dbabb20101923, []int{4}
 }
 func (m *ChunkInfoReq) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -231,15 +259,15 @@ func (m *ChunkInfoReq) GetCreateTime() int64 {
 }
 
 type ChunkInfoResp struct {
-	RootCid  []byte               `protobuf:"bytes,1,opt,name=RootCid,proto3" json:"RootCid,omitempty"`
-	Presence map[string]*Overlays `protobuf:"bytes,2,rep,name=Presence,proto3" json:"Presence,omitempty" protobuf_key:"bytes,1,opt,name=key,proto3" protobuf_val:"bytes,2,opt,name=value,proto3"`
+	RootCid  []byte            `protobuf:"bytes,1,opt,name=RootCid,proto3" json:"RootCid,omitempty"`
+	Presence map[string][]byte `protobuf:"bytes,2,rep,name=Presence,proto3" json:"Presence,omitempty" protobuf_key:"bytes,1,opt,name=key,proto3" protobuf_val:"bytes,2,opt,name=value,proto3"`
 }
 
 func (m *ChunkInfoResp) Reset()         { *m = ChunkInfoResp{} }
 func (m *ChunkInfoResp) String() string { return proto.CompactTextString(m) }
 func (*ChunkInfoResp) ProtoMessage()    {}
 func (*ChunkInfoResp) Descriptor() ([]byte, []int) {
-	return fileDescriptor_373dbabb20101923, []int{4}
+	return fileDescriptor_373dbabb20101923, []int{5}
 }
 func (m *ChunkInfoResp) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -275,7 +303,7 @@ func (m *ChunkInfoResp) GetRootCid() []byte {
 	return nil
 }
 
-func (m *ChunkInfoResp) GetPresence() map[string]*Overlays {
+func (m *ChunkInfoResp) GetPresence() map[string][]byte {
 	if m != nil {
 		return m.Presence
 	}
@@ -283,45 +311,41 @@ func (m *ChunkInfoResp) GetPresence() map[string]*Overlays {
 }
 
 func init() {
-	proto.RegisterType((*ChunkPyramidResp)(nil), "chunkinfo.ChunkPyramidResp")
-	proto.RegisterMapType((map[string]*Overlays)(nil), "chunkinfo.ChunkPyramidResp.CtnEntry")
-	proto.RegisterMapType((map[string][]byte)(nil), "chunkinfo.ChunkPyramidResp.PyramidEntry")
-	proto.RegisterType((*Overlays)(nil), "chunkinfo.Overlays")
-	proto.RegisterType((*ChunkPyramidReq)(nil), "chunkinfo.ChunkPyramidReq")
+	proto.RegisterType((*ChunkPyramidHashReq)(nil), "chunkinfo.ChunkPyramidHashReq")
+	proto.RegisterType((*ChunkPyramidHashResp)(nil), "chunkinfo.ChunkPyramidHashResp")
+	proto.RegisterType((*ChunkPyramidChunkReq)(nil), "chunkinfo.ChunkPyramidChunkReq")
+	proto.RegisterType((*ChunkPyramidChunkResp)(nil), "chunkinfo.ChunkPyramidChunkResp")
 	proto.RegisterType((*ChunkInfoReq)(nil), "chunkinfo.ChunkInfoReq")
 	proto.RegisterType((*ChunkInfoResp)(nil), "chunkinfo.ChunkInfoResp")
-	proto.RegisterMapType((map[string]*Overlays)(nil), "chunkinfo.ChunkInfoResp.PresenceEntry")
+	proto.RegisterMapType((map[string][]byte)(nil), "chunkinfo.ChunkInfoResp.PresenceEntry")
 }
 
 func init() { proto.RegisterFile("chunkinfo.proto", fileDescriptor_373dbabb20101923) }
 
 var fileDescriptor_373dbabb20101923 = []byte{
-	// 340 bytes of a gzipped FileDescriptorProto
+	// 293 bytes of a gzipped FileDescriptorProto
 	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xe2, 0xe2, 0x4f, 0xce, 0x28, 0xcd,
 	0xcb, 0xce, 0xcc, 0x4b, 0xcb, 0xd7, 0x2b, 0x28, 0xca, 0x2f, 0xc9, 0x17, 0xe2, 0x84, 0x0b, 0x28,
-	0x6d, 0x64, 0xe2, 0x12, 0x70, 0x06, 0xf1, 0x02, 0x2a, 0x8b, 0x12, 0x73, 0x33, 0x53, 0x82, 0x52,
-	0x8b, 0x0b, 0x84, 0x24, 0xb8, 0xd8, 0x83, 0xf2, 0xf3, 0x4b, 0x9c, 0x33, 0x53, 0x24, 0x18, 0x15,
-	0x18, 0x35, 0x78, 0x82, 0x60, 0x5c, 0x21, 0x27, 0x2e, 0x76, 0xa8, 0x42, 0x09, 0x26, 0x05, 0x66,
-	0x0d, 0x6e, 0x23, 0x0d, 0x3d, 0x84, 0xe1, 0xe8, 0xe6, 0xe8, 0x41, 0xd9, 0xae, 0x79, 0x25, 0x45,
-	0x95, 0x41, 0x30, 0x8d, 0x42, 0x66, 0x5c, 0xcc, 0xce, 0x25, 0x79, 0x12, 0xcc, 0x60, 0xfd, 0x2a,
-	0xf8, 0xf4, 0x3b, 0x97, 0xe4, 0x41, 0xf4, 0x82, 0x34, 0x48, 0x59, 0x71, 0xf1, 0x20, 0x1b, 0x28,
-	0x24, 0xc0, 0xc5, 0x9c, 0x9d, 0x5a, 0x09, 0x76, 0x21, 0x67, 0x10, 0x88, 0x29, 0x24, 0xc2, 0xc5,
-	0x5a, 0x96, 0x98, 0x53, 0x9a, 0x2a, 0xc1, 0x04, 0x76, 0x35, 0x84, 0x63, 0xc5, 0x64, 0xc1, 0x28,
-	0xe5, 0xcd, 0xc5, 0x01, 0x33, 0x0c, 0x8b, 0x3e, 0x4d, 0x64, 0x7d, 0xdc, 0x46, 0xc2, 0x48, 0x6e,
-	0xf2, 0x2f, 0x4b, 0x2d, 0xca, 0x49, 0xac, 0x2c, 0x46, 0x32, 0x4c, 0x49, 0x82, 0x8b, 0x03, 0x26,
-	0x2c, 0xc4, 0xc3, 0xc5, 0x58, 0x26, 0xc1, 0xa8, 0xc0, 0xac, 0xc1, 0x13, 0xc4, 0x58, 0xa6, 0xe4,
-	0xcd, 0xc5, 0x8f, 0xea, 0x89, 0x42, 0x3c, 0x61, 0x29, 0xc7, 0xc5, 0xe5, 0x5c, 0x94, 0x9a, 0x58,
-	0x92, 0x1a, 0x92, 0x99, 0x0b, 0xb1, 0x9a, 0x39, 0x08, 0x49, 0x44, 0xc9, 0x83, 0x8b, 0x07, 0x6c,
-	0x98, 0x67, 0x5e, 0x5a, 0x3e, 0x65, 0x26, 0xed, 0x67, 0xe4, 0xe2, 0x45, 0x32, 0x8a, 0x40, 0x0c,
-	0x73, 0x04, 0x14, 0xa5, 0x16, 0xa7, 0xe6, 0x25, 0xa7, 0x42, 0xa3, 0x58, 0x0d, 0x3d, 0x8a, 0x60,
-	0xa6, 0xe8, 0xc1, 0x14, 0x42, 0x22, 0x09, 0xae, 0x4f, 0x2a, 0x80, 0x8b, 0x17, 0x45, 0x8a, 0xe2,
-	0x20, 0x77, 0x92, 0x39, 0xf1, 0x48, 0x8e, 0xf1, 0xc2, 0x23, 0x39, 0xc6, 0x07, 0x8f, 0xe4, 0x18,
-	0x27, 0x3c, 0x96, 0x63, 0xb8, 0xf0, 0x58, 0x8e, 0xe1, 0xc6, 0x63, 0x39, 0x86, 0x28, 0xa6, 0x82,
-	0xa4, 0x24, 0x36, 0x70, 0xb2, 0x36, 0x06, 0x04, 0x00, 0x00, 0xff, 0xff, 0x42, 0x9c, 0xb0, 0x0e,
-	0xe9, 0x02, 0x00, 0x00,
+	0xe9, 0x73, 0x09, 0x3b, 0x83, 0x38, 0x01, 0x95, 0x45, 0x89, 0xb9, 0x99, 0x29, 0x1e, 0x89, 0xc5,
+	0x19, 0x41, 0xa9, 0x85, 0x42, 0x12, 0x5c, 0xec, 0x41, 0xf9, 0xf9, 0x25, 0xce, 0x99, 0x29, 0x12,
+	0x8c, 0x0a, 0x8c, 0x1a, 0x3c, 0x41, 0x30, 0xae, 0x92, 0x16, 0x97, 0x08, 0xa6, 0x86, 0xe2, 0x02,
+	0x21, 0x21, 0x2e, 0x16, 0x10, 0x5b, 0x82, 0x51, 0x81, 0x59, 0x83, 0x27, 0x08, 0xcc, 0x56, 0x72,
+	0x41, 0x55, 0x0b, 0x66, 0x83, 0x4c, 0x47, 0xa8, 0x65, 0x84, 0xa9, 0x45, 0xb6, 0x91, 0x09, 0xd5,
+	0x46, 0x5d, 0x2e, 0x51, 0x2c, 0xa6, 0x14, 0x17, 0x08, 0x89, 0x70, 0xb1, 0x82, 0x39, 0x50, 0x73,
+	0x20, 0x1c, 0x25, 0x0f, 0x2e, 0x1e, 0x30, 0xc3, 0x33, 0x2f, 0x2d, 0x1f, 0xaf, 0x57, 0x84, 0xe4,
+	0xb8, 0xb8, 0x9c, 0x8b, 0x52, 0x13, 0x4b, 0x52, 0x43, 0x32, 0x73, 0x53, 0xc1, 0xb6, 0x32, 0x07,
+	0x21, 0x89, 0x28, 0xad, 0x62, 0xe4, 0xe2, 0x45, 0x32, 0xaa, 0xb8, 0x00, 0x8f, 0x59, 0x4e, 0x5c,
+	0x1c, 0x01, 0x45, 0xa9, 0xc5, 0xa9, 0x79, 0xc9, 0x20, 0x93, 0x98, 0x35, 0xb8, 0x8d, 0xd4, 0xf4,
+	0x10, 0xc1, 0x8e, 0x62, 0x8a, 0x1e, 0x4c, 0xa1, 0x6b, 0x5e, 0x49, 0x51, 0x65, 0x10, 0x5c, 0x9f,
+	0x94, 0x35, 0x17, 0x2f, 0x8a, 0x94, 0x90, 0x00, 0x17, 0x73, 0x76, 0x6a, 0x25, 0xd8, 0x2a, 0xce,
+	0x20, 0x10, 0x13, 0xe4, 0xe5, 0xb2, 0xc4, 0x9c, 0xd2, 0x54, 0x68, 0x18, 0x41, 0x38, 0x56, 0x4c,
+	0x16, 0x8c, 0x4e, 0x32, 0x27, 0x1e, 0xc9, 0x31, 0x5e, 0x78, 0x24, 0xc7, 0xf8, 0xe0, 0x91, 0x1c,
+	0xe3, 0x84, 0xc7, 0x72, 0x0c, 0x17, 0x1e, 0xcb, 0x31, 0xdc, 0x78, 0x2c, 0xc7, 0x10, 0xc5, 0x54,
+	0x90, 0x94, 0xc4, 0x06, 0x8e, 0x78, 0x63, 0x40, 0x00, 0x00, 0x00, 0xff, 0xff, 0x70, 0xd3, 0x80,
+	0xe1, 0x0b, 0x02, 0x00, 0x00,
 }
 
-func (m *ChunkPyramidResp) Marshal() (dAtA []byte, err error) {
+func (m *ChunkPyramidHashReq) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
 	dAtA = make([]byte, size)
 	n, err := m.MarshalToSizedBuffer(dAtA[:size])
@@ -331,63 +355,16 @@ func (m *ChunkPyramidResp) Marshal() (dAtA []byte, err error) {
 	return dAtA[:n], nil
 }
 
-func (m *ChunkPyramidResp) MarshalTo(dAtA []byte) (int, error) {
+func (m *ChunkPyramidHashReq) MarshalTo(dAtA []byte) (int, error) {
 	size := m.Size()
 	return m.MarshalToSizedBuffer(dAtA[:size])
 }
 
-func (m *ChunkPyramidResp) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+func (m *ChunkPyramidHashReq) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 	i := len(dAtA)
 	_ = i
 	var l int
 	_ = l
-	if len(m.Ctn) > 0 {
-		for k := range m.Ctn {
-			v := m.Ctn[k]
-			baseI := i
-			if v != nil {
-				{
-					size, err := v.MarshalToSizedBuffer(dAtA[:i])
-					if err != nil {
-						return 0, err
-					}
-					i -= size
-					i = encodeVarintChunkinfo(dAtA, i, uint64(size))
-				}
-				i--
-				dAtA[i] = 0x12
-			}
-			i -= len(k)
-			copy(dAtA[i:], k)
-			i = encodeVarintChunkinfo(dAtA, i, uint64(len(k)))
-			i--
-			dAtA[i] = 0xa
-			i = encodeVarintChunkinfo(dAtA, i, uint64(baseI-i))
-			i--
-			dAtA[i] = 0x1a
-		}
-	}
-	if len(m.Pyramid) > 0 {
-		for k := range m.Pyramid {
-			v := m.Pyramid[k]
-			baseI := i
-			if len(v) > 0 {
-				i -= len(v)
-				copy(dAtA[i:], v)
-				i = encodeVarintChunkinfo(dAtA, i, uint64(len(v)))
-				i--
-				dAtA[i] = 0x12
-			}
-			i -= len(k)
-			copy(dAtA[i:], k)
-			i = encodeVarintChunkinfo(dAtA, i, uint64(len(k)))
-			i--
-			dAtA[i] = 0xa
-			i = encodeVarintChunkinfo(dAtA, i, uint64(baseI-i))
-			i--
-			dAtA[i] = 0x12
-		}
-	}
 	if len(m.RootCid) > 0 {
 		i -= len(m.RootCid)
 		copy(dAtA[i:], m.RootCid)
@@ -398,7 +375,7 @@ func (m *ChunkPyramidResp) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 	return len(dAtA) - i, nil
 }
 
-func (m *Overlays) Marshal() (dAtA []byte, err error) {
+func (m *ChunkPyramidHashResp) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
 	dAtA = make([]byte, size)
 	n, err := m.MarshalToSizedBuffer(dAtA[:size])
@@ -408,21 +385,21 @@ func (m *Overlays) Marshal() (dAtA []byte, err error) {
 	return dAtA[:n], nil
 }
 
-func (m *Overlays) MarshalTo(dAtA []byte) (int, error) {
+func (m *ChunkPyramidHashResp) MarshalTo(dAtA []byte) (int, error) {
 	size := m.Size()
 	return m.MarshalToSizedBuffer(dAtA[:size])
 }
 
-func (m *Overlays) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+func (m *ChunkPyramidHashResp) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 	i := len(dAtA)
 	_ = i
 	var l int
 	_ = l
-	if len(m.V) > 0 {
-		for iNdEx := len(m.V) - 1; iNdEx >= 0; iNdEx-- {
-			i -= len(m.V[iNdEx])
-			copy(dAtA[i:], m.V[iNdEx])
-			i = encodeVarintChunkinfo(dAtA, i, uint64(len(m.V[iNdEx])))
+	if len(m.Hash) > 0 {
+		for iNdEx := len(m.Hash) - 1; iNdEx >= 0; iNdEx-- {
+			i -= len(m.Hash[iNdEx])
+			copy(dAtA[i:], m.Hash[iNdEx])
+			i = encodeVarintChunkinfo(dAtA, i, uint64(len(m.Hash[iNdEx])))
 			i--
 			dAtA[i] = 0xa
 		}
@@ -430,7 +407,7 @@ func (m *Overlays) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 	return len(dAtA) - i, nil
 }
 
-func (m *ChunkPyramidReq) Marshal() (dAtA []byte, err error) {
+func (m *ChunkPyramidChunkReq) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
 	dAtA = make([]byte, size)
 	n, err := m.MarshalToSizedBuffer(dAtA[:size])
@@ -440,25 +417,57 @@ func (m *ChunkPyramidReq) Marshal() (dAtA []byte, err error) {
 	return dAtA[:n], nil
 }
 
-func (m *ChunkPyramidReq) MarshalTo(dAtA []byte) (int, error) {
+func (m *ChunkPyramidChunkReq) MarshalTo(dAtA []byte) (int, error) {
 	size := m.Size()
 	return m.MarshalToSizedBuffer(dAtA[:size])
 }
 
-func (m *ChunkPyramidReq) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+func (m *ChunkPyramidChunkReq) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 	i := len(dAtA)
 	_ = i
 	var l int
 	_ = l
-	if m.CreateTime != 0 {
-		i = encodeVarintChunkinfo(dAtA, i, uint64(m.CreateTime))
-		i--
-		dAtA[i] = 0x10
-	}
 	if len(m.RootCid) > 0 {
 		i -= len(m.RootCid)
 		copy(dAtA[i:], m.RootCid)
 		i = encodeVarintChunkinfo(dAtA, i, uint64(len(m.RootCid)))
+		i--
+		dAtA[i] = 0x12
+	}
+	if len(m.Hash) > 0 {
+		i -= len(m.Hash)
+		copy(dAtA[i:], m.Hash)
+		i = encodeVarintChunkinfo(dAtA, i, uint64(len(m.Hash)))
+		i--
+		dAtA[i] = 0xa
+	}
+	return len(dAtA) - i, nil
+}
+
+func (m *ChunkPyramidChunkResp) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *ChunkPyramidChunkResp) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *ChunkPyramidChunkResp) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	if len(m.Chunk) > 0 {
+		i -= len(m.Chunk)
+		copy(dAtA[i:], m.Chunk)
+		i = encodeVarintChunkinfo(dAtA, i, uint64(len(m.Chunk)))
 		i--
 		dAtA[i] = 0xa
 	}
@@ -524,15 +533,10 @@ func (m *ChunkInfoResp) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 		for k := range m.Presence {
 			v := m.Presence[k]
 			baseI := i
-			if v != nil {
-				{
-					size, err := v.MarshalToSizedBuffer(dAtA[:i])
-					if err != nil {
-						return 0, err
-					}
-					i -= size
-					i = encodeVarintChunkinfo(dAtA, i, uint64(size))
-				}
+			if len(v) > 0 {
+				i -= len(v)
+				copy(dAtA[i:], v)
+				i = encodeVarintChunkinfo(dAtA, i, uint64(len(v)))
 				i--
 				dAtA[i] = 0x12
 			}
@@ -567,7 +571,7 @@ func encodeVarintChunkinfo(dAtA []byte, offset int, v uint64) int {
 	dAtA[offset] = uint8(v)
 	return base
 }
-func (m *ChunkPyramidResp) Size() (n int) {
+func (m *ChunkPyramidHashReq) Size() (n int) {
 	if m == nil {
 		return 0
 	}
@@ -577,42 +581,17 @@ func (m *ChunkPyramidResp) Size() (n int) {
 	if l > 0 {
 		n += 1 + l + sovChunkinfo(uint64(l))
 	}
-	if len(m.Pyramid) > 0 {
-		for k, v := range m.Pyramid {
-			_ = k
-			_ = v
-			l = 0
-			if len(v) > 0 {
-				l = 1 + len(v) + sovChunkinfo(uint64(len(v)))
-			}
-			mapEntrySize := 1 + len(k) + sovChunkinfo(uint64(len(k))) + l
-			n += mapEntrySize + 1 + sovChunkinfo(uint64(mapEntrySize))
-		}
-	}
-	if len(m.Ctn) > 0 {
-		for k, v := range m.Ctn {
-			_ = k
-			_ = v
-			l = 0
-			if v != nil {
-				l = v.Size()
-				l += 1 + sovChunkinfo(uint64(l))
-			}
-			mapEntrySize := 1 + len(k) + sovChunkinfo(uint64(len(k))) + l
-			n += mapEntrySize + 1 + sovChunkinfo(uint64(mapEntrySize))
-		}
-	}
 	return n
 }
 
-func (m *Overlays) Size() (n int) {
+func (m *ChunkPyramidHashResp) Size() (n int) {
 	if m == nil {
 		return 0
 	}
 	var l int
 	_ = l
-	if len(m.V) > 0 {
-		for _, b := range m.V {
+	if len(m.Hash) > 0 {
+		for _, b := range m.Hash {
 			l = len(b)
 			n += 1 + l + sovChunkinfo(uint64(l))
 		}
@@ -620,18 +599,32 @@ func (m *Overlays) Size() (n int) {
 	return n
 }
 
-func (m *ChunkPyramidReq) Size() (n int) {
+func (m *ChunkPyramidChunkReq) Size() (n int) {
 	if m == nil {
 		return 0
 	}
 	var l int
 	_ = l
+	l = len(m.Hash)
+	if l > 0 {
+		n += 1 + l + sovChunkinfo(uint64(l))
+	}
 	l = len(m.RootCid)
 	if l > 0 {
 		n += 1 + l + sovChunkinfo(uint64(l))
 	}
-	if m.CreateTime != 0 {
-		n += 1 + sovChunkinfo(uint64(m.CreateTime))
+	return n
+}
+
+func (m *ChunkPyramidChunkResp) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	l = len(m.Chunk)
+	if l > 0 {
+		n += 1 + l + sovChunkinfo(uint64(l))
 	}
 	return n
 }
@@ -667,9 +660,8 @@ func (m *ChunkInfoResp) Size() (n int) {
 			_ = k
 			_ = v
 			l = 0
-			if v != nil {
-				l = v.Size()
-				l += 1 + sovChunkinfo(uint64(l))
+			if len(v) > 0 {
+				l = 1 + len(v) + sovChunkinfo(uint64(len(v)))
 			}
 			mapEntrySize := 1 + len(k) + sovChunkinfo(uint64(len(k))) + l
 			n += mapEntrySize + 1 + sovChunkinfo(uint64(mapEntrySize))
@@ -684,7 +676,7 @@ func sovChunkinfo(x uint64) (n int) {
 func sozChunkinfo(x uint64) (n int) {
 	return sovChunkinfo(uint64((x << 1) ^ uint64((int64(x) >> 63))))
 }
-func (m *ChunkPyramidResp) Unmarshal(dAtA []byte) error {
+func (m *ChunkPyramidHashReq) Unmarshal(dAtA []byte) error {
 	l := len(dAtA)
 	iNdEx := 0
 	for iNdEx < l {
@@ -707,10 +699,10 @@ func (m *ChunkPyramidResp) Unmarshal(dAtA []byte) error {
 		fieldNum := int32(wire >> 3)
 		wireType := int(wire & 0x7)
 		if wireType == 4 {
-			return fmt.Errorf("proto: ChunkPyramidResp: wiretype end group for non-group")
+			return fmt.Errorf("proto: ChunkPyramidHashReq: wiretype end group for non-group")
 		}
 		if fieldNum <= 0 {
-			return fmt.Errorf("proto: ChunkPyramidResp: illegal tag %d (wire type %d)", fieldNum, wire)
+			return fmt.Errorf("proto: ChunkPyramidHashReq: illegal tag %d (wire type %d)", fieldNum, wire)
 		}
 		switch fieldNum {
 		case 1:
@@ -747,263 +739,6 @@ func (m *ChunkPyramidResp) Unmarshal(dAtA []byte) error {
 				m.RootCid = []byte{}
 			}
 			iNdEx = postIndex
-		case 2:
-			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field Pyramid", wireType)
-			}
-			var msglen int
-			for shift := uint(0); ; shift += 7 {
-				if shift >= 64 {
-					return ErrIntOverflowChunkinfo
-				}
-				if iNdEx >= l {
-					return io.ErrUnexpectedEOF
-				}
-				b := dAtA[iNdEx]
-				iNdEx++
-				msglen |= int(b&0x7F) << shift
-				if b < 0x80 {
-					break
-				}
-			}
-			if msglen < 0 {
-				return ErrInvalidLengthChunkinfo
-			}
-			postIndex := iNdEx + msglen
-			if postIndex < 0 {
-				return ErrInvalidLengthChunkinfo
-			}
-			if postIndex > l {
-				return io.ErrUnexpectedEOF
-			}
-			if m.Pyramid == nil {
-				m.Pyramid = make(map[string][]byte)
-			}
-			var mapkey string
-			mapvalue := []byte{}
-			for iNdEx < postIndex {
-				entryPreIndex := iNdEx
-				var wire uint64
-				for shift := uint(0); ; shift += 7 {
-					if shift >= 64 {
-						return ErrIntOverflowChunkinfo
-					}
-					if iNdEx >= l {
-						return io.ErrUnexpectedEOF
-					}
-					b := dAtA[iNdEx]
-					iNdEx++
-					wire |= uint64(b&0x7F) << shift
-					if b < 0x80 {
-						break
-					}
-				}
-				fieldNum := int32(wire >> 3)
-				if fieldNum == 1 {
-					var stringLenmapkey uint64
-					for shift := uint(0); ; shift += 7 {
-						if shift >= 64 {
-							return ErrIntOverflowChunkinfo
-						}
-						if iNdEx >= l {
-							return io.ErrUnexpectedEOF
-						}
-						b := dAtA[iNdEx]
-						iNdEx++
-						stringLenmapkey |= uint64(b&0x7F) << shift
-						if b < 0x80 {
-							break
-						}
-					}
-					intStringLenmapkey := int(stringLenmapkey)
-					if intStringLenmapkey < 0 {
-						return ErrInvalidLengthChunkinfo
-					}
-					postStringIndexmapkey := iNdEx + intStringLenmapkey
-					if postStringIndexmapkey < 0 {
-						return ErrInvalidLengthChunkinfo
-					}
-					if postStringIndexmapkey > l {
-						return io.ErrUnexpectedEOF
-					}
-					mapkey = string(dAtA[iNdEx:postStringIndexmapkey])
-					iNdEx = postStringIndexmapkey
-				} else if fieldNum == 2 {
-					var mapbyteLen uint64
-					for shift := uint(0); ; shift += 7 {
-						if shift >= 64 {
-							return ErrIntOverflowChunkinfo
-						}
-						if iNdEx >= l {
-							return io.ErrUnexpectedEOF
-						}
-						b := dAtA[iNdEx]
-						iNdEx++
-						mapbyteLen |= uint64(b&0x7F) << shift
-						if b < 0x80 {
-							break
-						}
-					}
-					intMapbyteLen := int(mapbyteLen)
-					if intMapbyteLen < 0 {
-						return ErrInvalidLengthChunkinfo
-					}
-					postbytesIndex := iNdEx + intMapbyteLen
-					if postbytesIndex < 0 {
-						return ErrInvalidLengthChunkinfo
-					}
-					if postbytesIndex > l {
-						return io.ErrUnexpectedEOF
-					}
-					mapvalue = make([]byte, mapbyteLen)
-					copy(mapvalue, dAtA[iNdEx:postbytesIndex])
-					iNdEx = postbytesIndex
-				} else {
-					iNdEx = entryPreIndex
-					skippy, err := skipChunkinfo(dAtA[iNdEx:])
-					if err != nil {
-						return err
-					}
-					if (skippy < 0) || (iNdEx+skippy) < 0 {
-						return ErrInvalidLengthChunkinfo
-					}
-					if (iNdEx + skippy) > postIndex {
-						return io.ErrUnexpectedEOF
-					}
-					iNdEx += skippy
-				}
-			}
-			m.Pyramid[mapkey] = mapvalue
-			iNdEx = postIndex
-		case 3:
-			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field Ctn", wireType)
-			}
-			var msglen int
-			for shift := uint(0); ; shift += 7 {
-				if shift >= 64 {
-					return ErrIntOverflowChunkinfo
-				}
-				if iNdEx >= l {
-					return io.ErrUnexpectedEOF
-				}
-				b := dAtA[iNdEx]
-				iNdEx++
-				msglen |= int(b&0x7F) << shift
-				if b < 0x80 {
-					break
-				}
-			}
-			if msglen < 0 {
-				return ErrInvalidLengthChunkinfo
-			}
-			postIndex := iNdEx + msglen
-			if postIndex < 0 {
-				return ErrInvalidLengthChunkinfo
-			}
-			if postIndex > l {
-				return io.ErrUnexpectedEOF
-			}
-			if m.Ctn == nil {
-				m.Ctn = make(map[string]*Overlays)
-			}
-			var mapkey string
-			var mapvalue *Overlays
-			for iNdEx < postIndex {
-				entryPreIndex := iNdEx
-				var wire uint64
-				for shift := uint(0); ; shift += 7 {
-					if shift >= 64 {
-						return ErrIntOverflowChunkinfo
-					}
-					if iNdEx >= l {
-						return io.ErrUnexpectedEOF
-					}
-					b := dAtA[iNdEx]
-					iNdEx++
-					wire |= uint64(b&0x7F) << shift
-					if b < 0x80 {
-						break
-					}
-				}
-				fieldNum := int32(wire >> 3)
-				if fieldNum == 1 {
-					var stringLenmapkey uint64
-					for shift := uint(0); ; shift += 7 {
-						if shift >= 64 {
-							return ErrIntOverflowChunkinfo
-						}
-						if iNdEx >= l {
-							return io.ErrUnexpectedEOF
-						}
-						b := dAtA[iNdEx]
-						iNdEx++
-						stringLenmapkey |= uint64(b&0x7F) << shift
-						if b < 0x80 {
-							break
-						}
-					}
-					intStringLenmapkey := int(stringLenmapkey)
-					if intStringLenmapkey < 0 {
-						return ErrInvalidLengthChunkinfo
-					}
-					postStringIndexmapkey := iNdEx + intStringLenmapkey
-					if postStringIndexmapkey < 0 {
-						return ErrInvalidLengthChunkinfo
-					}
-					if postStringIndexmapkey > l {
-						return io.ErrUnexpectedEOF
-					}
-					mapkey = string(dAtA[iNdEx:postStringIndexmapkey])
-					iNdEx = postStringIndexmapkey
-				} else if fieldNum == 2 {
-					var mapmsglen int
-					for shift := uint(0); ; shift += 7 {
-						if shift >= 64 {
-							return ErrIntOverflowChunkinfo
-						}
-						if iNdEx >= l {
-							return io.ErrUnexpectedEOF
-						}
-						b := dAtA[iNdEx]
-						iNdEx++
-						mapmsglen |= int(b&0x7F) << shift
-						if b < 0x80 {
-							break
-						}
-					}
-					if mapmsglen < 0 {
-						return ErrInvalidLengthChunkinfo
-					}
-					postmsgIndex := iNdEx + mapmsglen
-					if postmsgIndex < 0 {
-						return ErrInvalidLengthChunkinfo
-					}
-					if postmsgIndex > l {
-						return io.ErrUnexpectedEOF
-					}
-					mapvalue = &Overlays{}
-					if err := mapvalue.Unmarshal(dAtA[iNdEx:postmsgIndex]); err != nil {
-						return err
-					}
-					iNdEx = postmsgIndex
-				} else {
-					iNdEx = entryPreIndex
-					skippy, err := skipChunkinfo(dAtA[iNdEx:])
-					if err != nil {
-						return err
-					}
-					if (skippy < 0) || (iNdEx+skippy) < 0 {
-						return ErrInvalidLengthChunkinfo
-					}
-					if (iNdEx + skippy) > postIndex {
-						return io.ErrUnexpectedEOF
-					}
-					iNdEx += skippy
-				}
-			}
-			m.Ctn[mapkey] = mapvalue
-			iNdEx = postIndex
 		default:
 			iNdEx = preIndex
 			skippy, err := skipChunkinfo(dAtA[iNdEx:])
@@ -1025,7 +760,7 @@ func (m *ChunkPyramidResp) Unmarshal(dAtA []byte) error {
 	}
 	return nil
 }
-func (m *Overlays) Unmarshal(dAtA []byte) error {
+func (m *ChunkPyramidHashResp) Unmarshal(dAtA []byte) error {
 	l := len(dAtA)
 	iNdEx := 0
 	for iNdEx < l {
@@ -1048,15 +783,15 @@ func (m *Overlays) Unmarshal(dAtA []byte) error {
 		fieldNum := int32(wire >> 3)
 		wireType := int(wire & 0x7)
 		if wireType == 4 {
-			return fmt.Errorf("proto: Overlays: wiretype end group for non-group")
+			return fmt.Errorf("proto: ChunkPyramidHashResp: wiretype end group for non-group")
 		}
 		if fieldNum <= 0 {
-			return fmt.Errorf("proto: Overlays: illegal tag %d (wire type %d)", fieldNum, wire)
+			return fmt.Errorf("proto: ChunkPyramidHashResp: illegal tag %d (wire type %d)", fieldNum, wire)
 		}
 		switch fieldNum {
 		case 1:
 			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field V", wireType)
+				return fmt.Errorf("proto: wrong wireType = %d for field Hash", wireType)
 			}
 			var byteLen int
 			for shift := uint(0); ; shift += 7 {
@@ -1083,8 +818,8 @@ func (m *Overlays) Unmarshal(dAtA []byte) error {
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.V = append(m.V, make([]byte, postIndex-iNdEx))
-			copy(m.V[len(m.V)-1], dAtA[iNdEx:postIndex])
+			m.Hash = append(m.Hash, make([]byte, postIndex-iNdEx))
+			copy(m.Hash[len(m.Hash)-1], dAtA[iNdEx:postIndex])
 			iNdEx = postIndex
 		default:
 			iNdEx = preIndex
@@ -1107,7 +842,7 @@ func (m *Overlays) Unmarshal(dAtA []byte) error {
 	}
 	return nil
 }
-func (m *ChunkPyramidReq) Unmarshal(dAtA []byte) error {
+func (m *ChunkPyramidChunkReq) Unmarshal(dAtA []byte) error {
 	l := len(dAtA)
 	iNdEx := 0
 	for iNdEx < l {
@@ -1130,13 +865,47 @@ func (m *ChunkPyramidReq) Unmarshal(dAtA []byte) error {
 		fieldNum := int32(wire >> 3)
 		wireType := int(wire & 0x7)
 		if wireType == 4 {
-			return fmt.Errorf("proto: ChunkPyramidReq: wiretype end group for non-group")
+			return fmt.Errorf("proto: ChunkPyramidChunkReq: wiretype end group for non-group")
 		}
 		if fieldNum <= 0 {
-			return fmt.Errorf("proto: ChunkPyramidReq: illegal tag %d (wire type %d)", fieldNum, wire)
+			return fmt.Errorf("proto: ChunkPyramidChunkReq: illegal tag %d (wire type %d)", fieldNum, wire)
 		}
 		switch fieldNum {
 		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Hash", wireType)
+			}
+			var byteLen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowChunkinfo
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				byteLen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if byteLen < 0 {
+				return ErrInvalidLengthChunkinfo
+			}
+			postIndex := iNdEx + byteLen
+			if postIndex < 0 {
+				return ErrInvalidLengthChunkinfo
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Hash = append(m.Hash[:0], dAtA[iNdEx:postIndex]...)
+			if m.Hash == nil {
+				m.Hash = []byte{}
+			}
+			iNdEx = postIndex
+		case 2:
 			if wireType != 2 {
 				return fmt.Errorf("proto: wrong wireType = %d for field RootCid", wireType)
 			}
@@ -1170,11 +939,61 @@ func (m *ChunkPyramidReq) Unmarshal(dAtA []byte) error {
 				m.RootCid = []byte{}
 			}
 			iNdEx = postIndex
-		case 2:
-			if wireType != 0 {
-				return fmt.Errorf("proto: wrong wireType = %d for field CreateTime", wireType)
+		default:
+			iNdEx = preIndex
+			skippy, err := skipChunkinfo(dAtA[iNdEx:])
+			if err != nil {
+				return err
 			}
-			m.CreateTime = 0
+			if (skippy < 0) || (iNdEx+skippy) < 0 {
+				return ErrInvalidLengthChunkinfo
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *ChunkPyramidChunkResp) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowChunkinfo
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: ChunkPyramidChunkResp: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: ChunkPyramidChunkResp: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Chunk", wireType)
+			}
+			var byteLen int
 			for shift := uint(0); ; shift += 7 {
 				if shift >= 64 {
 					return ErrIntOverflowChunkinfo
@@ -1184,11 +1003,26 @@ func (m *ChunkPyramidReq) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				m.CreateTime |= int64(b&0x7F) << shift
+				byteLen |= int(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
 			}
+			if byteLen < 0 {
+				return ErrInvalidLengthChunkinfo
+			}
+			postIndex := iNdEx + byteLen
+			if postIndex < 0 {
+				return ErrInvalidLengthChunkinfo
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Chunk = append(m.Chunk[:0], dAtA[iNdEx:postIndex]...)
+			if m.Chunk == nil {
+				m.Chunk = []byte{}
+			}
+			iNdEx = postIndex
 		default:
 			iNdEx = preIndex
 			skippy, err := skipChunkinfo(dAtA[iNdEx:])
@@ -1406,10 +1240,10 @@ func (m *ChunkInfoResp) Unmarshal(dAtA []byte) error {
 				return io.ErrUnexpectedEOF
 			}
 			if m.Presence == nil {
-				m.Presence = make(map[string]*Overlays)
+				m.Presence = make(map[string][]byte)
 			}
 			var mapkey string
-			var mapvalue *Overlays
+			mapvalue := []byte{}
 			for iNdEx < postIndex {
 				entryPreIndex := iNdEx
 				var wire uint64
@@ -1458,7 +1292,7 @@ func (m *ChunkInfoResp) Unmarshal(dAtA []byte) error {
 					mapkey = string(dAtA[iNdEx:postStringIndexmapkey])
 					iNdEx = postStringIndexmapkey
 				} else if fieldNum == 2 {
-					var mapmsglen int
+					var mapbyteLen uint64
 					for shift := uint(0); ; shift += 7 {
 						if shift >= 64 {
 							return ErrIntOverflowChunkinfo
@@ -1468,26 +1302,25 @@ func (m *ChunkInfoResp) Unmarshal(dAtA []byte) error {
 						}
 						b := dAtA[iNdEx]
 						iNdEx++
-						mapmsglen |= int(b&0x7F) << shift
+						mapbyteLen |= uint64(b&0x7F) << shift
 						if b < 0x80 {
 							break
 						}
 					}
-					if mapmsglen < 0 {
+					intMapbyteLen := int(mapbyteLen)
+					if intMapbyteLen < 0 {
 						return ErrInvalidLengthChunkinfo
 					}
-					postmsgIndex := iNdEx + mapmsglen
-					if postmsgIndex < 0 {
+					postbytesIndex := iNdEx + intMapbyteLen
+					if postbytesIndex < 0 {
 						return ErrInvalidLengthChunkinfo
 					}
-					if postmsgIndex > l {
+					if postbytesIndex > l {
 						return io.ErrUnexpectedEOF
 					}
-					mapvalue = &Overlays{}
-					if err := mapvalue.Unmarshal(dAtA[iNdEx:postmsgIndex]); err != nil {
-						return err
-					}
-					iNdEx = postmsgIndex
+					mapvalue = make([]byte, mapbyteLen)
+					copy(mapvalue, dAtA[iNdEx:postbytesIndex])
+					iNdEx = postbytesIndex
 				} else {
 					iNdEx = entryPreIndex
 					skippy, err := skipChunkinfo(dAtA[iNdEx:])

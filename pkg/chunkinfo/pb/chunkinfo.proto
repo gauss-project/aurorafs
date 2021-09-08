@@ -8,19 +8,21 @@ package chunkinfo;
 
 option go_package = "pb";
 
-message ChunkPyramidResp {
+message ChunkPyramidHashReq {
   bytes RootCid = 1;
-  map<string, bytes> Pyramid = 2;
-  map<string, Overlays> Ctn = 3;
 }
 
-message Overlays {
-  repeated bytes v = 1;
+message ChunkPyramidHashResp{
+  repeated bytes Hash = 1;
 }
 
-message ChunkPyramidReq {
-  bytes RootCid = 1;
-  int64 CreateTime = 2;
+message ChunkPyramidChunkReq {
+  bytes Hash = 1;
+  bytes RootCid = 2;
+}
+
+message ChunkPyramidChunkResp{
+  bytes Chunk = 1;
 }
 
 message ChunkInfoReq {
@@ -30,5 +32,5 @@ message ChunkInfoReq {
 
 message ChunkInfoResp {
   bytes RootCid = 1;
-  map<string, Overlays> Presence = 2;
+  map<string, bytes> Presence = 2;
 }

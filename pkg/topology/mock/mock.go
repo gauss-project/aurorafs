@@ -9,14 +9,18 @@ import (
 	"sync"
 
 	"github.com/gauss-project/aurorafs/pkg/boson"
+	"github.com/gauss-project/aurorafs/pkg/p2p"
 	"github.com/gauss-project/aurorafs/pkg/topology"
 )
 
 type mock struct {
-	peers          []boson.Address
-	closestPeer    boson.Address
-	closestPeerErr error
+	peers           []boson.Address
+	depth           uint8
+	closestPeer     boson.Address
+	closestPeerErr  error
+	peersErr        error
 	addPeersErr     error
+	isWithinFunc    func(c boson.Address) bool
 	marshalJSONFunc func() ([]byte, error)
 	mtx             sync.Mutex
 }
@@ -30,6 +34,12 @@ func WithPeers(peers ...boson.Address) Option {
 func WithAddPeersErr(err error) Option {
 	return optionFunc(func(d *mock) {
 		d.addPeersErr = err
+	})
+}
+
+func WithNeighborhoodDepth(dd uint8) Option {
+	return optionFunc(func(d *mock) {
+		d.depth = dd
 	})
 }
 
@@ -51,6 +61,12 @@ func WithMarshalJSONFunc(f func() ([]byte, error)) Option {
 	})
 }
 
+func WithIsWithinFunc(f func(boson.Address) bool) Option {
+	return optionFunc(func(d *mock) {
+		d.isWithinFunc = f
+	})
+}
+
 func NewTopologyDriver(opts ...Option) topology.Driver {
 	d := new(mock)
 	for _, o := range opts {
@@ -59,33 +75,43 @@ func NewTopologyDriver(opts ...Option) topology.Driver {
 	return d
 }
 
-func (d *mock) AddPeers(_ context.Context, addrs ...boson.Address) error {
-	if d.addPeersErr != nil {
-		return d.addPeersErr
-	}
+func (d *mock) AddPeers(addrs ...boson.Address) {
+	d.mtx.Lock()
+	defer d.mtx.Unlock()
 
-	for _, addr := range addrs {
-		d.mtx.Lock()
-		d.peers = append(d.peers, addr)
-		d.mtx.Unlock()
-	}
+	d.peers = append(d.peers, addrs...)
+}
 
+func (d *mock) Connected(ctx context.Context, peer p2p.Peer, _ bool) error {
+	d.AddPeers(peer.Address)
 	return nil
 }
 
-func (d *mock) Connected(ctx context.Context, addr boson.Address) error {
-	return d.AddPeers(ctx, addr)
+func (d *mock) Disconnected(peer p2p.Peer) {
+	d.mtx.Lock()
+	defer d.mtx.Unlock()
+
+	for i, addr := range d.peers {
+		if addr.Equal(peer.Address) {
+			d.peers = append(d.peers[:i], d.peers[i+1:]...)
+			break
+		}
+	}
 }
 
-func (d *mock) Disconnected(boson.Address) {
-	panic("todo")
+func (d *mock) Announce(_ context.Context, _ boson.Address, _ bool) error {
+	return nil
+}
+
+func (d *mock) AnnounceTo(_ context.Context, _, _ boson.Address, _ bool) error {
+	return nil
 }
 
 func (d *mock) Peers() []boson.Address {
 	return d.peers
 }
 
-func (d *mock) ClosestPeer(_ boson.Address, skipPeers ...boson.Address) (peerAddr boson.Address, err error) {
+func (d *mock) ClosestPeer(addr boson.Address, wantSelf bool, skipPeers ...boson.Address) (peerAddr boson.Address, err error) {
 	if len(skipPeers) == 0 {
 		if d.closestPeerErr != nil {
 			return d.closestPeer, d.closestPeerErr
@@ -97,6 +123,10 @@ func (d *mock) ClosestPeer(_ boson.Address, skipPeers ...boson.Address) (peerAdd
 
 	d.mtx.Lock()
 	defer d.mtx.Unlock()
+
+	if len(d.peers) == 0 {
+		return peerAddr, topology.ErrNotFound
+	}
 
 	skipPeer := false
 	for _, p := range d.peers {
@@ -111,12 +141,23 @@ func (d *mock) ClosestPeer(_ boson.Address, skipPeers ...boson.Address) (peerAdd
 			continue
 		}
 
-		peerAddr = p
+		if peerAddr.IsZero() {
+			peerAddr = p
+		}
+
+		if cmp, _ := boson.DistanceCmp(addr.Bytes(), p.Bytes(), peerAddr.Bytes()); cmp == 1 {
+			peerAddr = p
+		}
 	}
 
 	if peerAddr.IsZero() {
-		return peerAddr, topology.ErrNotFound
+		if wantSelf {
+			return peerAddr, topology.ErrWantSelf
+		} else {
+			return peerAddr, topology.ErrNotFound
+		}
 	}
+
 	return peerAddr, nil
 }
 
@@ -124,14 +165,33 @@ func (d *mock) SubscribePeersChange() (c <-chan struct{}, unsubscribe func()) {
 	return c, unsubscribe
 }
 
-func (*mock) NeighborhoodDepth() uint8 {
-	return 0
+func (m *mock) NeighborhoodDepth() uint8 {
+	return m.depth
+}
+
+func (m *mock) IsWithinDepth(addr boson.Address) bool {
+	if m.isWithinFunc != nil {
+		return m.isWithinFunc(addr)
+	}
+	return false
+}
+
+func (m *mock) EachNeighbor(f topology.EachPeerFunc) error {
+	return m.EachPeer(f)
+}
+
+func (*mock) EachNeighborRev(topology.EachPeerFunc) error {
+	panic("not implemented") // TODO: Implement
 }
 
 // EachPeer iterates from closest bin to farthest
 func (d *mock) EachPeer(f topology.EachPeerFunc) (err error) {
 	d.mtx.Lock()
 	defer d.mtx.Unlock()
+
+	if d.peersErr != nil {
+		return d.peersErr
+	}
 
 	for i, p := range d.peers {
 		_, _, err = f(p, uint8(i))
@@ -158,13 +218,12 @@ func (d *mock) EachPeerRev(f topology.EachPeerFunc) (err error) {
 	return nil
 }
 
-func (d *mock) MarshalJSON() ([]byte, error) {
-	return d.marshalJSONFunc()
+func (d *mock) Snapshot() *topology.KadParams {
+	return new(topology.KadParams)
 }
 
-func (d *mock) Close() error {
-	return nil
-}
+func (d *mock) Halt()        {}
+func (d *mock) Close() error { return nil }
 
 type Option interface {
 	apply(*mock)

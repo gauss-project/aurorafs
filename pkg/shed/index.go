@@ -44,6 +44,7 @@ type Item struct {
 	StoreTimestamp  int64
 	BinID           uint64
 	PinCounter      uint64 // maintains the no of time a chunk is pinned
+	GCounter        uint64
 	Tag             uint32
 }
 
@@ -68,6 +69,9 @@ func (i Item) Merge(i2 Item) Item {
 	}
 	if i.PinCounter == 0 {
 		i.PinCounter = i2.PinCounter
+	}
+	if i.GCounter == 0 {
+		i.GCounter = i2.GCounter
 	}
 	if i.Tag == 0 {
 		i.Tag = i2.Tag
