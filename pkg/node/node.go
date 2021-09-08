@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-// Package node defines the concept of a Bee node
+// Package node defines the concept of a Aurora node
 // by bootstrapping and injecting all necessary
 // dependencies.
 package node
@@ -12,7 +12,11 @@ import (
 	"crypto/ecdsa"
 	"fmt"
 	"github.com/gauss-project/aurorafs/pkg/chunkinfo"
+	"github.com/gauss-project/aurorafs/pkg/hive2"
 	"github.com/gauss-project/aurorafs/pkg/routetab"
+	"github.com/gauss-project/aurorafs/pkg/shed"
+	"github.com/gauss-project/aurorafs/pkg/topology/kademlia"
+	"github.com/gauss-project/aurorafs/pkg/topology/lightnode"
 	"io"
 	"log"
 	"net"
@@ -26,8 +30,6 @@ import (
 	"github.com/gauss-project/aurorafs/pkg/debugapi"
 
 	"github.com/gauss-project/aurorafs/pkg/boson"
-	"github.com/gauss-project/aurorafs/pkg/hive"
-	"github.com/gauss-project/aurorafs/pkg/kademlia"
 	"github.com/gauss-project/aurorafs/pkg/localstore"
 	"github.com/gauss-project/aurorafs/pkg/logging"
 	"github.com/gauss-project/aurorafs/pkg/metrics"
@@ -80,6 +82,7 @@ type Options struct {
 	CORSAllowedOrigins       []string
 	Logger                   logging.Logger
 	Standalone               bool
+	IsDev                    bool
 	TracingEnabled           bool
 	TracingEndpoint          string
 	TracingServiceName       string
@@ -94,6 +97,7 @@ type Options struct {
 	SwapFactoryAddress       string
 	SwapInitialDeposit       string
 	SwapEnable               bool
+	FullNode                 bool
 }
 
 func NewBee(addr string, bosonAddress boson.Address, publicKey ecdsa.PublicKey, signer crypto.Signer, networkID uint64, logger logging.Logger, libp2pPrivateKey, pssPrivateKey *ecdsa.PrivateKey, o Options) (b *Bee, err error) {
@@ -166,8 +170,6 @@ func NewBee(addr string, bosonAddress boson.Address, publicKey ecdsa.PublicKey, 
 		return nil, err
 	}
 
-	addressbook := addressbook.New(stateStore)
-
 	//var swapBackend *ethclient.Client
 	//var overlayEthAddress common.Address
 	//var chainID int64
@@ -231,13 +233,16 @@ func NewBee(addr string, bosonAddress boson.Address, publicKey ecdsa.PublicKey, 
 	//	)
 	//}
 
-	p2ps, err := libp2p.New(p2pCtx, signer, networkID, bosonAddress, addr, addressbook, stateStore, logger, tracer, libp2p.Options{
+	addressBook := addressbook.New(stateStore)
+	lightNodes := lightnode.NewContainer(bosonAddress)
+
+	p2ps, err := libp2p.New(p2pCtx, signer, networkID, bosonAddress, addr, addressBook, stateStore, lightNodes, logger, tracer, libp2p.Options{
 		PrivateKey:     libp2pPrivateKey,
 		NATAddr:        o.NATAddr,
 		EnableWS:       o.EnableWS,
 		EnableQUIC:     o.EnableQUIC,
-		Standalone:     o.Standalone,
 		WelcomeMessage: o.WelcomeMessage,
+		FullNode:       o.FullNode,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("p2p service: %w", err)
@@ -265,11 +270,6 @@ func NewBee(addr string, bosonAddress boson.Address, publicKey ecdsa.PublicKey, 
 
 	if err = p2ps.AddProtocol(pingPong.Protocol()); err != nil {
 		return nil, fmt.Errorf("pingpong service: %w", err)
-	}
-
-	hive := hive.New(p2ps, addressbook, networkID, logger)
-	if err = p2ps.AddProtocol(hive.Protocol()); err != nil {
-		return nil, fmt.Errorf("hive service: %w", err)
 	}
 
 	var bootnodes []ma.Multiaddr
@@ -347,9 +347,24 @@ func NewBee(addr string, bosonAddress boson.Address, publicKey ecdsa.PublicKey, 
 	//settlement.SetNotifyPaymentFunc(acc.AsyncNotifyPayment)
 	//pricing.SetPaymentThresholdObserver(acc)
 
-	kad := kademlia.New(bosonAddress, addressbook, hive, p2ps, logger, kademlia.Options{Bootnodes: bootnodes, StandaloneMode: o.Standalone, BootnodeMode: o.BootnodeMode})
+	metricsDB, err := shed.NewDBWrap(stateStore.DB())
+	if err != nil {
+		return nil, fmt.Errorf("unable to create metrics storage for kademlia: %w", err)
+	}
+
+	hiveObj := hive2.New(p2ps, addressBook, networkID, logger)
+	if err = p2ps.AddProtocol(hiveObj.Protocol()); err != nil {
+		return nil, fmt.Errorf("hive service: %w", err)
+	}
+	if !o.IsDev {
+		hiveObj.Start() // must start before kademlia
+	}
+
+	kad := kademlia.New(bosonAddress, addressBook, hiveObj, p2ps, metricsDB, logger, kademlia.Options{Bootnodes: bootnodes, BootnodeMode: o.BootnodeMode})
 	b.topologyCloser = kad
-	hive.SetAddPeersHandler(kad.AddPeers)
+	hiveObj.SetAddPeersHandler(kad.AddPeers)
+	hiveObj.SetConfig(hive2.Config{Kad: kad}) // hive2
+
 	p2ps.SetPickyNotifier(kad)
 	addrs, err := p2ps.Addresses()
 	if err != nil {
@@ -364,6 +379,10 @@ func NewBee(addr string, bosonAddress boson.Address, publicKey ecdsa.PublicKey, 
 	if err = p2ps.AddProtocol(route.Protocol()); err != nil {
 		return nil, fmt.Errorf("routetab service: %w", err)
 	}
+	route.SetConfig(routetab.Config{
+		AddressBook: addressBook,
+		NetworkID:   networkID,
+	})
 
 	var path string
 
@@ -383,7 +402,7 @@ func NewBee(addr string, bosonAddress boson.Address, publicKey ecdsa.PublicKey, 
 	}
 	b.localstoreCloser = storer
 
-	retrieve := retrieval.New(bosonAddress, p2ps, kad, storer, logger, tracer)
+	retrieve := retrieval.New(bosonAddress, p2ps, route, storer, logger, tracer)
 	if err = p2ps.AddProtocol(retrieve.Protocol()); err != nil {
 		return nil, fmt.Errorf("retrieval service: %w", err)
 	}
@@ -392,13 +411,15 @@ func NewBee(addr string, bosonAddress boson.Address, publicKey ecdsa.PublicKey, 
 
 	traversalService := traversal.NewService(ns)
 
-	chunkInfo := chunkinfo.New(p2ps, logger, traversalService, o.OracleEndpoint)
+	chunkInfo := chunkinfo.New(p2ps, logger, traversalService, stateStore, route, o.OracleEndpoint)
+	if err := chunkInfo.InitChunkInfo(); err != nil {
+		return nil, fmt.Errorf("chunk info init: %w", err)
+	}
 	if err = p2ps.AddProtocol(chunkInfo.Protocol()); err != nil {
 		return nil, fmt.Errorf("chunkInfo service: %w", err)
 	}
-
+	storer.Config(chunkInfo)
 	retrieve.Config(chunkInfo)
-
 
 	multiResolver := multiresolver.NewMultiResolver(
 		multiresolver.WithConnectionConfigs(o.ResolverConnectionCfgs),
@@ -461,7 +482,7 @@ func NewBee(addr string, bosonAddress boson.Address, publicKey ecdsa.PublicKey, 
 		//}
 
 		// inject dependencies and configure full debug api http path routes
-		debugAPIService.Configure(p2ps, pingPong, kad, storer)
+		debugAPIService.Configure(p2ps, pingPong, kad, lightNodes, storer)
 	}
 
 	if err := kad.Start(p2pCtx); err != nil {

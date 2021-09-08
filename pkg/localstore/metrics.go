@@ -13,7 +13,6 @@ type metrics struct {
 	TotalTimeGCLock                 prometheus.Counter
 	TotalTimeGCFirstItem            prometheus.Counter
 	TotalTimeCollectGarbage         prometheus.Counter
-	TotalTimeGCExclude              prometheus.Counter
 	TotalTimeGet                    prometheus.Counter
 	TotalTimeUpdateGC               prometheus.Counter
 	TotalTimeGetMulti               prometheus.Counter
@@ -21,16 +20,12 @@ type metrics struct {
 	TotalTimeHasMulti               prometheus.Counter
 	TotalTimePut                    prometheus.Counter
 	TotalTimeSet                    prometheus.Counter
-	TotalTimeSubscribePullIteration prometheus.Counter
-	TotalTimeSubscribePushIteration prometheus.Counter
 
 	GCCounter                prometheus.Counter
 	GCErrorCounter           prometheus.Counter
 	GCCollectedCounter       prometheus.Counter
 	GCCommittedCounter       prometheus.Counter
-	GCExcludeCounter         prometheus.Counter
-	GCExcludeError           prometheus.Counter
-	GCExcludeWriteBatchError prometheus.Counter
+	GCRemovedCounter         prometheus.Counter
 	GCUpdate                 prometheus.Counter
 	GCUpdateError            prometheus.Counter
 
@@ -46,17 +41,9 @@ type metrics struct {
 	ModeHasFailure                prometheus.Counter
 	ModeHasMulti                  prometheus.Counter
 	ModeHasMultiFailure           prometheus.Counter
-	SubscribePull                 prometheus.Counter
-	SubscribePullStop             prometheus.Counter
-	SubscribePullIteration        prometheus.Counter
-	SubscribePullIterationFailure prometheus.Counter
-	LastPullSubscriptionBinID     prometheus.Counter
-	SubscribePush                 prometheus.Counter
-	SubscribePushIteration        prometheus.Counter
-	SubscribePushIterationDone    prometheus.Counter
-	SubscribePushIterationFailure prometheus.Counter
 
 	GCSize                  prometheus.Gauge
+	GCWaitRemove            prometheus.Gauge
 	GCStoreTimeStamps       prometheus.Gauge
 	GCStoreAccessTimeStamps prometheus.Gauge
 }
@@ -82,12 +69,6 @@ func newMetrics() metrics {
 			Subsystem: subsystem,
 			Name:      "gc_time",
 			Help:      "Total time taken to collect garbage.",
-		}),
-		TotalTimeGCExclude: prometheus.NewCounter(prometheus.CounterOpts{
-			Namespace: m.Namespace,
-			Subsystem: subsystem,
-			Name:      "gc_exclude_index_time",
-			Help:      "Total time taken to exclude gc index.",
 		}),
 		TotalTimeGet: prometheus.NewCounter(prometheus.CounterOpts{
 			Namespace: m.Namespace,
@@ -131,18 +112,6 @@ func newMetrics() metrics {
 			Name:      "set_time",
 			Help:      "Total time taken to set chunk in DB.",
 		}),
-		TotalTimeSubscribePullIteration: prometheus.NewCounter(prometheus.CounterOpts{
-			Namespace: m.Namespace,
-			Subsystem: subsystem,
-			Name:      "subscribe_pull_iteration_time",
-			Help:      "Total time taken to subsctibe for pull iteration.",
-		}),
-		TotalTimeSubscribePushIteration: prometheus.NewCounter(prometheus.CounterOpts{
-			Namespace: m.Namespace,
-			Subsystem: subsystem,
-			Name:      "subscribe_push_iteration_time",
-			Help:      "Total time taken to subscribe for push iteration.",
-		}),
 		GCCounter: prometheus.NewCounter(prometheus.CounterOpts{
 			Namespace: m.Namespace,
 			Subsystem: subsystem,
@@ -167,23 +136,11 @@ func newMetrics() metrics {
 			Name:      "gc_committed_count",
 			Help:      "Number of gc items to commit.",
 		}),
-		GCExcludeCounter: prometheus.NewCounter(prometheus.CounterOpts{
+		GCRemovedCounter: prometheus.NewCounter(prometheus.CounterOpts{
 			Namespace: m.Namespace,
 			Subsystem: subsystem,
-			Name:      "gc_exclude_count",
-			Help:      "Number of times the GC_EXCLUDE operation is done.",
-		}),
-		GCExcludeError: prometheus.NewCounter(prometheus.CounterOpts{
-			Namespace: m.Namespace,
-			Subsystem: subsystem,
-			Name:      "gc_exclude_fail_count",
-			Help:      "Number of times the GC_EXCLUDE operation failed.",
-		}),
-		GCExcludeWriteBatchError: prometheus.NewCounter(prometheus.CounterOpts{
-			Namespace: m.Namespace,
-			Subsystem: subsystem,
-			Name:      "ex_exclude_write_batch_fail_count",
-			Help:      "Number of times the GC_EXCLUDE_WRITE_BATCH operation is failed.",
+			Name:      "gc_removed_count",
+			Help:      "Number of gc items to remove.",
 		}),
 		GCUpdate: prometheus.NewCounter(prometheus.CounterOpts{
 			Namespace: m.Namespace,
@@ -270,66 +227,18 @@ func newMetrics() metrics {
 			Name:      "mode_has_multi_failure_count",
 			Help:      "Number of times MODE_HAS_MULTI invocation failed.",
 		}),
-		SubscribePull: prometheus.NewCounter(prometheus.CounterOpts{
-			Namespace: m.Namespace,
-			Subsystem: subsystem,
-			Name:      "subscribe_pull_count",
-			Help:      "Number of times Subscribe_pULL is invoked.",
-		}),
-		SubscribePullStop: prometheus.NewCounter(prometheus.CounterOpts{
-			Namespace: m.Namespace,
-			Subsystem: subsystem,
-			Name:      "subscribe_pull_stop_count",
-			Help:      "Number of times Subscribe_pull_stop is invoked.",
-		}),
-		SubscribePullIteration: prometheus.NewCounter(prometheus.CounterOpts{
-			Namespace: m.Namespace,
-			Subsystem: subsystem,
-			Name:      "subscribe_pull_iteration_count",
-			Help:      "Number of times Subscribe_pull_iteration is invoked.",
-		}),
-		SubscribePullIterationFailure: prometheus.NewCounter(prometheus.CounterOpts{
-			Namespace: m.Namespace,
-			Subsystem: subsystem,
-			Name:      "subscribe_pull_iteration_fail_count",
-			Help:      "Number of times Subscribe_pull_iteration_fail is invoked.",
-		}),
-		LastPullSubscriptionBinID: prometheus.NewCounter(prometheus.CounterOpts{
-			Namespace: m.Namespace,
-			Subsystem: subsystem,
-			Name:      "last_pull_subscription_bin_id_count",
-			Help:      "Number of times LastPullSubscriptionBinID is invoked.",
-		}),
-		SubscribePush: prometheus.NewCounter(prometheus.CounterOpts{
-			Namespace: m.Namespace,
-			Subsystem: subsystem,
-			Name:      "subscribe_push_count",
-			Help:      "Number of times SUBSCRIBE_PUSH is invoked.",
-		}),
-		SubscribePushIteration: prometheus.NewCounter(prometheus.CounterOpts{
-			Namespace: m.Namespace,
-			Subsystem: subsystem,
-			Name:      "subscribe_push_iteration_count",
-			Help:      "Number of times SUBSCRIBE_PUSH_ITERATION is invoked.",
-		}),
-		SubscribePushIterationDone: prometheus.NewCounter(prometheus.CounterOpts{
-			Namespace: m.Namespace,
-			Subsystem: subsystem,
-			Name:      "subscribe_push_iteration_done_count",
-			Help:      "Number of times SUBSCRIBE_PUSH_ITERATION_DONE is invoked.",
-		}),
-		SubscribePushIterationFailure: prometheus.NewCounter(prometheus.CounterOpts{
-			Namespace: m.Namespace,
-			Subsystem: subsystem,
-			Name:      "subscribe_push_iteration_failure_count",
-			Help:      "Number of times SUBSCRIBE_PUSH_ITERATION_FAILURE is invoked.",
-		}),
 
 		GCSize: prometheus.NewGauge(prometheus.GaugeOpts{
 			Namespace: m.Namespace,
 			Subsystem: subsystem,
 			Name:      "gc_size",
 			Help:      "Number of elements in Garbage collection index.",
+		}),
+		GCWaitRemove: prometheus.NewGauge(prometheus.GaugeOpts{
+			Namespace: m.Namespace,
+			Subsystem: subsystem,
+			Name:      "gc_wait_remove",
+			Help:      "Number of elements in Garbage wait remove.",
 		}),
 		GCStoreTimeStamps: prometheus.NewGauge(prometheus.GaugeOpts{
 			Namespace: m.Namespace,

@@ -7,7 +7,9 @@ package hive_test
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
+	"github.com/gauss-project/aurorafs/pkg/boson/test"
 	"io/ioutil"
 	"math/rand"
 	"runtime/debug"
@@ -19,6 +21,7 @@ import (
 
 	ab "github.com/gauss-project/aurorafs/pkg/addressbook"
 	"github.com/gauss-project/aurorafs/pkg/aurora"
+	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/crypto"
 	"github.com/gauss-project/aurorafs/pkg/hive"
 	"github.com/gauss-project/aurorafs/pkg/hive/pb"
@@ -26,8 +29,76 @@ import (
 	"github.com/gauss-project/aurorafs/pkg/p2p/protobuf"
 	"github.com/gauss-project/aurorafs/pkg/p2p/streamtest"
 	"github.com/gauss-project/aurorafs/pkg/statestore/mock"
-	"github.com/gauss-project/aurorafs/pkg/boson"
 )
+
+func TestHandlerRateLimit(t *testing.T) {
+
+	logger := logging.New(ioutil.Discard, 0)
+	statestore := mock.NewStateStore()
+	addressbook := ab.New(statestore)
+	networkID := uint64(1)
+
+	addressbookclean := ab.New(mock.NewStateStore())
+
+	// new recorder for handling Ping
+	streamer := streamtest.New()
+	// create a hive server that handles the incoming stream
+	server := hive.New(streamer, addressbookclean, networkID, logger)
+
+	serverAddress := test.RandomAddress()
+
+	// setup the stream recorder to record stream data
+	serverRecorder := streamtest.New(
+		streamtest.WithProtocols(server.Protocol()),
+		streamtest.WithBaseAddr(serverAddress),
+	)
+
+	peers := make([]boson.Address, hive.LimitBurst+1)
+	for i := range peers {
+
+		underlay, err := ma.NewMultiaddr("/ip4/127.0.0.1/udp/" + strconv.Itoa(i))
+		if err != nil {
+			t.Fatal(err)
+		}
+		pk, err := crypto.GenerateSecp256k1Key()
+		if err != nil {
+			t.Fatal(err)
+		}
+		signer := crypto.NewDefaultSigner(pk)
+		overlay, err := crypto.NewOverlayAddress(pk.PublicKey, networkID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		bzzAddr, err := aurora.NewAddress(signer, underlay, overlay, networkID)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		err = addressbook.Put(bzzAddr.Overlay, *bzzAddr)
+		if err != nil {
+			t.Fatal(err)
+		}
+		peers[i] = bzzAddr.Overlay
+	}
+
+	// create a hive client that will do broadcast
+	client := hive.New(serverRecorder, addressbook, networkID, logger)
+	err := client.BroadcastPeers(context.Background(), serverAddress, peers...)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	rec, err := serverRecorder.Records(serverAddress, hive.ProtocolName, hive.ProtocolVersion, hive.PeersStreamName)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	lastRec := rec[len(rec)-1]
+
+	if lastRec.Err() != nil {
+		t.Fatal("want nil error")
+	}
+}
 
 func TestBroadcastPeers(t *testing.T) {
 	rand.Seed(time.Now().UnixNano())
@@ -73,9 +144,9 @@ func TestBroadcastPeers(t *testing.T) {
 		}
 
 		wantMsgs[i/hive.MaxBatchSize].Peers = append(wantMsgs[i/hive.MaxBatchSize].Peers, &pb.BzzAddress{
-			Overlay:   bzzAddresses[i].Overlay.Bytes(),
-			Underlay:  bzzAddresses[i].Underlay.Bytes(),
-			Signature: bzzAddresses[i].Signature,
+			Overlay:     bzzAddresses[i].Overlay.Bytes(),
+			Underlay:    bzzAddresses[i].Underlay.Bytes(),
+			Signature:   bzzAddresses[i].Signature,
 		})
 	}
 
@@ -85,6 +156,7 @@ func TestBroadcastPeers(t *testing.T) {
 		wantMsgs         []pb.Peers
 		wantOverlays     []boson.Address
 		wantBzzAddresses []aurora.Address
+		pingErr          func(addr ma.Multiaddr) (time.Duration, error)
 	}{
 		"OK - single record": {
 			addresee:         boson.MustParseHexAddress("ca1e9f3938cc1425c6061b96ad9eb93e134dfe8734ad490164ef20af9d1cf59c"),
@@ -121,14 +193,36 @@ func TestBroadcastPeers(t *testing.T) {
 			wantOverlays:     overlays[:2*hive.MaxBatchSize],
 			wantBzzAddresses: bzzAddresses[:2*hive.MaxBatchSize],
 		},
+		"OK - single batch - skip ping failures": {
+			addresee:         boson.MustParseHexAddress("ca1e9f3938cc1425c6061b96ad9eb93e134dfe8734ad490164ef20af9d1cf59c"),
+			peers:            overlays[:15],
+			wantMsgs:         []pb.Peers{{Peers: wantMsgs[0].Peers[:15]}},
+			wantOverlays:     overlays[:10],
+			wantBzzAddresses: bzzAddresses[:10],
+			pingErr: func(addr ma.Multiaddr) (rtt time.Duration, err error) {
+				for _, v := range bzzAddresses[10:15] {
+					if v.Underlay.Equal(addr) {
+						return rtt, errors.New("ping failure")
+					}
+				}
+				return rtt, nil
+			},
+		},
 	}
 
 	for name, tc := range testCases {
 		t.Run(name, func(t *testing.T) {
 			addressbookclean := ab.New(mock.NewStateStore())
 
+			// new recorder for handling Ping
+			var streamer *streamtest.Recorder
+			if tc.pingErr != nil {
+				streamer = streamtest.New(streamtest.WithPingErr(tc.pingErr))
+			} else {
+				streamer = streamtest.New()
+			}
 			// create a hive server that handles the incoming stream
-			server := hive.New(nil, addressbookclean, networkID, logger)
+			server := hive.New(streamer, addressbookclean, networkID, logger)
 
 			// setup the stream recorder to record stream data
 			recorder := streamtest.New(
@@ -142,7 +236,7 @@ func TestBroadcastPeers(t *testing.T) {
 			}
 
 			// get a record for this stream
-			records, err := recorder.Records(tc.addresee, "hive", "1.0.0", "peers")
+			records, err := recorder.Records(tc.addresee, hive.ProtocolName, hive.ProtocolVersion, hive.PeersStreamName)
 			if err != nil {
 				t.Fatal(err)
 			}

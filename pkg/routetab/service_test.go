@@ -7,10 +7,11 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"github.com/gauss-project/aurorafs/pkg/shed"
+	"github.com/gauss-project/aurorafs/pkg/topology/kademlia"
+	"github.com/gauss-project/aurorafs/pkg/topology/pslice"
 	"io"
-	"io/ioutil"
 	"math/rand"
-	"sync"
 	"testing"
 	"time"
 
@@ -22,8 +23,6 @@ import (
 	"github.com/gauss-project/aurorafs/pkg/crypto"
 	beeCrypto "github.com/gauss-project/aurorafs/pkg/crypto"
 	"github.com/gauss-project/aurorafs/pkg/discovery/mock"
-	"github.com/gauss-project/aurorafs/pkg/kademlia"
-	"github.com/gauss-project/aurorafs/pkg/kademlia/pslice"
 	"github.com/gauss-project/aurorafs/pkg/logging"
 	"github.com/gauss-project/aurorafs/pkg/p2p"
 	p2pmock "github.com/gauss-project/aurorafs/pkg/p2p/mock"
@@ -43,46 +42,52 @@ func init() {
 const underlayBase = "/ip4/127.0.0.1/tcp/1634/dns/"
 
 var (
-	nonConnectableAddress, _ = ma.NewMultiaddr(underlayBase + "16Uiu2HAkx8ULY8cTXhdVAcMmLcH9AsTKz6uBQ7DPLKRjMLgBVYkA")
-	nopLogger                = logging.New(ioutil.Discard, logrus.ErrorLevel)
+	nonConnectableAddress, _        = ma.NewMultiaddr(underlayBase + "16Uiu2HAkx8ULY8cTXhdVAcMmLcH9AsTKz6uBQ7DPLKRjMLgBVYkA")
+	noopLogger                      = logging.New(io.Discard, logrus.TraceLevel)
+	networkId                uint64 = 0
 )
 
 type Node struct {
 	*routetab.Service
 	signer crypto.Signer
 	book   addressbook.Interface
+	p2ps   *streamtest.RecorderDisconnecter
 }
 
 type Network struct {
 	ctx    context.Context
-	server Node
-	client Node
+	server *Node
+	client *Node
 }
 
-func newNetwork(t *testing.T) *Network {
+func newNode(t *testing.T, ctx context.Context) *Node {
 	t.Helper()
 
-	serverAddr := test.RandomAddress()
-	clientAddr := test.RandomAddress()
+	addr, kad, signer, ab := newTestKademlia(t)
+	stream := streamtest.NewRecorderDisconnecter(streamtest.New(streamtest.WithBaseAddr(addr)))
 
-	ctx := context.Background()
-	kad, signer, ab := newTestKademlia(serverAddr)
-	addOne(t, signer, kad, ab, clientAddr)
-	serverStream := streamtest.New(streamtest.WithBaseAddr(serverAddr))
-	r1 := routetab.New(serverAddr, ctx, serverStream, kad, mockstate.NewStateStore(), nopLogger)
+	service := routetab.New(addr, ctx, stream, kad, mockstate.NewStateStore(), noopLogger)
+	service.SetConfig(routetab.Config{
+		AddressBook: ab,
+		NetworkID:   networkId,
+	})
 
-	clientStream := streamtest.New(
-		streamtest.WithProtocols(r1.Protocol()),
-		streamtest.WithBaseAddr(clientAddr),
-	) // connect to server
-	kad2, signer1, ab1 := newTestKademlia(clientAddr)
-	addOne(t, signer1, kad2, ab1, serverAddr)
-	r2 := routetab.New(clientAddr, ctx, clientStream, kad2, mockstate.NewStateStore(), nopLogger)
+	return &Node{Service: service, signer: signer, book: ab, p2ps: stream}
+}
 
-	serverStream.SetProtocols(r2.Protocol()) // connect to client
-	ns := &Network{ctx: ctx, server: Node{r1, signer, ab}, client: Node{r2, signer1, ab1}}
+func newNetwork(t *testing.T, ctx context.Context) *Network {
+	t.Helper()
 
-	return ns
+	server := newNode(t, ctx)
+	client := newNode(t, ctx)
+
+	server.addOne(t, client.Address(), server.signer, false)
+	client.addOne(t, server.Address(), client.signer, false)
+
+	server.p2ps.SetProtocols(client.Protocol())
+	client.p2ps.SetProtocols(server.Protocol())
+
+	return &Network{ctx: ctx, server: server, client: client}
 }
 
 func (n *Network) ServerPeer() p2p.Peer {
@@ -93,17 +98,12 @@ func (n *Network) ClientPeer() p2p.Peer {
 	return p2p.Peer{Address: n.client.Address()}
 }
 
-func (n *Network) Start() {
-	n.server.Kad().Start(n.ctx)
-	n.client.Kad().Start(n.ctx)
-}
-
 func (n *Network) Close() {
 	n.server.Kad().Close()
 	n.client.Kad().Close()
 }
 
-func p2pMock(ab addressbook.Interface, signer beeCrypto.Signer) p2p.Service {
+func p2pMock(ab addressbook.Interface, overlay boson.Address, signer beeCrypto.Signer) p2p.Service {
 	p2ps := p2pmock.New(p2pmock.WithConnectFunc(func(ctx context.Context, underlay ma.Multiaddr) (*aurora.Address, error) {
 		if underlay.Equal(nonConnectableAddress) {
 			return nil, errors.New("non reachable node")
@@ -119,8 +119,7 @@ func p2pMock(ab addressbook.Interface, signer beeCrypto.Signer) p2p.Service {
 			}
 		}
 
-		overlay := test.RandomAddress()
-		bzzAddr, err := aurora.NewAddress(signer, underlay, overlay, 0)
+		bzzAddr, err := aurora.NewAddress(signer, underlay, overlay, networkId)
 		if err != nil {
 			return nil, err
 		}
@@ -135,21 +134,27 @@ func p2pMock(ab addressbook.Interface, signer beeCrypto.Signer) p2p.Service {
 	return p2ps
 }
 
-func newTestKademlia(base boson.Address) (*kademlia.Kad, beeCrypto.Signer, addressbook.Interface) {
-
+func newTestKademlia(t *testing.T) (boson.Address, *kademlia.Kad, beeCrypto.Signer, addressbook.Interface) {
+	metricsDB, err := shed.NewDB("", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := metricsDB.Close(); err != nil {
+			t.Fatal(err)
+		}
+	})
+	base, signer := randomAddress()
 	var (
 		saturationFuncImpl *func(bin uint8, peers, connected *pslice.PSlice) (bool, bool)
 		saturationFunc     = func(bin uint8, peers, connected *pslice.PSlice) (bool, bool) {
 			f := *saturationFuncImpl
 			return f(bin, peers, connected)
 		}
-
-		pk, _  = crypto.GenerateSecp256k1Key()                                                                                       // random private key
-		signer = beeCrypto.NewDefaultSigner(pk)                                                                                      // signer
-		ab     = addressbook.New(mockstate.NewStateStore())                                                                          // address book
-		p2ps   = p2pMock(ab, signer)                                                                                                 // p2p mock
-		disc   = mock.NewDiscovery()                                                                                                 // mock discovery protocol
-		kad    = kademlia.New(base, ab, disc, p2ps, nopLogger, kademlia.Options{SaturationFunc: saturationFunc, BitSuffixLength: 2}) // kademlia instance
+		ab   = addressbook.New(mockstate.NewStateStore())                                                                                      // address book
+		p2ps = p2pMock(ab, base, signer)                                                                                                       // p2p mock
+		disc = mock.NewDiscovery()                                                                                                             // mock discovery protocol
+		kad  = kademlia.New(base, ab, disc, p2ps, metricsDB, noopLogger, kademlia.Options{SaturationFunc: saturationFunc, BitSuffixLength: 2}) // kademlia instance
 	)
 
 	sfImpl := func(bin uint8, peers, connected *pslice.PSlice) (bool, bool) {
@@ -157,23 +162,29 @@ func newTestKademlia(base boson.Address) (*kademlia.Kad, beeCrypto.Signer, addre
 	}
 	saturationFuncImpl = &sfImpl
 
-	return kad, signer, ab
+	err = kad.Start(context.TODO())
+	if err != nil {
+		t.Fatal(err)
+	}
+	return base, kad, signer, ab
 }
 
-func addOne(t *testing.T, signer beeCrypto.Signer, k *kademlia.Kad, ab addressbook.Putter, peer boson.Address) {
+func (s *Node) addOne(t *testing.T, peer boson.Address, signer crypto.Signer, notConn bool) {
 	t.Helper()
 	multiaddr, err := ma.NewMultiaddr(underlayBase + peer.String())
 	if err != nil {
 		t.Fatal(err)
 	}
-	bzzAddr, err := aurora.NewAddress(signer, multiaddr, peer, 0)
+	auroraAddr, err := aurora.NewAddress(signer, multiaddr, peer, networkId)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err = ab.Put(peer, *bzzAddr); err != nil {
+	if err := s.book.Put(peer, *auroraAddr); err != nil {
 		t.Fatal(err)
 	}
-	_ = k.AddPeers(context.Background(), peer)
+	if !notConn {
+		s.Kad().AddPeers(peer)
+	}
 }
 
 func convPathByte(path []string) [][]byte {
@@ -390,7 +401,7 @@ func TestMergeRouteList(t *testing.T) {
 }
 
 func TestRouteTableWriteConflict(t *testing.T) {
-	rt := routetab.NewRouteTable(mockstate.NewStateStore(), nopLogger, routetab.NewMetrics())
+	rt := routetab.NewRouteTable(mockstate.NewStateStore(), noopLogger, routetab.NewMetrics())
 
 	target := test.RandomAddress()
 	largePaths := make([]string, 1001)
@@ -444,7 +455,7 @@ func TestRouteTable_Gc(t *testing.T) {
 	if len(now) == 0 || len(now[0].NextHop) != 0 {
 		t.Fatalf("current route gc expected now count 1 and nexHop count 0, got count %d , nextHop count %d ", len(now), len(now[0].NextHop))
 	}
-	route := routetab.NewRouteTable(mockstate.NewStateStore(), nopLogger, routetab.NewMetrics())
+	route := routetab.NewRouteTable(mockstate.NewStateStore(), noopLogger, routetab.NewMetrics())
 
 	item2 := generateRoute(path1)
 	target := test.RandomAddress()
@@ -475,42 +486,34 @@ func TestRouteTable_Gc(t *testing.T) {
 
 func TestService_FindRoute(t *testing.T) {
 	ctx := context.Background()
-	ns := newNetwork(t)
-	ns.Start()
+	ns := newNetwork(t, ctx)
 	defer ns.Close()
 
-	target := test.RandomAddress()
-
-	addOne(t, ns.client.signer, ns.client.Kad(), ns.client.book, test.RandomAddress())
+	target, signerTarget := randomAddress()
 
 	p1 := test.RandomAddress()
 	p2 := test.RandomAddress()
+	item := generateRoute([]string{p1.String(), p2.String()})
+	routes := []routetab.RouteItem{item}
 
-	wg := sync.WaitGroup{}
-	wg.Add(1)
-	go func(t *testing.T) {
-		<-time.After(time.Millisecond*100)
-		item := generateRoute([]string{p1.String(), p2.String()})
-		routes := []routetab.RouteItem{item}
-		ns.server.DoResp(ctx, ns.ClientPeer(), target, routes)
-		wg.Done()
-	}(t)
+	ns.server.addOne(t, target, signerTarget, true)
 
-	ns.client.DoReq(
-		ctx,
-		ns.server.Address(),
-		p2p.Peer{Address: ns.server.Address()},
-		target,
-		&pb.FindRouteReq{Dest: target.Bytes()},
-		nil,
-	)
-	wg.Wait()
+	err := ns.server.RouteTab().Set(target, routes)
+	if err != nil {
+		t.Fatal(err)
+	}
 
-	route, err := ns.client.GetRoute(ctx, target)
+	time.Sleep(time.Millisecond * 100)
+
+	dest, route, err := ns.client.FindRoute(ctx, target)
 	if err != nil {
 		t.Fatalf("GetRoute err %s", err)
 	}
 
+	addr, _ := ns.server.book.Get(target)
+	if !dest.Equal(addr) {
+		t.Fatalf("client receive aurora address not equal.")
+	}
 	receive := route[0]
 	if receive.TTL != 3 || !receive.Neighbor.Equal(ns.server.Address()) {
 		t.Fatalf("client receive route expired ttl=3,neighbor=%s, got ttl=%d,neighbor=%s", ns.server.Address().String(), receive.TTL, receive.Neighbor.String())
@@ -535,22 +538,26 @@ func TestService_FindRoute(t *testing.T) {
 	}
 }
 
-func TestService_HandleReq(t *testing.T) {
+// target in client neighbor
+func TestService_FindRoute2(t *testing.T) {
 	ctx := context.Background()
-	ns := newNetwork(t)
-	ns.Start()
+	ns := newNetwork(t, ctx)
 	defer ns.Close()
 
-	// target in client neighbor
-	target := test.RandomAddressAt(ns.client.Address(),0)
+	target, signerTarget := randomAddress()
+	ns.client.addOne(t, target, signerTarget, false)
 
-	addOne(t, ns.client.signer, ns.client.Kad(), ns.client.book, target)
-	addOne(t, ns.server.signer, ns.server.Kad(), ns.server.book, test.RandomAddress())
+	time.Sleep(time.Millisecond * 50)
 
-	route, err := ns.server.FindRoute(ctx, target)
+	dest, route, err := ns.server.FindRoute(ctx, target)
 	if err != nil {
 		t.Fatalf("client receive route err %s", err.Error())
 	}
+	addr, _ := ns.client.book.Get(target)
+	if !dest.Equal(addr) {
+		t.Fatalf("client receive aurora address not equal.")
+	}
+
 	if len(route) != 1 {
 		t.Fatalf("client receive route expired count 1, got %d", len(route))
 	}
@@ -561,23 +568,37 @@ func TestService_HandleReq(t *testing.T) {
 	if len(receive.NextHop) != 0 {
 		t.Fatalf("client receive route expired len(nextHop)==0, got %d", len(receive.NextHop))
 	}
+}
 
-	// client have route
-	target2 := test.RandomAddress()
+// client have route
+func TestService_FindRoute3(t *testing.T) {
+	ctx := context.Background()
+	ns := newNetwork(t, ctx)
+	defer ns.Close()
+
+	ns.server.addOne(t, ns.client.Address(), ns.client.signer, false)
+	target2, signer2 := randomAddress()
 	p1 := test.RandomAddress()
 	p2 := test.RandomAddress()
 	item := generateRoute([]string{p1.String(), p2.String()})
 	routes := []routetab.RouteItem{item}
-	err = ns.client.RouteTab().Set(target2, routes)
+	ns.client.addOne(t, target2, signer2, true)
+	err := ns.client.RouteTab().Set(target2, routes)
 	if err != nil {
 		t.Fatalf("routetab set err %s", err.Error())
 		return
 	}
-	route, err = ns.server.FindRoute(ctx, target2)
+	time.Sleep(time.Millisecond * 100)
+	dest, route, err := ns.server.FindRoute(ctx, target2)
 	if err != nil {
 		t.Fatalf("client receive route err %s", err.Error())
 	}
-	receive = route[0]
+	addr, _ := ns.server.book.Get(target2)
+	if !dest.Equal(addr) {
+		t.Fatalf("client receive aurora address not equal.")
+	}
+
+	receive := route[0]
 	if receive.TTL != 3 || !receive.Neighbor.Equal(ns.client.Address()) {
 		t.Fatalf("client receive route expired ttl=3,neighbor=%s, got ttl=%d,neighbor=%s", ns.client.Address().String(), receive.TTL, receive.Neighbor.String())
 	}
@@ -588,7 +609,7 @@ func TestService_HandleReq(t *testing.T) {
 
 func TestHandleMaxTTLResponse(t *testing.T) {
 	ctx := context.Background()
-	ns := newNetwork(t)
+	ns := newNetwork(t, ctx)
 
 	paths := make([]string, routetab.MaxTTL+1)
 	for i := 0; i < len(paths); i++ {
@@ -597,10 +618,10 @@ func TestHandleMaxTTLResponse(t *testing.T) {
 
 	n1 := test.RandomAddress()
 	n2 := test.RandomAddress()
-	target := test.RandomAddress()
+	target, signer := randomAddress()
 	serverSideRoute := generateRoute([]string{n1.String(), n2.String(), target.String()})
 	ns.server.RouteTab().Set(target, []routetab.RouteItem{serverSideRoute})
-
+	ns.server.addOne(t, target, signer, false)
 	request := pb.FindRouteReq{
 		Dest: target.Bytes(),
 		Path: convPathByte(paths),
@@ -641,36 +662,40 @@ func TestHandleCirclePathResponse(t *testing.T) {
 
 	buf := bytes.NewBuffer([]byte{})
 	createNS := func() *Network {
-		oldLogger := nopLogger
-		nopLogger = logging.New(buf, logrus.TraceLevel)
+		oldLogger := noopLogger
+		noopLogger = logging.New(buf, logrus.TraceLevel)
 		defer func() {
-			nopLogger = oldLogger
+			noopLogger = oldLogger
 		}()
 
-		return newNetwork(t)
+		return newNetwork(t, ctx)
 	}
 	ns := createNS()
 
-	ns.Start()
 	defer ns.Close()
 
+	var signer crypto.Signer
+	var neighbor boson.Address
 	paths := make([]string, 5)
 	for i := 0; i < len(paths); i++ {
+		if i == len(paths)-1 {
+			neighbor, signer = randomAddress()
+			paths[i] = neighbor.String()
+		}
 		paths[i] = test.RandomAddress().String()
+
 	}
 
-	circleHead := paths[rand.Intn(len(paths)-1)]
-	neighbor := boson.MustParseHexAddress(circleHead)
-	addOne(t, ns.server.signer, ns.server.Kad(), ns.server.book, neighbor)
+	ns.server.addOne(t, neighbor, signer, false)
 
-	target := test.RandomAddress()
+	target, _ := randomAddress()
 	request := pb.FindRouteReq{
 		Dest: target.Bytes(),
 		Path: convPathByte(paths),
 	}
-	ns.client.DoReq(ctx, ns.server.Address(), ns.ServerPeer(), target, &request, nil)
+	ns.client.DoReq(ctx, test.RandomAddress(), ns.ServerPeer(), target, &request, nil)
 
-	time.Sleep(2 * time.Second)
+	time.Sleep(500 * time.Millisecond)
 
 	_, err := ns.client.RouteTab().Get(target)
 	if !errors.Is(err, routetab.ErrNotFound) {
@@ -701,7 +726,7 @@ func TestHandleCirclePathResponse(t *testing.T) {
 
 func TestPendCallResTab_Gc(t *testing.T) {
 	addr := test.RandomAddress()
-	pend := routetab.NewPendCallResTab(addr, nopLogger, routetab.NewMetrics())
+	pend := routetab.NewPendCallResTab(addr, noopLogger, routetab.NewMetrics())
 
 	target1 := test.RandomAddress()
 	target2 := test.RandomAddress()
@@ -740,12 +765,12 @@ func TestPendCallResTab_Gc(t *testing.T) {
 	}
 }
 
-type nopService struct {
+type noopService struct {
 	err      error
 	response pb.FindRouteResp
 }
 
-func (s *nopService) Protocol() p2p.ProtocolSpec {
+func (s *noopService) Protocol() p2p.ProtocolSpec {
 	return p2p.ProtocolSpec{
 		Name:    routetab.ProtocolName,
 		Version: routetab.ProtocolVersion,
@@ -780,18 +805,18 @@ func TestBusyNetworkResponse(t *testing.T) {
 	}()
 
 	ctx := context.Background()
-	ns := newNetwork(t)
+	ns := newNetwork(t, ctx)
 
-	target := test.RandomAddress()
+	target, signer := randomAddress()
 
 	beforeClient := test.RandomAddress()
-	beforeClientService := &nopService{}
+	beforeClientService := &noopService{}
 	_ = streamtest.New(
 		streamtest.WithProtocols(ns.client.Protocol()),
 		streamtest.WithBaseAddr(beforeClient),
 	)
-	addOne(t, ns.client.signer, ns.client.Kad(), ns.client.book, ns.client.Address())
-	ns.client.P2P().(*streamtest.Recorder).SetProtocols(beforeClientService.Protocol())
+
+	ns.client.p2ps.SetProtocols(beforeClientService.Protocol())
 
 	paths := make([]string, 3)
 	for i := 0; i < len(paths); i++ {
@@ -804,14 +829,16 @@ func TestBusyNetworkResponse(t *testing.T) {
 	}
 	ns.client.DoReq(ctx, beforeClient, ns.ServerPeer(), target, &request, nil)
 
-	time.Sleep(1 * time.Second)
+	time.Sleep(100 * time.Millisecond)
 
 	beforeTarget := test.RandomAddress()
 	paths = []string{beforeTarget.String(), target.String()}
 	route := generateRoute(paths)
-	ns.server.DoResp(ctx, ns.ClientPeer(), target, []routetab.RouteItem{route})
+	ns.server.addOne(t, target, signer, false)
+	aur, _ := ns.server.book.Get(target)
+	ns.server.DoResp(ctx, ns.ClientPeer(), aur, []routetab.RouteItem{route})
 
-	time.Sleep(1 * time.Second)
+	time.Sleep(100 * time.Millisecond)
 
 	if beforeClientService.err != nil {
 		t.Fatal(beforeClientService.err)
@@ -845,4 +872,138 @@ func TestBusyNetworkResponse(t *testing.T) {
 	}
 
 	iterate(beforeClientService.response.RouteItems[0])
+}
+
+func randomAddress() (base boson.Address, signer crypto.Signer) {
+	pk, _ := crypto.GenerateSecp256k1Key()
+	signer = beeCrypto.NewDefaultSigner(pk)
+	base, _ = crypto.NewOverlayAddress(pk.PublicKey, networkId)
+	return
+}
+
+func TestConnectFarNode(t *testing.T) {
+	ctx := context.Background()
+
+	a := newNode(t, ctx)
+	b := newNode(t, ctx)
+	gap := newNode(t, ctx)
+
+	t.Logf("a addr %s\n", a.Address())
+	t.Logf("b addr %s\n", b.Address())
+	t.Logf("gap addr %s\n", gap.Address())
+
+	a.addOne(t, gap.Address(), gap.signer, false)
+	gap.addOne(t, a.Address(), a.signer, false)
+	b.addOne(t, gap.Address(), gap.signer, false)
+	gap.addOne(t, b.Address(), b.signer, false)
+
+	a.p2ps.SetProtocols(gap.Protocol())
+	gap.p2ps.SetProtocols(a.Protocol())
+	//b.p2ps.SetProtocols(gap.Protocol())
+	//gap.p2ps.SetProtocols(b.Protocol())
+
+	//a.p2ps.SetProtocols(b.Protocol())
+	//b.p2ps.SetProtocols(a.Protocol())
+
+	a.p2ps.SetConnectFun(func(ctx context.Context, addr ma.Multiaddr) (address *aurora.Address, err error) {
+		addresses, err := a.book.Addresses()
+		if err != nil {
+			return nil, errors.New("could not fetch addresbook addresses")
+		}
+
+		for _, a := range addresses {
+			if a.Underlay.Equal(addr) {
+				return &a, nil
+			}
+		}
+
+		bzzAddr, err := aurora.NewAddress(a.signer, addr, b.Address(), networkId)
+		if err != nil {
+			return nil, err
+		}
+
+		if err := a.book.Put(b.Address(), *bzzAddr); err != nil {
+			return nil, err
+		}
+
+		return bzzAddr, nil
+	})
+
+	findGap := false
+	a.Kad().EachPeer(func(address boson.Address, u uint8) (stop, jumpToNext bool, err error) {
+		if address.Equal(gap.Address()) {
+			findGap = true
+			return true, false, nil
+		}
+		if address.Equal(b.Address()) {
+			t.Fatal("unexpected to find node B")
+		}
+		return false, false, nil
+	})
+	_, err := a.book.Get(b.Address())
+	if !findGap || !errors.Is(err, addressbook.ErrNotFound) {
+		t.Fatal("node A should known gap")
+	}
+
+	time.Sleep(500 * time.Millisecond)
+
+	//findGap = false
+	//b.Kad().EachPeer(func(address boson.Address, u uint8) (stop, jumpToNext bool, err error) {
+	//	if address.Equal(gap.Address()) {
+	//		findGap = true
+	//		return true, false, nil
+	//	}
+	//	if address.Equal(a.Address()) {
+	//		t.Fatal("unexpected to find node A")
+	//	}
+	//	return false, false, nil
+	//})
+	//_, err = b.book.Get(a.Address())
+	//if !findGap || !errors.Is(err, addressbook.ErrNotFound) {
+	//	t.Fatal("node B should known gap")
+	//}
+
+	//time.Sleep(500 * time.Millisecond)
+
+	var findNodes []boson.Address
+	gap.Kad().EachPeer(func(address boson.Address, u uint8) (stop, jumpToNext bool, err error) {
+		if address.Equal(a.Address()) || address.Equal(b.Address()) {
+			findNodes = append(findNodes, address)
+		}
+		return false, false, nil
+	})
+	if len(findNodes) != 2 {
+		t.Fatalf("expected to want 2 nodes, got %d nodes %v", len(findNodes), findNodes)
+	}
+
+	t.Run("connect node", func(t *testing.T) {
+		err := a.Connect(ctx, b.Address())
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		find := false
+		a.Kad().EachKnownPeer(func(address boson.Address, u uint8) (stop, jumpToNext bool, err error) {
+			if address.Equal(b.Address()) {
+				find = true
+				return true, false, nil
+			}
+			return false, false, nil
+		})
+		if !find {
+			t.Fatal("node B should be known")
+		}
+
+		//find = false
+		//b.Kad().EachKnownPeer(func(address boson.Address, u uint8) (stop, jumpToNext bool, err error) {
+		//	if address.Equal(a.Address()) {
+		//		find = true
+		//		return true, false, nil
+		//	}
+		//	return false, false, nil
+		//})
+		//if !find {
+		//	t.Fatal("node A should be known")
+		//}
+	})
 }
