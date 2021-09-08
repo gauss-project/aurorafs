@@ -61,5 +61,6 @@ require (
 	google.golang.org/protobuf v1.27.1 // indirect
 	gopkg.in/ini.v1 v1.57.0 // indirect
 	gopkg.in/yaml.v2 v2.4.0
+	resenje.org/singleflight v0.2.0
 	resenje.org/web v0.4.3
 )
