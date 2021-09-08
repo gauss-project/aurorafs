@@ -14,12 +14,13 @@ import (
 	"time"
 
 	"github.com/gauss-project/aurorafs/pkg/addressbook"
+	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/crypto"
 	"github.com/gauss-project/aurorafs/pkg/logging"
 	"github.com/gauss-project/aurorafs/pkg/p2p"
 	"github.com/gauss-project/aurorafs/pkg/p2p/libp2p"
 	"github.com/gauss-project/aurorafs/pkg/statestore/mock"
-	"github.com/gauss-project/aurorafs/pkg/boson"
+	"github.com/gauss-project/aurorafs/pkg/topology/lightnode"
 	"github.com/multiformats/go-multiaddr"
 )
 
@@ -27,7 +28,9 @@ type libp2pServiceOpts struct {
 	Logger      logging.Logger
 	Addressbook addressbook.Interface
 	PrivateKey  *ecdsa.PrivateKey
+	MockPeerKey *ecdsa.PrivateKey
 	libp2pOpts  libp2p.Options
+	lightNodes  *lightnode.Container
 }
 
 // newService constructs a new libp2p service.
@@ -65,7 +68,13 @@ func newService(t *testing.T, networkID uint64, o libp2pServiceOpts) (s *libp2p.
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
-	s, err = libp2p.New(ctx, crypto.NewDefaultSigner(swarmKey), networkID, overlay, addr, o.Addressbook, statestore, o.Logger, nil, o.libp2pOpts)
+
+	if o.lightNodes == nil {
+		o.lightNodes = lightnode.NewContainer(overlay)
+	}
+	opts := o.libp2pOpts
+
+	s, err = libp2p.New(ctx, crypto.NewDefaultSigner(swarmKey), networkID, overlay, addr, o.Addressbook, statestore, o.lightNodes, o.Logger, nil, opts)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -145,4 +154,12 @@ func serviceUnderlayAddress(t *testing.T, s *libp2p.Service) multiaddr.Multiaddr
 		t.Fatal(err)
 	}
 	return addrs[0]
+}
+
+type MockSenderMatcher struct {
+	BlockHash []byte
+}
+
+func (m MockSenderMatcher) Matches(context.Context, []byte, uint64, boson.Address) ([]byte, error) {
+	return m.BlockHash, nil
 }

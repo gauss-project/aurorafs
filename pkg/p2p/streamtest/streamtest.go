@@ -7,13 +7,15 @@ package streamtest
 import (
 	"context"
 	"errors"
+	"github.com/gauss-project/aurorafs/pkg/aurora"
 	"io"
 	"sync"
 	"testing"
 	"time"
 
-	"github.com/gauss-project/aurorafs/pkg/p2p"
 	"github.com/gauss-project/aurorafs/pkg/boson"
+	"github.com/gauss-project/aurorafs/pkg/p2p"
+	ma "github.com/multiformats/go-multiaddr"
 )
 
 var (
@@ -30,16 +32,26 @@ var (
 )
 
 type Recorder struct {
-	base    boson.Address
-	records map[string][]*Record
-	recordsMu   sync.Mutex
-	protocols   []p2p.ProtocolSpec
-	middlewares []p2p.HandlerMiddleware
+	base               boson.Address
+	fullNode           bool
+	records            map[string][]*Record
+	recordsMu          sync.Mutex
+	protocols          []p2p.ProtocolSpec
+	middlewares        []p2p.HandlerMiddleware
+	streamErr          func(boson.Address, string, string, string) error
+	pingErr            func(ma.Multiaddr) (time.Duration, error)
+	protocolsWithPeers map[string]p2p.ProtocolSpec
 }
 
 func WithProtocols(protocols ...p2p.ProtocolSpec) Option {
 	return optionFunc(func(r *Recorder) {
 		r.protocols = append(r.protocols, protocols...)
+	})
+}
+
+func WithPeerProtocols(protocolsWithPeers map[string]p2p.ProtocolSpec) Option {
+	return optionFunc(func(r *Recorder) {
+		r.protocolsWithPeers = protocolsWithPeers
 	})
 }
 
@@ -55,9 +67,28 @@ func WithBaseAddr(a boson.Address) Option {
 	})
 }
 
+func WithLightNode() Option {
+	return optionFunc(func(r *Recorder) {
+		r.fullNode = false
+	})
+}
+
+func WithStreamError(streamErr func(boson.Address, string, string, string) error) Option {
+	return optionFunc(func(r *Recorder) {
+		r.streamErr = streamErr
+	})
+}
+
+func WithPingErr(pingErr func(ma.Multiaddr) (time.Duration, error)) Option {
+	return optionFunc(func(r *Recorder) {
+		r.pingErr = pingErr
+	})
+}
+
 func New(opts ...Option) *Recorder {
 	r := &Recorder{
-		records: make(map[string][]*Record),
+		records:  make(map[string][]*Record),
+		fullNode: true,
 	}
 
 	r.middlewares = append(r.middlewares, noopMiddleware)
@@ -73,6 +104,12 @@ func (r *Recorder) SetProtocols(protocols ...p2p.ProtocolSpec) {
 }
 
 func (r *Recorder) NewStream(ctx context.Context, addr boson.Address, h p2p.Headers, protocolName, protocolVersion, streamName string) (p2p.Stream, error) {
+	if r.streamErr != nil {
+		err := r.streamErr(addr, protocolName, protocolVersion, streamName)
+		if err != nil {
+			return nil, err
+		}
+	}
 	recordIn := newRecord()
 	recordOut := newRecord()
 	streamOut := newStream(recordIn, recordOut)
@@ -80,14 +117,18 @@ func (r *Recorder) NewStream(ctx context.Context, addr boson.Address, h p2p.Head
 
 	var handler p2p.HandlerFunc
 	var headler p2p.HeadlerFunc
-	for _, p := range r.protocols {
-		if p.Name == protocolName && p.Version == protocolVersion {
-			for _, s := range p.StreamSpecs {
-				if s.Name == streamName {
-					handler = s.Handler
-					headler = s.Headler
-				}
+	peerHandlers, ok := r.protocolsWithPeers[addr.String()]
+	if !ok {
+		for _, p := range r.protocols {
+			if p.Name == protocolName && p.Version == protocolVersion {
+				peerHandlers = p
 			}
+		}
+	}
+	for _, s := range peerHandlers.StreamSpecs {
+		if s.Name == streamName {
+			handler = s.Handler
+			headler = s.Headler
 		}
 	}
 	if handler == nil {
@@ -97,15 +138,16 @@ func (r *Recorder) NewStream(ctx context.Context, addr boson.Address, h p2p.Head
 		handler = r.middlewares[i](handler)
 	}
 	if headler != nil {
-		streamOut.headers = headler(h)
+		streamOut.headers = headler(h, addr)
 	}
 	record := &Record{in: recordIn, out: recordOut, done: make(chan struct{})}
 	go func() {
 		defer close(record.done)
 
 		// pass a new context to handler,
+		streamIn.responseHeaders = streamOut.headers
 		// do not cancel it with the client stream context
-		err := handler(context.Background(), p2p.Peer{Address: r.base}, streamIn)
+		err := handler(context.Background(), p2p.Peer{Address: r.base, FullNode: r.fullNode}, streamIn)
 		if err != nil && err != io.EOF {
 			record.setErr(err)
 		}
@@ -118,6 +160,13 @@ func (r *Recorder) NewStream(ctx context.Context, addr boson.Address, h p2p.Head
 
 	r.records[id] = append(r.records[id], record)
 	return streamOut, nil
+}
+
+func (r *Recorder) Ping(ctx context.Context, addr ma.Multiaddr) (rtt time.Duration, err error) {
+	if r.pingErr != nil {
+		return r.pingErr(addr)
+	}
+	return rtt, err
 }
 
 func (r *Recorder) Records(addr boson.Address, protocolName, protocolVersio, streamName string) ([]*Record, error) {
@@ -194,9 +243,10 @@ func (r *Record) setErr(err error) {
 }
 
 type stream struct {
-	in      *record
-	out     *record
-	headers p2p.Headers
+	in              *record
+	out             *record
+	headers         p2p.Headers
+	responseHeaders p2p.Headers
 }
 
 func newStream(in, out *record) *stream {
@@ -213,6 +263,10 @@ func (s *stream) Write(p []byte) (int, error) {
 
 func (s *stream) Headers() p2p.Headers {
 	return s.headers
+}
+
+func (s *stream) ResponseHeaders() p2p.Headers {
+	return s.responseHeaders
 }
 
 func (s *stream) Close() error {
@@ -336,14 +390,31 @@ type RecorderDisconnecter struct {
 	disconnected map[string]struct{}
 	blocklisted  map[string]time.Duration
 	mu           sync.RWMutex
+
+	connected   map[string]struct{}
+	connectFunc func(ctx context.Context, addr ma.Multiaddr) (address *aurora.Address, err error)
 }
 
 func NewRecorderDisconnecter(r *Recorder) *RecorderDisconnecter {
 	return &RecorderDisconnecter{
 		Recorder:     r,
+		connected:    make(map[string]struct{}),
 		disconnected: make(map[string]struct{}),
 		blocklisted:  make(map[string]time.Duration),
 	}
+}
+
+func (r *RecorderDisconnecter) SetConnectFun(f func(ctx context.Context, addr ma.Multiaddr) (address *aurora.Address, err error)) {
+	r.connectFunc = f
+}
+
+func (r *RecorderDisconnecter) Connect(ctx context.Context, ma ma.Multiaddr) (address *aurora.Address, err error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	r.connected[ma.String()] = struct{}{}
+
+	return r.connectFunc(ctx, ma)
 }
 
 func (r *RecorderDisconnecter) Disconnect(overlay boson.Address) error {

@@ -8,9 +8,9 @@ import (
 	"errors"
 	"net/http"
 
+	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/jsonhttp"
 	"github.com/gauss-project/aurorafs/pkg/p2p"
-	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gorilla/mux"
 	"github.com/multiformats/go-multiaddr"
 )

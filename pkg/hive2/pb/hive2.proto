@@ -1,0 +1,24 @@
+// Copyright 2020 The Swarm Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
+syntax = "proto3";
+
+package hive;
+
+option go_package = "pb";
+
+message Peers {
+    repeated AuroraAddress peers = 1;
+}
+
+message AuroraAddress {
+    bytes Underlay = 1;
+    bytes Signature = 2;
+    bytes Overlay = 3;
+}
+
+message FindNodeReq {
+    repeated int32 Po = 1;
+    int32 Limit = 2;
+}
