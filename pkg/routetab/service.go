@@ -4,17 +4,17 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/gauss-project/aurorafs/pkg/addressbook"
-	"github.com/gauss-project/aurorafs/pkg/aurora"
-	"github.com/gauss-project/aurorafs/pkg/topology/kademlia"
 	"time"
 
+	"github.com/gauss-project/aurorafs/pkg/addressbook"
+	"github.com/gauss-project/aurorafs/pkg/aurora"
 	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/logging"
 	"github.com/gauss-project/aurorafs/pkg/p2p"
 	"github.com/gauss-project/aurorafs/pkg/p2p/protobuf"
 	"github.com/gauss-project/aurorafs/pkg/routetab/pb"
 	"github.com/gauss-project/aurorafs/pkg/storage"
+	"github.com/gauss-project/aurorafs/pkg/topology/kademlia"
 )
 
 const (
@@ -174,6 +174,7 @@ func (s *Service) onRouteReq(ctx context.Context, p p2p.Peer, stream p2p.Stream)
 	if s.isNeighbor(target) {
 		// dest in neighbor then resp
 		dest, _ := s.config.AddressBook.Get(target)
+		s.doRouteResp(ctx, p.Address, dest, []RouteItem{})
 		s.logger.Tracef("route: handlerFindRouteReq dest= %s in neighbor", target.String())
 		s.doRouteResp(ctx, p.Address, dest, []RouteItem{})
 		return nil

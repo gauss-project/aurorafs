@@ -2,7 +2,9 @@ package routetab
 
 import (
 	"context"
+	"fmt"
 	"github.com/gauss-project/aurorafs/pkg/aurora"
+	"os"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -77,6 +79,8 @@ func (pend *pendCallResTab) Forward(ctx context.Context, s *Service, target *aur
 	pend.mu.Lock(key)
 	defer pend.mu.Unlock(key)
 
+	fmt.Fprintf(os.Stderr, "pending table %v\n", pend.items)
+
 	mKey := common.BytesToHash(target.Overlay.Bytes())
 	res := pend.items[mKey]
 	for _, v := range res {
@@ -85,6 +89,7 @@ func (pend *pendCallResTab) Forward(ctx context.Context, s *Service, target *aur
 			s.doRouteResp(ctx, v.src, target, routes)
 		} else if v.resCh != nil {
 			// sync return
+			fmt.Fprintf(os.Stderr, "pending return\n")
 			v.resCh <- struct{}{}
 		}
 	}
