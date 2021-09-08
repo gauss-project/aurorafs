@@ -349,6 +349,9 @@ func (s *Service) connect(ctx context.Context, peer boson.Address) (err error) {
 		_ = s.p2ps.Disconnect(i.Overlay)
 		return errOverlayMismatch
 	}
+
+	s.kad.KnownPeer().Add(peer)
+
 	return nil
 }
 

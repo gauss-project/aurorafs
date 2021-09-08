@@ -19,6 +19,7 @@ package localstore
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"io/ioutil"
 	"math/rand"
@@ -27,11 +28,15 @@ import (
 	"testing"
 	"time"
 
+	"github.com/gauss-project/aurorafs/pkg/boson"
+	chunkinfo "github.com/gauss-project/aurorafs/pkg/chunkinfo/mock"
+	"github.com/gauss-project/aurorafs/pkg/collection/entry"
+	"github.com/gauss-project/aurorafs/pkg/file/pipeline/builder"
 	"github.com/gauss-project/aurorafs/pkg/logging"
+	"github.com/gauss-project/aurorafs/pkg/sctx"
 	"github.com/gauss-project/aurorafs/pkg/shed"
 	"github.com/gauss-project/aurorafs/pkg/storage"
-	"github.com/gauss-project/aurorafs/pkg/boson"
-	"github.com/syndtr/goleveldb/leveldb"
+	"github.com/gauss-project/aurorafs/pkg/traversal"
 )
 
 // TestDB_collectGarbageWorker tests garbage collection runs
@@ -53,16 +58,23 @@ func TestDB_collectGarbageWorker_multipleBatches(t *testing.T) {
 }
 
 // testDBCollectGarbageWorker is a helper test function to test
-// garbage collection runs by uploading and syncing a number of chunks.
+// garbage collection runs by put request a number of chunks.
 func testDBCollectGarbageWorker(t *testing.T) {
 
 	chunkCount := 150
 
 	var closed chan struct{}
 	testHookCollectGarbageChan := make(chan uint64)
-	t.Cleanup(setTestHookCollectGarbage(func(collectedCount uint64) {
+	testHookRecycleGarbageChan := make(chan uint64)
+	t.Cleanup(setTestHook(&testHookCollectGarbage, func(collectedCount uint64) {
 		select {
 		case testHookCollectGarbageChan <- collectedCount:
+		case <-closed:
+		}
+	}))
+	t.Cleanup(setTestHook(&testHookRecycleGarbage, func(recycledCount uint64) {
+		select {
+		case testHookRecycleGarbageChan <- recycledCount:
 		case <-closed:
 		}
 	}))
@@ -71,26 +83,15 @@ func testDBCollectGarbageWorker(t *testing.T) {
 	})
 	closed = db.close
 
-	addrs := make([]boson.Address, 0)
+	// upload random file
+	ci := chunkinfo.New()
+	db.Config(ci)
+	reference, chunks, addGc := addRandomFile(t, chunkCount, db, ci, false)
 
-	// upload random chunks
-	for i := 0; i < chunkCount; i++ {
-		ch := generateTestRandomChunk()
+	addGc(t)
 
-		_, err := db.Put(context.Background(), storage.ModePutUpload, ch)
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		err = db.Set(context.Background(), storage.ModeSetSync, ch.Address())
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		addrs = append(addrs, ch.Address())
-
-	}
-
+	// trigger gc
+	db.triggerGarbageCollection()
 	gcTarget := db.gcTarget()
 
 	for {
@@ -103,39 +104,50 @@ func testDBCollectGarbageWorker(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if gcSize == gcTarget {
+		if gcSize <= gcTarget {
 			break
 		}
 	}
 
-	t.Run("pull index count", newItemsCountTest(db.pullIndex, int(gcTarget)))
-
-	t.Run("gc index count", newItemsCountTest(db.gcIndex, int(gcTarget)))
+	t.Run("gc index count", newItemsCountTest(db.gcIndex, 0))
 
 	t.Run("gc size", newIndexGCSizeTest(db))
 
-	// the first synced chunk should be removed
-	t.Run("get the first synced chunk", func(t *testing.T) {
-		_, err := db.Get(context.Background(), storage.ModeGetRequest, addrs[0])
+	// the file reference chunk should be removed
+	t.Run("get the file reference chunk", func(t *testing.T) {
+		_, err := db.Get(context.Background(), storage.ModeGetRequest, reference)
 		if !errors.Is(err, storage.ErrNotFound) {
 			t.Errorf("got error %v, want %v", err, storage.ErrNotFound)
 		}
 	})
 
-	t.Run("only first inserted chunks should be removed", func(t *testing.T) {
-		for i := 0; i < (chunkCount - int(gcTarget)); i++ {
-			_, err := db.Get(context.Background(), storage.ModeGetRequest, addrs[i])
+	var prevChunkSize int
+
+	for {
+		select {
+		case <-testHookRecycleGarbageChan:
+		case <-time.After(10 * time.Second):
+			t.Error("recycle garbage timeout")
+		}
+		chunkSize, err := db.retrievalDataIndex.Count()
+		if err != nil {
+			t.Fatal(err)
+		}
+		prevChunkSize = chunkSize
+		if chunkSize == 0 {
+			break
+		}
+		if prevChunkSize > 0 && prevChunkSize < chunkSize {
+			t.Errorf("got current chunk size %d, but prev chunk size (%d) small than this\n", chunkSize, prevChunkSize)
+		}
+	}
+
+	t.Run("file related chunks should be removed", func(t *testing.T) {
+		for i := 0; i < chunkCount; i++ {
+			_, err := db.Get(context.Background(), storage.ModeGetRequest, chunks[i])
 			if !errors.Is(err, storage.ErrNotFound) {
 				t.Errorf("got error %v, want %v", err, storage.ErrNotFound)
 			}
-		}
-	})
-
-	// last synced chunk should not be removed
-	t.Run("get most recent synced chunk", func(t *testing.T) {
-		_, err := db.Get(context.Background(), storage.ModeGetRequest, addrs[len(addrs)-1])
-		if err != nil {
-			t.Fatal(err)
 		}
 	})
 }
@@ -145,14 +157,20 @@ func testDBCollectGarbageWorker(t *testing.T) {
 func TestPinGC(t *testing.T) {
 
 	chunkCount := 150
-	pinChunksCount := 50
 	dbCapacity := uint64(100)
 
 	var closed chan struct{}
 	testHookCollectGarbageChan := make(chan uint64)
-	t.Cleanup(setTestHookCollectGarbage(func(collectedCount uint64) {
+	testHookRecycleGarbageChan := make(chan uint64)
+	t.Cleanup(setTestHook(&testHookCollectGarbage, func(collectedCount uint64) {
 		select {
 		case testHookCollectGarbageChan <- collectedCount:
+		case <-closed:
+		}
+	}))
+	t.Cleanup(setTestHook(&testHookRecycleGarbage, func(collectedCount uint64) {
+		select {
+		case testHookRecycleGarbageChan <- collectedCount:
 		case <-closed:
 		}
 	}))
@@ -162,34 +180,25 @@ func TestPinGC(t *testing.T) {
 	})
 	closed = db.close
 
-	addrs := make([]boson.Address, 0)
-	pinAddrs := make([]boson.Address, 0)
+	// upload random file
+	ci := chunkinfo.New()
+	db.Config(ci)
 
-	// upload random chunks
-	for i := 0; i < chunkCount; i++ {
-		ch := generateTestRandomChunk()
+	_, chunksA, addGC1 := addRandomFile(t, int(dbCapacity)-4, db, ci, false)
+	addGC1(t)
+	pinReference, pinChunks, _ := addRandomFile(t, chunkCount, db, ci, true)
+	_, chunksB, addGC2 := addRandomFile(t, 5, db, ci, false)
+	addGC2(t)
 
-		_, err := db.Put(context.Background(), storage.ModePutUpload, ch)
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		err = db.Set(context.Background(), storage.ModeSetSync, ch.Address())
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		addrs = append(addrs, ch.Address())
-
-		// Pin the chunks at the beginning to make sure they are not removed by GC
-		if i < pinChunksCount {
-			err = db.Set(context.Background(), storage.ModeSetPin, ch.Address())
-			if err != nil {
-				t.Fatal(err)
-			}
-			pinAddrs = append(pinAddrs, ch.Address())
-		}
+	curSize, err := db.gcSize.Get()
+	if err != nil {
+		t.Fatal(err)
 	}
+	if curSize < db.capacity {
+		t.Fatalf("current db not trigger gc， cur gc size = %d\n", curSize)
+	}
+
+	db.triggerGarbageCollection()
 	gcTarget := db.gcTarget()
 
 	for {
@@ -202,27 +211,44 @@ func TestPinGC(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if gcSize == gcTarget {
+		if gcSize <= gcTarget {
 			break
 		}
 	}
 
-	t.Run("pin Index count", newItemsCountTest(db.pinIndex, pinChunksCount))
+	t.Run("pin Index count", newItemsCountTest(db.pinIndex, len(pinChunks)))
 
-	t.Run("gc exclude index count", newItemsCountTest(db.gcExcludeIndex, 0))
+	t.Run("gc index count", newItemsCountTest(db.gcIndex, 1))
 
-	t.Run("pull index count", newItemsCountTest(db.pullIndex, int(gcTarget)+pinChunksCount))
+	t.Run("gc size", func(t *testing.T) {
+		got, err := db.gcSize.Get()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got != uint64(len(chunksB)) {
+			t.Errorf("got gc size %v, want %v", got, len(chunksB))
+		}
+	})
 
-	t.Run("gc index count", newItemsCountTest(db.gcIndex, int(gcTarget)))
+	select {
+	case <-testHookRecycleGarbageChan:
+	case <-time.After(10 * time.Second):
+		t.Error("recycle garbage timeout")
+	}
 
-	t.Run("gc size", newIndexGCSizeTest(db))
+	t.Run("first upload chunk was removed from gc index", func(t *testing.T) {
+		for _, hash := range chunksA {
+			_, err := db.Get(context.Background(), storage.ModeGetRequest, hash)
+			if !errors.Is(err, storage.ErrNotFound) {
+				t.Fatal(err)
+			}
+		}
+	})
 
 	t.Run("pinned chunk not in gc Index", func(t *testing.T) {
 		err := db.gcIndex.Iterate(func(item shed.Item) (stop bool, err error) {
-			for _, pinHash := range pinAddrs {
-				if bytes.Equal(pinHash.Bytes(), item.Address) {
-					t.Fatal("pin chunk present in gcIndex")
-				}
+			if bytes.Equal(pinReference.Bytes(), item.Address) {
+				t.Fatal("pin chunk present in gcIndex")
 			}
 			return false, nil
 		}, nil)
@@ -232,7 +258,7 @@ func TestPinGC(t *testing.T) {
 	})
 
 	t.Run("pinned chunks exists", func(t *testing.T) {
-		for _, hash := range pinAddrs {
+		for _, hash := range pinChunks {
 			_, err := db.Get(context.Background(), storage.ModeGetRequest, hash)
 			if err != nil {
 				t.Fatal(err)
@@ -240,10 +266,10 @@ func TestPinGC(t *testing.T) {
 		}
 	})
 
-	t.Run("first chunks after pinned chunks should be removed", func(t *testing.T) {
-		for i := pinChunksCount; i < (int(dbCapacity) - int(gcTarget)); i++ {
-			_, err := db.Get(context.Background(), storage.ModeGetRequest, addrs[i])
-			if !errors.Is(err, leveldb.ErrNotFound) {
+	t.Run("second upload chunks exists", func(t *testing.T) {
+		for _, hash := range chunksB {
+			_, err := db.Get(context.Background(), storage.ModeGetRequest, hash)
+			if err != nil {
 				t.Fatal(err)
 			}
 		}
@@ -260,38 +286,27 @@ func TestGCAfterPin(t *testing.T) {
 		Capacity: 100,
 	})
 
-	pinAddrs := make([]boson.Address, 0)
-
 	// upload random chunks
-	for i := 0; i < chunkCount; i++ {
-		ch := generateTestRandomChunk()
+	ci := chunkinfo.New()
+	db.Config(ci)
+	reference, chunks, addGc := addRandomFile(t, chunkCount, db, ci, false)
 
-		_, err := db.Put(context.Background(), storage.ModePutUpload, ch)
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		// Pin before adding to GC in ModeSetSync
-		err = db.Set(context.Background(), storage.ModeSetPin, ch.Address())
-		if err != nil {
-			t.Fatal(err)
-		}
-		pinAddrs = append(pinAddrs, ch.Address())
-
-		err = db.Set(context.Background(), storage.ModeSetSync, ch.Address())
+	ctx := sctx.SetRootCID(context.Background(), reference)
+	for _, chunk := range chunks {
+		err := db.Set(ctx, storage.ModeSetPin, chunk)
 		if err != nil {
 			t.Fatal(err)
 		}
 	}
 
-	t.Run("pin Index count", newItemsCountTest(db.pinIndex, chunkCount))
+	addGc(t)
 
-	t.Run("gc exclude index count", newItemsCountTest(db.gcExcludeIndex, chunkCount))
+	t.Run("pin Index count", newItemsCountTest(db.pinIndex, len(chunks)))
 
-	t.Run("gc index count", newItemsCountTest(db.gcIndex, int(0)))
+	t.Run("gc index count", newItemsCountTest(db.gcIndex, 0))
 
-	for _, hash := range pinAddrs {
-		_, err := db.Get(context.Background(), storage.ModeGetRequest, hash)
+	for _, hash := range chunks {
+		_, err := db.Get(ctx, storage.ModeGetRequest, hash)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -306,8 +321,11 @@ func TestDB_collectGarbageWorker_withRequests(t *testing.T) {
 		Capacity: 100,
 	})
 
+	ci := chunkinfo.New()
+	db.Config(ci)
+
 	testHookCollectGarbageChan := make(chan uint64)
-	defer setTestHookCollectGarbage(func(collectedCount uint64) {
+	defer setTestHook(&testHookCollectGarbage, func(collectedCount uint64) {
 		testHookCollectGarbageChan <- collectedCount
 	})()
 
@@ -317,12 +335,8 @@ func TestDB_collectGarbageWorker_withRequests(t *testing.T) {
 	for i := 0; i < int(db.capacity)-1; i++ {
 		ch := generateTestRandomChunk()
 
-		_, err := db.Put(context.Background(), storage.ModePutUpload, ch)
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		err = db.Set(context.Background(), storage.ModeSetSync, ch.Address())
+		ctx := sctx.SetRootCID(context.Background(), ch.Address())
+		_, err := db.Put(ctx, storage.ModePutRequest, ch)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -338,10 +352,11 @@ func TestDB_collectGarbageWorker_withRequests(t *testing.T) {
 		close(testHookUpdateGCChan)
 	})
 
-	// request the latest synced chunk
+	// request the latest put chunk
 	// to prioritize it in the gc index
 	// not to be collected
-	_, err := db.Get(context.Background(), storage.ModeGetRequest, addrs[0])
+	ctx := sctx.SetRootCID(context.Background(), addrs[0])
+	_, err := db.Get(ctx, storage.ModeGetRequest, addrs[0])
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -357,21 +372,17 @@ func TestDB_collectGarbageWorker_withRequests(t *testing.T) {
 	// no need to wait for update gc hook anymore
 	resetTestHookUpdateGC()
 
-	// upload and sync another chunk to trigger
+	// put request another chunk to trigger
 	// garbage collection
 	ch := generateTestRandomChunk()
-	_, err = db.Put(context.Background(), storage.ModePutUpload, ch)
-	if err != nil {
-		t.Fatal(err)
-	}
-	err = db.Set(context.Background(), storage.ModeSetSync, ch.Address())
+	ctx = sctx.SetRootCID(context.Background(), ch.Address())
+	_, err = db.Put(ctx, storage.ModePutRequest, ch)
 	if err != nil {
 		t.Fatal(err)
 	}
 	addrs = append(addrs, ch.Address())
 
 	// wait for garbage collection
-
 	gcTarget := db.gcTarget()
 
 	var totalCollectedCount uint64
@@ -395,8 +406,6 @@ func TestDB_collectGarbageWorker_withRequests(t *testing.T) {
 	if totalCollectedCount != wantTotalCollectedCount {
 		t.Errorf("total collected chunks %v, want %v", totalCollectedCount, wantTotalCollectedCount)
 	}
-
-	t.Run("pull index count", newItemsCountTest(db.pullIndex, int(gcTarget)))
 
 	t.Run("gc index count", newItemsCountTest(db.gcIndex, int(gcTarget)))
 
@@ -445,17 +454,16 @@ func TestDB_gcSize(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	ci := chunkinfo.New()
+	db.Config(ci)
+
 	count := 100
 
 	for i := 0; i < count; i++ {
 		ch := generateTestRandomChunk()
 
-		_, err := db.Put(context.Background(), storage.ModePutUpload, ch)
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		err = db.Set(context.Background(), storage.ModeSetSync, ch.Address())
+		ctx := sctx.SetRootCID(context.Background(), ch.Address())
+		_, err := db.Put(ctx, storage.ModePutRequest, ch)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -468,25 +476,26 @@ func TestDB_gcSize(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	db.Config(ci)
 	defer db.Close()
 
 	t.Run("gc index size", newIndexGCSizeTest(db))
 }
 
-// setTestHookCollectGarbage sets testHookCollectGarbage and
+// setTestHook sets gc hook and
 // returns a function that will reset it to the
 // value before the change.
-func setTestHookCollectGarbage(h func(collectedCount uint64)) (reset func()) {
-	current := testHookCollectGarbage
+func setTestHook(hook *func(uint64), f func(collectedCount uint64)) (reset func()) {
+	current := *hook
 	reset = func() { testHookCollectGarbage = current }
-	testHookCollectGarbage = h
+	*hook = f
 	return reset
 }
 
 // TestSetTestHookCollectGarbage tests if setTestHookCollectGarbage changes
 // testHookCollectGarbage function correctly and if its reset function
 // resets the original function.
-func TestSetTestHookCollectGarbage(t *testing.T) {
+func TestSetTestHook(t *testing.T) {
 	// Set the current function after the test finishes.
 	defer func(h func(collectedCount uint64)) { testHookCollectGarbage = h }(testHookCollectGarbage)
 
@@ -512,7 +521,7 @@ func TestSetTestHookCollectGarbage(t *testing.T) {
 	}
 
 	// set the new function
-	reset := setTestHookCollectGarbage(func(_ uint64) {
+	reset := setTestHook(&testHookCollectGarbage, func(_ uint64) {
 		got = changed
 	})
 
@@ -541,16 +550,16 @@ func TestPinAfterMultiGC(t *testing.T) {
 		Capacity: 10,
 	})
 
+	ci := chunkinfo.New()
+	db.Config(ci)
+
 	pinnedChunks := make([]boson.Address, 0)
 
 	// upload random chunks above db capacity to see if chunks are still pinned
 	for i := 0; i < 20; i++ {
 		ch := generateTestRandomChunk()
-		_, err := db.Put(context.Background(), storage.ModePutUpload, ch)
-		if err != nil {
-			t.Fatal(err)
-		}
-		err = db.Set(context.Background(), storage.ModeSetSync, ch.Address())
+		ctx := sctx.SetRootCID(context.Background(), ch.Address())
+		_, err := db.Put(ctx, storage.ModePutRequest, ch)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -562,22 +571,16 @@ func TestPinAfterMultiGC(t *testing.T) {
 	}
 	for i := 0; i < 20; i++ {
 		ch := generateTestRandomChunk()
-		_, err := db.Put(context.Background(), storage.ModePutUpload, ch)
-		if err != nil {
-			t.Fatal(err)
-		}
-		err = db.Set(context.Background(), storage.ModeSetSync, ch.Address())
+		ctx := sctx.SetRootCID(context.Background(), ch.Address())
+		_, err := db.Put(ctx, storage.ModePutRequest, ch)
 		if err != nil {
 			t.Fatal(err)
 		}
 	}
 	for i := 0; i < 20; i++ {
 		ch := generateTestRandomChunk()
-		_, err := db.Put(context.Background(), storage.ModePutUpload, ch)
-		if err != nil {
-			t.Fatal(err)
-		}
-		err = db.Set(context.Background(), storage.ModeSetSync, ch.Address())
+		ctx := sctx.SetRootCID(context.Background(), ch.Address())
+		_, err := db.Put(ctx, storage.ModePutRequest, ch)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -590,7 +593,8 @@ func TestPinAfterMultiGC(t *testing.T) {
 		outItem := shed.Item{
 			Address: addr.Bytes(),
 		}
-		gotChunk, err := db.Get(context.Background(), storage.ModeGetRequest, boson.NewAddress(outItem.Address))
+		ctx := sctx.SetRootCID(context.Background(), addr)
+		gotChunk, err := db.Get(ctx, storage.ModeGetRequest, boson.NewAddress(outItem.Address))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -623,7 +627,7 @@ func generateAndPinAChunk(t *testing.T, db *DB) boson.Chunk {
 func TestPinSyncAndAccessPutSetChunkMultipleTimes(t *testing.T) {
 	var closed chan struct{}
 	testHookCollectGarbageChan := make(chan uint64)
-	t.Cleanup(setTestHookCollectGarbage(func(collectedCount uint64) {
+	t.Cleanup(setTestHook(&testHookCollectGarbage, func(collectedCount uint64) {
 		select {
 		case testHookCollectGarbageChan <- collectedCount:
 		case <-closed:
@@ -633,6 +637,9 @@ func TestPinSyncAndAccessPutSetChunkMultipleTimes(t *testing.T) {
 		Capacity: 10,
 	})
 	closed = db.close
+
+	ci := chunkinfo.New()
+	db.Config(ci)
 
 	pinnedChunks := addRandomChunks(t, 5, db, true)
 	rand1Chunks := addRandomChunks(t, 15, db, false)
@@ -690,32 +697,115 @@ func addRandomChunks(t *testing.T, count int, db *DB, pin bool) []boson.Chunk {
 	var chunks []boson.Chunk
 	for i := 0; i < count; i++ {
 		ch := generateTestRandomChunk()
-		_, err := db.Put(context.Background(), storage.ModePutUpload, ch)
+		ctx := sctx.SetRootCID(context.Background(), ch.Address())
+		_, err := db.Put(ctx, storage.ModePutRequest, ch)
 		if err != nil {
 			t.Fatal(err)
 		}
 		if pin {
-			err = db.Set(context.Background(), storage.ModeSetPin, ch.Address())
+			err = db.Set(ctx, storage.ModeSetPin, ch.Address())
 			if err != nil {
 				t.Fatal(err)
 			}
-			err = db.Set(context.Background(), storage.ModeSetSync, ch.Address())
-			if err != nil {
-				t.Fatal(err)
-			}
-			_, err = db.Get(context.Background(), storage.ModeGetRequest, ch.Address())
+			_, err = db.Get(ctx, storage.ModeGetRequest, ch.Address())
 			if err != nil {
 				t.Fatal(err)
 			}
 		} else {
 			// Non pinned chunks could be GC'd by the time they reach here.
 			// so it is okay to ignore the error
-			_ = db.Set(context.Background(), storage.ModeSetSync, ch.Address())
-			_, _ = db.Get(context.Background(), storage.ModeGetRequest, ch.Address())
+			_, _ = db.Get(ctx, storage.ModeGetRequest, ch.Address())
 		}
 		chunks = append(chunks, ch)
 	}
 	return chunks
+}
+
+func addRandomFile(t *testing.T, count int, db *DB, ci *chunkinfo.ChunkInfo, pin bool) (reference boson.Address, chunkHashes []boson.Address, addGc func(*testing.T)) {
+	buf := new(bytes.Buffer)
+	mode := storage.ModePutRequest
+	if pin {
+		mode = storage.ModePutRequestPin
+	}
+	for i := 0; i < count; i++ {
+		ch := generateTestRandomChunk()
+		buf.Write(ch.Data()[boson.SpanSize:])
+	}
+	ctx := context.Background()
+	pipe := builder.NewPipelineBuilder(ctx, db, mode, false)
+	fr, err := builder.FeedPipeline(ctx, pipe, buf, int64(buf.Len()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	meta := entry.NewMetadata(fr.String())
+	meta.MimeType = "text/plain; charset=utf-8"
+	metadata, err := json.Marshal(meta)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pipe = builder.NewPipelineBuilder(ctx, db, mode, false)
+	mr, err := builder.FeedPipeline(ctx, pipe, bytes.NewReader(metadata), int64(len(metadata)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	entries := entry.New(fr, mr)
+	entryBytes, err := entries.MarshalBinary()
+	if err != nil {
+		t.Fatal(err)
+	}
+	pipe = builder.NewPipelineBuilder(ctx, db, mode, false)
+	reference, err = builder.FeedPipeline(ctx, pipe, bytes.NewReader(entryBytes), int64(len(entryBytes)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	item := addressToItem(reference)
+	data, err := db.retrievalDataIndex.Get(item)
+	if err != nil {
+		t.Fatal(err)
+	}
+	traverser := traversal.NewService(db)
+	err = traverser.TraverseFileAddresses(ctx, reference, func(address boson.Address) error {
+		chunkHashes = append(chunkHashes, address)
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i, chunk := range chunkHashes {
+		ci.PutChunkPyramid(reference, chunk, i)
+	}
+	if !pin {
+		addGc = func(t2 *testing.T) {
+			t2.Helper()
+			exists, err := db.pinIndex.Has(item)
+			if err != nil {
+				t2.Fatal(err)
+			}
+			if exists {
+				return
+			}
+			item.AccessTimestamp = now()
+			err = db.retrievalAccessIndex.Put(item)
+			if err != nil {
+				t2.Fatal(err)
+			}
+			item.BinID = data.BinID
+			item.GCounter = uint64(len(chunkHashes))
+			err = db.gcIndex.Put(item)
+			if err != nil {
+				t2.Fatal(err)
+			}
+			curSize, err := db.gcSize.Get()
+			if err != nil {
+				t2.Fatal(err)
+			}
+			err = db.gcSize.Put(curSize + uint64(len(chunkHashes)))
+			if err != nil {
+				t2.Fatal(err)
+			}
+		}
+	}
+	return
 }
 
 // TestGC_NoEvictDirty checks that the garbage collection
@@ -733,8 +823,11 @@ func TestGC_NoEvictDirty(t *testing.T) {
 		Capacity: 10,
 	})
 
+	ci := chunkinfo.New()
+	db.Config(ci)
+
 	testHookCollectGarbageChan := make(chan uint64)
-	t.Cleanup(setTestHookCollectGarbage(func(collectedCount uint64) {
+	t.Cleanup(setTestHook(&testHookCollectGarbage, func(collectedCount uint64) {
 		// don't trigger if we haven't collected anything - this may
 		// result in a race condition when we inspect the gcsize below,
 		// causing the database to shut down while the cleanup to happen
@@ -767,7 +860,8 @@ func TestGC_NoEvictDirty(t *testing.T) {
 			// for all chunks!
 			if i < 2 {
 				mtx.Lock()
-				_, err := db.Get(context.Background(), storage.ModeGetRequest, addrs[i])
+				ctx := sctx.SetRootCID(context.Background(), addrs[i])
+				_, err := db.Get(ctx, storage.ModeGetRequest, addrs[i])
 				mtx.Unlock()
 				if err != nil {
 					t.Error(err)
@@ -784,16 +878,12 @@ func TestGC_NoEvictDirty(t *testing.T) {
 	// upload random chunks
 	for i := 0; i < chunkCount; i++ {
 		ch := generateTestRandomChunk()
-
-		_, err := db.Put(context.Background(), storage.ModePutUpload, ch)
+		ctx := sctx.SetRootCID(context.Background(), ch.Address())
+		_, err := db.Put(ctx, storage.ModePutRequest, ch)
 		if err != nil {
 			t.Fatal(err)
 		}
 
-		err = db.Set(context.Background(), storage.ModeSetSync, ch.Address())
-		if err != nil {
-			t.Fatal(err)
-		}
 		mtx.Lock()
 		addrs = append(addrs, ch.Address())
 		mtx.Unlock()
@@ -815,23 +905,21 @@ func TestGC_NoEvictDirty(t *testing.T) {
 		}
 	}
 
-	t.Run("pull index count", newItemsCountTest(db.pullIndex, int(gcTarget)))
-
 	t.Run("gc index count", newItemsCountTest(db.gcIndex, int(gcTarget)))
 
 	t.Run("gc size", newIndexGCSizeTest(db))
 
 	// the first synced chunk should be removed
 	t.Run("get the first two chunks, third is gone", func(t *testing.T) {
-		_, err := db.Get(context.Background(), storage.ModeGetRequest, addrs[0])
+		_, err := db.Get(sctx.SetRootCID(context.Background(), addrs[0]), storage.ModeGetRequest, addrs[0])
 		if err != nil {
 			t.Error("got error but expected none")
 		}
-		_, err = db.Get(context.Background(), storage.ModeGetRequest, addrs[1])
+		_, err = db.Get(sctx.SetRootCID(context.Background(), addrs[1]), storage.ModeGetRequest, addrs[1])
 		if err != nil {
 			t.Error("got error but expected none")
 		}
-		_, err = db.Get(context.Background(), storage.ModeGetRequest, addrs[2])
+		_, err = db.Get(sctx.SetRootCID(context.Background(), addrs[2]), storage.ModeGetRequest, addrs[2])
 		if !errors.Is(err, storage.ErrNotFound) {
 			t.Errorf("expected err not found but got %v", err)
 		}
@@ -839,7 +927,7 @@ func TestGC_NoEvictDirty(t *testing.T) {
 
 	t.Run("only later inserted chunks should be removed", func(t *testing.T) {
 		for i := 2; i < (chunkCount - int(gcTarget)); i++ {
-			_, err := db.Get(context.Background(), storage.ModeGetRequest, addrs[i])
+			_, err := db.Get(sctx.SetRootCID(context.Background(), addrs[i]), storage.ModeGetRequest, addrs[i])
 			if !errors.Is(err, storage.ErrNotFound) {
 				t.Errorf("got error %v, want %v", err, storage.ErrNotFound)
 			}
@@ -848,7 +936,7 @@ func TestGC_NoEvictDirty(t *testing.T) {
 
 	// last synced chunk should not be removed
 	t.Run("get most recent synced chunk", func(t *testing.T) {
-		_, err := db.Get(context.Background(), storage.ModeGetRequest, addrs[len(addrs)-1])
+		_, err := db.Get(sctx.SetRootCID(context.Background(), addrs[len(addrs)-1]), storage.ModeGetRequest, addrs[len(addrs)-1])
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -864,4 +952,95 @@ func setTestHookGCIteratorDone(h func()) (reset func()) {
 	reset = func() { testHookGCIteratorDone = current }
 	testHookGCIteratorDone = h
 	return reset
+}
+
+//Empty some tests.
+func TestPinAndUnpinChunk(t *testing.T) {
+	chunkCount := 5
+
+	var closed chan struct{}
+	testHookCollectGarbageChan := make(chan uint64)
+	testHookRecycleGarbageChan := make(chan uint64)
+	t.Cleanup(setTestHook(&testHookCollectGarbage, func(collectedCount uint64) {
+		select {
+		case testHookCollectGarbageChan <- collectedCount:
+		case <-closed:
+		}
+	}))
+	t.Cleanup(setTestHook(&testHookRecycleGarbage, func(recycledCount uint64) {
+		select {
+		case testHookRecycleGarbageChan <- recycledCount:
+		case <-closed:
+		}
+	}))
+	db := newTestDB(t, &Options{
+		Capacity: 10,
+	})
+	closed = db.close
+
+	// upload random file
+	ci := chunkinfo.New()
+	db.Config(ci)
+	reference, chunks, addGc := addRandomFile(t, chunkCount, db, ci, false)
+
+	for i, chunk := range chunks {
+		ci.PutChunkPyramid(reference, chunk, i)
+	}
+
+	rctx := sctx.SetRootCID(context.Background(), reference)
+	addGc(t)
+
+	var err error
+	//Pin lives to upload files for the first time.
+	for _, v := range chunks {
+		err = db.Set(rctx, storage.ModeSetPin, v)
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	chunkCount = 16
+	reference1, chunks1, addGc1 := addRandomFile(t, chunkCount, db, ci, false)
+	for i, chunk := range chunks1 {
+		ci.PutChunkPyramid(reference1, chunk, i)
+	}
+
+	rctx = sctx.SetRootCID(context.Background(), reference1)
+	for _, v := range chunks1 {
+		err = db.Set(rctx, storage.ModeSetPin, v)
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	for _, v := range chunks1 {
+		err = db.Set(rctx, storage.ModeSetUnpin, v)
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	addGc1(t)
+
+	//Invoke gc
+	db.triggerGarbageCollection()
+	select {
+	case <-testHookRecycleGarbageChan:
+	case <-time.After(10 * time.Second):
+		t.Error("recycle garbage timeout")
+	}
+
+	for _, v := range chunks1 {
+		_, err := db.Get(rctx, storage.ModeGetRequest, v)
+		if err == nil {
+			t.Fatal(err)
+		}
+	}
+
+	//Check whether the pin file exists.
+	for _, v := range chunks {
+		_, err := db.Get(rctx, storage.ModeGetRequest, v)
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
 }

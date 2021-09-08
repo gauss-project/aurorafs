@@ -10,6 +10,8 @@ import (
 	"context"
 	"errors"
 	"math/big"
+
+	"github.com/gauss-project/aurorafs/pkg/boson"
 )
 
 var (
@@ -24,6 +26,7 @@ type (
 	targetsContextKey struct{}
 	gasPriceKey       struct{}
 	gasLimitKey       struct{}
+	rootCIDKey        struct{}
 )
 
 // SetHost sets the http request host in the context
@@ -40,7 +43,6 @@ func GetHost(ctx context.Context) string {
 	return ""
 }
 
-
 func SetGasLimit(ctx context.Context, limit uint64) context.Context {
 	return context.WithValue(ctx, gasLimitKey{}, limit)
 }
@@ -55,7 +57,6 @@ func GetGasLimit(ctx context.Context) uint64 {
 
 func SetGasPrice(ctx context.Context, price *big.Int) context.Context {
 	return context.WithValue(ctx, gasPriceKey{}, price)
-
 }
 
 func GetGasPrice(ctx context.Context) *big.Int {
@@ -64,4 +65,16 @@ func GetGasPrice(ctx context.Context) *big.Int {
 		return v
 	}
 	return nil
+}
+
+func SetRootCID(ctx context.Context, rootCID boson.Address) context.Context {
+	return context.WithValue(ctx, rootCIDKey{}, rootCID)
+}
+
+func GetRootCID(ctx context.Context) boson.Address {
+	v, ok := ctx.Value(rootCIDKey{}).(boson.Address)
+	if ok {
+		return v
+	}
+	return boson.ZeroAddress
 }

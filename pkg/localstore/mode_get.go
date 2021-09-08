@@ -21,11 +21,11 @@ import (
 	"errors"
 	"time"
 
-	"github.com/syndtr/goleveldb/leveldb"
-
 	"github.com/gauss-project/aurorafs/pkg/boson"
+	"github.com/gauss-project/aurorafs/pkg/sctx"
 	"github.com/gauss-project/aurorafs/pkg/shed"
 	"github.com/gauss-project/aurorafs/pkg/storage"
+	"github.com/syndtr/goleveldb/leveldb"
 )
 
 // Get returns a chunk from the database. If the chunk is
@@ -33,7 +33,7 @@ import (
 // All required indexes will be updated required by the
 // Getter Mode. Get is required to implement chunk.Store
 // interface.
-func (db *DB) Get(ctx context.Context, mode storage.ModeGet, addr boson.Address, rootCid ...boson.Address) (ch boson.Chunk, err error) {
+func (db *DB) Get(ctx context.Context, mode storage.ModeGet, addr boson.Address) (ch boson.Chunk, err error) {
 	db.metrics.ModeGet.Inc()
 	defer totalTimeMetric(db.metrics.TotalTimeGet, time.Now())
 
@@ -43,7 +43,7 @@ func (db *DB) Get(ctx context.Context, mode storage.ModeGet, addr boson.Address,
 		}
 	}()
 
-	out, err := db.get(mode, addr)
+	out, err := db.get(mode, addr, sctx.GetRootCID(ctx))
 	if err != nil {
 		if errors.Is(err, leveldb.ErrNotFound) {
 			return nil, storage.ErrNotFound
@@ -55,7 +55,7 @@ func (db *DB) Get(ctx context.Context, mode storage.ModeGet, addr boson.Address,
 
 // get returns Item from the retrieval index
 // and updates other indexes.
-func (db *DB) get(mode storage.ModeGet, addr boson.Address) (out shed.Item, err error) {
+func (db *DB) get(mode storage.ModeGet, addr, rootAddr boson.Address) (out shed.Item, err error) {
 	item := addressToItem(addr)
 
 	out, err = db.retrievalDataIndex.Get(item)
@@ -65,7 +65,11 @@ func (db *DB) get(mode storage.ModeGet, addr boson.Address) (out shed.Item, err 
 	switch mode {
 	// update the access timestamp and gc index
 	case storage.ModeGetRequest:
-		db.updateGCItems(out)
+		if !rootAddr.IsZero() {
+			db.updateGCItems(addressToItem(rootAddr))
+		} else {
+			db.updateGCItems(out)
+		}
 
 	case storage.ModeGetPin:
 		pinnedItem, err := db.pinIndex.Get(item)
@@ -147,29 +151,40 @@ func (db *DB) updateGC(item shed.Item) (err error) {
 		// do not add it to the gc index
 		return nil
 	}
+	if item.BinID == 0 {
+		i, err = db.retrievalDataIndex.Get(item)
+		if err != nil {
+			return err
+		}
+		item.BinID = i.BinID
+	}
 	// delete current entry from the gc index
 	err = db.gcIndex.DeleteInBatch(batch, item)
 	if err != nil {
 		return err
 	}
+	// update the gc item timestamp in case
+	// it exists
+	var gcItem shed.Item
+	gcItem, err = db.gcIndex.Get(item)
+	item.GCounter = gcItem.GCounter
 	// update access timestamp
 	item.AccessTimestamp = now()
-	// update retrieve access index
-	err = db.retrievalAccessIndex.PutInBatch(batch, item)
-	if err != nil {
-		return err
-	}
-
-	// add new entry to gc index ONLY if it is not present in pinIndex
-	ok, err := db.pinIndex.Has(item)
-	if err != nil {
-		return err
-	}
-	if !ok {
+	if err == nil {
 		err = db.gcIndex.PutInBatch(batch, item)
 		if err != nil {
 			return err
 		}
+	} else {
+		if !errors.Is(err, leveldb.ErrNotFound) {
+			return err
+		}
+	}
+
+	// update retrieve access index
+	err = db.retrievalAccessIndex.PutInBatch(batch, item)
+	if err != nil {
+		return err
 	}
 
 	return db.shed.WriteBatch(batch)
