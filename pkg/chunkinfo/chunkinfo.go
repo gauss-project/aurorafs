@@ -99,9 +99,6 @@ func (ci *ChunkInfo) InitChunkInfo() error {
 	if err := ci.initChunkInfoDiscover(); err != nil {
 		return err
 	}
-	if err := ci.initChunkPyramid(); err != nil {
-		return err
-	}
 	return nil
 }
 
@@ -218,7 +215,9 @@ func (ci *ChunkInfo) GetChunkPyramid(rootCid boson.Address) []*boson.Address {
 
 func (ci *ChunkInfo) IsDiscover(rootCid boson.Address) bool {
 	q := ci.getQueue(rootCid.String())
-
+	if q == nil {
+		return false
+	}
 	if ci.cpd.getPendingFinder(rootCid) {
 		return true
 	}

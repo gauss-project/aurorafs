@@ -40,6 +40,9 @@ func (ci *ChunkInfo) initChunkInfoTabNeighbor() error {
 		}
 		bit, _ := bitvector.NewFromBytes(vb.B, vb.Len)
 		ci.ct.putChunkInfoTabNeighbor(rootCid, overlay, *bit)
+		if err := ci.initChunkPyramid(context.Background(), rootCid); err != nil {
+			return true, err
+		}
 		return false, nil
 	}); err != nil {
 		return err

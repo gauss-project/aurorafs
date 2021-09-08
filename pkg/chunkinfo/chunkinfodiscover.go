@@ -37,6 +37,9 @@ func (ci *ChunkInfo) initChunkInfoDiscover() error {
 		}
 		bit, _ := bitvector.NewFromBytes(vb.B, vb.Len)
 		ci.cd.putChunkInfoDiscover(rootCid, overlay, *bit)
+		if err := ci.initChunkPyramid(context.Background(), rootCid); err != nil {
+			return true, err
+		}
 		return false, nil
 	}); err != nil {
 		return err
