@@ -7,7 +7,6 @@ import (
 	"github.com/gauss-project/aurorafs/pkg/chunkinfo/pb"
 	"github.com/gauss-project/aurorafs/pkg/p2p"
 	"github.com/gauss-project/aurorafs/pkg/p2p/protobuf"
-	"io"
 	"time"
 )
 
@@ -109,9 +108,6 @@ func (ci *ChunkInfo) sendPyramid(ctx context.Context, address boson.Address, str
 		}
 		var resp pb.ChunkPyramidHashResp
 		if err := r.ReadMsgWithContext(ctx, &resp); err != nil {
-			if err == io.EOF {
-				break
-			}
 			return nil, fmt.Errorf("[chunk info]read message: %w", err)
 		}
 		return resp, nil
@@ -122,9 +118,6 @@ func (ci *ChunkInfo) sendPyramid(ctx context.Context, address boson.Address, str
 		}
 		var resp pb.ChunkPyramidChunkResp
 		if err := r.ReadMsgWithContext(ctx, &resp); err != nil {
-			if err == io.EOF {
-				break
-			}
 			return nil, fmt.Errorf("read message: %w", err)
 		}
 		return resp, nil
