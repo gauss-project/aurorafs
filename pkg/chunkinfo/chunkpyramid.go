@@ -4,11 +4,8 @@ import (
 	"context"
 	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/chunkinfo/pb"
-	"strings"
 	"sync"
 )
-
-var pyramidKeyPrefix = "pyramid-"
 
 // chunkPyramid Pyramid
 type chunkPyramid struct {
@@ -21,25 +18,23 @@ func newChunkPyramid() *chunkPyramid {
 	return &chunkPyramid{pyramid: make(map[string]map[string]int)}
 }
 
-func (ci *ChunkInfo) initChunkPyramid() error {
-	if err := ci.storer.Iterate(pyramidKeyPrefix, func(k, v []byte) (bool, error) {
-		if !strings.HasPrefix(string(k), pyramidKeyPrefix) {
-			return true, nil
-		}
-		key := string(k)
-		rootCid, cid, err := unmarshalKey(pyramidKeyPrefix, key)
-		if err != nil {
-			return true, err
-		}
-		var sort int
-		if err := ci.storer.Get(key, &sort); err != nil {
-			return true, err
-		}
-		ci.cp.putChunkPyramid(rootCid, cid, sort)
-		return false, nil
-	}); err != nil {
+func (ci *ChunkInfo) initChunkPyramid(ctx context.Context, rootCid boson.Address) error {
+	if ci.cp.pyramid[rootCid.String()] != nil {
+		return nil
+	}
+	trie, err := ci.traversal.GetTrieData(ctx, rootCid)
+	if err != nil {
 		return err
 	}
+	data, err := ci.traversal.CheckTrieData(ctx, rootCid, trie)
+	if err != nil {
+		return err
+	}
+	hashs := make([][]byte, 0)
+	for k := range trie {
+		hashs = append(hashs, []byte(k))
+	}
+	ci.updateChunkPyramid(rootCid, data, hashs)
 	return nil
 }
 
@@ -72,15 +67,11 @@ func (ci *ChunkInfo) updateChunkPyramid(rootCid boson.Address, pyramids [][][]by
 	for _, p := range pyramids {
 		for _, x := range p {
 			py[boson.NewAddress(x).String()] = i
-			// db
-			ci.storer.Put(generateKey(pyramidKeyPrefix, rootCid, boson.NewAddress(x)), i)
 			i++
 		}
 	}
 	for _, hash := range hashs {
 		py[boson.NewAddress(hash).String()] = -1
-		// db
-		ci.storer.Put(generateKey(pyramidKeyPrefix, rootCid, boson.NewAddress(hash)), -1)
 	}
 	ci.cp.pyramid[rootCid.String()] = py
 }

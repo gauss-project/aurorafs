@@ -174,8 +174,8 @@ func (s *Service) onRouteReq(ctx context.Context, p p2p.Peer, stream p2p.Stream)
 	if s.isNeighbor(target) {
 		// dest in neighbor then resp
 		dest, _ := s.config.AddressBook.Get(target)
-		s.doRouteResp(ctx, p.Address, dest, []RouteItem{})
 		s.logger.Tracef("route: handlerFindRouteReq dest= %s in neighbor", target.String())
+		s.doRouteResp(ctx, p.Address, dest, []RouteItem{})
 		return nil
 	}
 	dest, routes, err := s.GetRoute(ctx, target)
@@ -186,8 +186,8 @@ func (s *Service) onRouteReq(ctx context.Context, p p2p.Peer, stream p2p.Stream)
 			return nil
 		}
 		// have route resp
-		s.doRouteResp(ctx, p.Address, dest, routes)
 		s.logger.Tracef("route: handlerFindRouteReq dest= %s in route table", target.String())
+		s.doRouteResp(ctx, p.Address, dest, routes)
 		return nil
 	}
 	// forward
@@ -327,6 +327,8 @@ func (s *Service) connect(ctx context.Context, peer boson.Address) (err error) {
 
 	s.metrics.TotalOutboundConnectionAttempts.Inc()
 
+	s.logger.Tracef("route: connect to %s", auroraAddr.Underlay.String())
+
 	switch i, err := s.p2ps.Connect(ctx, auroraAddr.Underlay); {
 	case errors.Is(err, p2p.ErrDialLightNode):
 		return errPruneEntry
@@ -347,6 +349,9 @@ func (s *Service) connect(ctx context.Context, peer boson.Address) (err error) {
 		_ = s.p2ps.Disconnect(i.Overlay)
 		return errOverlayMismatch
 	}
+
+	s.kad.KnownPeer().Add(peer)
+
 	return nil
 }
 
@@ -366,7 +371,7 @@ func (s *Service) saveRespRouteItem(ctx context.Context, neighbor boson.Address,
 		s.logger.Errorf("route: target addressBook.Put %s", err.Error())
 		return
 	}
-	s.kad.AddPeers(target)
+	//s.kad.AddPeers(target)
 
 	now := []RouteItem{{
 		CreateTime: time.Now().Unix(),
@@ -436,7 +441,7 @@ func (s *Service) doRouteResp(ctx context.Context, peer boson.Address, target *a
 }
 
 func (s *Service) sendDataToNode(ctx context.Context, peer boson.Address, streamName string, msg protobuf.Message) {
-	s.logger.Tracef("route: sendDataToNode dest %s ,handler %s", peer.String(), streamName)
+	s.logger.Tracef("route: sendDataToNode to %s %s", peer.String(), streamName)
 	stream, err1 := s.p2ps.NewStream(ctx, peer, nil, protocolName, protocolVersion, streamName)
 	if err1 != nil {
 		s.metrics.TotalErrors.Inc()

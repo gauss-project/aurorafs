@@ -22,6 +22,7 @@ import (
 	"github.com/gauss-project/aurorafs/pkg/file/loadsave"
 	"github.com/gauss-project/aurorafs/pkg/jsonhttp"
 	"github.com/gauss-project/aurorafs/pkg/manifest"
+	"github.com/gauss-project/aurorafs/pkg/sctx"
 	"github.com/gauss-project/aurorafs/pkg/storage"
 	"github.com/gauss-project/aurorafs/pkg/tracing"
 )
@@ -30,9 +31,6 @@ func (s *server) bzzDownloadHandler(w http.ResponseWriter, r *http.Request) {
 	logger := tracing.NewLoggerWithTraceID(r.Context(), s.logger)
 	ls := loadsave.New(s.storer, storage.ModePutRequest, false)
 	feedDereferenced := false
-
-
-	ctx := r.Context()
 
 	nameOrHex := mux.Vars(r)["address"]
 	pathVar := mux.Vars(r)["path"]
@@ -50,6 +48,7 @@ func (s *server) bzzDownloadHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	r = r.WithContext(sctx.SetRootCID(r.Context(), address))
 	if !s.chunkInfo.Init(r.Context(), nil, address) {
 		logger.Debugf("aurora download: chunkInfo init %s: %v", nameOrHex, err)
 		jsonhttp.NotFound(w, nil)
@@ -57,7 +56,7 @@ func (s *server) bzzDownloadHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// read manifest entry
-	j, _, err := joiner.New(ctx, s.storer, address)
+	j, _, err := joiner.New(r.Context(), s.storer, address)
 	if err != nil {
 		logger.Debugf("aurora download: joiner manifest entry %s: %v", address, err)
 		logger.Errorf("aurora download: joiner %s", address)
@@ -66,7 +65,7 @@ func (s *server) bzzDownloadHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	buf := bytes.NewBuffer(nil)
-	_, err = file.JoinReadAll(ctx, j, buf)
+	_, err = file.JoinReadAll(r.Context(), j, buf)
 	if err != nil {
 		logger.Debugf("aurora download: read entry %s: %v", address, err)
 		logger.Errorf("aurora download: read entry %s", address)
@@ -84,7 +83,7 @@ func (s *server) bzzDownloadHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// read metadata
-	j, _, err = joiner.New(ctx, s.storer, e.Metadata())
+	j, _, err = joiner.New(r.Context(), s.storer, e.Metadata())
 	if err != nil {
 		logger.Debugf("aurora download: joiner metadata %s: %v", address, err)
 		logger.Errorf("aurora download: joiner %s", address)
@@ -94,7 +93,7 @@ func (s *server) bzzDownloadHandler(w http.ResponseWriter, r *http.Request) {
 
 	// read metadata
 	buf = bytes.NewBuffer(nil)
-	_, err = file.JoinReadAll(ctx, j, buf)
+	_, err = file.JoinReadAll(r.Context(), j, buf)
 	if err != nil {
 		logger.Debugf("aurora download: read metadata %s: %v", address, err)
 		logger.Errorf("aurora download: read metadata %s", address)
@@ -126,20 +125,20 @@ func (s *server) bzzDownloadHandler(w http.ResponseWriter, r *http.Request) {
 	if pathVar == "" {
 		logger.Tracef("aurora download: handle empty path %s", address)
 
-		if indexDocumentSuffixKey, ok := manifestMetadataLoad(ctx, m, manifestRootPath, manifestWebsiteIndexDocumentSuffixKey); ok {
+		if indexDocumentSuffixKey, ok := manifestMetadataLoad(r.Context(), m, manifestRootPath, manifestWebsiteIndexDocumentSuffixKey); ok {
 			pathWithIndex := path.Join(pathVar, indexDocumentSuffixKey)
-			indexDocumentManifestEntry, err := m.Lookup(ctx, pathWithIndex)
+			indexDocumentManifestEntry, err := m.Lookup(r.Context(), pathWithIndex)
 			if err == nil {
 				// index document exists
 				logger.Debugf("aurora download: serving path: %s", pathWithIndex)
 
-				s.serveManifestEntry(w, r,  address, indexDocumentManifestEntry.Reference(), !feedDereferenced)
+				s.serveManifestEntry(w, r, address, indexDocumentManifestEntry.Reference(), !feedDereferenced)
 				return
 			}
 		}
 	}
 
-	me, err := m.Lookup(ctx, pathVar)
+	me, err := m.Lookup(r.Context(), pathVar)
 	if err != nil {
 		logger.Debugf("aurora download: invalid path %s/%s: %v", address, pathVar, err)
 		logger.Error("aurora download: invalid path")
@@ -149,7 +148,7 @@ func (s *server) bzzDownloadHandler(w http.ResponseWriter, r *http.Request) {
 			if !strings.HasPrefix(pathVar, "/") {
 				// check for directory
 				dirPath := pathVar + "/"
-				exists, err := m.HasPrefix(ctx, dirPath)
+				exists, err := m.HasPrefix(r.Context(), dirPath)
 				if err == nil && exists {
 					// redirect to directory
 					u := r.URL
@@ -164,11 +163,11 @@ func (s *server) bzzDownloadHandler(w http.ResponseWriter, r *http.Request) {
 			}
 
 			// check index suffix path
-			if indexDocumentSuffixKey, ok := manifestMetadataLoad(ctx, m, manifestRootPath, manifestWebsiteIndexDocumentSuffixKey); ok {
+			if indexDocumentSuffixKey, ok := manifestMetadataLoad(r.Context(), m, manifestRootPath, manifestWebsiteIndexDocumentSuffixKey); ok {
 				if !strings.HasSuffix(pathVar, indexDocumentSuffixKey) {
 					// check if path is directory with index
 					pathWithIndex := path.Join(pathVar, indexDocumentSuffixKey)
-					indexDocumentManifestEntry, err := m.Lookup(ctx, pathWithIndex)
+					indexDocumentManifestEntry, err := m.Lookup(r.Context(), pathWithIndex)
 					if err == nil {
 						// index document exists
 						logger.Debugf("aurora download: serving path: %s", pathWithIndex)
@@ -180,9 +179,9 @@ func (s *server) bzzDownloadHandler(w http.ResponseWriter, r *http.Request) {
 			}
 
 			// check if error document is to be shown
-			if errorDocumentPath, ok := manifestMetadataLoad(ctx, m, manifestRootPath, manifestWebsiteErrorDocumentPathKey); ok {
+			if errorDocumentPath, ok := manifestMetadataLoad(r.Context(), m, manifestRootPath, manifestWebsiteErrorDocumentPathKey); ok {
 				if pathVar != errorDocumentPath {
-					errorDocumentManifestEntry, err := m.Lookup(ctx, errorDocumentPath)
+					errorDocumentManifestEntry, err := m.Lookup(r.Context(), errorDocumentPath)
 					if err == nil {
 						// error document exists
 						logger.Debugf("aurora download: serving path: %s", errorDocumentPath)
@@ -269,7 +268,7 @@ func (s *server) serveManifestEntry(w http.ResponseWriter, r *http.Request, addr
 
 	fileEntryAddress := fe.Reference()
 
-	s.downloadHandler(w, r, fileEntryAddress, additionalHeaders, etag, address)
+	s.downloadHandler(w, r, fileEntryAddress, additionalHeaders, etag)
 }
 
 // manifestMetadataLoad returns the value for a key stored in the metadata of
@@ -288,5 +287,3 @@ func manifestMetadataLoad(ctx context.Context, manifest manifest.Interface, path
 
 	return "", false
 }
-
-

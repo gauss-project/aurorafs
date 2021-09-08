@@ -33,7 +33,6 @@ import (
 )
 
 const (
-
 	BosonPinHeader           = "Boson-Pin"
 	BosonTagHeader           = "Boson-Tag"
 	BosonEncryptHeader       = "Boson-Encrypt"
@@ -68,15 +67,14 @@ type Service interface {
 }
 
 type server struct {
+	storer   storage.Storer
+	resolver resolver.Interface
 
-	storer      storage.Storer
-	resolver    resolver.Interface
-
-	overlay     boson.Address
-	chunkInfo   chunkinfo.Interface
-	traversal   traversal.Service
-	logger      logging.Logger
-	tracer      *tracing.Tracer
+	overlay   boson.Address
+	chunkInfo chunkinfo.Interface
+	traversal traversal.Service
+	logger    logging.Logger
+	tracer    *tracing.Tracer
 
 	Options
 	http.Handler
@@ -98,21 +96,21 @@ const (
 )
 
 // New will create a and initialize a new API service.
-func New(storer storage.Storer, resolver resolver.Interface, addr boson.Address,  chunkInfo chunkinfo.Interface,  traversalService traversal.Service,  logger logging.Logger, tracer *tracing.Tracer, o Options) Service {
+func New(storer storage.Storer, resolver resolver.Interface, addr boson.Address, chunkInfo chunkinfo.Interface, traversalService traversal.Service, logger logging.Logger, tracer *tracing.Tracer, o Options) Service {
 	s := &server{
 
-		storer:      storer,
-		resolver:    resolver,
+		storer:   storer,
+		resolver: resolver,
 
-		overlay:     addr,
-		chunkInfo:   chunkInfo,
-		traversal:   traversalService,
+		overlay:   addr,
+		chunkInfo: chunkInfo,
+		traversal: traversalService,
 
-		Options:     o,
-		logger:      logger,
-		tracer:      tracer,
-		metrics:     newMetrics(),
-		quit:        make(chan struct{}),
+		Options: o,
+		logger:  logger,
+		tracer:  tracer,
+		metrics: newMetrics(),
+		quit:    make(chan struct{}),
 	}
 
 	s.setupRouting()
@@ -139,9 +137,6 @@ func (s *server) Close() error {
 
 	return nil
 }
-
-
-
 
 func (s *server) resolveNameOrAddress(str string) (boson.Address, error) {
 	log := s.logger
@@ -171,6 +166,9 @@ func (s *server) resolveNameOrAddress(str string) (boson.Address, error) {
 
 // requestModePut returns the desired storage.ModePut for this request based on the request headers.
 func requestModePut(r *http.Request) storage.ModePut {
+	if h := strings.ToLower(r.Header.Get(BosonPinHeader)); h == "true" {
+		return storage.ModePutUploadPin
+	}
 
 	return storage.ModePutUpload
 }

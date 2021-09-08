@@ -9,14 +9,13 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/gauss-project/aurorafs/pkg/boson"
+	"github.com/gauss-project/aurorafs/pkg/jsonhttp"
+	"github.com/gauss-project/aurorafs/pkg/logging/httpaccess"
 	"github.com/gorilla/handlers"
 	"github.com/gorilla/mux"
 	"github.com/sirupsen/logrus"
 	"resenje.org/web"
-
-	"github.com/gauss-project/aurorafs/pkg/boson"
-	"github.com/gauss-project/aurorafs/pkg/jsonhttp"
-	"github.com/gauss-project/aurorafs/pkg/logging/httpaccess"
 )
 
 func (s *server) setupRouting() {
@@ -89,7 +88,6 @@ func (s *server) setupRouting() {
 		),
 	})
 
-
 	handle(router, "/aurora/{address}", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		u := r.URL
 		u.Path += "/"
@@ -102,6 +100,26 @@ func (s *server) setupRouting() {
 		),
 	})
 
+	handle(router, "/pin/files/{address}", jsonhttp.MethodHandler{
+		"POST": web.ChainHandlers(
+			s.newTracingHandler("pin-files-post"),
+			web.FinalHandlerFunc(s.pinFile),
+		),
+		"DELETE": web.ChainHandlers(
+			s.newTracingHandler("pin-files-delete"),
+			web.FinalHandlerFunc(s.unpinFile),
+		),
+	})
+	handle(router, "/pin/aurora/{address}", jsonhttp.MethodHandler{
+		"POST": web.ChainHandlers(
+			s.newTracingHandler("pin-aurora-post"),
+			web.FinalHandlerFunc(s.pinAuroras),
+		),
+		"DELETE": web.ChainHandlers(
+			s.newTracingHandler("pin-aurora-delete"),
+			web.FinalHandlerFunc(s.unpinAuroras),
+		),
+	})
 
 	s.Handler = web.ChainHandlers(
 		httpaccess.NewHTTPAccessLogHandler(s.logger, logrus.InfoLevel, s.tracer, "api access"),

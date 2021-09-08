@@ -19,11 +19,11 @@ package localstore
 import (
 	"context"
 	"errors"
+	"github.com/gauss-project/aurorafs/pkg/storage"
 	"testing"
 
-	"github.com/gauss-project/aurorafs/pkg/storage"
-
 	"github.com/syndtr/goleveldb/leveldb"
+	chunkinfo "github.com/gauss-project/aurorafs/pkg/chunkinfo/mock"
 )
 
 // TestModeSetRemove validates ModeSetRemove index values on the provided DB.
@@ -31,6 +31,9 @@ func TestModeSetRemove(t *testing.T) {
 	for _, tc := range multiChunkTestCases {
 		t.Run(tc.name, func(t *testing.T) {
 			db := newTestDB(t, nil)
+
+			ci := chunkinfo.New()
+			db.Config(ci)
 
 			chunks := generateTestRandomChunks(tc.count)
 
@@ -63,12 +66,6 @@ func TestModeSetRemove(t *testing.T) {
 
 				t.Run("retrieve access index count", newItemsCountTest(db.retrievalAccessIndex, 0))
 			})
-
-			for _, ch := range chunks {
-				newPullIndexTest(db, ch, 0, leveldb.ErrNotFound)(t)
-			}
-
-			t.Run("pull index count", newItemsCountTest(db.pullIndex, 0))
 
 			t.Run("gc index count", newItemsCountTest(db.gcIndex, 0))
 

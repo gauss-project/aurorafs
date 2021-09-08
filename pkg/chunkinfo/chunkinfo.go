@@ -99,9 +99,6 @@ func (ci *ChunkInfo) InitChunkInfo() error {
 	if err := ci.initChunkInfoDiscover(); err != nil {
 		return err
 	}
-	if err := ci.initChunkPyramid(); err != nil {
-		return err
-	}
 	return nil
 }
 
@@ -161,6 +158,9 @@ func (ci *ChunkInfo) Init(ctx context.Context, authInfo []byte, rootCid boson.Ad
 				first = false
 			}
 		} else if peerAttempt < count {
+			if ci.getQueue(rootCid.String()) == nil {
+				ci.newQueue(rootCid.String())
+			}
 			if err := ci.doFindChunkPyramid(ctx, nil, rootCid, overlays[peerAttempt]); err != nil {
 				errorC <- err
 			}
@@ -176,6 +176,7 @@ func (ci *ChunkInfo) Init(ctx context.Context, authInfo []byte, rootCid boson.Ad
 		}
 		if peersResults >= count {
 			return false
+
 		}
 	}
 }
@@ -218,7 +219,9 @@ func (ci *ChunkInfo) GetChunkPyramid(rootCid boson.Address) []*boson.Address {
 
 func (ci *ChunkInfo) IsDiscover(rootCid boson.Address) bool {
 	q := ci.getQueue(rootCid.String())
-
+	if q == nil {
+		return false
+	}
 	if ci.cpd.getPendingFinder(rootCid) {
 		return true
 	}
