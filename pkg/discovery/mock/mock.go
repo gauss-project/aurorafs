@@ -58,3 +58,11 @@ func (d *Discovery) Reset() {
 func (d *Discovery) DoFindNode(ctx context.Context, peer boson.Address, pos []int32, limit int32) (res chan boson.Address, total int, err error) {
 	return
 }
+
+func (d *Discovery) IsStart() bool {
+	return true
+}
+
+func (d *Discovery) IsHive2() bool {
+	return false
+}

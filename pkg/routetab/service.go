@@ -174,7 +174,6 @@ func (s *Service) onRouteReq(ctx context.Context, p p2p.Peer, stream p2p.Stream)
 	if s.isNeighbor(target) {
 		// dest in neighbor then resp
 		dest, _ := s.config.AddressBook.Get(target)
-		s.doRouteResp(ctx, p.Address, dest, []RouteItem{})
 		s.logger.Tracef("route: handlerFindRouteReq dest= %s in neighbor", target.String())
 		s.doRouteResp(ctx, p.Address, dest, []RouteItem{})
 		return nil
