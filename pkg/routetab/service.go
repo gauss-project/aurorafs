@@ -35,6 +35,7 @@ type RouteTab interface {
 	GetRoute(ctx context.Context, target boson.Address) (dest *aurora.Address, routes []RouteItem, err error)
 	FindRoute(ctx context.Context, target boson.Address) (dest *aurora.Address, route []RouteItem, err error)
 	Connect(ctx context.Context, target boson.Address) error
+	GetTargetNeighbor(ctx context.Context, target boson.Address) (addresses []boson.Address, err error)
 }
 
 type Service struct {
@@ -294,6 +295,20 @@ func (s *Service) Connect(ctx context.Context, target boson.Address) error {
 		return nil
 	}
 	return s.connect(ctx, target)
+}
+
+func (s *Service) GetTargetNeighbor(ctx context.Context, target boson.Address) (addresses []boson.Address, err error) {
+	var routes []RouteItem
+	_, routes, err = s.GetRoute(ctx, target)
+	if err != nil {
+		s.logger.Debugf("route: GetTargetNeighbor err=%s", err.Error())
+		_, routes, err = s.FindRoute(ctx, target)
+		if err != nil {
+			return
+		}
+	}
+	addresses = GetClosestNeighbor(routes)
+	return
 }
 
 func (s *Service) connect(ctx context.Context, peer boson.Address) (err error) {

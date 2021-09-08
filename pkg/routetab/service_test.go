@@ -1007,3 +1007,26 @@ func TestConnectFarNode(t *testing.T) {
 		//}
 	})
 }
+
+func TestGetClosestNeighbor(t *testing.T) {
+	path := []string{"0301", "0304", "0503", "0604", "0905", "0406"}
+	route := generateRoute(path)
+	path1 := []string{"0302", "0304", "0503", "0704", "0905", "0506"}
+	route1 := generateRoute(path1)
+	path2 := []string{"0303", "0305", "0403", "0804", "0905", "0606"}
+	route3 := generateRoute(path2)
+	list := []routetab.RouteItem{route, route1, route3}
+	got := routetab.GetClosestNeighbor(list)
+	if len(got) != 3 {
+		t.Fatalf("expected len(GetClosestNeighbor) 3 got %d", len(got))
+	}
+	if !got[0].Equal(boson.MustParseHexAddress("0406")) {
+		t.Fatalf("expected address 0406  got %s", got[0].String())
+	}
+	if !got[1].Equal(boson.MustParseHexAddress("0506")) {
+		t.Fatalf("expected address 0506  got %s", got[0].String())
+	}
+	if !got[2].Equal(boson.MustParseHexAddress("0606")) {
+		t.Fatalf("expected address 0606  got %s", got[0].String())
+	}
+}
