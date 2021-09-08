@@ -799,7 +799,7 @@ func addRandomFile(t *testing.T, count int, db *DB, ci *chunkinfo.ChunkInfo, pin
 			if err != nil {
 				t2.Fatal(err)
 			}
-			err = db.gcSize.Put(curSize+uint64(len(chunkHashes)))
+			err = db.gcSize.Put(curSize + uint64(len(chunkHashes)))
 			if err != nil {
 				t2.Fatal(err)
 			}
@@ -952,4 +952,81 @@ func setTestHookGCIteratorDone(h func()) (reset func()) {
 	reset = func() { testHookGCIteratorDone = current }
 	testHookGCIteratorDone = h
 	return reset
+}
+
+//Empty some tests.
+func TestPinAndUnpinChunk(t *testing.T) {
+	chunkCount := 5
+
+	var closed chan struct{}
+	testHookCollectGarbageChan := make(chan uint64)
+	testHookRecycleGarbageChan := make(chan uint64)
+	t.Cleanup(setTestHook(&testHookCollectGarbage, func(collectedCount uint64) {
+		select {
+		case testHookCollectGarbageChan <- collectedCount:
+		case <-closed:
+		}
+	}))
+	t.Cleanup(setTestHook(&testHookRecycleGarbage, func(recycledCount uint64) {
+		select {
+		case testHookRecycleGarbageChan <- recycledCount:
+		case <-closed:
+		}
+	}))
+	db := newTestDB(t, &Options{
+		Capacity: 10,
+	})
+	closed = db.close
+
+	// upload random file
+	ci := chunkinfo.New()
+	db.Config(ci)
+	reference, chunks, addGc := addRandomFile(t, chunkCount, db, ci, false)
+
+	for i, chunk := range chunks {
+		ci.PutChunkPyramid(reference, chunk, i)
+	}
+
+	rctx := sctx.SetRootCID(context.Background(), reference)
+	addGc(t)
+
+	var err error
+	//Pin lives to upload files for the first time.
+	for _, v := range chunks {
+		err = db.Set(rctx, storage.ModeSetPin, v)
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	chunkCount = 16
+	reference1, chunks1, addGc1 := addRandomFile(t, chunkCount, db, ci, false)
+	for i, chunk := range chunks1 {
+		ci.PutChunkPyramid(reference1, chunk, i)
+	}
+
+	addGc1(t)
+
+	//Invoke gc
+	db.triggerGarbageCollection()
+	select {
+	case <-testHookRecycleGarbageChan:
+	case <-time.After(10 * time.Second):
+		t.Error("recycle garbage timeout")
+	}
+
+	for _, v := range chunks1 {
+		_, err := db.Get(rctx, storage.ModeGetRequest, v)
+		if err == nil {
+			t.Fatal(err)
+		}
+	}
+
+	//Check whether the pin file exists.
+	for _, v := range chunks {
+		_, err := db.Get(rctx, storage.ModeGetRequest, v)
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
 }

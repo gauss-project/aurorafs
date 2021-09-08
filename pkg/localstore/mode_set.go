@@ -286,6 +286,9 @@ func (db *DB) setPin(batch *leveldb.Batch, item, rootItem shed.Item) (gcSizeChan
 
 			gcItem, err = db.gcIndex.Get(rootItem)
 			if err != nil {
+				if errors.Is(err, leveldb.ErrNotFound) {
+					return 0, nil
+				}
 				return 0, err
 			}
 
@@ -294,7 +297,6 @@ func (db *DB) setPin(batch *leveldb.Batch, item, rootItem shed.Item) (gcSizeChan
 				if err != nil {
 					return 0, err
 				}
-				gcSizeChange--
 			} else {
 				gcItem.GCounter--
 				err = db.gcIndex.Put(gcItem)
@@ -302,6 +304,8 @@ func (db *DB) setPin(batch *leveldb.Batch, item, rootItem shed.Item) (gcSizeChan
 					return 0, err
 				}
 			}
+
+			gcSizeChange--
 		}
 	}
 
@@ -335,46 +339,49 @@ func (db *DB) setUnpin(batch *leveldb.Batch, item, rootItem shed.Item) (gcSizeCh
 		return 0, err
 	}
 
-	i, err = db.retrievalAccessIndex.Get(rootItem)
-	if err != nil {
-		if !errors.Is(err, leveldb.ErrNotFound) {
-			return 0, err
+	if rootItem.Address != nil {
+		i, err = db.retrievalAccessIndex.Get(rootItem)
+		if err != nil {
+			if !errors.Is(err, leveldb.ErrNotFound) {
+				return 0, err
+			}
+			rootItem.AccessTimestamp = now()
+			err = db.retrievalAccessIndex.PutInBatch(batch, rootItem)
+			if err != nil {
+				return 0, err
+			}
+		} else {
+			rootItem.AccessTimestamp = i.AccessTimestamp
 		}
-		rootItem.AccessTimestamp = now()
-		err = db.retrievalAccessIndex.PutInBatch(batch, rootItem)
+
+		i, err = db.retrievalDataIndex.Get(rootItem)
 		if err != nil {
 			return 0, err
 		}
-	} else {
-		rootItem.AccessTimestamp = i.AccessTimestamp
-	}
+		rootItem.StoreTimestamp = i.StoreTimestamp
+		rootItem.BinID = i.BinID
 
-	i, err = db.retrievalDataIndex.Get(rootItem)
-	if err != nil {
-		return 0, err
-	}
-	rootItem.StoreTimestamp = i.StoreTimestamp
-	rootItem.BinID = i.BinID
+		var gcItem shed.Item
 
-	var gcItem shed.Item
-
-	gcItem, err = db.gcIndex.Get(rootItem)
-	if err != nil {
-		if !errors.Is(err, leveldb.ErrNotFound) {
-			return 0, err
-		}
-		rootItem.GCounter = 1
-		err = db.gcIndex.PutInBatch(batch, rootItem)
+		gcItem, err = db.gcIndex.Get(rootItem)
 		if err != nil {
-			return 0, err
+			if !errors.Is(err, leveldb.ErrNotFound) {
+				return 0, err
+			}
+			rootItem.GCounter = 1
+			err = db.gcIndex.PutInBatch(batch, rootItem)
+			if err != nil {
+				return 0, err
+			}
+		} else {
+			gcItem.GCounter++
+			err = db.gcIndex.PutInBatch(batch, gcItem)
+			if err != nil {
+				return 0, err
+			}
 		}
+
 		gcSizeChange++
-	} else {
-		gcItem.GCounter++
-		err = db.gcIndex.PutInBatch(batch, gcItem)
-		if err != nil {
-			return 0, err
-		}
 	}
 
 	return
