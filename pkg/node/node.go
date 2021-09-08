@@ -414,7 +414,7 @@ func NewBee(addr string, bosonAddress boson.Address, publicKey ecdsa.PublicKey, 
 	if err = p2ps.AddProtocol(chunkInfo.Protocol()); err != nil {
 		return nil, fmt.Errorf("chunkInfo service: %w", err)
 	}
-
+	storer.Config(chunkInfo)
 	retrieve.Config(chunkInfo)
 
 	multiResolver := multiresolver.NewMultiResolver(

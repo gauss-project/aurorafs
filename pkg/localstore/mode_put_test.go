@@ -20,12 +20,15 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"github.com/gauss-project/aurorafs/pkg/sctx"
+	"math/rand"
+	"strconv"
 	"sync"
 	"testing"
 	"time"
 
-	"github.com/gauss-project/aurorafs/pkg/storage"
 	"github.com/gauss-project/aurorafs/pkg/boson"
+	"github.com/gauss-project/aurorafs/pkg/storage"
 	"github.com/syndtr/goleveldb/leveldb"
 )
 
@@ -111,40 +114,6 @@ func TestModePutRequestPin(t *testing.T) {
 	}
 }
 
-// TestModePutSync validates ModePutSync index values on the provided DB.
-func TestModePutSync(t *testing.T) {
-	for _, tc := range multiChunkTestCases {
-		t.Run(tc.name, func(t *testing.T) {
-			db := newTestDB(t, nil)
-
-			wantTimestamp := time.Now().UTC().UnixNano()
-			defer setNow(func() (t int64) {
-				return wantTimestamp
-			})()
-
-			chunks := generateTestRandomChunks(tc.count)
-
-			_, err := db.Put(context.Background(), storage.ModePutSync, chunks...)
-			if err != nil {
-				t.Fatal(err)
-			}
-
-			binIDs := make(map[uint8]uint64)
-
-			for _, ch := range chunks {
-				po := db.po(ch.Address())
-				binIDs[po]++
-
-				newRetrieveIndexesTestWithAccess(db, ch, wantTimestamp, wantTimestamp)(t)
-				newPullIndexTest(db, ch, binIDs[po], nil)(t)
-				newPinIndexTest(db, ch, leveldb.ErrNotFound)(t)
-				newItemsCountTest(db.gcIndex, tc.count)(t)
-				newIndexGCSizeTest(db)(t)
-			}
-		})
-	}
-}
-
 // TestModePutUpload validates ModePutUpload index values on the provided DB.
 func TestModePutUpload(t *testing.T) {
 	for _, tc := range multiChunkTestCases {
@@ -170,8 +139,6 @@ func TestModePutUpload(t *testing.T) {
 				binIDs[po]++
 
 				newRetrieveIndexesTest(db, ch, wantTimestamp, 0)(t)
-				newPullIndexTest(db, ch, binIDs[po], nil)(t)
-				newPushIndexTest(db, ch, wantTimestamp, nil)(t)
 				newPinIndexTest(db, ch, leveldb.ErrNotFound)(t)
 			}
 		})
@@ -191,20 +158,44 @@ func TestModePutUploadPin(t *testing.T) {
 
 			chunks := generateTestRandomChunks(tc.count)
 
+			//Add pin test by file
+			var FileList []boson.Address
+			for i := 0; i < 20; i++ {
+				FileList = append(FileList, boson.NewAddress([]byte(strconv.Itoa(rand.Int()))))
+			}
+
+			for _, file := range FileList {
+				ctx := sctx.SetRootCID(context.Background(), file)
+
+				_, err := db.Put(ctx, storage.ModePutUploadPin, chunks...)
+				if err != nil {
+					t.Fatal(err)
+				}
+
+				binIDs := make(map[uint8]uint64)
+
+				for _, ch := range chunks {
+					po := db.po(ch.Address())
+					binIDs[po]++
+
+					newRetrieveIndexesTest(db, ch, wantTimestamp, 0)(t)
+					err = newPinChunkValidateTest(db, ch, nil)
+					if err != nil {
+						t.Fatal(err)
+					}
+				}
+				//Test whether rootcid exists
+				chun := boson.NewChunk(file, nil)
+				newPinIndexTest(db, chun, nil)(t)
+			}
+
+			//Old business logic test
 			_, err := db.Put(context.Background(), storage.ModePutUploadPin, chunks...)
 			if err != nil {
 				t.Fatal(err)
 			}
-
-			binIDs := make(map[uint8]uint64)
-
 			for _, ch := range chunks {
-				po := db.po(ch.Address())
-				binIDs[po]++
-
 				newRetrieveIndexesTest(db, ch, wantTimestamp, 0)(t)
-				newPullIndexTest(db, ch, binIDs[po], nil)(t)
-				newPushIndexTest(db, ch, wantTimestamp, nil)(t)
 				newPinIndexTest(db, ch, nil)(t)
 			}
 		})
@@ -333,12 +324,6 @@ func TestModePut_sameChunk(t *testing.T) {
 					pullIndex: true,
 					pushIndex: true,
 				},
-				{
-					name:      "ModePutSync",
-					mode:      storage.ModePutSync,
-					pullIndex: true,
-					pushIndex: false,
-				},
 			} {
 				t.Run(tcn.name, func(t *testing.T) {
 					db := newTestDB(t, nil)
@@ -361,16 +346,7 @@ func TestModePut_sameChunk(t *testing.T) {
 							}
 						}
 
-						count := func(b bool) (c int) {
-							if b {
-								return tc.count
-							}
-							return 0
-						}
-
 						newItemsCountTest(db.retrievalDataIndex, tc.count)(t)
-						newItemsCountTest(db.pullIndex, count(tcn.pullIndex))(t)
-						newItemsCountTest(db.pushIndex, count(tcn.pushIndex))(t)
 					}
 				})
 			}
@@ -384,7 +360,6 @@ func TestPutDuplicateChunks(t *testing.T) {
 	for _, mode := range []storage.ModePut{
 		storage.ModePutUpload,
 		storage.ModePutRequest,
-		storage.ModePutSync,
 	} {
 		t.Run(mode.String(), func(t *testing.T) {
 			db := newTestDB(t, nil)
