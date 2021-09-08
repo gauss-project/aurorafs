@@ -52,7 +52,7 @@ func (s *store) Get(ctx context.Context, mode storage.ModeGet, addr boson.Addres
 
 				return ch, nil
 			}
-			return ch, nil
+			return nil, err
 		}
 
 		return nil, fmt.Errorf("netstore get: %w", err)
