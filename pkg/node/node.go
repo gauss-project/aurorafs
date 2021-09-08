@@ -98,6 +98,8 @@ type Options struct {
 	SwapInitialDeposit       string
 	SwapEnable               bool
 	FullNode                 bool
+	KadBinMaxPeers           int
+	LightNodeMaxPeers        int
 }
 
 func NewBee(addr string, bosonAddress boson.Address, publicKey ecdsa.PublicKey, signer crypto.Signer, networkID uint64, logger logging.Logger, libp2pPrivateKey, pssPrivateKey *ecdsa.PrivateKey, o Options) (b *Bee, err error) {
@@ -243,6 +245,7 @@ func NewBee(addr string, bosonAddress boson.Address, publicKey ecdsa.PublicKey, 
 		EnableQUIC:     o.EnableQUIC,
 		WelcomeMessage: o.WelcomeMessage,
 		FullNode:       o.FullNode,
+		LightNodeLimit: o.LightNodeMaxPeers,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("p2p service: %w", err)
@@ -360,7 +363,11 @@ func NewBee(addr string, bosonAddress boson.Address, publicKey ecdsa.PublicKey, 
 		hiveObj.Start() // must start before kademlia
 	}
 
-	kad := kademlia.New(bosonAddress, addressBook, hiveObj, p2ps, metricsDB, logger, kademlia.Options{Bootnodes: bootnodes, BootnodeMode: o.BootnodeMode})
+	kad := kademlia.New(bosonAddress, addressBook, hiveObj, p2ps, metricsDB, logger, kademlia.Options{
+		Bootnodes:    bootnodes,
+		BootnodeMode: o.BootnodeMode,
+		BinMaxPeers:  o.KadBinMaxPeers,
+	})
 	b.topologyCloser = kad
 	hiveObj.SetAddPeersHandler(kad.AddPeers)
 	hiveObj.SetConfig(hive2.Config{Kad: kad}) // hive2

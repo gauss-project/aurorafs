@@ -71,6 +71,7 @@ type Options struct {
 	Bootnodes       []ma.Multiaddr
 	BootnodeMode    bool
 	BitSuffixLength int
+	BinMaxPeers     int // every k bucket max connes
 }
 
 // Kad is the Swarm forwarding kademlia implementation.
@@ -113,6 +114,15 @@ func New(
 	o Options,
 ) *Kad {
 	if o.SaturationFunc == nil {
+		if o.BinMaxPeers > 5 {
+			if o.BinMaxPeers%5 != 0 {
+				overSaturationPeers = o.BinMaxPeers - o.BinMaxPeers%5 + 5
+			} else {
+				overSaturationPeers = o.BinMaxPeers
+			}
+			saturationPeers = overSaturationPeers / 10
+			quickSaturationPeers = overSaturationPeers / 5
+		}
 		os := overSaturationPeers
 		if o.BootnodeMode {
 			os = bootNodeOverSaturationPeers
