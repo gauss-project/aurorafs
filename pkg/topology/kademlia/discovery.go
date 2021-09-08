@@ -10,6 +10,9 @@ import (
 // discover is a forever loop that manages the find to new peers
 func (k *Kad) discover() {
 	defer k.wg.Done()
+	if !k.discovery.IsStart() {
+		return
+	}
 	defer k.logger.Debugf("kademlia discover loop exited")
 
 	worker := func() {

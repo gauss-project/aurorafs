@@ -487,8 +487,10 @@ func (k *Kad) Start(_ context.Context) error {
 	k.wg.Add(1)
 	go k.manage()
 
-	//k.wg.Add(1)
-	//go k.discover() // hive2
+	if k.discovery.IsHive2() {
+		k.wg.Add(1)
+		go k.discover() // hive2
+	}
 
 	go func() {
 		select {
@@ -725,6 +727,9 @@ func (k *Kad) connect(ctx context.Context, peer boson.Address, ma ma.Multiaddr) 
 // Announce a newly connected peer to our connected peers, but also
 // notify the peer about our already connected peers
 func (k *Kad) Announce(ctx context.Context, peer boson.Address, fullnode bool) error {
+	if !k.discovery.IsStart() {
+		return nil
+	}
 	var addrs []boson.Address
 
 	for bin := uint8(0); bin < boson.MaxBins; bin++ {
@@ -772,7 +777,9 @@ func (k *Kad) AnnounceTo(ctx context.Context, addressee, peer boson.Address, ful
 	if !fullnode {
 		return errAnnounceLightNode
 	}
-
+	if !k.discovery.IsStart() {
+		return nil
+	}
 	return k.discovery.BroadcastPeers(ctx, addressee, peer)
 }
 

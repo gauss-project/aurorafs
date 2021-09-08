@@ -82,6 +82,7 @@ type Options struct {
 	CORSAllowedOrigins       []string
 	Logger                   logging.Logger
 	Standalone               bool
+	IsDev                    bool
 	TracingEnabled           bool
 	TracingEndpoint          string
 	TracingServiceName       string
@@ -354,6 +355,9 @@ func NewBee(addr string, bosonAddress boson.Address, publicKey ecdsa.PublicKey, 
 	hiveObj := hive2.New(p2ps, addressBook, networkID, logger)
 	if err = p2ps.AddProtocol(hiveObj.Protocol()); err != nil {
 		return nil, fmt.Errorf("hive service: %w", err)
+	}
+	if !o.IsDev {
+		hiveObj.Start() // must start before kademlia
 	}
 
 	kad := kademlia.New(bosonAddress, addressBook, hiveObj, p2ps, metricsDB, logger, kademlia.Options{Bootnodes: bootnodes, BootnodeMode: o.BootnodeMode})

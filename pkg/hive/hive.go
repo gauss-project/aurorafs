@@ -48,6 +48,7 @@ var (
 )
 
 type Service struct {
+	start           bool
 	streamer        p2p.StreamerPinger
 	addressBook     addressbook.GetPutter
 	addPeersHandler func(...boson.Address)
@@ -316,4 +317,16 @@ func (s *Service) checkAndAddPeers(ctx context.Context, peers pb.Peers) {
 
 func (s *Service) DoFindNode(ctx context.Context, peer boson.Address, pos []int32, limit int32) (res chan boson.Address, total int, err error) {
 	return
+}
+
+func (s *Service) IsStart() bool {
+	return s.start
+}
+
+func (s *Service) Start() {
+	s.start = true
+}
+
+func (s *Service) IsHive2() bool {
+	return false
 }

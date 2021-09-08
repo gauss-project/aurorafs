@@ -132,6 +132,7 @@ func (c *command) initStartCmd() (err error) {
 				OracleEndpoint:           c.config.GetString(optionNameOracleAPIAddr),
 				CORSAllowedOrigins:       c.config.GetStringSlice(optionCORSAllowedOrigins),
 				Standalone:               c.config.GetBool(optionNameStandalone),
+				IsDev:                    c.config.GetBool(optionNameDevMode),
 				TracingEnabled:           c.config.GetBool(optionNameTracingEnabled),
 				TracingEndpoint:          c.config.GetString(optionNameTracingEndpoint),
 				TracingServiceName:       c.config.GetString(optionNameTracingServiceName),

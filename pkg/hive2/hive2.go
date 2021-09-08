@@ -31,6 +31,7 @@ const (
 )
 
 type Service struct {
+	start           bool
 	streamer        p2p.StreamerPinger
 	addressBook     addressbook.GetPutter
 	addPeersHandler func(...boson.Address)
@@ -125,7 +126,7 @@ func (s *Service) onFindNode(ctx context.Context, peer p2p.Peer, stream p2p.Stre
 	if req.Limit > maxPeersLimit {
 		req.Limit = maxPeersLimit
 	}
-	resp :=&pb.Peers{}
+	resp := &pb.Peers{}
 
 	_ = s.config.Kad.EachPeerRev(func(address boson.Address, u uint8) (stop, jumpToNext bool, err error) {
 		for _, v := range req.Po {
@@ -297,4 +298,16 @@ func (s *Service) checkAndAddPeers(ctx context.Context, result resultChan) {
 func (s *Service) BroadcastPeers(ctx context.Context, addressee boson.Address, peers ...boson.Address) error {
 
 	return nil
+}
+
+func (s *Service) IsStart() bool {
+	return s.start
+}
+
+func (s *Service) Start() {
+	s.start = true
+}
+
+func (s *Service) IsHive2() bool {
+	return true
 }
