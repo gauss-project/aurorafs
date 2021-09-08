@@ -431,6 +431,12 @@ func (s *traversalService) CheckTrieData(ctx context.Context, reference boson.Ad
 
 	// here we can put those data into localstore.
 	rctx := sctx.SetRootCID(ctx, reference)
+	// first we put root chunk
+	_, err = s.storer.Put(rctx, storage.ModePutRequest, boson.NewChunk(reference, trieData[reference.String()]))
+	if err != nil {
+		return
+	}
+	delete(p.seen, reference.String())
 	for k := range p.seen {
 		addr, err = boson.ParseHexAddress(k)
 		if err != nil {
