@@ -1005,6 +1005,20 @@ func TestPinAndUnpinChunk(t *testing.T) {
 		ci.PutChunkPyramid(reference1, chunk, i)
 	}
 
+	rctx = sctx.SetRootCID(context.Background(), reference1)
+	for _, v := range chunks1 {
+		err = db.Set(rctx, storage.ModeSetPin, v)
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	for _, v := range chunks1 {
+		err = db.Set(rctx, storage.ModeSetUnpin, v)
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
 	addGc1(t)
 
 	//Invoke gc
