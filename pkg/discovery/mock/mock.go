@@ -15,11 +15,13 @@ type Discovery struct {
 	mtx     sync.Mutex
 	ctr     int //how many ops
 	records map[string][]boson.Address
+	isHive2 bool
 }
 
-func NewDiscovery() *Discovery {
+func NewDiscovery(isHive2 bool) *Discovery {
 	return &Discovery{
 		records: make(map[string][]boson.Address),
+		isHive2: isHive2,
 	}
 }
 
@@ -64,5 +66,5 @@ func (d *Discovery) IsStart() bool {
 }
 
 func (d *Discovery) IsHive2() bool {
-	return false
+	return d.isHive2
 }

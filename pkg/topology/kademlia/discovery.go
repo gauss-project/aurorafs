@@ -18,7 +18,7 @@ func (k *Kad) discover() {
 	worker := func() {
 		start := time.Now()
 		k.logger.Debugf("kademlia discover start...")
-		defer k.logger.Debugf("kademlia discover end. %d ms", time.Since(start).Milliseconds())
+		defer k.logger.Debugf("kademlia discover took %s to finish", time.Since(start))
 		stop, jumpNext, _ := k.startFindNode(k.base, 0)
 		if stop {
 			return
@@ -35,16 +35,17 @@ func (k *Kad) discover() {
 	}
 
 	tick := time.NewTicker(time.Minute * 30)
-	firstRun := time.NewTicker(time.Second * 2)
 	for {
 		select {
 		case <-k.halt:
 			return
 		case <-k.quit:
 			return
-		case <-firstRun.C:
+		case <-k.firstDiscoveryC:
+			// wait for kademlia have A certain amount of saturation
+			// when boot maybe have many peer in address book
+			<-time.After(time.Second * 30)
 			worker()
-			firstRun.Stop()
 		case <-tick.C:
 			worker()
 		}

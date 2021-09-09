@@ -153,7 +153,7 @@ func newTestKademlia(t *testing.T) (boson.Address, *kademlia.Kad, beeCrypto.Sign
 		}
 		ab   = addressbook.New(mockstate.NewStateStore())                                                                                      // address book
 		p2ps = p2pMock(ab, base, signer)                                                                                                       // p2p mock
-		disc = mock.NewDiscovery()                                                                                                             // mock discovery protocol
+		disc = mock.NewDiscovery(false)                                                                                                             // mock discovery protocol
 		kad  = kademlia.New(base, ab, disc, p2ps, metricsDB, noopLogger, kademlia.Options{SaturationFunc: saturationFunc, BitSuffixLength: 2}) // kademlia instance
 	)
 

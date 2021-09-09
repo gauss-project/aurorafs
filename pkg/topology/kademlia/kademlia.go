@@ -101,6 +101,7 @@ type Kad struct {
 	wg                sync.WaitGroup
 	waitNext          *waitnext.WaitNext
 	metrics           metrics
+	firstDiscoveryC   chan struct{}
 }
 
 // New returns a new Kademlia.
@@ -154,6 +155,7 @@ func New(
 		done:              make(chan struct{}),
 		wg:                sync.WaitGroup{},
 		metrics:           newMetrics(),
+		firstDiscoveryC:   make(chan struct{}, 1),
 	}
 
 	if k.bitSuffixLength > 0 {
@@ -488,6 +490,7 @@ func (k *Kad) manage() {
 				}
 				k.logger.Debug("kademlia: no connected peers, trying bootnodes")
 				k.connectBootNodes(ctx)
+				k.firstDiscoveryC <- struct{}{}
 			}
 		}
 	}
