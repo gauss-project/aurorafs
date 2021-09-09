@@ -335,14 +335,12 @@ func (s *Service) connect(ctx context.Context, peer boson.Address) (err error) {
 			return err
 		}
 	}
-	s.logger.Infof("route: attempting to connect to peer %q", peer)
 
 	ctx, cancel := context.WithTimeout(ctx, peerConnectionAttemptTimeout)
 	defer cancel()
 
-	s.metrics.TotalOutboundConnectionAttempts.Inc()
 
-	s.logger.Tracef("route: connect to %s", auroraAddr.Underlay.String())
+	s.logger.Tracef("route: connect to overlay=%q,underlay=%q", peer, auroraAddr.Underlay.String())
 
 	switch i, err := s.p2ps.Connect(ctx, auroraAddr.Underlay); {
 	case errors.Is(err, p2p.ErrDialLightNode):
@@ -365,6 +363,7 @@ func (s *Service) connect(ctx context.Context, peer boson.Address) (err error) {
 		return errOverlayMismatch
 	}
 
+	s.metrics.TotalOutboundConnections.Inc()
 	s.kad.KnownPeer().Add(peer)
 
 	return nil
