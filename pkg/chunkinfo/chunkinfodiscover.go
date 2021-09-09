@@ -92,7 +92,7 @@ func (ci *ChunkInfo) updateChunkInfo(rootCid, overlay boson.Address, bv []byte) 
 
 	rc := rootCid.String()
 	over := overlay.String()
-	if _, ok := ci.cd.overlays[rc]; !ok {
+	if _, ok := ci.cd.presence[rc]; !ok {
 		ci.cd.presence[rc] = make(map[string]*bitvector.BitVector)
 	}
 	if _, ok := ci.cd.presence[rootCid.String()][over]; !ok {

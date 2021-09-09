@@ -68,7 +68,7 @@ func (ci *ChunkInfo) updateNeighborChunkInfo(rootCid, cid boson.Address, overlay
 
 	rc := rootCid.String()
 	over := overlay.String()
-	if _, ok := ci.ct.overlays[rc]; !ok {
+	if _, ok := ci.ct.presence[rc]; !ok {
 		ci.ct.presence[rc] = make(map[string]*bitvector.BitVector)
 	}
 	if _, ok := ci.ct.presence[rootCid.String()][over]; !ok {
@@ -111,9 +111,7 @@ func (cn *chunkInfoTabNeighbor) getNeighborChunkInfo(rootCid boson.Address) map[
 	overlays := cn.overlays[rc]
 	for _, overlay := range overlays {
 		bv := cn.presence[rc][overlay.String()]
-		if bv != nil {
-			res[overlay.String()] = bv.Bytes()
-		}
+		res[overlay.String()] = bv.Bytes()
 	}
 	return res
 }
