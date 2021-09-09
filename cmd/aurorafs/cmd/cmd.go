@@ -58,8 +58,6 @@ const (
 	optionNameSwapFactoryAddress        = "swap-factory-address"
 	optionNameSwapInitialDeposit        = "swap-initial-deposit"
 	optionNameSwapEnable                = "swap-enable"
-	optionNameBinMaxPeers               = "bin-max-peers"
-	optionNameLightMaxPeers             = "light-max-peers"
 )
 
 func init() {
@@ -228,6 +226,4 @@ func (c *command) setAllFlags(cmd *cobra.Command) {
 	cmd.Flags().String(optionNameSwapInitialDeposit, "100000000000000000", "initial deposit if deploying a new chequebook")
 	cmd.Flags().Bool(optionNameSwapEnable, true, "enable swap")
 	cmd.Flags().Bool(optionNameFullNode, true, "full node")
-	cmd.Flags().Int(optionNameLightMaxPeers, 100, "connected light node max limit")
-	cmd.Flags().Int(optionNameBinMaxPeers, 20, "kademlia every k bucket connected peers max limit")
 }

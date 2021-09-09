@@ -8,7 +8,6 @@ import (
 	"bytes"
 	"context"
 	"crypto/ecdsa"
-	"errors"
 	"fmt"
 	"io/ioutil"
 
@@ -110,9 +109,6 @@ func (c *command) initStartCmd() (err error) {
 
 			bootNode := c.config.GetBool(optionNameBootnodeMode)
 			fullNode := c.config.GetBool(optionNameFullNode)
-			if bootNode && !fullNode {
-				return errors.New("boot node must be started as a full node")
-			}
 			if fullNode {
 				logger.Info("start node mode full.")
 			}
@@ -152,8 +148,6 @@ func (c *command) initStartCmd() (err error) {
 				SwapFactoryAddress:       c.config.GetString(optionNameSwapFactoryAddress),
 				SwapInitialDeposit:       c.config.GetString(optionNameSwapInitialDeposit),
 				SwapEnable:               c.config.GetBool(optionNameSwapEnable),
-				KadBinMaxPeers:           c.config.GetInt(optionNameBinMaxPeers),
-				LightNodeMaxPeers:        c.config.GetInt(optionNameLightMaxPeers),
 			})
 			if err != nil {
 				return err

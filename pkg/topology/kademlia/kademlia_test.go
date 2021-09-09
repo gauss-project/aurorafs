@@ -888,7 +888,7 @@ func TestClosestPeer(t *testing.T) {
 		},
 	}
 
-	disc := mock.NewDiscovery(false)
+	disc := mock.NewDiscovery()
 	ab := addressbook.New(mockstate.NewStateStore())
 
 	kad := kademlia.New(base, ab, disc, p2pMock(ab, nil, nil, nil), metricsDB, logger, kademlia.Options{})
@@ -1193,7 +1193,7 @@ func newTestKademlia(t *testing.T, connCounter, failedConnCounter *int32, kadOpt
 		ab     = addressbook.New(mockstate.NewStateStore())                    // address book
 		p2p    = p2pMock(ab, signer, connCounter, failedConnCounter)           // p2p mock
 		logger = logging.New(ioutil.Discard, 0)                                // logger
-		disc   = mock.NewDiscovery(false)                                           // mock discovery protocol
+		disc   = mock.NewDiscovery()                                           // mock discovery protocol
 		kad    = kademlia.New(base, ab, disc, p2p, metricsDB, logger, kadOpts) // kademlia instance
 	)
 
