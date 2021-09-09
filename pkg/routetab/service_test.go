@@ -21,7 +21,6 @@ import (
 	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/boson/test"
 	"github.com/gauss-project/aurorafs/pkg/crypto"
-	beeCrypto "github.com/gauss-project/aurorafs/pkg/crypto"
 	"github.com/gauss-project/aurorafs/pkg/discovery/mock"
 	"github.com/gauss-project/aurorafs/pkg/logging"
 	"github.com/gauss-project/aurorafs/pkg/p2p"
@@ -103,7 +102,7 @@ func (n *Network) Close() {
 	n.client.Kad().Close()
 }
 
-func p2pMock(ab addressbook.Interface, overlay boson.Address, signer beeCrypto.Signer) p2p.Service {
+func p2pMock(ab addressbook.Interface, overlay boson.Address, signer crypto.Signer) p2p.Service {
 	p2ps := p2pmock.New(p2pmock.WithConnectFunc(func(ctx context.Context, underlay ma.Multiaddr) (*aurora.Address, error) {
 		if underlay.Equal(nonConnectableAddress) {
 			return nil, errors.New("non reachable node")
@@ -134,7 +133,7 @@ func p2pMock(ab addressbook.Interface, overlay boson.Address, signer beeCrypto.S
 	return p2ps
 }
 
-func newTestKademlia(t *testing.T) (boson.Address, *kademlia.Kad, beeCrypto.Signer, addressbook.Interface) {
+func newTestKademlia(t *testing.T) (boson.Address, *kademlia.Kad, crypto.Signer, addressbook.Interface) {
 	metricsDB, err := shed.NewDB("", nil)
 	if err != nil {
 		t.Fatal(err)
@@ -153,7 +152,7 @@ func newTestKademlia(t *testing.T) (boson.Address, *kademlia.Kad, beeCrypto.Sign
 		}
 		ab   = addressbook.New(mockstate.NewStateStore())                                                                                      // address book
 		p2ps = p2pMock(ab, base, signer)                                                                                                       // p2p mock
-		disc = mock.NewDiscovery()                                                                                                             // mock discovery protocol
+		disc = mock.NewDiscovery(false)                                                                                                             // mock discovery protocol
 		kad  = kademlia.New(base, ab, disc, p2ps, metricsDB, noopLogger, kademlia.Options{SaturationFunc: saturationFunc, BitSuffixLength: 2}) // kademlia instance
 	)
 
@@ -876,7 +875,7 @@ func TestBusyNetworkResponse(t *testing.T) {
 
 func randomAddress() (base boson.Address, signer crypto.Signer) {
 	pk, _ := crypto.GenerateSecp256k1Key()
-	signer = beeCrypto.NewDefaultSigner(pk)
+	signer = crypto.NewDefaultSigner(pk)
 	base, _ = crypto.NewOverlayAddress(pk.PublicKey, networkId)
 	return
 }
@@ -1006,4 +1005,27 @@ func TestConnectFarNode(t *testing.T) {
 		//	t.Fatal("node A should be known")
 		//}
 	})
+}
+
+func TestGetClosestNeighbor(t *testing.T) {
+	path := []string{"0301", "0304", "0503", "0604", "0905", "0406"}
+	route := generateRoute(path)
+	path1 := []string{"0302", "0304", "0503", "0704", "0905", "0506"}
+	route1 := generateRoute(path1)
+	path2 := []string{"0303", "0305", "0403", "0804", "0905", "0606"}
+	route3 := generateRoute(path2)
+	list := []routetab.RouteItem{route, route1, route3}
+	got := routetab.GetClosestNeighbor(list)
+	if len(got) != 3 {
+		t.Fatalf("expected len(GetClosestNeighbor) 3 got %d", len(got))
+	}
+	if !got[0].Equal(boson.MustParseHexAddress("0406")) {
+		t.Fatalf("expected address 0406  got %s", got[0].String())
+	}
+	if !got[1].Equal(boson.MustParseHexAddress("0506")) {
+		t.Fatalf("expected address 0506  got %s", got[0].String())
+	}
+	if !got[2].Equal(boson.MustParseHexAddress("0606")) {
+		t.Fatalf("expected address 0606  got %s", got[0].String())
+	}
 }

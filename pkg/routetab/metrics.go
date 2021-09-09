@@ -19,7 +19,7 @@ type metrics struct {
 	FindRouteRespReceivedCount prometheus.Counter
 	TotalErrors                prometheus.Counter
 
-	TotalOutboundConnectionAttempts prometheus.Counter
+	TotalOutboundConnections prometheus.Counter
 	TotalOutboundConnectionFailedAttempts prometheus.Counter
 }
 
@@ -57,11 +57,11 @@ func newMetrics() metrics {
 			Name:      "route_errors_total_count",
 			Help:      "Number of route errors total.",
 		}),
-		TotalOutboundConnectionAttempts: prometheus.NewCounter(prometheus.CounterOpts{
+		TotalOutboundConnections: prometheus.NewCounter(prometheus.CounterOpts{
 			Namespace: m.Namespace,
 			Subsystem: subsystem,
-			Name:      "total_outbound_connection_attempts",
-			Help:      "Total outbound connection attempts made.",
+			Name:      "total_outbound_connection",
+			Help:      "Total outbound connection made.",
 		}),
 		TotalOutboundConnectionFailedAttempts: prometheus.NewCounter(prometheus.CounterOpts{
 			Namespace: m.Namespace,

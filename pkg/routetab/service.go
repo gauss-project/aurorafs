@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/gauss-project/aurorafs/pkg/topology/lightnode"
 	"time"
 
 	"github.com/gauss-project/aurorafs/pkg/addressbook"
@@ -35,6 +36,8 @@ type RouteTab interface {
 	GetRoute(ctx context.Context, target boson.Address) (dest *aurora.Address, routes []RouteItem, err error)
 	FindRoute(ctx context.Context, target boson.Address) (dest *aurora.Address, route []RouteItem, err error)
 	Connect(ctx context.Context, target boson.Address) error
+	GetTargetNeighbor(ctx context.Context, target boson.Address) (addresses []boson.Address, err error)
+	IsNeighbor(dest boson.Address) (has bool)
 }
 
 type Service struct {
@@ -51,6 +54,7 @@ type Service struct {
 type Config struct {
 	AddressBook addressbook.Interface
 	NetworkID   uint64
+	LightNodes  *lightnode.Container
 }
 
 func New(addr boson.Address, ctx context.Context, p2ps p2p.StreamerConnect, kad *kademlia.Kad, store storage.StateStorer, logger logging.Logger) *Service {
@@ -171,7 +175,7 @@ func (s *Service) onRouteReq(ctx context.Context, p p2p.Peer, stream p2p.Stream)
 		return nil
 	}
 	// need resp
-	if s.isNeighbor(target) {
+	if s.IsNeighbor(target) {
 		// dest in neighbor then resp
 		dest, _ := s.config.AddressBook.Get(target)
 		s.logger.Tracef("route: handlerFindRouteReq dest= %s in neighbor", target.String())
@@ -235,7 +239,7 @@ func (s *Service) FindRoute(ctx context.Context, target boson.Address) (dest *au
 	dest, routes, err = s.GetRoute(ctx, target)
 	if err != nil {
 		s.logger.Debugf("route: FindRoute dest %s %s", target.String(), err.Error())
-		if s.isNeighbor(target) {
+		if s.IsNeighbor(target) {
 			err = fmt.Errorf("route: FindRoute dest %s is neighbor", target.String())
 			return
 		}
@@ -282,18 +286,40 @@ func (s *Service) GetRoute(_ context.Context, target boson.Address) (dest *auror
 }
 
 func (s *Service) Connect(ctx context.Context, target boson.Address) error {
+	if target.Equal(s.addr) {
+		return nil
+	}
 	var isConnected bool
-	_ = s.kad.EachPeer(func(address boson.Address, u uint8) (stop, jumpToNext bool, err error) {
+	findFun := func(address boson.Address, u uint8) (stop, jumpToNext bool, err error) {
 		if target.Equal(address) {
 			isConnected = true
 			return true, false, nil
 		}
 		return false, false, nil
-	})
+	}
+	_ = s.kad.EachPeer(findFun)
+	if isConnected {
+		return nil
+	}
+	_ = s.config.LightNodes.EachPeer(findFun)
 	if isConnected {
 		return nil
 	}
 	return s.connect(ctx, target)
+}
+
+func (s *Service) GetTargetNeighbor(ctx context.Context, target boson.Address) (addresses []boson.Address, err error) {
+	var routes []RouteItem
+	_, routes, err = s.GetRoute(ctx, target)
+	if err != nil {
+		s.logger.Debugf("route: GetTargetNeighbor err=%s", err.Error())
+		_, routes, err = s.FindRoute(ctx, target)
+		if err != nil {
+			return
+		}
+	}
+	addresses = GetClosestNeighbor(routes)
+	return
 }
 
 func (s *Service) connect(ctx context.Context, peer boson.Address) (err error) {
@@ -320,14 +346,11 @@ func (s *Service) connect(ctx context.Context, peer boson.Address) (err error) {
 			return err
 		}
 	}
-	s.logger.Infof("route: attempting to connect to peer %q", peer)
 
 	ctx, cancel := context.WithTimeout(ctx, peerConnectionAttemptTimeout)
 	defer cancel()
 
-	s.metrics.TotalOutboundConnectionAttempts.Inc()
-
-	s.logger.Tracef("route: connect to %s", auroraAddr.Underlay.String())
+	s.logger.Tracef("route: connect to overlay=%q,underlay=%q", peer, auroraAddr.Underlay.String())
 
 	switch i, err := s.p2ps.Connect(ctx, auroraAddr.Underlay); {
 	case errors.Is(err, p2p.ErrDialLightNode):
@@ -350,6 +373,7 @@ func (s *Service) connect(ctx context.Context, peer boson.Address) (err error) {
 		return errOverlayMismatch
 	}
 
+	s.metrics.TotalOutboundConnections.Inc()
 	s.kad.KnownPeer().Add(peer)
 
 	return nil
@@ -396,7 +420,7 @@ func (s *Service) getNeighbor(target boson.Address, alpha int32) (forward []boso
 	return
 }
 
-func (s *Service) isNeighbor(dest boson.Address) (has bool) {
+func (s *Service) IsNeighbor(dest boson.Address) (has bool) {
 	err := s.kad.EachPeer(func(address boson.Address, u uint8) (stop, jumpToNext bool, err error) {
 		if dest.Equal(address) {
 			has = true
