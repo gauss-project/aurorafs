@@ -133,13 +133,13 @@ func (m *MockStorer) has(ctx context.Context, addr boson.Address) (yes bool, err
 	return has, nil
 }
 
-func (m *MockStorer) Has(ctx context.Context, addr boson.Address) (yes bool, err error) {
+func (m *MockStorer) Has(ctx context.Context, hasMode storage.ModeHas, addr boson.Address) (yes bool, err error) {
 	m.mtx.Lock()
 	defer m.mtx.Unlock()
 	return m.has(ctx, addr)
 }
 
-func (m *MockStorer) HasMulti(ctx context.Context, addrs ...boson.Address) (yes []bool, err error) {
+func (m *MockStorer) HasMulti(ctx context.Context, hasMode storage.ModeHas, addrs ...boson.Address) (yes []bool, err error) {
 	panic("not implemented") // TODO: Implement
 }
 

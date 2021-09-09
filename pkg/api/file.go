@@ -7,9 +7,12 @@ package api
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/gauss-project/aurorafs/pkg/aurora"
+	"github.com/gauss-project/aurorafs/pkg/traversal"
 	"io"
 	"io/ioutil"
 	"mime"
@@ -39,6 +42,12 @@ const (
 // fileUploadResponse is returned when an HTTP request to upload a file is successful
 type fileUploadResponse struct {
 	Reference boson.Address `json:"reference"`
+}
+type fileListResponse struct {
+	FileHash  string
+	Size      int
+	PinState  bool
+	BitVector aurora.BitVectorApi
 }
 
 // fileUploadHandler uploads the file and its metadata supplied as:
@@ -356,4 +365,81 @@ func (s *server) downloadHandler(w http.ResponseWriter, r *http.Request, referen
 	w.Header().Set("Access-Control-Expose-Headers", "Content-Disposition")
 
 	http.ServeContent(w, r, "", time.Now(), langos.NewBufferedLangos(reader, lookaheadBufferSize(l)))
+}
+
+func (s *server) fileDelete(w http.ResponseWriter, r *http.Request) {
+	addr, err := boson.ParseHexAddress(mux.Vars(r)["addr"])
+	if err != nil {
+		s.logger.Debugf("pin files: parse address: %v", err)
+		s.logger.Error("pin files: parse address")
+		jsonhttp.BadRequest(w, "bad address")
+		return
+	}
+
+	//There is no direct return success.
+	has, err := s.storer.Has(r.Context(), storage.ModeHasRetrievalData, addr)
+	if err != nil {
+		jsonhttp.OK(w, nil)
+		return
+	}
+
+	if !has {
+		_, err := s.storer.Get(r.Context(), storage.ModeGetRequest, addr)
+		if err != nil {
+			s.logger.Debugf("pin chunk: netstore get: %v", err)
+			s.logger.Error("pin chunk: netstore")
+
+			jsonhttp.NotFound(w, nil)
+			return
+		}
+	}
+
+	ok := s.chunkInfo.DelFile(addr, s.overlay)
+	if !ok {
+		jsonhttp.InternalServerError(w, "Error in chunk deletion.")
+		return
+	}
+	ctx := r.Context()
+
+	chunkAddressFn := s.delpinChunkAddressFn(ctx, addr)
+
+	err = s.traversal.TraverseFileAddresses(ctx, addr, chunkAddressFn)
+	if err != nil {
+		s.logger.Debugf("pin files: traverse chunks: %v, addr %s", err, addr)
+
+		if errors.Is(err, traversal.ErrInvalidType) {
+			s.logger.Error("pin files: invalid type")
+			jsonhttp.BadRequest(w, "invalid type")
+			return
+		}
+
+		s.logger.Error("pin files: cannot pin")
+		jsonhttp.InternalServerError(w, "cannot pin")
+		return
+	}
+
+	jsonhttp.OK(w, nil)
+}
+
+func (s *server) fileList(w http.ResponseWriter, r *http.Request) {
+	var ResponseList []fileListResponse
+
+	fileListInfo, addressList := s.chunkInfo.GetFileList(s.overlay)
+	if len(fileListInfo) > 0 && len(addressList) > 0 {
+		yes, err := s.storer.HasMulti(context.Background(), storage.ModeHasPin, addressList...)
+		if err != nil {
+			return
+		}
+		for i, v := range addressList {
+			//fileListInfo[v.String()].PinState = yes[i]
+			Response := fileListResponse{}
+			Response.FileHash = v.String()
+			Response.Size = fileListInfo[v.String()].TreeSize
+			Response.PinState = yes[i]
+			Response.BitVector = fileListInfo[v.String()].Bitvector
+			ResponseList = append(ResponseList, Response)
+		}
+	}
+
+	jsonhttp.OK(w, ResponseList)
 }

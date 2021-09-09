@@ -38,6 +38,10 @@ func (s *server) setupRouting() {
 	})
 
 	handle(router, "/files", jsonhttp.MethodHandler{
+		"GET": web.ChainHandlers(
+			s.newTracingHandler("files-get"),
+			web.FinalHandlerFunc(s.fileList),
+		),
 		"POST": web.ChainHandlers(
 			s.newTracingHandler("files-upload"),
 			web.FinalHandlerFunc(s.fileUploadHandler),
@@ -47,6 +51,10 @@ func (s *server) setupRouting() {
 		"GET": web.ChainHandlers(
 			s.newTracingHandler("files-download"),
 			web.FinalHandlerFunc(s.fileDownloadHandler),
+		),
+		"DELETE": web.ChainHandlers(
+			s.newTracingHandler("files-delete"),
+			web.FinalHandlerFunc(s.fileDelete),
 		),
 	})
 

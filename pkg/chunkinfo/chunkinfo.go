@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/gauss-project/aurorafs/pkg/aurora"
 	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/logging"
 	"github.com/gauss-project/aurorafs/pkg/p2p"
@@ -32,6 +33,10 @@ type Interface interface {
 	GetChunkPyramid(rootCid boson.Address) []*boson.Address
 
 	IsDiscover(rootCid boson.Address) bool
+
+	GetFileList(overlay boson.Address) (fileListInfo map[string]*aurora.FileInfo, rootList []boson.Address)
+
+	DelFile(rootCid, overlay boson.Address) bool
 }
 
 // ChunkInfo
@@ -233,6 +238,37 @@ func (ci *ChunkInfo) IsDiscover(rootCid boson.Address) bool {
 	}
 
 	return false
+}
+
+func (ci *ChunkInfo) GetFileList(overlay boson.Address) (fileListInfo map[string]*aurora.FileInfo, rootList []boson.Address) {
+	ci.ct.RLock()
+	chunkInfo := ci.ct.presence
+	ci.ct.RUnlock()
+	fileListInfo = make(map[string]*aurora.FileInfo)
+	for root, node := range chunkInfo {
+		if v, ok := node[overlay.String()]; ok {
+			file := &aurora.FileInfo{}
+			file.PinState = false
+			file.TreeSize = ci.cp.getRootHash(root) - v.Len()
+			file.Bitvector.B = v.Bytes()
+			file.Bitvector.Len = v.Len()
+			fileListInfo[root] = file
+			rootList = append(rootList, boson.MustParseHexAddress(root))
+		}
+	}
+	return
+}
+
+func (ci *ChunkInfo) DelFile(rootCid, overlay boson.Address) bool {
+	err := ci.storer.Delete(generateKey(discoverKeyPrefix, rootCid, overlay))
+	if err != nil {
+		return false
+	}
+	if ok := ci.cp.delRootCid(rootCid); ok {
+		return ci.ct.delPresence(rootCid)
+	} else {
+		return false
+	}
 }
 
 func generateKey(keyPrefix string, rootCid, overlay boson.Address) string {

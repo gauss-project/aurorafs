@@ -18,18 +18,29 @@ package localstore
 
 import (
 	"context"
+	"github.com/gauss-project/aurorafs/pkg/storage"
 	"time"
 
 	"github.com/gauss-project/aurorafs/pkg/boson"
 )
 
 // Has returns true if the chunk is stored in database.
-func (db *DB) Has(ctx context.Context, addr boson.Address) (bool, error) {
+func (db *DB) Has(ctx context.Context, hasMode storage.ModeHas, addr boson.Address) (bool, error) {
+	var has bool
+	var err error
 
 	db.metrics.ModeHas.Inc()
 	defer totalTimeMetric(db.metrics.TotalTimeHas, time.Now())
+	switch hasMode {
+	case storage.ModeHasPin:
+		has, err = db.pinIndex.Has(addressToItem(addr))
+	case storage.ModeHasRetrievalData:
+		has, err = db.retrievalDataIndex.Has(addressToItem(addr))
+	default:
+		has, err = db.retrievalDataIndex.Has(addressToItem(addr))
 
-	has, err := db.retrievalDataIndex.Has(addressToItem(addr))
+	}
+
 	if err != nil {
 		db.metrics.ModeHasFailure.Inc()
 	}
@@ -38,12 +49,23 @@ func (db *DB) Has(ctx context.Context, addr boson.Address) (bool, error) {
 
 // HasMulti returns a slice of booleans which represent if the provided chunks
 // are stored in database.
-func (db *DB) HasMulti(ctx context.Context, addrs ...boson.Address) ([]bool, error) {
+func (db *DB) HasMulti(ctx context.Context, hasMode storage.ModeHas, addrs ...boson.Address) ([]bool, error) {
+
+	var have []bool
+	var err error
 
 	db.metrics.ModeHasMulti.Inc()
+
+	switch hasMode {
+	case storage.ModeHasPin:
+		have, err = db.pinIndex.HasMulti(addressesToItems(addrs...)...)
+	case storage.ModeHasRetrievalData:
+		have, err = db.retrievalDataIndex.HasMulti(addressesToItems(addrs...)...)
+	default:
+		have, err = db.retrievalDataIndex.HasMulti(addressesToItems(addrs...)...)
+	}
 	defer totalTimeMetric(db.metrics.TotalTimeHasMulti, time.Now())
 
-	have, err := db.retrievalDataIndex.HasMulti(addressesToItems(addrs...)...)
 	if err != nil {
 		db.metrics.ModeHasMultiFailure.Inc()
 	}

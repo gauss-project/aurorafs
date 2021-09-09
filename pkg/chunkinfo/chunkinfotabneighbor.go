@@ -127,3 +127,10 @@ func (cn *chunkInfoTabNeighbor) getNeighborChunkInfo(rootCid boson.Address) map[
 func (cn *chunkInfoTabNeighbor) createChunkInfoResp(rootCid boson.Address, ctn map[string][]byte) pb.ChunkInfoResp {
 	return pb.ChunkInfoResp{RootCid: rootCid.Bytes(), Presence: ctn}
 }
+
+func (cn *chunkInfoTabNeighbor) delPresence(rootCid boson.Address) bool {
+	cn.Lock()
+	defer cn.Unlock()
+	delete(cn.presence, rootCid.String())
+	return true
+}
