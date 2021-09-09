@@ -90,13 +90,17 @@ func (ci *ChunkInfo) updateChunkInfo(rootCid, overlay boson.Address, bv []byte) 
 	ci.cd.Lock()
 	defer ci.cd.Unlock()
 
+	exists := false
 	rc := rootCid.String()
-	over := overlay.String()
-	if _, ok := ci.cd.overlays[rc]; !ok {
-		ci.cd.presence[rc] = make(map[string]*bitvector.BitVector)
+	for _, over := range ci.cd.overlays[rc] {
+		if over.Equal(overlay) {
+			exists = true
+			break
+		}
 	}
-	if _, ok := ci.cd.presence[rootCid.String()][over]; !ok {
+	if !exists {
 		ci.cd.overlays[rc] = append(ci.cd.overlays[rc], overlay)
+		ci.cd.presence[rc] = make(map[string]*bitvector.BitVector)
 	}
 	vb, ok := ci.cd.presence[rc][overlay.String()]
 	if !ok {

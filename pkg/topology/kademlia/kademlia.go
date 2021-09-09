@@ -36,9 +36,6 @@ const (
 
 	peerConnectionAttemptTimeout = 5 * time.Second // Timeout for establishing a new connection with peer.
 
-	lookupPoLimit           = 3 // the number of hive2 used to find node for near po count.
-	lookupNeighborPeerLimit = 3
-	findNodePeerLimit       = 16
 )
 
 var (
@@ -71,6 +68,7 @@ type Options struct {
 	Bootnodes       []ma.Multiaddr
 	BootnodeMode    bool
 	BitSuffixLength int
+	BinMaxPeers     int // every k bucket max connes
 }
 
 // Kad is the Swarm forwarding kademlia implementation.
@@ -100,6 +98,7 @@ type Kad struct {
 	wg                sync.WaitGroup
 	waitNext          *waitnext.WaitNext
 	metrics           metrics
+	firstDiscoveryC   chan struct{}
 }
 
 // New returns a new Kademlia.
@@ -113,6 +112,15 @@ func New(
 	o Options,
 ) *Kad {
 	if o.SaturationFunc == nil {
+		if o.BinMaxPeers > 5 {
+			if o.BinMaxPeers%5 != 0 {
+				overSaturationPeers = o.BinMaxPeers - o.BinMaxPeers%5 + 5
+			} else {
+				overSaturationPeers = o.BinMaxPeers
+			}
+			saturationPeers = overSaturationPeers / 10
+			quickSaturationPeers = overSaturationPeers / 5
+		}
 		os := overSaturationPeers
 		if o.BootnodeMode {
 			os = bootNodeOverSaturationPeers
@@ -144,6 +152,7 @@ func New(
 		done:              make(chan struct{}),
 		wg:                sync.WaitGroup{},
 		metrics:           newMetrics(),
+		firstDiscoveryC:   make(chan struct{}, 1),
 	}
 
 	if k.bitSuffixLength > 0 {
@@ -478,6 +487,7 @@ func (k *Kad) manage() {
 				}
 				k.logger.Debug("kademlia: no connected peers, trying bootnodes")
 				k.connectBootNodes(ctx)
+				k.firstDiscoveryC <- struct{}{}
 			}
 		}
 	}
@@ -486,11 +496,6 @@ func (k *Kad) manage() {
 func (k *Kad) Start(_ context.Context) error {
 	k.wg.Add(1)
 	go k.manage()
-
-	if k.discovery.IsHive2() {
-		k.wg.Add(1)
-		go k.discover() // hive2
-	}
 
 	go func() {
 		select {
@@ -573,6 +578,16 @@ func (k *Kad) connectBootNodes(ctx context.Context) {
 			return
 		}
 	}
+}
+
+func (k *Kad) NotSaturatedBin() (lookupBin []uint8) {
+	for i := uint8(0); i < boson.MaxBins; i++ {
+		if saturate, _ := k.saturationFunc(i, k.knownPeers, k.connectedPeers); saturate {
+			continue
+		}
+		lookupBin = append(lookupBin, i)
+	}
+	return
 }
 
 // binSaturated indicates whether a certain bin is saturated or not.
