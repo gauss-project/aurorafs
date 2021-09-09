@@ -52,7 +52,7 @@ func (k *Kad) discover() {
 	}
 }
 
-func (k *Kad) startFindNode(target boson.Address, total int) (stop bool, jumpNext bool, count int) {
+func (k *Kad) startFindNode(target boson.Address, total int32) (stop bool, jumpNext bool, count int32) {
 	var ch chan boson.Address
 	ch, stop, jumpNext, count = k.lookup(target, total)
 	if stop || jumpNext {
@@ -67,7 +67,7 @@ func (k *Kad) startFindNode(target boson.Address, total int) (stop bool, jumpNex
 	return
 }
 
-func (k *Kad) lookup(target boson.Address, total int) (ch chan boson.Address, stop bool, jumpNext bool, count int) {
+func (k *Kad) lookup(target boson.Address, total int32) (ch chan boson.Address, stop bool, jumpNext bool, count int32) {
 	stop = true
 	var lookupBin []uint8
 	for i := uint8(0); i < boson.MaxBins; i++ {
@@ -87,8 +87,8 @@ func (k *Kad) lookup(target boson.Address, total int) (ch chan boson.Address, st
 		for _, dest := range peers {
 			pos := lookupDistances(target, dest, lookupPoLimit, lookupBin)
 			if len(pos) > 0 {
-				var cnt int
-				ch, cnt, _ = k.discovery.DoFindNode(context.Background(), dest, pos, findNodePeerLimit)
+				var cnt int32
+				ch, cnt, _ = k.discovery.DoFindNode(context.Background(), dest, pos, findNodePeerLimit-total)
 				count = total + cnt
 				if count >= findNodePeerLimit {
 					jumpNext = true
@@ -103,6 +103,7 @@ func (k *Kad) lookup(target boson.Address, total int) (ch chan boson.Address, st
 
 // e.g. lookupRequestLimit=3
 // for a target with Proximity(target, dest) = 5 the result is [5, 6, 4].
+// skip saturation po
 func lookupDistances(target, dest boson.Address, lookupRequestLimit int, pick []uint8) (pos []int32) {
 	po := boson.Proximity(target.Bytes(), dest.Bytes())
 	pos = append(pos, int32(po))
