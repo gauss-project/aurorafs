@@ -21,7 +21,6 @@ import (
 	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/boson/test"
 	"github.com/gauss-project/aurorafs/pkg/crypto"
-	beeCrypto "github.com/gauss-project/aurorafs/pkg/crypto"
 	"github.com/gauss-project/aurorafs/pkg/discovery/mock"
 	"github.com/gauss-project/aurorafs/pkg/logging"
 	"github.com/gauss-project/aurorafs/pkg/p2p"
@@ -103,7 +102,7 @@ func (n *Network) Close() {
 	n.client.Kad().Close()
 }
 
-func p2pMock(ab addressbook.Interface, overlay boson.Address, signer beeCrypto.Signer) p2p.Service {
+func p2pMock(ab addressbook.Interface, overlay boson.Address, signer crypto.Signer) p2p.Service {
 	p2ps := p2pmock.New(p2pmock.WithConnectFunc(func(ctx context.Context, underlay ma.Multiaddr) (*aurora.Address, error) {
 		if underlay.Equal(nonConnectableAddress) {
 			return nil, errors.New("non reachable node")
@@ -134,7 +133,7 @@ func p2pMock(ab addressbook.Interface, overlay boson.Address, signer beeCrypto.S
 	return p2ps
 }
 
-func newTestKademlia(t *testing.T) (boson.Address, *kademlia.Kad, beeCrypto.Signer, addressbook.Interface) {
+func newTestKademlia(t *testing.T) (boson.Address, *kademlia.Kad, crypto.Signer, addressbook.Interface) {
 	metricsDB, err := shed.NewDB("", nil)
 	if err != nil {
 		t.Fatal(err)
@@ -876,7 +875,7 @@ func TestBusyNetworkResponse(t *testing.T) {
 
 func randomAddress() (base boson.Address, signer crypto.Signer) {
 	pk, _ := crypto.GenerateSecp256k1Key()
-	signer = beeCrypto.NewDefaultSigner(pk)
+	signer = crypto.NewDefaultSigner(pk)
 	base, _ = crypto.NewOverlayAddress(pk.PublicKey, networkId)
 	return
 }

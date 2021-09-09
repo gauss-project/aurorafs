@@ -359,9 +359,6 @@ func NewBee(addr string, bosonAddress boson.Address, publicKey ecdsa.PublicKey, 
 	if err = p2ps.AddProtocol(hiveObj.Protocol()); err != nil {
 		return nil, fmt.Errorf("hive service: %w", err)
 	}
-	if !o.IsDev {
-		hiveObj.Start() // must start before kademlia
-	}
 
 	kad := kademlia.New(bosonAddress, addressBook, hiveObj, p2ps, metricsDB, logger, kademlia.Options{
 		Bootnodes:    bootnodes,
@@ -370,7 +367,7 @@ func NewBee(addr string, bosonAddress boson.Address, publicKey ecdsa.PublicKey, 
 	})
 	b.topologyCloser = kad
 	hiveObj.SetAddPeersHandler(kad.AddPeers)
-	hiveObj.SetConfig(hive2.Config{Kad: kad}) // hive2
+	hiveObj.SetConfig(hive2.Config{Kad: kad, Base: bosonAddress}) // hive2
 
 	p2ps.SetPickyNotifier(kad)
 	addrs, err := p2ps.Addresses()
@@ -389,6 +386,7 @@ func NewBee(addr string, bosonAddress boson.Address, publicKey ecdsa.PublicKey, 
 	route.SetConfig(routetab.Config{
 		AddressBook: addressBook,
 		NetworkID:   networkID,
+		LightNodes:  lightNodes,
 	})
 
 	var path string
@@ -495,6 +493,10 @@ func NewBee(addr string, bosonAddress boson.Address, publicKey ecdsa.PublicKey, 
 	if err := kad.Start(p2pCtx); err != nil {
 		return nil, err
 	}
+	if !o.IsDev {
+		hiveObj.Start()
+	}
+
 	p2ps.Ready()
 
 	return b, nil

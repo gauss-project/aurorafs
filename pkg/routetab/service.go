@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/gauss-project/aurorafs/pkg/topology/lightnode"
 	"time"
 
 	"github.com/gauss-project/aurorafs/pkg/addressbook"
@@ -52,6 +53,7 @@ type Service struct {
 type Config struct {
 	AddressBook addressbook.Interface
 	NetworkID   uint64
+	LightNodes  *lightnode.Container
 }
 
 func New(addr boson.Address, ctx context.Context, p2ps p2p.StreamerConnect, kad *kademlia.Kad, store storage.StateStorer, logger logging.Logger) *Service {
@@ -284,13 +286,18 @@ func (s *Service) GetRoute(_ context.Context, target boson.Address) (dest *auror
 
 func (s *Service) Connect(ctx context.Context, target boson.Address) error {
 	var isConnected bool
-	_ = s.kad.EachPeer(func(address boson.Address, u uint8) (stop, jumpToNext bool, err error) {
+	findFun := func(address boson.Address, u uint8) (stop, jumpToNext bool, err error) {
 		if target.Equal(address) {
 			isConnected = true
 			return true, false, nil
 		}
 		return false, false, nil
-	})
+	}
+	_ = s.kad.EachPeer(findFun)
+	if isConnected {
+		return nil
+	}
+	_ = s.config.LightNodes.EachPeer(findFun)
 	if isConnected {
 		return nil
 	}
@@ -338,7 +345,6 @@ func (s *Service) connect(ctx context.Context, peer boson.Address) (err error) {
 
 	ctx, cancel := context.WithTimeout(ctx, peerConnectionAttemptTimeout)
 	defer cancel()
-
 
 	s.logger.Tracef("route: connect to overlay=%q,underlay=%q", peer, auroraAddr.Underlay.String())
 

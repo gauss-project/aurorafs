@@ -57,7 +57,7 @@ func (d *Discovery) Reset() {
 	d.records = make(map[string][]boson.Address)
 }
 
-func (d *Discovery) DoFindNode(ctx context.Context, peer boson.Address, pos []int32, limit int32) (res chan boson.Address, total int, err error) {
+func (d *Discovery) DoFindNode(ctx context.Context, peer boson.Address, pos []int32, limit int32) (res chan boson.Address, total int32, err error) {
 	return
 }
 

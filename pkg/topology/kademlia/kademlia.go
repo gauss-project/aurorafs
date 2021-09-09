@@ -36,9 +36,6 @@ const (
 
 	peerConnectionAttemptTimeout = 5 * time.Second // Timeout for establishing a new connection with peer.
 
-	lookupPoLimit           = 3 // the number of hive2 used to find node for near po count.
-	lookupNeighborPeerLimit = 3
-	findNodePeerLimit       = 16
 )
 
 var (
@@ -500,11 +497,6 @@ func (k *Kad) Start(_ context.Context) error {
 	k.wg.Add(1)
 	go k.manage()
 
-	if k.discovery.IsHive2() {
-		k.wg.Add(1)
-		go k.discover() // hive2
-	}
-
 	go func() {
 		select {
 		case <-k.halt:
@@ -586,6 +578,16 @@ func (k *Kad) connectBootNodes(ctx context.Context) {
 			return
 		}
 	}
+}
+
+func (k *Kad) NotSaturatedBin() (lookupBin []uint8) {
+	for i := uint8(0); i < boson.MaxBins; i++ {
+		if saturate, _ := k.saturationFunc(i, k.knownPeers, k.connectedPeers); saturate {
+			continue
+		}
+		lookupBin = append(lookupBin, i)
+	}
+	return
 }
 
 // binSaturated indicates whether a certain bin is saturated or not.
