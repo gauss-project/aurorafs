@@ -176,3 +176,15 @@ func minTTLPb(items []*pb.RouteItem) uint8 {
 	}
 	return ttl
 }
+
+func GetClosestNeighbor(routes []RouteItem) []boson.Address {
+	addresses := make([]boson.Address, 0)
+	for _, v := range routes {
+		if len(v.NextHop) == 0 {
+			addresses = append(addresses, v.Neighbor)
+			continue
+		}
+		addresses = append(addresses, GetClosestNeighbor(v.NextHop)...)
+	}
+	return addresses
+}
