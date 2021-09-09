@@ -37,6 +37,7 @@ type RouteTab interface {
 	FindRoute(ctx context.Context, target boson.Address) (dest *aurora.Address, route []RouteItem, err error)
 	Connect(ctx context.Context, target boson.Address) error
 	GetTargetNeighbor(ctx context.Context, target boson.Address) (addresses []boson.Address, err error)
+	IsNeighbor(dest boson.Address) (has bool)
 }
 
 type Service struct {
@@ -174,7 +175,7 @@ func (s *Service) onRouteReq(ctx context.Context, p p2p.Peer, stream p2p.Stream)
 		return nil
 	}
 	// need resp
-	if s.isNeighbor(target) {
+	if s.IsNeighbor(target) {
 		// dest in neighbor then resp
 		dest, _ := s.config.AddressBook.Get(target)
 		s.logger.Tracef("route: handlerFindRouteReq dest= %s in neighbor", target.String())
@@ -238,7 +239,7 @@ func (s *Service) FindRoute(ctx context.Context, target boson.Address) (dest *au
 	dest, routes, err = s.GetRoute(ctx, target)
 	if err != nil {
 		s.logger.Debugf("route: FindRoute dest %s %s", target.String(), err.Error())
-		if s.isNeighbor(target) {
+		if s.IsNeighbor(target) {
 			err = fmt.Errorf("route: FindRoute dest %s is neighbor", target.String())
 			return
 		}
@@ -285,6 +286,9 @@ func (s *Service) GetRoute(_ context.Context, target boson.Address) (dest *auror
 }
 
 func (s *Service) Connect(ctx context.Context, target boson.Address) error {
+	if target.Equal(s.addr) {
+		return nil
+	}
 	var isConnected bool
 	findFun := func(address boson.Address, u uint8) (stop, jumpToNext bool, err error) {
 		if target.Equal(address) {
@@ -416,7 +420,7 @@ func (s *Service) getNeighbor(target boson.Address, alpha int32) (forward []boso
 	return
 }
 
-func (s *Service) isNeighbor(dest boson.Address) (has bool) {
+func (s *Service) IsNeighbor(dest boson.Address) (has bool) {
 	err := s.kad.EachPeer(func(address boson.Address, u uint8) (stop, jumpToNext bool, err error) {
 		if dest.Equal(address) {
 			has = true
