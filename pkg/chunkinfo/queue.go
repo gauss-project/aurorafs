@@ -158,16 +158,16 @@ func (ci *ChunkInfo) queueProcess(ctx context.Context, rootCid boson.Address) {
 	for i := 0; i < n; i++ {
 		unNode := q.pop(UnPull)
 		q.push(Pulling, *unNode)
+		overlay := boson.NewAddress(*unNode)
 		ci.tt.updateTimeOutTrigger(rootCid.Bytes(), *unNode)
-		ciReq := ci.cd.createChunkInfoReq(rootCid)
-		go ci.sendData(ctx, boson.NewAddress(*unNode), streamChunkInfoReqName, ciReq)
+		ciReq := ci.cd.createChunkInfoReq(rootCid, overlay, ci.addr)
+		go ci.sendDatas(ctx, overlay, streamChunkInfoReqName, ciReq)
 	}
 }
 
 // updateQueue
 func (ci *ChunkInfo) updateQueue(ctx context.Context, authInfo []byte, rootCid, overlay boson.Address, overlays [][]byte) {
 	ci.queuesLk.Lock()
-	defer ci.queuesLk.Unlock()
 	q := ci.getQueue(rootCid.String())
 	for _, n := range overlays {
 		if q.len(UnPull) >= PullerMax {
@@ -180,5 +180,6 @@ func (ci *ChunkInfo) updateQueue(ctx context.Context, authInfo []byte, rootCid, 
 	}
 	q.popNode(Pulling, overlay.Bytes())
 	q.push(Pulled, overlay.Bytes())
+	ci.queuesLk.Unlock()
 	ci.doFindChunkInfo(ctx, authInfo, rootCid)
 }
