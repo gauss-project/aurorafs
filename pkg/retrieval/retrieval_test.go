@@ -453,6 +453,12 @@ func (r *mockRouteTable)FindRoute(ctx context.Context, target boson.Address) (de
 func (r *mockRouteTable)Connect(ctx context.Context, target boson.Address) error{
 	return nil
 }
+func (r *mockRouteTable)GetTargetNeighbor(ctx context.Context, target boson.Address) (addresses []boson.Address, err error){
+	return
+}
+func (r *mockRouteTable)IsNeighbor(dest boson.Address) (has bool){
+	return
+}
 
 
 type mockPeerSuggester struct {
