@@ -360,11 +360,14 @@ func NewBee(addr string, bosonAddress boson.Address, publicKey ecdsa.PublicKey, 
 		return nil, fmt.Errorf("hive service: %w", err)
 	}
 
-	kad := kademlia.New(bosonAddress, addressBook, hiveObj, p2ps, metricsDB, logger, kademlia.Options{
+	kad, err := kademlia.New(bosonAddress, addressBook, hiveObj, p2ps, metricsDB, logger, kademlia.Options{
 		Bootnodes:    bootnodes,
 		BootnodeMode: o.BootnodeMode,
 		BinMaxPeers:  o.KadBinMaxPeers,
 	})
+	if err != nil {
+		return nil, fmt.Errorf("unable to create kademlia: %w", err)
+	}
 	b.topologyCloser = kad
 	hiveObj.SetAddPeersHandler(kad.AddPeers)
 	hiveObj.SetConfig(hive2.Config{Kad: kad, Base: bosonAddress}) // hive2

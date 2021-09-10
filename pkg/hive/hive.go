@@ -315,7 +315,7 @@ func (s *Service) checkAndAddPeers(ctx context.Context, peers pb.Peers) {
 	}
 }
 
-func (s *Service) DoFindNode(ctx context.Context, peer boson.Address, pos []int32, limit int32) (res chan boson.Address, total int, err error) {
+func (s *Service) DoFindNode(ctx context.Context, peer boson.Address, pos []int32, limit int32) (res chan boson.Address, total int32, err error) {
 	return
 }
 
@@ -325,8 +325,4 @@ func (s *Service) IsStart() bool {
 
 func (s *Service) Start() {
 	s.start = true
-}
-
-func (s *Service) IsHive2() bool {
-	return false
 }

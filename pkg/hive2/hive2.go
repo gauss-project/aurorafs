@@ -315,33 +315,29 @@ func (s *Service) Start() {
 	s.start = true
 }
 
-func (s *Service) IsHive2() bool {
-	return true
+func (s *Service) discoverWork()  {
+	start := time.Now()
+	s.logger.Debugf("hive2 discover start...")
+	defer s.logger.Debugf("hive2 discover took %s to finish", time.Since(start))
+	stop, jumpNext, _ := s.startFindNode(s.config.Base, 0)
+	if stop {
+		return
+	}
+	if jumpNext {
+		for i := 0; i < 3; i++ {
+			dest := test.RandomAddress()
+			stop, _, _ = s.startFindNode(dest, 0)
+			if stop {
+				return
+			}
+		}
+	}
 }
 
 // discover is a forever loop that manages the find to new peers
 func (s *Service) discover() {
 	defer s.wg.Done()
 	defer s.logger.Debugf("hive2 discover loop exited")
-
-	worker := func() {
-		start := time.Now()
-		s.logger.Debugf("hive2 discover start...")
-		defer s.logger.Debugf("hive2 discover took %s to finish", time.Since(start))
-		stop, jumpNext, _ := s.startFindNode(s.config.Base, 0)
-		if stop {
-			return
-		}
-		if jumpNext {
-			for i := 0; i < 3; i++ {
-				dest := test.RandomAddress()
-				stop, _, _ = s.startFindNode(dest, 0)
-				if stop {
-					return
-				}
-			}
-		}
-	}
 
 	tick := time.NewTicker(time.Minute * 30)
 	tickFirst := time.NewTicker(time.Second * 30)
@@ -358,7 +354,7 @@ func (s *Service) discover() {
 		case <-tick.C:
 			runWorkC <- struct{}{}
 		case <-runWorkC:
-			worker()
+			s.discoverWork()
 		}
 	}
 }

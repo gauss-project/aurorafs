@@ -65,7 +65,7 @@ func TestContainer(t *testing.T) {
 		}
 
 		i := 0
-		peers := []boson.Address{p2, p1}
+		peers := []boson.Address{p1, p2}
 		if err = c.EachPeer(func(p boson.Address, _ uint8) (bool, bool, error) {
 			if !p.Equal(peers[i]) {
 				return false, false, errors.New("peer not in order")

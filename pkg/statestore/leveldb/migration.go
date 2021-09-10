@@ -19,6 +19,8 @@ package leveldb
 import (
 	"errors"
 	"fmt"
+	"strings"
+	"time"
 )
 
 var errMissingCurrentSchema = errors.New("could not find current db schema")
@@ -28,10 +30,11 @@ const (
 	dbSchemaKey = "statestore_schema"
 
 	dbSchemaGrace = "grace"
+	dBSchemaKademliaMetrics = "kademlia-metrics"
 )
 
 var (
-	dbSchemaCurrent = dbSchemaGrace
+	dbSchemaCurrent = dBSchemaKademliaMetrics
 )
 
 type migration struct {
@@ -43,6 +46,7 @@ type migration struct {
 // in order to run data migrations in the correct sequence
 var schemaMigrations = []migration{
 	{name: dbSchemaGrace, fn: func(s *store) error { return nil }},
+	{name: dBSchemaKademliaMetrics, fn: migrateKademliaMetrics},
 }
 
 func (s *store) migrate(schemaName string) error {
@@ -107,4 +111,50 @@ func getMigrations(currentSchema, targetSchema string, allSchemeMigrations []mig
 		return nil, errMissingTargetSchema
 	}
 	return migrations, nil
+}
+
+// migrateKademliaMetrics removes all old existing
+// kademlia metrics database content.
+func migrateKademliaMetrics(s *store) error {
+	for _, prefix := range []string{"peer-last-seen-timestamp", "peer-total-connection-duration"} {
+		start := time.Now()
+		s.logger.Debugf("removing kademlia %q metrics", prefix)
+
+		keys, err := collectKeys(s, prefix)
+		if err != nil {
+			return err
+		}
+
+		if err := deleteKeys(s, keys); err != nil {
+			return err
+		}
+
+		s.logger.Debugf("removing kademlia %q metrics took %s", prefix, time.Since(start))
+	}
+	return nil
+}
+
+func collectKeys(s *store, prefix string) (keys []string, err error) {
+	if err := s.Iterate(prefix, func(k, v []byte) (bool, error) {
+		stk := string(k)
+		if strings.HasPrefix(stk, prefix) {
+			keys = append(keys, stk)
+		}
+		return false, nil
+	}); err != nil {
+		return nil, err
+	}
+	return keys, nil
+}
+
+func deleteKeys(s *store, keys []string) error {
+	for _, v := range keys {
+		err := s.Delete(v)
+		if err != nil {
+			return fmt.Errorf("error deleting key %s: %w", v, err)
+		}
+		s.logger.Debugf("deleted key %s", v)
+	}
+	s.logger.Debugf("deleted keys: %d", len(keys))
+	return nil
 }

@@ -15,13 +15,11 @@ type Discovery struct {
 	mtx     sync.Mutex
 	ctr     int //how many ops
 	records map[string][]boson.Address
-	isHive2 bool
 }
 
-func NewDiscovery(isHive2 bool) *Discovery {
+func NewDiscovery() *Discovery {
 	return &Discovery{
 		records: make(map[string][]boson.Address),
-		isHive2: isHive2,
 	}
 }
 
@@ -63,8 +61,4 @@ func (d *Discovery) DoFindNode(ctx context.Context, peer boson.Address, pos []in
 
 func (d *Discovery) IsStart() bool {
 	return true
-}
-
-func (d *Discovery) IsHive2() bool {
-	return d.isHive2
 }

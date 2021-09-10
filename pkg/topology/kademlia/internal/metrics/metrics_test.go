@@ -5,7 +5,6 @@
 package metrics_test
 
 import (
-	"context"
 	"testing"
 	"time"
 
@@ -40,8 +39,12 @@ func TestPeerMetricsCollector(t *testing.T) {
 		}
 	})
 
+	mc, err := metrics.NewCollector(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	var (
-		mc   = metrics.NewCollector(db)
 		addr = boson.MustParseHexAddress("0123456789")
 
 		t1 = time.Now()               // Login time.
@@ -112,24 +115,40 @@ func TestPeerMetricsCollector(t *testing.T) {
 	}
 
 	// Inspect.
-	mc.Inspect(addr, func(have *metrics.Snapshot) {
-		want := ss
-		if diff := cmp.Diff(have, want); diff != "" {
-			t.Fatalf("unexpected snapshot diffrence:\n%s", diff)
-		}
-	})
+	have := mc.Inspect(addr)
+	want := ss
+	if diff := cmp.Diff(have, want); diff != "" {
+		t.Fatalf("unexpected snapshot diffrence:\n%s", diff)
+	}
 
 	// Flush.
-	if err := mc.Flush(addr); err != nil {
+	if err := mc.Flush(); err != nil {
 		t.Fatalf("Flush(): unexpected error: %v", err)
 	}
 
 	// Finalize.
 	mc.Record(addr, metrics.PeerLogIn(t1, metrics.PeerConnectionDirectionInbound))
-	if err := mc.Finalize(context.Background(), t3); err != nil {
+	if err := mc.Finalize(t3, true); err != nil {
 		t.Fatalf("Finalize(%s): unexpected error: %v", t3, err)
 	}
 	if have, want := len(mc.Snapshot(t2, addr)), 0; have != want {
 		t.Fatalf("Finalize(%s): counters length mismatch: have %d; want %d", t3, have, want)
+	}
+
+	// Load the flushed metrics again from the persistent db.
+	mc, err = metrics.NewCollector(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if have, want := len(mc.Snapshot(t2, addr)), 1; have != want {
+		t.Fatalf("NewCollector(...): counters length mismatch: have %d; want %d", have, want)
+	}
+	have = mc.Inspect(addr)
+	want = &metrics.Snapshot{
+		LastSeenTimestamp:       ss.LastSeenTimestamp,
+		ConnectionTotalDuration: 2 * ss.ConnectionTotalDuration, // 2x because we've already logout with t3 and login with t1 again.
+	}
+	if diff := cmp.Diff(have, want); diff != "" {
+		t.Fatalf("unexpected snapshot diffrence:\n%s", diff)
 	}
 }

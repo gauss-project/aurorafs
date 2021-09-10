@@ -3,22 +3,19 @@ package hive2_test
 import (
 	"context"
 	"errors"
-	"fmt"
 	"github.com/gauss-project/aurorafs/pkg/addressbook"
 	"github.com/gauss-project/aurorafs/pkg/aurora"
 	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/crypto"
+	"github.com/gauss-project/aurorafs/pkg/discovery/mock"
 	"github.com/gauss-project/aurorafs/pkg/hive2"
 	"github.com/gauss-project/aurorafs/pkg/logging"
-	p2p "github.com/gauss-project/aurorafs/pkg/p2p"
-	"github.com/gauss-project/aurorafs/pkg/p2p/libp2p"
+	"github.com/gauss-project/aurorafs/pkg/p2p"
 	p2pmock "github.com/gauss-project/aurorafs/pkg/p2p/mock"
 	"github.com/gauss-project/aurorafs/pkg/p2p/streamtest"
 	"github.com/gauss-project/aurorafs/pkg/shed"
 	mockstate "github.com/gauss-project/aurorafs/pkg/statestore/mock"
 	"github.com/gauss-project/aurorafs/pkg/topology/kademlia"
-	"github.com/gauss-project/aurorafs/pkg/topology/lightnode"
-	"github.com/gauss-project/aurorafs/pkg/tracing"
 	ma "github.com/multiformats/go-multiaddr"
 	"github.com/sirupsen/logrus"
 	"io"
@@ -48,9 +45,9 @@ func newNode(t *testing.T) *Node {
 
 	addr, kad, signer, ab := newTestKademlia(t)
 	stream := streamtest.New(streamtest.WithBaseAddr(addr.Overlay))
-
 	h := hive2.New(stream, ab, networkId, noopLogger)
 	h.SetConfig(hive2.Config{Kad: kad})
+	stream.SetProtocols(h.Protocol())
 
 	return &Node{
 		peer:   addr,
@@ -69,7 +66,7 @@ func p2pMock(ab addressbook.Interface, overlay boson.Address, signer crypto.Sign
 		}
 		addresses, err := ab.Addresses()
 		if err != nil {
-			return nil, errors.New("could not fetch addresbook addresses")
+			return nil, errors.New("could not fetch addressBook addresses")
 		}
 
 		for _, a := range addresses {
@@ -103,27 +100,17 @@ func newTestKademlia(t *testing.T) (*aurora.Address, *kademlia.Kad, crypto.Signe
 			t.Fatal(err)
 		}
 	})
-	port := portArray[len(portArray)-1] + 1
-	portArray = append(portArray, port)
+
 	base, signer := randomAddress(t)
-	lightNodes := lightnode.NewContainer(base.Overlay)
-	tracer, tracerCloser, err := tracing.NewTracer(&tracing.Options{})
-	defer tracerCloser.Close()
 	ab := addressbook.New(mockstate.NewStateStore()) // address book
-	p2ps, err := libp2p.New(context.TODO(), signer, networkId, base.Overlay, fmt.Sprintf(":%d", port), ab, mockstate.NewStateStore(), lightNodes, noopLogger, tracer, libp2p.Options{FullNode: true})
-	if err != nil {
-		t.Fatal(err)
-	}
-	var (
-		disc = hive2.New(p2ps, ab, networkId, noopLogger)                                                           // mock discovery protocol
-		kad  = kademlia.New(base.Overlay, ab, disc, p2ps, metricsDB, noopLogger, kademlia.Options{BinMaxPeers: 10}) // kademlia instance
-	)
-	p2ps.SetPickyNotifier(kad)
-	disc.SetConfig(hive2.Config{Kad: kad})
+	p2ps := p2pMock(ab, base.Overlay, signer)
+	disc := mock.NewDiscovery()
+	kad := kademlia.New(base.Overlay, ab, disc, p2ps, metricsDB, noopLogger, kademlia.Options{BinMaxPeers: 10}) // kademlia instance
 	err = kad.Start(context.TODO())
 	if err != nil {
 		t.Fatal(err)
 	}
+	p2ps.SetPickyNotifier(kad)
 	return base, kad, signer, ab
 }
 
@@ -166,7 +153,6 @@ func TestService_DoFindNode(t *testing.T) {
 	nodes[0].addOne(t, nodes[1].peer, true)
 	nodes[1].addOne(t, nodes[0].peer, true)
 
-
 	for i := 2; i < 20; i++ {
 		nodes[1].addOne(t, nodes[i].peer, true)
 	}
@@ -178,6 +164,10 @@ func TestService_DoFindNode(t *testing.T) {
 	if s0.Connected != 1 {
 		t.Fatalf("connected expected 1 got %d", s0.Connected)
 	}
-	//nodes[0].kad
+	nodes[0].Hive2.DiscoverWork()
+	s01 := nodes[0].kad.Snapshot()
+	if s0.Connected != 17 {
+		t.Fatalf("connected expected 17 got %d", s01.Connected)
+	}
 
 }

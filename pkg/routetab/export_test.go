@@ -11,7 +11,6 @@ import (
 	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/p2p"
 	"github.com/gauss-project/aurorafs/pkg/routetab/pb"
-	"github.com/gauss-project/aurorafs/pkg/topology/kademlia"
 )
 
 var (
@@ -39,14 +38,6 @@ func (s *Service) DoResp(ctx context.Context, peer p2p.Peer, target *aurora.Addr
 
 func (s *Service) RouteTab() *routeTable {
 	return s.routeTable
-}
-
-func (s *Service) Address() boson.Address {
-	return s.addr
-}
-
-func (s *Service) Kad() *kademlia.Kad {
-	return s.kad
 }
 
 func (pend *pendCallResTab) GetItems() map[common.Hash]pendingCallResArray {

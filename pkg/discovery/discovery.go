@@ -21,6 +21,4 @@ type Driver interface {
 	// IsStart entry to run
 	IsStart() bool
 
-	// IsHive2 is hive2 protocol
-	IsHive2() bool
 }
