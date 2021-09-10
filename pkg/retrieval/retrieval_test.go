@@ -28,32 +28,30 @@ import (
 	"github.com/gauss-project/aurorafs/pkg/storage"
 	storemock "github.com/gauss-project/aurorafs/pkg/storage/mock"
 	"github.com/gauss-project/aurorafs/pkg/topology"
-
 	// "io"
 	// "os"
 	// "github.com/sirupsen/logrus"
 )
 
 var (
-	testTimeout  = 5 * time.Second
+	testTimeout = 5 * time.Second
 	// defaultPrice = uint64(10)
 )
-
 
 // TestDelivery tests that a naive request -> delivery flow works.
 func TestDelivery(t *testing.T) {
 	var (
 		// chunk                = testingc.FixtureChunk("0033")
-		rootAddr			 = boson.MustParseHexAddress("3300")
-		logger               = logging.New(ioutil.Discard, 0)
-		mockStorer           = storemock.NewStorer()
-		clientAddr           = boson.MustParseHexAddress("9ee7add8")
-		serverAddr           = boson.MustParseHexAddress("9ee7add7")
+		rootAddr   = boson.MustParseHexAddress("3300")
+		logger     = logging.New(ioutil.Discard, 0)
+		mockStorer = storemock.NewStorer()
+		clientAddr = boson.MustParseHexAddress("9ee7add8")
+		serverAddr = boson.MustParseHexAddress("9ee7add7")
 	)
 
 	bmtHashOfFoo := "8a74889a73c23fe2be037886c6b709e3175b95b8deea9c95eeda0dbc60740bd8"
 	address := boson.MustParseHexAddress(bmtHashOfFoo)
-	data := []uint8{3,0,0,0,0,0,0,0,102,111,111}
+	data := []uint8{3, 0, 0, 0, 0, 0, 0, 0, 102, 111, 111}
 
 	chunk := boson.NewChunk(address, data)
 
@@ -89,7 +87,7 @@ func TestDelivery(t *testing.T) {
 	mockChunkInfo := NewMockChunkInfo()
 	mockChunkInfo.OnChunkTransferred(chunk.Address(), rootAddr, serverAddr)
 
-	client := retrieval.New(clientAddr, recorder, &mockRouteTable,clientMockStorer, logger, nil)
+	client := retrieval.New(clientAddr, recorder, &mockRouteTable, clientMockStorer, logger, nil)
 	client.Config(mockChunkInfo)
 	ctx, cancel := context.WithTimeout(context.Background(), testTimeout)
 	defer cancel()
@@ -160,17 +158,17 @@ func TestDelivery(t *testing.T) {
 	// }
 }
 
-func TestRetrievaeChunk(t *testing.T){
+func TestRetrievaeChunk(t *testing.T) {
 	var (
 		logger = logging.New(ioutil.Discard, 0)
 	)
 
-	t.Run("downstream", func(t *testing.T){
+	t.Run("downstream", func(t *testing.T) {
 		serverAddress := boson.MustParseHexAddress("03")
 		clientAddress := boson.MustParseHexAddress("01")
 		// chunk := testingc.FixtureChunk("02c2")
 
-		chunkBytes := []uint8{3,0,0,0,0,0,0,0,102,111,111}
+		chunkBytes := []uint8{3, 0, 0, 0, 0, 0, 0, 0, 102, 111, 111}
 		h := hasher(chunkBytes[boson.SpanSize:])
 		addressBytes, _ := h(chunkBytes[:boson.SpanSize])
 		chunkAddr := boson.NewAddress(addressBytes)
@@ -219,7 +217,7 @@ func TestRetrievaeChunk(t *testing.T){
 	t.Run("forward", func(t *testing.T) {
 		// client =====> forwarder =====> server
 		address := boson.MustParseHexAddress("8a74889a73c23fe2be037886c6b709e3175b95b8deea9c95eeda0dbc60740bd8")
-		data := []uint8{3,0,0,0,0,0,0,0,102,111,111}
+		data := []uint8{3, 0, 0, 0, 0, 0, 0, 0, 102, 111, 111}
 
 		chunk := boson.NewChunk(address, data)
 		rootAddr := boson.MustParseHexAddress("0101")
@@ -227,7 +225,6 @@ func TestRetrievaeChunk(t *testing.T){
 		serverAddress := boson.MustParseHexAddress("0100000000000000000000000000000000000000000000000000000000000000")
 		forwarderAddress := boson.MustParseHexAddress("0200000000000000000000000000000000000000000000000000000000000000")
 		clientAddress := boson.MustParseHexAddress("030000000000000000000000000000000000000000000000000000000000000000")
-
 
 		// config server
 		serverStorer := storemock.NewStorer()
@@ -265,11 +262,11 @@ func TestRetrievaeChunk(t *testing.T){
 		clientChunkInfo.OnChunkTransferred(chunk.Address(), rootAddr, forwarderAddress)
 		client.Config(clientChunkInfo)
 
-		if got, _ := forwarderStorer.Has(context.Background(), chunk.Address()); got {
+		if got, _ := forwarderStorer.Has(context.Background(), storage.ModeHasRetrievalData, chunk.Address()); got {
 			t.Fatalf("forwarder node already has chunk")
 		}
 
-		got, err := client.RetrieveChunk(context.Background(), rootAddr, chunk.Address() )
+		got, err := client.RetrieveChunk(context.Background(), rootAddr, chunk.Address())
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -277,13 +274,13 @@ func TestRetrievaeChunk(t *testing.T){
 			t.Fatalf("got data %x, want %x", got.Data(), chunk.Data())
 		}
 
-		if got, _ := forwarderStorer.Has(context.Background(), chunk.Address()); !got {
+		if got, _ := forwarderStorer.Has(context.Background(), storage.ModeHasRetrievalData, chunk.Address()); !got {
 			t.Fatalf("forwarder did not cache chunk")
 		}
 	})
 }
 
-func TestRetrievePreemptiveRetry(t *testing.T){
+func TestRetrievePreemptiveRetry(t *testing.T) {
 	// logger := logging.New(io.MultiWriter(os.Stdout), 6)
 	// logFormater := logrus.TextFormatter{
 	// 	DisableTimestamp: true,
@@ -436,24 +433,29 @@ func TestRetrievePreemptiveRetry(t *testing.T){
 
 }
 
-
 type mockRouteTable struct {
 }
 
-func NewMockRouteTable() mockRouteTable{
+func NewMockRouteTable() mockRouteTable {
 	return mockRouteTable{}
 }
 
-func (r *mockRouteTable)GetRoute(ctx context.Context, target boson.Address) (dest *aurora.Address, routes []routetab.RouteItem, err error){
+func (r *mockRouteTable) GetRoute(ctx context.Context, target boson.Address) (dest *aurora.Address, routes []routetab.RouteItem, err error) {
 	return nil, []routetab.RouteItem{}, nil
 }
-func (r *mockRouteTable)FindRoute(ctx context.Context, target boson.Address) (dest *aurora.Address, route []routetab.RouteItem, err error){
+func (r *mockRouteTable) FindRoute(ctx context.Context, target boson.Address) (dest *aurora.Address, route []routetab.RouteItem, err error) {
 	return nil, []routetab.RouteItem{}, nil
 }
-func (r *mockRouteTable)Connect(ctx context.Context, target boson.Address) error{
+func (r *mockRouteTable) Connect(ctx context.Context, target boson.Address) error {
 	return nil
 }
 
+func (r *mockRouteTable) GetTargetNeighbor(ctx context.Context, target boson.Address) (addresses []boson.Address, err error) {
+	return nil, nil
+}
+func (r *mockRouteTable) IsNeighbor(dest boson.Address) (has bool) {
+	return false
+}
 
 type mockPeerSuggester struct {
 	eachPeerRevFunc func(f topology.EachPeerFunc) error
@@ -467,45 +469,53 @@ func (s mockPeerSuggester) EachPeerRev(f topology.EachPeerFunc) error {
 	return s.eachPeerRevFunc(f)
 }
 
-type mockChunkInfo struct{
+type mockChunkInfo struct {
 	chunkMap map[string][][]byte
 }
 
-func NewMockChunkInfo() *mockChunkInfo{
+func NewMockChunkInfo() *mockChunkInfo {
 	return &mockChunkInfo{
 		chunkMap: make(map[string][][]byte),
 	}
 }
 
-func (c *mockChunkInfo) FindChunkInfo(ctx context.Context, authInfo []byte, rootCid boson.Address, overlays []boson.Address){
+func (c *mockChunkInfo) FindChunkInfo(ctx context.Context, authInfo []byte, rootCid boson.Address, overlays []boson.Address) {
 }
 
-func (c *mockChunkInfo) GetChunkInfo(rootCid boson.Address, cid boson.Address) [][]byte{
+func (c *mockChunkInfo) GetChunkInfo(rootCid boson.Address, cid boson.Address) [][]byte {
 	mapKey := fmt.Sprintf("%v,%v", rootCid.String(), cid.String())
 	return c.chunkMap[mapKey]
 }
 
-func (c *mockChunkInfo) CancelFindChunkInfo(rootCid boson.Address){}
+func (c *mockChunkInfo) CancelFindChunkInfo(rootCid boson.Address) {}
 
-func (c *mockChunkInfo) OnChunkTransferred(cid boson.Address, rootCid boson.Address, overlays boson.Address) error{
+func (c *mockChunkInfo) OnChunkTransferred(cid boson.Address, rootCid boson.Address, overlays boson.Address) error {
 	mapKey := fmt.Sprintf("%v,%v", rootCid.String(), cid.String())
-	if _, exist := c.chunkMap[mapKey]; !exist{
+	if _, exist := c.chunkMap[mapKey]; !exist {
 		c.chunkMap[mapKey] = make([][]byte, 0)
 	}
 	c.chunkMap[mapKey] = append(c.chunkMap[mapKey], overlays.Bytes())
 	return nil
 }
 
-func (c *mockChunkInfo) Init(ctx context.Context, authInfo []byte, rootCid boson.Address) bool{
+func (c *mockChunkInfo) Init(ctx context.Context, authInfo []byte, rootCid boson.Address) bool {
 	return false
 }
 
-func (c *mockChunkInfo)GetChunkPyramid(rootCid boson.Address) []*boson.Address{
+func (c *mockChunkInfo) GetChunkPyramid(rootCid boson.Address) []*boson.Address {
 	return []*boson.Address{}
 }
 
-func (c *mockChunkInfo)IsDiscover(rootCid boson.Address) bool{
+func (c *mockChunkInfo) IsDiscover(rootCid boson.Address) bool {
 	return false
+}
+
+func (c *mockChunkInfo) GetFileList(overlay boson.Address) (fileListInfo map[string]*aurora.FileInfo, rootList []boson.Address) {
+	return nil, nil
+}
+
+func (c *mockChunkInfo) DelFile(rootCid, overlay boson.Address) bool {
+	return true
 }
 
 // hasher is a helper function to hash a given data based on the given span.
@@ -524,7 +534,7 @@ func hasher(data []byte) func([]byte) ([]byte, error) {
 	}
 }
 
-func TestBasic(t *testing.T){
+func TestBasic(t *testing.T) {
 	// bmtHashOfFoo := "8a74889a73c23fe2be037886c6b709e3175b95b8deea9c95eeda0dbc60740bd8"
 	// bmtHashOfFoo := "2387e8e7d8a48c2a9339c97c1dc3461a9a7aa07e994c5cb8b38fd7c1b3e6ea48"
 	// address := boson.MustParseHexAddress(bmtHashOfFoo)

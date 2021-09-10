@@ -7,13 +7,14 @@ package api
 import (
 	"encoding/hex"
 	"errors"
+	"github.com/gauss-project/aurorafs/pkg/storage"
 	"io/ioutil"
 	"net/http"
 
+	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/cac"
 	"github.com/gauss-project/aurorafs/pkg/jsonhttp"
 	"github.com/gauss-project/aurorafs/pkg/soc"
-	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gorilla/mux"
 )
 
@@ -114,7 +115,7 @@ func (s *server) socUploadHandler(w http.ResponseWriter, r *http.Request) {
 
 	ctx := r.Context()
 
-	has, err := s.storer.Has(ctx, sch.Address())
+	has, err := s.storer.Has(ctx, storage.ModeHasRetrievalData, sch.Address())
 	if err != nil {
 		s.logger.Debugf("soc upload: store has: %v", err)
 		s.logger.Error("soc upload: store has")

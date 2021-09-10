@@ -20,7 +20,7 @@ func (s *server) pinFile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	has, err := s.storer.Has(r.Context(), addr)
+	has, err := s.storer.Has(r.Context(), storage.ModeHasRetrievalData, addr)
 	if err != nil {
 		s.logger.Debugf("pin files: localstore has: %v", err)
 		s.logger.Error("pin files: store")
@@ -70,7 +70,7 @@ func (s *server) unpinFile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	has, err := s.storer.Has(r.Context(), addr)
+	has, err := s.storer.Has(r.Context(), storage.ModeHasRetrievalData, addr)
 	if err != nil {
 		s.logger.Debugf("pin files: localstore has: %v", err)
 		s.logger.Error("pin files: store")

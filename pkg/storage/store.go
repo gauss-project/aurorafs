@@ -10,10 +10,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/syndtr/goleveldb/leveldb"
 	"io"
-
-	"github.com/gauss-project/aurorafs/pkg/boson"
 )
 
 var (
@@ -50,6 +49,14 @@ const (
 	ModeGetLookup
 	// ModeGetPin: used when a pinned chunk is accessed
 	ModeGetPin
+)
+
+type ModeHas int
+
+//Pin modes
+const (
+	ModeHasPin ModeHas = iota
+	ModeHasRetrievalData
 )
 
 // ModePut enumerates different Putter modes.
@@ -159,8 +166,8 @@ type Setter interface {
 }
 
 type Hasser interface {
-	Has(ctx context.Context, addr boson.Address) (yes bool, err error)
-	HasMulti(ctx context.Context, addrs ...boson.Address) (yes []bool, err error)
+	Has(ctx context.Context, hasMode ModeHas, addr boson.Address) (yes bool, err error)
+	HasMulti(ctx context.Context, hasMode ModeHas, addrs ...boson.Address) (yes []bool, err error)
 }
 
 //type PullSubscriber interface {

@@ -50,3 +50,16 @@ func (s *server) unpinChunkAddressFn(ctx context.Context, reference boson.Addres
 		return nil
 	}
 }
+
+func (s *server) delpinChunkAddressFn(ctx context.Context, reference boson.Address) func(address boson.Address) error {
+	return func(address boson.Address) error {
+
+		err := s.storer.Set(ctx, storage.ModeSetRemove, address)
+		if err != nil {
+			s.logger.Debugf("unpin traversal: for reference %s, address %s: %w", reference, address, err)
+			// continue un-pinning all chunks
+		}
+
+		return nil
+	}
+}
