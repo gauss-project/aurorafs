@@ -14,7 +14,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-
 	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/crypto"
 
@@ -36,6 +35,17 @@ type addressJSON struct {
 	Overlay   string `json:"overlay"`
 	Underlay  string `json:"underlay"`
 	Signature string `json:"signature"`
+}
+
+type FileInfo struct {
+	TreeSize  int
+	Bitvector BitVectorApi
+	PinState  bool
+}
+
+type BitVectorApi struct {
+	Len int
+	B   []byte
 }
 
 func NewAddress(signer crypto.Signer, underlay ma.Multiaddr, overlay boson.Address, networkID uint64) (*Address, error) {

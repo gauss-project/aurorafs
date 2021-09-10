@@ -9,11 +9,11 @@ import (
 	"net/http"
 	"testing"
 
+	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/jsonhttp"
 	"github.com/gauss-project/aurorafs/pkg/jsonhttp/jsonhttptest"
 	"github.com/gauss-project/aurorafs/pkg/storage"
 	"github.com/gauss-project/aurorafs/pkg/storage/mock"
-	"github.com/gauss-project/aurorafs/pkg/boson"
 )
 
 func TestHasChunkHandler(t *testing.T) {
@@ -64,7 +64,7 @@ func TestHasChunkHandler(t *testing.T) {
 				Code:    http.StatusOK,
 			}),
 		)
-		yes, err := mockStorer.Has(context.Background(), key)
+		yes, err := mockStorer.Has(context.Background(), storage.ModeHasRetrievalData, key)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -81,7 +81,7 @@ func TestHasChunkHandler(t *testing.T) {
 				Code:    http.StatusOK,
 			}),
 		)
-		yes, err := mockStorer.Has(context.Background(), boson.NewAddress([]byte(notPresentChunkAddress)))
+		yes, err := mockStorer.Has(context.Background(), storage.ModeHasRetrievalData, boson.NewAddress([]byte(notPresentChunkAddress)))
 		if err != nil {
 			t.Fatal(err)
 		}

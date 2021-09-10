@@ -20,7 +20,7 @@ func (s *server) pinAuroras(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	has, err := s.storer.Has(r.Context(), addr)
+	has, err := s.storer.Has(r.Context(), storage.ModeHasRetrievalData, addr)
 	if err != nil {
 		s.logger.Debugf("pin Auroras: localstore has: %v", err)
 		s.logger.Error("pin Auroras: store")
@@ -70,7 +70,7 @@ func (s *server) unpinAuroras(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	has, err := s.storer.Has(r.Context(), addr)
+	has, err := s.storer.Has(r.Context(), storage.ModeHasRetrievalData, addr)
 	if err != nil {
 		s.logger.Debugf("pin Auroras: localstore has: %v", err)
 		s.logger.Error("pin Auroras: store")

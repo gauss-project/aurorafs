@@ -2,6 +2,7 @@ package mock
 
 import (
 	"context"
+	"github.com/gauss-project/aurorafs/pkg/aurora"
 	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/chunkinfo"
 )
@@ -25,15 +26,15 @@ func newPendingFinderInfo() *pendingFinderInfo {
 }
 
 type ChunkInfo struct {
-	cp  *chunkPyramid
-	cpd *pendingFinderInfo
+	cp    *chunkPyramid
+	cpd   *pendingFinderInfo
 	queue map[string]chunkinfo.Pull
 }
 
 func New() *ChunkInfo {
 	return &ChunkInfo{
-		cp:  newChunkPyramid(),
-		cpd: newPendingFinderInfo(),
+		cp:    newChunkPyramid(),
+		cpd:   newPendingFinderInfo(),
 		queue: make(map[string]chunkinfo.Pull),
 	}
 }
@@ -86,6 +87,9 @@ func (ci *ChunkInfo) IsDiscover(rootCid boson.Address) bool {
 
 	return false
 }
+func (ci *ChunkInfo) GetFileList(overlay boson.Address) (fileListInfo map[string]*aurora.FileInfo, rootList []boson.Address) {
+	return nil, nil
+}
 
 func (ci *ChunkInfo) PutChunkPyramid(rootCid, cid boson.Address, sort int) {
 	rc := rootCid.String()
@@ -105,4 +109,8 @@ func (ci *ChunkInfo) ChangeDiscoverStatus(rootCid boson.Address, s chunkinfo.Pul
 	} else {
 		ci.CancelFindChunkInfo(rootCid)
 	}
+}
+
+func (ci *ChunkInfo) DelFile(rootCid, overlay boson.Address) bool {
+	return true
 }
