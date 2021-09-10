@@ -169,3 +169,18 @@ func (cp *chunkPyramid) getCidStore(rootCid, cid boson.Address) int {
 	defer cp.RUnlock()
 	return cp.pyramid[rootCid.String()][cid.String()]
 }
+
+func (cp *chunkPyramid) getRootHash(rootCID string) int {
+	cp.RLock()
+	defer cp.RUnlock()
+	if cid, ok := cp.pyramid[rootCID]; ok {
+		return len(cid)
+	}
+	return 0
+}
+func (cp *chunkPyramid) delRootCid(rootCID boson.Address) bool {
+	cp.Lock()
+	defer cp.Unlock()
+	delete(cp.pyramid, rootCID.String())
+	return true
+}

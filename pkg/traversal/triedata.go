@@ -119,7 +119,7 @@ func (s *traversalService) getChunkBytes(
 	}
 
 	j.SetSaveIntChunks(trieData)
-	j.IterateChunkAddresses(func(addr boson.Address) error {return nil})
+	j.IterateChunkAddresses(func(addr boson.Address) error { return nil })
 
 	return nil
 }
@@ -285,7 +285,7 @@ func (s *traversalService) GetTrieData(ctx context.Context, reference boson.Addr
 type pyramid struct {
 	data map[string][]byte
 	seen map[string]struct{}
-	mu sync.Mutex
+	mu   sync.Mutex
 }
 
 func newPyramid(trieData map[string][]byte) *pyramid {
@@ -332,11 +332,11 @@ func (p *pyramid) Set(_ context.Context, _ storage.ModeSet, _ ...boson.Address) 
 	panic("not implemented")
 }
 
-func (p *pyramid) Has(_ context.Context, _ boson.Address) (bool, error) {
+func (p *pyramid) Has(_ context.Context, hasMode storage.ModeHas, _ boson.Address) (bool, error) {
 	panic("not implemented")
 }
 
-func (p *pyramid) HasMulti(_ context.Context, _ ...boson.Address) ([]bool, error) {
+func (p *pyramid) HasMulti(_ context.Context, hasMode storage.ModeHas, _ ...boson.Address) ([]bool, error) {
 	panic("not implemented")
 }
 
@@ -347,18 +347,18 @@ func (p *pyramid) Close() error {
 type nopChainWriter struct{}
 
 func (n *nopChainWriter) ChainWrite(_ *pipeline.PipeWriteArgs) error { return nil }
-func (n *nopChainWriter) Sum() ([]byte, error) { return nil, nil }
+func (n *nopChainWriter) Sum() ([]byte, error)                       { return nil, nil }
 
 var ErrInvalidTrie = errors.New("traversal: invalid trie data")
 
 // CheckTrieData check the trie data, return leaf node chunk hash array.
 func (s *traversalService) CheckTrieData(ctx context.Context, reference boson.Address, trieData map[string][]byte) (dataChunks [][][]byte, err error) {
 	var (
-		e *entry.Entry
-		addr boson.Address
+		e                  *entry.Entry
+		addr               boson.Address
 		isFile, isManifest bool
-		m manifest.Interface
-		metadata *entry.Metadata
+		m                  manifest.Interface
+		metadata           *entry.Metadata
 	)
 	if _, exists := trieData[reference.String()]; !exists {
 		return nil, fmt.Errorf("invalid trie data without reference %s\n", reference)

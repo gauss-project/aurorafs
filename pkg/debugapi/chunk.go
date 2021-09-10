@@ -7,9 +7,9 @@ package debugapi
 import (
 	"net/http"
 
+	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/jsonhttp"
 	"github.com/gauss-project/aurorafs/pkg/storage"
-	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gorilla/mux"
 )
 
@@ -21,7 +21,7 @@ func (s *Service) hasChunkHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	has, err := s.storer.Has(r.Context(), addr)
+	has, err := s.storer.Has(r.Context(), storage.ModeHasRetrievalData, addr)
 	if err != nil {
 		s.logger.Debugf("debug api: localstore has: %v", err)
 		jsonhttp.BadRequest(w, err)
@@ -43,7 +43,7 @@ func (s *Service) removeChunk(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	has, err := s.storer.Has(r.Context(), addr)
+	has, err := s.storer.Has(r.Context(), storage.ModeHasRetrievalData, addr)
 	if err != nil {
 		s.logger.Debugf("debug api: localstore remove: %v", err)
 		jsonhttp.BadRequest(w, err)
