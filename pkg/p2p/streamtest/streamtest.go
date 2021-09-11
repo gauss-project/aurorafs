@@ -7,7 +7,6 @@ package streamtest
 import (
 	"context"
 	"errors"
-	"github.com/gauss-project/aurorafs/pkg/aurora"
 	"io"
 	"sync"
 	"testing"
@@ -383,19 +382,14 @@ type optionFunc func(*Recorder)
 
 func (f optionFunc) apply(r *Recorder) { f(r) }
 
-var _ p2p.StreamerConnect = (*RecorderDisconnecter)(nil)
+var _ p2p.StreamerDisconnecter = (*RecorderDisconnecter)(nil)
 
 type RecorderDisconnecter struct {
 	*Recorder
 	disconnected map[string]struct{}
 	blocklisted  map[string]time.Duration
 	mu           sync.RWMutex
-
-	connected   map[string]struct{}
-	connectFunc connectFunc
 }
-
-type connectFunc func(ctx context.Context, addr ma.Multiaddr) (address *aurora.Address, err error)
 
 func NewRecorderDisconnecter(r *Recorder) *RecorderDisconnecter {
 	return &RecorderDisconnecter{
@@ -403,17 +397,6 @@ func NewRecorderDisconnecter(r *Recorder) *RecorderDisconnecter {
 		disconnected: make(map[string]struct{}),
 		blocklisted:  make(map[string]time.Duration),
 	}
-}
-
-func (r *RecorderDisconnecter) SetConnectFunc(f connectFunc) {
-	r.connectFunc = f
-}
-
-func (r *RecorderDisconnecter) Connect(ctx context.Context, addr ma.Multiaddr) (address *aurora.Address, err error) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-
-	return r.connectFunc(ctx, addr)
 }
 
 func (r *RecorderDisconnecter) Disconnect(overlay boson.Address, _ string) error {

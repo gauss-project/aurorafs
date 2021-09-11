@@ -177,6 +177,10 @@ func (s *Service) SetPickyNotifier(f p2p.PickyNotifier) {
 	s.notifierFunc = f
 }
 
+func (s *Service) SetConnectFunc(f func(ctx context.Context, addr ma.Multiaddr) (address *aurora.Address, err error)) {
+	s.connectFunc = f
+}
+
 type Option interface {
 	apply(*Service)
 }

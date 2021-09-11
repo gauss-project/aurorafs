@@ -40,6 +40,10 @@ func (s *Service) RouteTab() *routeTable {
 	return s.routeTable
 }
 
+func (s *Service) GetNeighbor(target boson.Address, alpha int32) []boson.Address {
+	return s.getNeighbor(target, alpha)
+}
+
 func (pend *pendCallResTab) GetItems() map[common.Hash]pendingCallResArray {
 	return pend.items
 }

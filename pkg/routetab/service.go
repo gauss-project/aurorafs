@@ -42,7 +42,7 @@ type RouteTab interface {
 
 type Service struct {
 	addr         boson.Address
-	p2ps         p2p.StreamerConnect
+	p2ps         p2p.Service
 	logger       logging.Logger
 	metrics      metrics
 	pendingCalls *pendCallResTab
@@ -55,9 +55,10 @@ type Config struct {
 	AddressBook addressbook.Interface
 	NetworkID   uint64
 	LightNodes  *lightnode.Container
+	Stream      p2p.Streamer
 }
 
-func New(addr boson.Address, ctx context.Context, p2ps p2p.StreamerConnect, kad *kademlia.Kad, store storage.StateStorer, logger logging.Logger) *Service {
+func New(addr boson.Address, ctx context.Context, p2ps p2p.Service, kad *kademlia.Kad, store storage.StateStorer, logger logging.Logger) *Service {
 	// load route table from db only those valid item will be loaded
 
 	met := newMetrics()
@@ -466,7 +467,7 @@ func (s *Service) doRouteResp(ctx context.Context, peer boson.Address, target *a
 
 func (s *Service) sendDataToNode(ctx context.Context, peer boson.Address, streamName string, msg protobuf.Message) {
 	s.logger.Tracef("route: sendDataToNode to %s %s", peer.String(), streamName)
-	stream, err1 := s.p2ps.NewStream(ctx, peer, nil, protocolName, protocolVersion, streamName)
+	stream, err1 := s.config.Stream.NewStream(ctx, peer, nil, protocolName, protocolVersion, streamName)
 	if err1 != nil {
 		s.metrics.TotalErrors.Inc()
 		s.logger.Errorf("route: sendDataToNode NewStream, err1=%s", err1)

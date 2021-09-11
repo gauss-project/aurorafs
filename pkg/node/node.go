@@ -390,6 +390,7 @@ func NewBee(addr string, bosonAddress boson.Address, publicKey ecdsa.PublicKey, 
 		AddressBook: addressBook,
 		NetworkID:   networkID,
 		LightNodes:  lightNodes,
+		Stream:      p2ps,
 	})
 
 	var path string

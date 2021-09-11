@@ -48,11 +48,14 @@ var (
 
 type Node struct {
 	*routetab.Service
-	peer   *aurora.Address
-	signer crypto.Signer
-	book   addressbook.Interface
-	p2ps   *streamtest.RecorderDisconnecter
-	kad    *kademlia.Kad
+	overlay boson.Address
+	addr    *aurora.Address
+	peer    p2p.Peer
+	signer  crypto.Signer
+	book    addressbook.Interface
+	p2ps    p2p.Service
+	kad     *kademlia.Kad
+	stream  *streamtest.Recorder
 }
 
 type Network struct {
@@ -61,47 +64,17 @@ type Network struct {
 	client *Node
 }
 
-//func (n *Network) Close() {
-//	n.server.kad.Close()
-//	n.server.Service.Close()
-//	n.client.kad.Close()
-//	n.client.Service.Close()
-//}
-
-func newNode(t *testing.T, ctx context.Context) *Node {
-	t.Helper()
-
-	addr, kad, signer, ab := newTestKademlia(t)
-	stream := streamtest.NewRecorderDisconnecter(streamtest.New(streamtest.WithBaseAddr(addr.Overlay)))
-
-	service := routetab.New(addr.Overlay, ctx, stream, kad, mockstate.NewStateStore(), noopLogger)
-	service.SetConfig(routetab.Config{
-		AddressBook: ab,
-		NetworkID:   networkId,
-		LightNodes:  lightnode.NewContainer(addr.Overlay),
-	})
-
-	return &Node{
-		peer:    addr,
-		Service: service,
-		signer:  signer,
-		book:    ab,
-		p2ps:    stream,
-		kad:     kad,
-	}
-}
-
 func newNetwork(t *testing.T, ctx context.Context) *Network {
 	t.Helper()
 
-	server := newNode(t, ctx)
-	client := newNode(t, ctx)
+	server := newTestNode(t)
+	client := newTestNode(t)
 
-	server.addOne(t, client.peer, true)
-	client.addOne(t, server.peer, true)
+	server.addOne(t, client.addr, true)
+	client.addOne(t, server.addr, true)
 
-	server.p2ps.SetProtocols(client.Protocol())
-	client.p2ps.SetProtocols(server.Protocol())
+	server.stream.SetProtocols(client.Protocol())
+	client.stream.SetProtocols(server.Protocol())
 
 	return &Network{ctx: ctx, server: server, client: client}
 }
@@ -137,7 +110,9 @@ func p2pMock(ab addressbook.Interface, overlay boson.Address, signer crypto.Sign
 	return p2ps
 }
 
-func newTestKademlia(t *testing.T) (*aurora.Address, *kademlia.Kad, crypto.Signer, addressbook.Interface) {
+func newTestNode(t *testing.T) *Node {
+	t.Helper()
+
 	metricsDB, err := shed.NewDB("", nil)
 	if err != nil {
 		t.Fatal(err)
@@ -160,10 +135,28 @@ func newTestKademlia(t *testing.T) (*aurora.Address, *kademlia.Kad, crypto.Signe
 	//if err != nil {
 	//	t.Fatal(err)
 	//}
+	stream := streamtest.New(streamtest.WithBaseAddr(base.Overlay))
+	service := routetab.New(base.Overlay, context.Background(), p2ps, kad, mockstate.NewStateStore(), noopLogger)
+	service.SetConfig(routetab.Config{
+		AddressBook: ab,
+		NetworkID:   networkId,
+		LightNodes:  lightnode.NewContainer(base.Overlay),
+		Stream:      stream,
+	})
 
 	p2ps.SetPickyNotifier(kad)
 
-	return base, kad, signer, ab
+	return &Node{
+		overlay: base.Overlay,
+		addr:    base,
+		peer:    p2p.Peer{Address: base.Overlay},
+		Service: service,
+		signer:  signer,
+		book:    ab,
+		p2ps:    p2ps,
+		kad:     kad,
+		stream:  stream,
+	}
 }
 
 func randomAddress(t *testing.T) (addr *aurora.Address, signer crypto.Signer) {
@@ -520,8 +513,8 @@ func TestService_FindRoute(t *testing.T) {
 		t.Fatalf("client receive aurora address not equal.")
 	}
 	receive := route[0]
-	if receive.TTL != 3 || !receive.Neighbor.Equal(ns.server.peer.Overlay) {
-		t.Fatalf("client receive route expired ttl=3,neighbor=%s, got ttl=%d,neighbor=%s", ns.server.peer.Overlay.String(), receive.TTL, receive.Neighbor.String())
+	if receive.TTL != 3 || !receive.Neighbor.Equal(ns.server.overlay) {
+		t.Fatalf("client receive route expired ttl=3,neighbor=%s, got ttl=%d,neighbor=%s", ns.server.overlay.String(), receive.TTL, receive.Neighbor.String())
 	}
 	if !receive.NextHop[0].Neighbor.Equal(p1) {
 		t.Fatalf("client receive route expired nextHop neighbor=%s, got %s", p1.String(), receive.NextHop[0].Neighbor.String())
@@ -535,8 +528,8 @@ func TestService_FindRoute(t *testing.T) {
 		t.Fatalf("client receive route expired count 1, got %d", len(get))
 	}
 	receive = get[0]
-	if receive.TTL != 3 || !receive.Neighbor.Equal(ns.server.peer.Overlay) {
-		t.Fatalf("client receive route expired ttl=3,neighbor=%s, got ttl=%d,neighbor=%s", ns.server.peer.Overlay, receive.TTL, receive.Neighbor.String())
+	if receive.TTL != 3 || !receive.Neighbor.Equal(ns.server.overlay) {
+		t.Fatalf("client receive route expired ttl=3,neighbor=%s, got ttl=%d,neighbor=%s", ns.server.overlay, receive.TTL, receive.Neighbor.String())
 	}
 	if !receive.NextHop[0].Neighbor.Equal(p1) {
 		t.Fatalf("client receive route expired nextHop neighbor=%s, got %s", p1.String(), receive.NextHop[0].Neighbor.String())
@@ -564,8 +557,8 @@ func TestService_FindRoute2(t *testing.T) {
 		t.Fatalf("client receive route expired count 1, got %d", len(route))
 	}
 	receive := route[0]
-	if receive.TTL != 1 || !receive.Neighbor.Equal(ns.client.peer.Overlay) {
-		t.Fatalf("client receive route expired ttl=1,neighbor=%s, got ttl=%d,neighbor=%s", ns.client.peer.Overlay.String(), receive.TTL, receive.Neighbor.String())
+	if receive.TTL != 1 || !receive.Neighbor.Equal(ns.client.overlay) {
+		t.Fatalf("client receive route expired ttl=1,neighbor=%s, got ttl=%d,neighbor=%s", ns.client.overlay.String(), receive.TTL, receive.Neighbor.String())
 	}
 	if len(receive.NextHop) != 0 {
 		t.Fatalf("client receive route expired len(nextHop)==0, got %d", len(receive.NextHop))
@@ -577,7 +570,7 @@ func TestService_FindRoute3(t *testing.T) {
 	ctx := context.Background()
 	ns := newNetwork(t, ctx)
 
-	ns.server.addOne(t, ns.client.peer, true)
+	ns.server.addOne(t, ns.client.addr, true)
 	target2, _ := randomAddress(t)
 	p1 := test.RandomAddress()
 	p2 := test.RandomAddress()
@@ -600,8 +593,8 @@ func TestService_FindRoute3(t *testing.T) {
 	}
 
 	receive := route[0]
-	if receive.TTL != 3 || !receive.Neighbor.Equal(ns.client.peer.Overlay) {
-		t.Fatalf("client receive route expired ttl=3,neighbor=%s, got ttl=%d,neighbor=%s", ns.client.peer.Overlay, receive.TTL, receive.Neighbor.String())
+	if receive.TTL != 3 || !receive.Neighbor.Equal(ns.client.overlay) {
+		t.Fatalf("client receive route expired ttl=3,neighbor=%s, got ttl=%d,neighbor=%s", ns.client.overlay, receive.TTL, receive.Neighbor.String())
 	}
 	if !receive.NextHop[0].Neighbor.Equal(p1) {
 		t.Fatalf("client receive route expired nextHop neighbor=%s, got %s", p1.String(), receive.NextHop[0].Neighbor.String())
@@ -631,7 +624,7 @@ func TestHandleMaxTTLResponse(t *testing.T) {
 		Path: convPathByte(paths),
 	}
 	ch := make(chan struct{}, 1)
-	ns.client.DoReq(ctx, ns.server.peer.Overlay, p2p.Peer{Address: ns.server.peer.Overlay}, target.Overlay, &request, ch)
+	ns.client.DoReq(ctx, ns.server.overlay, ns.server.peer, target.Overlay, &request, ch)
 
 	time.Sleep(time.Millisecond * 10)
 
@@ -676,31 +669,20 @@ func TestHandleCirclePathResponse(t *testing.T) {
 	}
 	ns := createNS()
 
-	var neighbor *aurora.Address
-	paths := make([]string, 2)
-	for i := 0; i < len(paths); i++ {
-		if i == len(paths)-1 {
-			neighbor, _ = randomAddress(t)
-			paths[i] = neighbor.Overlay.String()
-		}
-		paths[i] = test.RandomAddress().String()
-
-	}
-
-	ns.server.addOne(t, neighbor, true)
+	p1, _ := randomAddress(t)
+	p2, _ := randomAddress(t)
+	paths := []string{p1.Overlay.String(), ns.server.overlay.String(), p2.Overlay.String()}
 
 	target, _ := randomAddress(t)
 	request := pb.FindRouteReq{
 		Dest: target.Overlay.Bytes(),
 		Path: convPathByte(paths),
 	}
-	ns.client.DoReq(ctx, neighbor.Overlay, p2p.Peer{Address: ns.server.peer.Overlay}, target.Overlay, &request, nil)
-
-	time.Sleep(500 * time.Millisecond)
-
-	_, err := ns.client.RouteTab().Get(target.Overlay)
+	ns.client.DoReq(ctx, p2.Overlay, ns.server.peer, target.Overlay, &request, nil)
+	time.Sleep(time.Millisecond * 50)
+	_, _, err := ns.client.GetRoute(ctx, target.Overlay)
 	if !errors.Is(err, routetab.ErrNotFound) {
-		t.Fatal(err)
+		t.Fatalf("exp target route notfound, got %v", err)
 	}
 
 	detect := true
@@ -713,8 +695,8 @@ func TestHandleCirclePathResponse(t *testing.T) {
 			}
 			t.Fatal(err)
 		}
-		t.Log(string(line))
-		exists := bytes.Contains(line, []byte(fmt.Sprintf("%s discard,", target)))
+		//t.Log(string(line))
+		exists := bytes.Contains(line, []byte(fmt.Sprintf("%s discard,", target.Overlay.String())))
 		if exists {
 			detect = false
 		}
@@ -817,7 +799,7 @@ func TestBusyNetworkResponse(t *testing.T) {
 		streamtest.WithBaseAddr(beforeClient),
 	)
 
-	ns.client.p2ps.SetProtocols(beforeClientService.Protocol())
+	ns.client.stream.SetProtocols(beforeClientService.Protocol())
 
 	paths := make([]string, 3)
 	for i := 0; i < len(paths); i++ {
@@ -828,7 +810,7 @@ func TestBusyNetworkResponse(t *testing.T) {
 		Dest: target.Overlay.Bytes(),
 		Path: convPathByte(paths),
 	}
-	ns.client.DoReq(ctx, beforeClient, p2p.Peer{Address: ns.server.peer.Overlay}, target.Overlay, &request, nil)
+	ns.client.DoReq(ctx, beforeClient, ns.server.peer, target.Overlay, &request, nil)
 
 	time.Sleep(50 * time.Millisecond)
 
@@ -837,7 +819,7 @@ func TestBusyNetworkResponse(t *testing.T) {
 	route := generateRoute(paths)
 	ns.server.addOne(t, target, true)
 	aur, _ := ns.server.book.Get(target.Overlay)
-	ns.server.DoResp(ctx, p2p.Peer{Address: ns.client.peer.Overlay}, aur, []routetab.RouteItem{route})
+	ns.server.DoResp(ctx, ns.client.peer, aur, []routetab.RouteItem{route})
 
 	time.Sleep(50 * time.Millisecond)
 
@@ -854,7 +836,7 @@ func TestBusyNetworkResponse(t *testing.T) {
 		index   int
 	)
 	expectedPaths := []string{
-		ns.server.peer.Overlay.String(),
+		ns.server.overlay.String(),
 		beforeTarget.String(),
 		target.Overlay.String(),
 	}
@@ -879,79 +861,33 @@ func TestConnectFarNode(t *testing.T) {
 	ctx := context.Background()
 
 	ns := newNetwork(t, ctx)
-	gap := newNode(t, ctx)
+	gap := newTestNode(t)
 
-	t.Logf("a addr %s\n", ns.client.peer.Overlay)
-	t.Logf("b addr %s\n", ns.server.peer.Overlay)
-	t.Logf("gap addr %s\n", gap.peer.Overlay)
-
-	ns.server.addOne(t, gap.peer, true)
-	ns.server.p2ps.SetProtocols(gap.Protocol())
-	gap.addOne(t, ns.server.peer, true)
-	gap.p2ps.SetProtocols(ns.server.Protocol())
-
-	//gap.p2ps.SetProtocols(ns.client.Protocol())
-	//ns.client.p2ps.SetProtocols(gap.Protocol())
-
-	ns.client.p2ps.SetConnectFunc(func(ctx context.Context, addr ma.Multiaddr) (address *aurora.Address, err error) {
-		addresses, err := ns.client.book.Addresses()
-		if err != nil {
-			return nil, errors.New("could not fetch addresbook addresses")
-		}
-
-		for _, a := range addresses {
-			if a.Underlay.Equal(addr) {
-				return &a, nil
-			}
-		}
-
-		bzzAddr, err := aurora.NewAddress(gap.signer, addr, gap.peer.Overlay, networkId)
-		if err != nil {
-			return nil, err
-		}
-
-		if err := ns.client.book.Put(gap.peer.Overlay, *bzzAddr); err != nil {
-			return nil, err
-		}
-
-		return bzzAddr, nil
-	})
+	ns.server.addOne(t, gap.addr, true)
 
 	_ = ns.client.kad.EachPeer(func(address boson.Address, u uint8) (stop, jumpToNext bool, err error) {
-		if address.Equal(gap.peer.Overlay) {
+		if address.Equal(gap.overlay) {
 			t.Fatal("unexpected to find node gap")
 		}
 		return false, false, nil
 	})
-	_, err := ns.client.book.Get(gap.peer.Overlay)
+	_, err := ns.client.book.Get(gap.overlay)
 	if !errors.Is(err, addressbook.ErrNotFound) {
 		t.Fatal("node client should known gap")
 	}
 
-	t.Run("connect node", func(t *testing.T) {
-		err := ns.client.Connect(ctx, gap.peer.Overlay)
-		if err != nil {
-			t.Fatal(err)
-		}
+	err = ns.client.Connect(ctx, gap.overlay)
+	if err != nil {
+		t.Fatal(err)
+	}
 
-		find := false
-		_ = ns.client.kad.EachPeer(func(address boson.Address, u uint8) (stop, jumpToNext bool, err error) {
-			if address.Equal(gap.peer.Overlay) {
-				find = true
-			}
-			return false, false, nil
-		})
-		if !find {
-			t.Fatal("expected to find node gap, got notfound")
-		}
-		auroraAddress, _, err := ns.client.GetRoute(ctx, gap.peer.Overlay)
-		if errors.Is(err, routetab.ErrNotFound) {
-			t.Fatal("expected to find to gap route, got notfound")
-		}
-		if !auroraAddress.Equal(gap.peer) {
-			t.Fatal("expected to find aurora address eq gap")
-		}
-	})
+	auroraAddress, _, err := ns.client.GetRoute(ctx, gap.overlay)
+	if errors.Is(err, routetab.ErrNotFound) {
+		t.Fatal("expected to find to gap route, got notfound")
+	}
+	if !auroraAddress.Equal(gap.addr) {
+		t.Fatal("expected to find aurora address eq gap")
+	}
 }
 
 func TestGetClosestNeighbor(t *testing.T) {
