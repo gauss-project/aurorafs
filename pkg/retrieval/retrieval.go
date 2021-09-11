@@ -47,6 +47,7 @@ type Service struct {
 	acoServer			*aco.AcoServer
 	routeTab        	routetab.RouteTab
 	singleflight  		singleflight.Group
+	isFullNode			bool
 }
 
 type retrievalResult struct {
@@ -61,7 +62,7 @@ const (
 	retrieveRetryIntervalDuration = 5 * time.Second
 )
 
-func New(addr boson.Address, streamer p2p.Streamer, routeTable routetab.RouteTab, storer storage.Storer, logger logging.Logger, tracer *tracing.Tracer) *Service {
+func New(addr boson.Address, streamer p2p.Streamer, routeTable routetab.RouteTab, storer storage.Storer, isFullNode bool, logger logging.Logger, tracer *tracing.Tracer) *Service {
 	acoServer := aco.NewAcoServer()
 	return &Service{
 		addr:      addr,
@@ -72,6 +73,7 @@ func New(addr boson.Address, streamer p2p.Streamer, routeTable routetab.RouteTab
 		tracer:    tracer,
 		acoServer: &acoServer,
 		routeTab:  routeTable,
+		isFullNode: isFullNode,
 	}
 }
 
@@ -101,6 +103,7 @@ func (s *Service) RetrieveChunk(ctx context.Context, rootAddr, chunkAddr boson.A
 		var (
 			maxRequestAttemp int = 3
 			totalRouteCount int = 5
+			totalBackupRouteCount int = 5
 			resultC = make(chan retrievalResult, totalRouteCount)
 		)
 
@@ -112,27 +115,56 @@ func (s *Service) RetrieveChunk(ctx context.Context, rootAddr, chunkAddr boson.A
 			return nil, fmt.Errorf("no result from chunkinfo")
 		}
 
-		routeList := make([]aco.Route, 0)
-		for _, v := range chunkResult {
-			addr := boson.NewAddress(v)
-			newRoute := aco.NewRoute(addr, addr)
-			routeList = append(routeList, newRoute)
+		nodeList :=  make([]boson.Address, len(chunkResult))
+		for i, v := range chunkResult{
+			newNode := boson.NewAddress(v)
+			nodeList[i] = newNode
 		}
 
-		acoRouteIndexList := s.acoServer.GetRouteAcoIndex(routeList, totalRouteCount)
+		directRouteList := make([]aco.Route, len(nodeList))
+		for i, node := range nodeList{
+			newRoute := aco.NewRoute(node, node)
+			directRouteList[i] = newRoute
+		}
+		directRouteAcoIndexList := s.acoServer.GetRouteAcoIndex(directRouteList, totalRouteCount)
+
+		routList := make([]aco.Route, 0)
+		for _, acoIndex := range directRouteAcoIndexList{
+			curRoute := directRouteList[acoIndex]
+			routList = append(routList, curRoute)
+		}
+
+		// append backupRoute to routeList
+		if len(directRouteAcoIndexList) > 0{
+			acoIndex0 := directRouteAcoIndexList[0]
+			targetNode := directRouteList[acoIndex0].TargetNode
+			if neighborNodeList, err := s.routeTab.GetTargetNeighbor(ctx, targetNode); err == nil{
+				backupRouteList := make([]aco.Route, len(neighborNodeList))
+				for i, node := range neighborNodeList{
+					linkNode := node
+					newRoute := aco.NewRoute(linkNode, targetNode)
+					backupRouteList[i] = newRoute
+				}
+				backupAcoIndexList := s.acoServer.GetRouteAcoIndex(backupRouteList, totalBackupRouteCount)
+
+				for _, acoIndex := range backupAcoIndexList{
+					newRoute := backupRouteList[acoIndex]
+					routList = append(routList, newRoute)
+				}
+			}
+		}
 
 		requestAttemp := 0
 		for requestAttemp < maxRequestAttemp{
 			requestAttemp ++
 
-			for _, routeIndex := range acoRouteIndexList{
-				retrievalRoute := routeList[routeIndex]
-
+			for _, retrievalRoute := range routList{
 				s.metrics.PeerRequestCounter.Inc()
 
 				go func(){
 					s.acoServer.OnDownloadStart(retrievalRoute)
 					chunk, downloadDetail, err := s.retrieveChunk(ctx, retrievalRoute, rootAddr, chunkAddr)
+					s.acoServer.OnDownloadEnd(retrievalRoute)
 					select {
 					case resultC <- retrievalResult{
 						chunk:     			chunk,
@@ -150,15 +182,14 @@ func (s *Service) RetrieveChunk(ctx context.Context, rootAddr, chunkAddr boson.A
 					if result.err != nil{
 						s.logger.Debugf("retrieval: failed to get chunk (%s,%s) from route %s: %v", 
 							rootAddr, chunkAddr, retrievalRoute, result.err)
-						s.acoServer.OnDownloadFinish(retrievalRoute, nil)
-						// return nil, result.err
 					}else{
 						s.acoServer.OnDownloadFinish(retrievalRoute, result.downloadDetail)
-						s.chunkinfo.OnChunkTransferred(chunkAddr, rootAddr, s.addr)
+						if s.isFullNode{
+							s.chunkinfo.OnChunkTransferred(chunkAddr, rootAddr, s.addr)
+						}
 						return result.chunk, nil
 					}
 				case <-ctx.Done():
-					s.acoServer.OnDownloadFinish(retrievalRoute, nil)
 					s.logger.Tracef("retrieval: failed to get chunk: ctx.Done() (%s:%s): %v", rootAddr, chunkAddr, ctx.Err())
 					return nil, fmt.Errorf("retrieval: %w", ctx.Err())
 				}
@@ -175,9 +206,9 @@ func (s *Service) RetrieveChunk(ctx context.Context, rootAddr, chunkAddr boson.A
 }
 
 func (s *Service) retrieveChunk(ctx context.Context, route aco.Route, rootAddr, chunkAddr boson.Address) (boson.Chunk, *aco.DownloadDetail, error) {
-	if !route.LinkNode.Equal(route.TargetNode) {
-		return nil, nil, fmt.Errorf("not direct link, %v,%v(not same)", route.LinkNode.String(), route.TargetNode.String())
-	}
+	// if !route.LinkNode.Equal(route.TargetNode) {
+	// 	return nil, nil, fmt.Errorf("not direct link, %v,%v(not same)", route.LinkNode.String(), route.TargetNode.String())
+	// }
 	if err := s.routeTab.Connect(ctx, route.LinkNode); err != nil{
 		return nil, nil, fmt.Errorf("connect failed, peer: %v", route.LinkNode.String());
 	}
@@ -254,22 +285,20 @@ func (s *Service) handler(ctx context.Context, p p2p.Peer, stream p2p.Stream) (e
 	defer span.Finish()
 
 	ctx = context.WithValue(ctx, requestSourceContextKey{}, p.Address.String())
-	_, rootAddr, chunkAddr := boson.NewAddress(req.TargetAddr), boson.NewAddress(req.RootAddr), boson.NewAddress(req.ChunkAddr)
+	targetAddr, rootAddr, chunkAddr := boson.NewAddress(req.TargetAddr), boson.NewAddress(req.RootAddr), boson.NewAddress(req.ChunkAddr)
 
 	forward := false
 	chunk, err := s.storer.Get(ctx, storage.ModeGetRequest, chunkAddr)
 	if err != nil {
 		if errors.Is(err, storage.ErrNotFound) {
-			// forward the request
-			// if !s.addr.Equal(targetAddr){
-			chunk, err = s.RetrieveChunk(ctx, rootAddr, chunkAddr)
-			if err != nil {
-				return fmt.Errorf("retrieve chunk: %w", err)
+			if s.addr.Equal(targetAddr){
+				return fmt.Errorf("get from store: %w", err)
+			}else{
+				if chunk, err = s.RetrieveChunk(ctx, rootAddr, chunkAddr); err!= nil{
+					return fmt.Errorf("retrieve chunk: %w", err)
+				}
+				forward = true
 			}
-			forward = true
-			// }else{
-			// 	return fmt.Errorf("get from store: %w", err)
-			// }
 		} else {
 			return fmt.Errorf("get from store: %w", err)
 		}
@@ -281,7 +310,7 @@ func (s *Service) handler(ctx context.Context, p p2p.Peer, stream p2p.Stream) (e
 		return fmt.Errorf("write delivery: %w peer %s", err, p.Address.String())
 	}
 
-	if s.chunkinfo != nil {
+	if s.chunkinfo != nil && p.FullNode{
 		s.chunkinfo.OnChunkTransferred(chunkAddr, rootAddr, p.Address)
 	}
 
@@ -291,8 +320,7 @@ func (s *Service) handler(ctx context.Context, p p2p.Peer, stream p2p.Stream) (e
 			return fmt.Errorf("retrieve cache put :%w", err)
 		}
 	}
-
-	s.logger.Tracef("retrieval protocol debiting peer %s", p.Address.String())
+	// s.logger.Tracef("retrieval protocol debiting peer %s", p.Address.String())
 
 	return nil
 }

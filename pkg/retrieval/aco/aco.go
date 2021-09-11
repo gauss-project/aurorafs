@@ -83,13 +83,17 @@ func (s *AcoServer) onDownloadEnd(route Route){
 	}
 }
 
+func (s *AcoServer) OnDownloadEnd(route Route){
+	s.onDownloadEnd(route)
+}
+
 func (s *AcoServer) OnDownloadFinish(route Route, downloadDetail *DownloadDetail){
-	if downloadDetail == nil{
-		s.onDownloadEnd(route)
-		return
-	}else{
+	// if downloadDetail == nil{
+	// 	s.onDownloadEnd(route)
+	// 	return
+	// }else{
 		s.onDownloadTaskFinish(route, downloadDetail.StartMs, downloadDetail.EndMs, downloadDetail.Size)
-	}
+	// }
 }
 
 func (s *AcoServer) onDownloadTaskFinish(route Route, startMs int64, endMs int64, size int64){
