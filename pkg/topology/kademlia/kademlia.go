@@ -655,27 +655,17 @@ func (k *Kad) connectBootNodes(ctx context.Context) {
 	}
 }
 
-func (k *Kad) NotSaturatedBin() (lookupBin []uint8) {
-	for i := uint8(0); i < boson.MaxBins; i++ {
-		if saturate, _ := k.saturationFunc(i, k.knownPeers, k.connectedPeers); saturate {
-			continue
-		}
-		lookupBin = append(lookupBin, i)
-	}
-	return
-}
-
 // binSaturated indicates whether a certain bin is saturated or not.
 // when a bin is not saturated it means we would like to proactively
 // initiate connections to other peers in the bin.
 func binSaturated(oversaturationAmount int) binSaturationFunc {
 	return func(bin uint8, peers, connected *pslice.PSlice) (bool, bool) {
-		potentialDepth := recalcDepth(peers, boson.MaxPO)
+		//potentialDepth := recalcDepth(peers, boson.MaxPO)
 
 		// short circuit for bins which are >= depth
-		if bin >= potentialDepth {
-			return false, false
-		}
+		//if bin >= potentialDepth {
+		//	return false, false
+		//}
 
 		// lets assume for now that the minimum number of peers in a bin
 		// would be 2, under which we would always want to connect to new peers
@@ -1245,6 +1235,11 @@ func (k *Kad) IsBalanced(bin uint8) bool {
 	}
 
 	return true
+}
+
+func (k *Kad) IsSaturated(bin uint8) bool {
+	saturate, _ := k.saturationFunc(bin, k.knownPeers, k.connectedPeers)
+	return saturate
 }
 
 func (k *Kad) SetRadius(r uint8) {

@@ -131,10 +131,8 @@ func newTestNode(t *testing.T) *Node {
 	if err != nil {
 		t.Fatal(err)
 	}
-	//err = kad.Start(context.TODO())
-	//if err != nil {
-	//	t.Fatal(err)
-	//}
+	p2ps.SetPickyNotifier(kad)
+
 	stream := streamtest.New(streamtest.WithBaseAddr(base.Overlay))
 	service := routetab.New(base.Overlay, context.Background(), p2ps, kad, mockstate.NewStateStore(), noopLogger)
 	service.SetConfig(routetab.Config{
@@ -143,8 +141,6 @@ func newTestNode(t *testing.T) *Node {
 		LightNodes:  lightnode.NewContainer(base.Overlay),
 		Stream:      stream,
 	})
-
-	p2ps.SetPickyNotifier(kad)
 
 	return &Node{
 		overlay: base.Overlay,
