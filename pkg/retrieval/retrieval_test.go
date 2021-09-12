@@ -30,10 +30,9 @@ import (
 	storemock "github.com/gauss-project/aurorafs/pkg/storage/mock"
 	"github.com/gauss-project/aurorafs/pkg/topology"
 
-	"io"
-	"os"
-
-	"github.com/sirupsen/logrus"
+	// "io"
+	// "os"
+	// "github.com/sirupsen/logrus"
 )
 
 var (
@@ -162,14 +161,20 @@ func TestDelivery(t *testing.T) {
 }
 
 func TestRetrievalChunk(t *testing.T) {
+	// logger := logging.New(io.MultiWriter(os.Stdout), 6)
+	// logFormater := logrus.TextFormatter{
+	// 	DisableTimestamp: true,
+	// 	ForceColors:      true,
+	// }
+	// logger.NewEntry().Logger.SetFormatter(&logFormater)
+	logger := logging.New(ioutil.Discard, 0)
 	var (
-		logger         = logging.New(ioutil.Discard, 0)
 		mockRouteTable = NewMockRouteTable()
 	)
 
 	t.Run("downstream", func(t *testing.T) {
-		serverAddress := boson.MustParseHexAddress("03")
-		clientAddress := boson.MustParseHexAddress("01")
+		serverAddress := boson.MustParseHexAddress("0003")
+		clientAddress := boson.MustParseHexAddress("0001")
 		// chunk := testingc.FixtureChunk("02c2")
 
 		chunkBytes := []uint8{3, 0, 0, 0, 0, 0, 0, 0, 102, 111, 111}
@@ -190,23 +195,16 @@ func TestRetrievalChunk(t *testing.T) {
 		server := retrieval.New(serverAddress, nil, &mockRouteTable, serverStorer, true, logger, nil)
 		server.Config(serverMockChunkInfo)
 
-		// recorder := streamtest.New(streamtest.WithProtocols(server.Protocol()))
 		recorder := streamtest.New(
 			streamtest.WithProtocols(server.Protocol()),
 			streamtest.WithBaseAddr(clientAddress),
 		)
-
-		// clientSuggester := mockPeerSuggester{eachPeerRevFunc: func(f topology.EachPeerFunc) error {
-		// 	_, _, _ = f(serverAddress, 0)
-		// 	return nil
-		// }}
 
 		clientStorer := storemock.NewStorer()
 		clientMockChunkInfo := NewMockChunkInfo()
 		clientMockChunkInfo.OnChunkTransferred(chunk.Address(), rootAddr, serverAddress)
 		client := retrieval.New(clientAddress, recorder, &mockRouteTable, clientStorer, true, logger, nil)
 		client.Config(clientMockChunkInfo)
-		// client := retrieval.New(clientAddress, nil, recorder, clientSuggester, logger, accountingmock.NewAccounting(), pricer, nil, false, noopStampValidator)
 
 		got, err := client.RetrieveChunk(context.Background(), rootAddr, chunk.Address())
 		if err != nil {
@@ -225,9 +223,9 @@ func TestRetrievalChunk(t *testing.T) {
 		chunk := boson.NewChunk(address, data)
 		rootAddr := boson.MustParseHexAddress("0101")
 
-		serverAddress := boson.MustParseHexAddress("0100000000000000000000000000000000000000000000000000000000000000")
-		forwarderAddress := boson.MustParseHexAddress("0200000000000000000000000000000000000000000000000000000000000000")
-		clientAddress := boson.MustParseHexAddress("030000000000000000000000000000000000000000000000000000000000000000")
+		serverAddress := boson.MustParseHexAddress("0001")
+		forwarderAddress := boson.MustParseHexAddress("0002")
+		clientAddress := boson.MustParseHexAddress("0003")
 
 		// config server
 		serverStorer := storemock.NewStorer()
@@ -236,6 +234,7 @@ func TestRetrievalChunk(t *testing.T) {
 			t.Fatal(err)
 		}
 		server := retrieval.New(serverAddress, nil, &mockRouteTable, serverStorer, true, logger, nil)
+
 		// config forwarder
 		f2sRecorder := streamtest.New(
 			streamtest.WithProtocols(server.Protocol()),
@@ -243,10 +242,6 @@ func TestRetrievalChunk(t *testing.T) {
 		)
 		forwarderStorer := storemock.NewStorer()
 		forwarder := retrieval.New(forwarderAddress, f2sRecorder, &mockRouteTable, forwarderStorer, true, logger, nil)
-
-		forwarderChunkInfo := NewMockChunkInfo()
-		forwarderChunkInfo.OnChunkTransferred(chunk.Address(), rootAddr, serverAddress)
-		forwarder.Config(forwarderChunkInfo)
 
 		// config client
 		c2fRecorder := streamtest.New(
@@ -257,7 +252,7 @@ func TestRetrievalChunk(t *testing.T) {
 		client := retrieval.New(clientAddress, c2fRecorder, &mockRouteTable, clientStorer, true, logger, nil)
 
 		clientChunkInfo := NewMockChunkInfo()
-		clientChunkInfo.OnChunkTransferred(chunk.Address(), rootAddr, forwarderAddress)
+		clientChunkInfo.OnChunkTransferred(chunk.Address(), rootAddr, serverAddress)
 		client.Config(clientChunkInfo)
 
 		if got, _ := forwarderStorer.Has(context.Background(), chunk.Address()); got {
@@ -279,64 +274,68 @@ func TestRetrievalChunk(t *testing.T) {
 
 }
 
-func TestIndirectRetrieval(t *testing.T) {
-	logger := logging.New(io.MultiWriter(os.Stdout), 6)
-	logFormater := logrus.TextFormatter{
-		DisableTimestamp: true,
-		ForceColors:      true,
-	}
-	logger.NewEntry().Logger.SetFormatter(&logFormater)
+func TestNeighborRetrieval(t *testing.T) {
+	// logger := logging.New(io.MultiWriter(os.Stdout), 6)
+	// logFormater := logrus.TextFormatter{
+	// 	DisableTimestamp: true,
+	// 	ForceColors:      true,
+	// }
+	// logger.NewEntry().Logger.SetFormatter(&logFormater)
+
+	logger := logging.New(ioutil.Discard, 0)
+
 
 	address := boson.MustParseHexAddress("8a74889a73c23fe2be037886c6b709e3175b95b8deea9c95eeda0dbc60740bd8")
 	data := []uint8{3, 0, 0, 0, 0, 0, 0, 0, 102, 111, 111}
 
 	chunk := boson.NewChunk(address, data)
 	chunkAddr := chunk.Address()
-	rootAddr := boson.MustParseHexAddress("5001")
+	rootAddr := boson.MustParseHexAddress("1001")
 
 	t.Run("relay node contains chunk", func(t *testing.T) {
-		// client retrieval => relay (with chunk)
+		// client retrieval => relay => server
 		serverAddress := boson.MustParseHexAddress("0001")
-		relayServerAddress := boson.MustParseHexAddress("0002")
+		neighborServerAddress := boson.MustParseHexAddress("0002")
 		clientAddress := boson.MustParseHexAddress("0003")
 
+		// init server
 		serverStorer := storemock.NewStorer()
 		if _, err := serverStorer.Put(context.Background(), storage.ModePutUpload, chunk); err != nil {
 			t.Fatal(err)
 		}
 		server := retrieval.New(serverAddress, nil, &mockRouteTable{}, serverStorer, true, logger, nil)
-		relay2serverRecorder := streamtest.New(
+		neighbor2serverRecorder := streamtest.New(
 			streamtest.WithProtocols(
 				server.Protocol(),
 			),
 			streamtest.WithBaseAddr(
-				relayServerAddress,
+				neighborServerAddress,
 			),
 		)
 
-		relayStorer := storemock.NewStorer()
+		// init neighbor
+		neighborStorer := storemock.NewStorer()
 		// if _, err := relayStorer.Put(context.Background(), storage.ModePutUpload, chunk); err != nil{
 		// 	t.Fatal(err)
 		// }
-		relayServer := retrieval.New(relayServerAddress, relay2serverRecorder, &mockRouteTable{}, relayStorer, true, logger, nil)
-		client2relayRecorder := streamtest.New(
+		neighborServer := retrieval.New(neighborServerAddress, neighbor2serverRecorder, &mockRouteTable{}, neighborStorer, true, logger, nil)
+		client2neighborRecorder := streamtest.New(
 			streamtest.WithProtocols(
-				relayServer.Protocol(),
+				neighborServer.Protocol(),
 			),
 			streamtest.WithBaseAddr(
 				clientAddress,
 			),
 		)
 
-		// clientRouteTable := NewMockRouteTable()
+		// init client
 		clientRouteTable := mockRouteTable{
 			rejectAddrList: []boson.Address{serverAddress},
 			neighborMap: map[string][]boson.Address{
-				serverAddress.String(): {relayServerAddress},
+				serverAddress.String(): {neighborServerAddress},
 			},
 		}
-		client := retrieval.New(clientAddress, client2relayRecorder, &clientRouteTable, nil, true, logger, nil)
-		// server := retrieval.New(serverAddress, )
+		client := retrieval.New(clientAddress, client2neighborRecorder, &clientRouteTable, nil, true, logger, nil)
 
 		clientChunkInfo := NewMockChunkInfo()
 		clientChunkInfo.OnChunkTransferred(chunkAddr, rootAddr, serverAddress)
@@ -348,6 +347,10 @@ func TestIndirectRetrieval(t *testing.T) {
 		}
 		if !bytes.Equal(got.Data(), chunk.Data()) {
 			t.Fatalf("got data %x, want %x", got.Data(), chunk.Data())
+		}
+
+		if got, _ := neighborStorer.Has(context.Background(), chunk.Address()); !got {
+			t.Fatalf("neighbor did not cache chunk")
 		}
 	})
 }
@@ -388,8 +391,8 @@ func TestRetrievePreemptiveRetry(t *testing.T) {
 
 	clientAddress := boson.MustParseHexAddress("1010")
 
-	serverAddress1 := boson.MustParseHexAddress("111111")
-	serverAddress2 := boson.MustParseHexAddress("222222")
+	serverAddress1 := boson.MustParseHexAddress("0001")
+	serverAddress2 := boson.MustParseHexAddress("0002")
 
 	serverStorer1 := storemock.NewStorer()
 	serverStorer2 := storemock.NewStorer()
@@ -406,12 +409,18 @@ func TestRetrievePreemptiveRetry(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	mockRouteTable := NewMockRouteTable()
-	server1 := retrieval.New(serverAddress1, nil, &mockRouteTable, serverStorer1, true, logger, nil)
+	defaultMockRouteTable := NewMockRouteTable()
+
+	server1RouteTable := mockRouteTable{
+		rejectAddrList: []boson.Address{serverAddress2},
+		neighborMap: map[string][]boson.Address{},
+	}
+
+	server1 := retrieval.New(serverAddress1, nil, &server1RouteTable, serverStorer1, true, logger, nil)
 	server1ChunkInfo := NewMockChunkInfo()
 	server1.Config(server1ChunkInfo)
 
-	server2 := retrieval.New(serverAddress2, nil, &mockRouteTable, serverStorer2, true, logger, nil)
+	server2 := retrieval.New(serverAddress2, nil, &defaultMockRouteTable, serverStorer2, true, logger, nil)
 	server2ChunkInfo := NewMockChunkInfo()
 	server2.Config(server2ChunkInfo)
 
@@ -441,14 +450,13 @@ func TestRetrievePreemptiveRetry(t *testing.T) {
 			),
 		)
 
-		client := retrieval.New(clientAddress, recorder, &mockRouteTable, nil, true, logger, nil)
+		client := retrieval.New(clientAddress, recorder, &defaultMockRouteTable, nil, true, logger, nil)
 		clientChunkInfo := NewMockChunkInfo()
 
 		clientChunkInfo.OnChunkTransferred(chunk.Address(), chunkRootAddr, serverAddress2)
 		client.Config(clientChunkInfo)
 
 		got, err := client.RetrieveChunk(context.Background(), chunkRootAddr, chunk.Address())
-		// got, err = client.RetrieveChunk(context.Background(), chunkRootAddr, chunk.Address())
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -502,7 +510,6 @@ func TestRetrievePreemptiveRetry(t *testing.T) {
 			t.Fatalf("got data %x, want %x", got.Data(), chunk.Data())
 		}
 	})
-
 }
 
 type mockRouteTable struct {
@@ -535,8 +542,10 @@ func (r *mockRouteTable) Connect(ctx context.Context, target boson.Address) (err
 	return
 }
 
-func (r *mockRouteTable) GetTargetNeighbor(ctx context.Context, target boson.Address) (addresses []boson.Address, err error) {
-	return
+func (r *mockRouteTable) GetTargetNeighbor(ctx context.Context, target boson.Address) ([]boson.Address, error) {
+	// nodeList := make([]boson.Address, 0)
+	// return nodeList, nil
+	return r.neighborMap[target.String()], nil
 }
 
 func (r *mockRouteTable) IsNeighbor(dest boson.Address) (has bool) {
