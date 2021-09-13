@@ -337,6 +337,9 @@ func (ci *ChunkInfo) onFindChunkPyramid(ctx context.Context, authInfo []byte, ro
 // onFindChunkInfo
 func (ci *ChunkInfo) onFindChunkInfo(ctx context.Context, authInfo []byte, rootCid, overlay boson.Address, chunkInfo map[string][]byte) {
 	ci.tt.removeTimeOutTrigger(rootCid, overlay)
+	if chunkInfo == nil {
+		chunkInfo = make(map[string][]byte, 1)
+	}
 	overlays := make([][]byte, 0, len(chunkInfo))
 	for over, bv := range chunkInfo {
 		overlays = append(overlays, boson.MustParseHexAddress(over).Bytes())

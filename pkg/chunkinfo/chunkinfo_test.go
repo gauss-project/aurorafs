@@ -114,43 +114,108 @@ func TestHandlerChunkInfoReq(t *testing.T) {
 	fmt.Println(reqMessages)
 }
 
-func TestHandlerChunkInfoResp(t *testing.T) {
+func TestHandlerCHunkInfoReqRelay(t *testing.T) {
+	// req a->b->c
 	cAddress := boson.MustParseHexAddress("03")
 	bAddress := boson.MustParseHexAddress("02")
 	aAddress := boson.MustParseHexAddress("01")
 
-	rootCid, s := mockUploadFile(t)
-	c := mockChunkInfo(s, nil, cAddress)
-	c.newQueue(rootCid.String())
-	recorder1 := streamtest.New(
-		streamtest.WithBaseAddr(cAddress),
-		streamtest.WithProtocols(c.Protocol()),
-	)
-	b := mockChunkInfo(s, recorder1, bAddress)
+	rootCid, tra := mockUploadFile(t)
 
 	recorder := streamtest.New(
-		streamtest.WithProtocols(b.Protocol()),
 		streamtest.WithBaseAddr(bAddress),
+		streamtest.WithProtocols(
+			newTestProtocol(func(ctx context.Context, peer p2p.Peer, stream p2p.Stream) error {
+				if _, err := bufio.NewReader(stream).ReadString('\n'); err != nil {
+					return err
+				}
+				var g errgroup.Group
+				g.Go(stream.Close)
+				g.Go(stream.FullClose)
+
+				if err := g.Wait(); err != nil {
+					return err
+				}
+				return stream.FullClose()
+			}, protocolName, protocolVersion, streamChunkInfoRespName)),
 	)
+
+	cOverlay := mockChunkInfo(tra, recorder, cAddress)
+	cRecorder := streamtest.New(streamtest.WithProtocols(cOverlay.Protocol()), streamtest.WithBaseAddr(bAddress))
+	bOverlay := mockChunkInfo(tra, cRecorder, bAddress)
+	bRecorder := streamtest.New(streamtest.WithProtocols(bOverlay.Protocol()), streamtest.WithBaseAddr(aAddress))
+	aOverlay := mockChunkInfo(tra, bRecorder, aAddress)
+
 	ctx := context.Background()
-	b.newQueue(rootCid.String())
-	b.getQueue(rootCid.String()).push(Pulling, aAddress.Bytes())
-	b.cpd.updatePendingFinder(rootCid)
-	tree, _ := b.getChunkPyramid(ctx, rootCid)
-	pram, _ := b.traversal.CheckTrieData(ctx, rootCid, tree)
+	aOverlay.findChunkInfo(ctx, nil, rootCid, []boson.Address{cAddress})
+	time.Sleep(5 * time.Second)
 
-	a := mockChunkInfo(s, recorder, aAddress)
-
-	if err := a.OnChunkTransferred(boson.NewAddress(pram[0][0]), rootCid, aAddress); err != nil {
+	// a -> b
+	reqBRecords, err := bRecorder.Records(cAddress, protocolName, protocolVersion, streamChunkInfoReqName)
+	if err != nil {
 		t.Fatal(err)
 	}
 
-	req := a.cd.createChunkInfoReq(rootCid, aAddress, cAddress)
-	resp := a.ct.createChunkInfoResp(rootCid, a.ct.getNeighborChunkInfo(rootCid), req.GetTarget(), req.Req)
-	a.onChunkInfoResp(ctx, nil, aAddress, resp)
+	if l := len(reqBRecords); l != 1 {
+		t.Fatalf("got %v records, want %v", l, 1)
+	}
+	respRecord := reqBRecords[0]
+	reqBMessages, err := protobuf.ReadMessages(
+		bytes.NewReader(respRecord.In()),
+		func() protobuf.Message { return new(pb.ChunkInfoReq) },
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fmt.Println(reqBMessages)
+
+	respCRecord, err := recorder.Records(bAddress, protocolName, protocolVersion, streamChunkInfoRespName)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if l := len(respCRecord); l != 1 {
+		t.Fatalf("got %v records, want %v", l, 1)
+	}
+	cRecord := respCRecord[0]
+	respCMessages, err := protobuf.ReadMessages(
+		bytes.NewReader(cRecord.In()),
+		func() protobuf.Message { return new(pb.ChunkInfoResp) },
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fmt.Println(respCMessages)
+}
+
+func TestHandlerChunkInfoResp(t *testing.T) {
+	bAddress := boson.MustParseHexAddress("02")
+	aAddress := boson.MustParseHexAddress("01")
+
+	rootCid, tra := mockUploadFile(t)
+
+	aOverlay := mockChunkInfo(tra, nil, aAddress)
+	aRecorder := streamtest.New(streamtest.WithProtocols(aOverlay.Protocol()), streamtest.WithBaseAddr(bAddress))
+	aOverlay.newQueue(rootCid.String())
+	bOverlay := mockChunkInfo(tra, aRecorder, bAddress)
+
+	ctx := context.Background()
+
+	//resp  b ->a
+	tree, _ := bOverlay.getChunkPyramid(ctx, rootCid)
+	pram, _ := bOverlay.traversal.CheckTrieData(ctx, rootCid, tree)
+	if err := bOverlay.OnChunkTransferred(boson.NewAddress(pram[0][0]), rootCid, bAddress); err != nil {
+		t.Fatal(err)
+	}
+	req := bOverlay.cd.createChunkInfoReq(rootCid, bAddress, aAddress)
+
+	if err := bOverlay.onChunkInfoReq(ctx, nil, aAddress, req); err != nil {
+		t.Fatal(err)
+	}
 
 	var vb bitVector
-	c.storer.Get(generateKey(keyPrefix, rootCid, aAddress), &vb)
+	if err := aOverlay.storer.Get(generateKey(discoverKeyPrefix, rootCid, bAddress), &vb); err != nil {
+		t.Fatal(err)
+	}
 	vf, err := bitvector.NewFromBytes(vb.B, vb.Len)
 	if err != nil {
 		t.Fatal(err)
@@ -159,7 +224,7 @@ func TestHandlerChunkInfoResp(t *testing.T) {
 		t.Fatalf("got %v records, want %v", vf.String(), "0000000001000000")
 	}
 
-	respRecords, err := recorder1.Records(aAddress, "chunkinfo", "1.0.0", "chunkinforesp")
+	respRecords, err := aRecorder.Records(aAddress, "chunkinfo", "1.0.0", "chunkinforesp")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -178,10 +243,68 @@ func TestHandlerChunkInfoResp(t *testing.T) {
 	}
 
 	fmt.Println(respMessages)
-	v := c.GetChunkInfo(rootCid, boson.NewAddress(pram[0][0]))
+	v := aOverlay.GetChunkInfo(rootCid, boson.NewAddress(pram[0][0]))
 	if v == nil || len(v) == 0 {
 		t.Fatalf("bit vector error")
 	}
+}
+
+func TestHandlerCHunkInfoRespRelay(t *testing.T) {
+	// resp c->b->a
+	cAddress := boson.MustParseHexAddress("03")
+	bAddress := boson.MustParseHexAddress("02")
+	aAddress := boson.MustParseHexAddress("01")
+
+	rootCid, tra := mockUploadFile(t)
+
+	aOverlay := mockChunkInfo(tra, nil, aAddress)
+	aRecorder := streamtest.New(streamtest.WithProtocols(aOverlay.Protocol()), streamtest.WithBaseAddr(bAddress))
+	aOverlay.newQueue(rootCid.String())
+	bOverlay := mockChunkInfo(tra, aRecorder, bAddress)
+	bOverlay.newQueue(rootCid.String())
+	bRecorder := streamtest.New(streamtest.WithProtocols(bOverlay.Protocol()), streamtest.WithBaseAddr(aAddress))
+	cOverlay := mockChunkInfo(tra, bRecorder, cAddress)
+
+	resp := cOverlay.ct.createChunkInfoResp(rootCid, nil, cAddress.Bytes(), aAddress.Bytes())
+	cOverlay.sendData(context.Background(), bAddress, streamChunkInfoRespName, resp)
+
+	// c -> b
+	respCRecords, err := bRecorder.Records(bAddress, protocolName, protocolVersion, streamChunkInfoRespName)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if l := len(respCRecords); l != 1 {
+		t.Fatalf("got %v records, want %v", l, 1)
+	}
+	respRecord := respCRecords[0]
+	respBMessages, err := protobuf.ReadMessages(
+		bytes.NewReader(respRecord.In()),
+		func() protobuf.Message { return new(pb.ChunkInfoResp) },
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fmt.Println(respBMessages)
+
+	// b -> a
+	respBRecords, err := aRecorder.Records(aAddress, protocolName, protocolVersion, streamChunkInfoRespName)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if l := len(respBRecords); l != 1 {
+		t.Fatalf("got %v records, want %v", l, 1)
+	}
+	respBRecord := respBRecords[0]
+	respAMessages, err := protobuf.ReadMessages(
+		bytes.NewReader(respBRecord.In()),
+		func() protobuf.Message { return new(pb.ChunkInfoResp) },
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fmt.Println(respAMessages)
 }
 
 func TestHandlerPyramid(t *testing.T) {
