@@ -32,7 +32,13 @@ type BitVector struct {
 
 // New creates a new bit vector with the given length
 func New(l int) (*BitVector, error) {
-	return NewFromBytes(make([]byte, l/8+1), l)
+	var len int
+	if l%8 == 0 && l != 0 {
+		len = l / 8
+	} else {
+		len = l/8 + 1
+	}
+	return NewFromBytes(make([]byte, len), l)
 }
 
 // NewFromBytes creates a bit vector from the passed byte slice.

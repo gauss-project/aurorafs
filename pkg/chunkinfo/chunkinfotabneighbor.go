@@ -125,5 +125,6 @@ func (cn *chunkInfoTabNeighbor) delPresence(rootCid boson.Address) bool {
 	cn.Lock()
 	defer cn.Unlock()
 	delete(cn.presence, rootCid.String())
+	delete(cn.overlays, rootCid.String())
 	return true
 }
