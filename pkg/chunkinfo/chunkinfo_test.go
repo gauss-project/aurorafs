@@ -114,7 +114,7 @@ func TestHandlerChunkInfoReq(t *testing.T) {
 	fmt.Println(reqMessages)
 }
 
-func TestHandlerCHunkInfoReqRelay(t *testing.T) {
+func TestHandlerChunkInfoReqRelay(t *testing.T) {
 	// req a->b->c
 	cAddress := boson.MustParseHexAddress("03")
 	bAddress := boson.MustParseHexAddress("02")
@@ -249,7 +249,7 @@ func TestHandlerChunkInfoResp(t *testing.T) {
 	}
 }
 
-func TestHandlerCHunkInfoRespRelay(t *testing.T) {
+func TestHandlerChunkInfoRespRelay(t *testing.T) {
 	// resp c->b->a
 	cAddress := boson.MustParseHexAddress("03")
 	bAddress := boson.MustParseHexAddress("02")

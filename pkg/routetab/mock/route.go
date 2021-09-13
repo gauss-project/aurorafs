@@ -24,7 +24,7 @@ func (r *mockRouteTable) Connect(ctx context.Context, target boson.Address) erro
 	return nil
 }
 
-func (r *mockRouteTable) GetTargetNeighbor(ctx context.Context, target boson.Address) (addresses []boson.Address, err error) {
+func (r *mockRouteTable) GetTargetNeighbor(ctx context.Context, target boson.Address, limit int) (addresses []boson.Address, err error) {
 	return nil, nil
 }
 func (r *mockRouteTable) IsNeighbor(dest boson.Address) (has bool) {
