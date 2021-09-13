@@ -36,13 +36,13 @@ type RouteTab interface {
 	GetRoute(ctx context.Context, target boson.Address) (dest *aurora.Address, routes []RouteItem, err error)
 	FindRoute(ctx context.Context, target boson.Address) (dest *aurora.Address, route []RouteItem, err error)
 	Connect(ctx context.Context, target boson.Address) error
-	GetTargetNeighbor(ctx context.Context, target boson.Address) (addresses []boson.Address, err error)
+	GetTargetNeighbor(ctx context.Context, target boson.Address, limit int) (addresses []boson.Address, err error)
 	IsNeighbor(dest boson.Address) (has bool)
 }
 
 type Service struct {
 	addr         boson.Address
-	p2ps         p2p.StreamerConnect
+	p2ps         p2p.Service
 	logger       logging.Logger
 	metrics      metrics
 	pendingCalls *pendCallResTab
@@ -55,9 +55,10 @@ type Config struct {
 	AddressBook addressbook.Interface
 	NetworkID   uint64
 	LightNodes  *lightnode.Container
+	Stream      p2p.Streamer
 }
 
-func New(addr boson.Address, ctx context.Context, p2ps p2p.StreamerConnect, kad *kademlia.Kad, store storage.StateStorer, logger logging.Logger) *Service {
+func New(addr boson.Address, ctx context.Context, p2ps p2p.Service, kad *kademlia.Kad, store storage.StateStorer, logger logging.Logger) *Service {
 	// load route table from db only those valid item will be loaded
 
 	met := newMetrics()
@@ -149,7 +150,7 @@ func (s *Service) onRouteReq(ctx context.Context, p p2p.Peer, stream p2p.Stream)
 		s.logger.Errorf(content)
 		return fmt.Errorf(content)
 	}
-	s.logger.Tracef("route: handlerFindRouteReq received: dest= %s", boson.NewAddress(req.Dest).String())
+	s.logger.Tracef("route: handlerFindRouteReq received: target=%s", boson.NewAddress(req.Dest).String())
 
 	s.metrics.FindRouteReqReceivedCount.Inc()
 	// passive route save
@@ -166,19 +167,19 @@ func (s *Service) onRouteReq(ctx context.Context, p p2p.Peer, stream p2p.Stream)
 
 	if len(req.Path) > int(MaxTTL) {
 		// discard
-		s.logger.Tracef("route: handlerFindRouteReq dest= %s discard ttl= %d", target.String(), len(req.Path))
+		s.logger.Tracef("route: handlerFindRouteReq target=%s discard, ttl=%d", target.String(), len(req.Path))
 		return nil
 	}
 	if inPath(s.addr.Bytes(), req.Path) {
 		// discard
-		s.logger.Tracef("route: handlerFindRouteReq dest= %s discard received path contains self", target.String())
+		s.logger.Tracef("route: handlerFindRouteReq target=%s discard, received path contains self.", target.String())
 		return nil
 	}
 	// need resp
 	if s.IsNeighbor(target) {
 		// dest in neighbor then resp
 		dest, _ := s.config.AddressBook.Get(target)
-		s.logger.Tracef("route: handlerFindRouteReq dest= %s in neighbor", target.String())
+		s.logger.Tracef("route: handlerFindRouteReq target=%s in neighbor", target.String())
 		s.doRouteResp(ctx, p.Address, dest, []RouteItem{})
 		return nil
 	}
@@ -186,11 +187,11 @@ func (s *Service) onRouteReq(ctx context.Context, p p2p.Peer, stream p2p.Stream)
 	if err == nil {
 		if len(req.Path)+minTTL(routes) > int(MaxTTL) {
 			// discard
-			s.logger.Tracef("route: handlerFindRouteReq dest= %s discard ttl= %d", target.String(), len(req.Path)+minTTL(routes))
+			s.logger.Tracef("route: handlerFindRouteReq target=%s discard, ttl=%d", target.String(), len(req.Path)+minTTL(routes))
 			return nil
 		}
 		// have route resp
-		s.logger.Tracef("route: handlerFindRouteReq dest= %s in route table", target.String())
+		s.logger.Tracef("route: handlerFindRouteReq target=%s in route table", target.String())
 		s.doRouteResp(ctx, p.Address, dest, routes)
 		return nil
 	}
@@ -201,11 +202,11 @@ func (s *Service) onRouteReq(ctx context.Context, p p2p.Peer, stream p2p.Stream)
 			// forward
 			req.Path = append(req.Path, p.Address.Bytes())
 			s.doRouteReq(ctx, s.addr, v, target, &req, nil)
-			s.logger.Tracef("route: handlerFindRouteReq dest= %s forward ro %s", target.String(), v.String())
+			s.logger.Tracef("route: handlerFindRouteReq target=%s forward=%s", target.String(), v.String())
 			continue
 		}
 		// discard
-		s.logger.Tracef("route: handlerFindRouteReq dest= %s discard forward= %s", target.String(), v.String())
+		s.logger.Tracef("route: handlerFindRouteReq target=%s discard, received path contains forward=%s", target.String(), v.String())
 	}
 	return nil
 }
@@ -238,9 +239,9 @@ func (s *Service) onRouteResp(ctx context.Context, p p2p.Peer, stream p2p.Stream
 func (s *Service) FindRoute(ctx context.Context, target boson.Address) (dest *aurora.Address, routes []RouteItem, err error) {
 	dest, routes, err = s.GetRoute(ctx, target)
 	if err != nil {
-		s.logger.Debugf("route: FindRoute dest %s %s", target.String(), err.Error())
+		s.logger.Debugf("route: FindRoute target=%s %s", target.String(), err.Error())
 		if s.IsNeighbor(target) {
-			err = fmt.Errorf("route: FindRoute dest %s is neighbor", target.String())
+			err = fmt.Errorf("target=%s is neighbor", target.String())
 			return
 		}
 		forward := s.getNeighbor(target, defaultNeighborAlpha)
@@ -267,8 +268,8 @@ func (s *Service) FindRoute(ctx context.Context, target boson.Address) (dest *au
 			return
 		}
 		s.metrics.TotalErrors.Inc()
-		s.logger.Errorf("route: FindRoute dest %s , neighbor len equal 0", target.String())
-		err = fmt.Errorf("neighbor len equal 0")
+		s.logger.Errorf("route: FindRoute target=%s , neighbor notfound", target.String())
+		err = fmt.Errorf("neighbor notfound")
 	}
 	return
 }
@@ -308,7 +309,7 @@ func (s *Service) Connect(ctx context.Context, target boson.Address) error {
 	return s.connect(ctx, target)
 }
 
-func (s *Service) GetTargetNeighbor(ctx context.Context, target boson.Address) (addresses []boson.Address, err error) {
+func (s *Service) GetTargetNeighbor(ctx context.Context, target boson.Address, limit int) (addresses []boson.Address, err error) {
 	var routes []RouteItem
 	_, routes, err = s.GetRoute(ctx, target)
 	if err != nil {
@@ -318,7 +319,7 @@ func (s *Service) GetTargetNeighbor(ctx context.Context, target boson.Address) (
 			return
 		}
 	}
-	addresses = GetClosestNeighbor(routes)
+	addresses = GetClosestNeighborLimit(routes, limit)
 	return
 }
 
@@ -327,17 +328,17 @@ func (s *Service) connect(ctx context.Context, peer boson.Address) (err error) {
 	auroraAddr, err := s.config.AddressBook.Get(peer)
 	switch {
 	case errors.Is(err, addressbook.ErrNotFound):
-		s.logger.Debugf("route: empty address book entry for peer %q", peer)
+		s.logger.Debugf("route: empty address book entry for peer %s", peer)
 		s.kad.KnownPeer().Remove(peer)
 		needFindUnderlay = true
 	case err != nil:
-		s.logger.Debugf("route: failed to get address book entry for peer %q: %v", peer, err)
+		s.logger.Debugf("route: failed to get address book entry for peer %s: %v", peer, err)
 		needFindUnderlay = true
 	}
 	remove := func(peer boson.Address) {
 		s.kad.KnownPeer().Remove(peer)
 		if err := s.config.AddressBook.Remove(peer); err != nil {
-			s.logger.Debugf("route: could not remove peer %q from addressBook", peer)
+			s.logger.Debugf("route: could not remove peer %s from addressBook", peer)
 		}
 	}
 	if needFindUnderlay {
@@ -350,7 +351,7 @@ func (s *Service) connect(ctx context.Context, peer boson.Address) (err error) {
 	ctx, cancel := context.WithTimeout(ctx, peerConnectionAttemptTimeout)
 	defer cancel()
 
-	s.logger.Tracef("route: connect to overlay=%q,underlay=%q", peer, auroraAddr.Underlay.String())
+	s.logger.Tracef("route: connect to overlay=%s,underlay=%s", peer, auroraAddr.Underlay.String())
 
 	switch i, err := s.p2ps.Connect(ctx, auroraAddr.Underlay); {
 	case errors.Is(err, p2p.ErrDialLightNode):
@@ -363,13 +364,13 @@ func (s *Service) connect(ctx context.Context, peer boson.Address) (err error) {
 	case errors.Is(err, context.Canceled):
 		return err
 	case err != nil:
-		s.logger.Debugf("route: could not connect to peer %q: %v", peer, err)
+		s.logger.Debugf("route: could not connect to peer %s: %v", peer, err)
 		s.metrics.TotalOutboundConnectionFailedAttempts.Inc()
 		remove(peer)
 		return err
 	case !i.Overlay.Equal(peer):
-		_ = s.p2ps.Disconnect(peer)
-		_ = s.p2ps.Disconnect(i.Overlay)
+		_ = s.p2ps.Disconnect(peer, errOverlayMismatch.Error())
+		_ = s.p2ps.Disconnect(i.Overlay, errOverlayMismatch.Error())
 		return errOverlayMismatch
 	}
 
@@ -466,7 +467,7 @@ func (s *Service) doRouteResp(ctx context.Context, peer boson.Address, target *a
 
 func (s *Service) sendDataToNode(ctx context.Context, peer boson.Address, streamName string, msg protobuf.Message) {
 	s.logger.Tracef("route: sendDataToNode to %s %s", peer.String(), streamName)
-	stream, err1 := s.p2ps.NewStream(ctx, peer, nil, protocolName, protocolVersion, streamName)
+	stream, err1 := s.config.Stream.NewStream(ctx, peer, nil, protocolName, protocolVersion, streamName)
 	if err1 != nil {
 		s.metrics.TotalErrors.Inc()
 		s.logger.Errorf("route: sendDataToNode NewStream, err1=%s", err1)

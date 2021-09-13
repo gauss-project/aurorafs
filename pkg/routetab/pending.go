@@ -12,7 +12,7 @@ import (
 )
 
 var (
-	PendingTimeout  = time.Second * 10
+	PendingTimeout  = time.Second * 3
 	pendingInterval = time.Second
 )
 
