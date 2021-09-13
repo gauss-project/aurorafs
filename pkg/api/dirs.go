@@ -303,7 +303,7 @@ func (s *server) dirDelHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	ok := s.chunkInfo.DelFile(addr, s.overlay)
+	ok := s.chunkInfo.DelFile(addr)
 	if !ok {
 		jsonhttp.InternalServerError(w, "Error in chunk deletion.")
 		return

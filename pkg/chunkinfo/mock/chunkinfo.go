@@ -39,7 +39,7 @@ func New() *ChunkInfo {
 	}
 }
 
-func (ci *ChunkInfo) FindChunkInfo(_ context.Context, authInfo []byte, rootCid boson.Address, overlays []boson.Address) {
+func (ci *ChunkInfo) FindChunkInfo(_ context.Context, authInfo []byte, rootCid boson.Address, overlays []boson.Address) bool {
 	panic("not implemented")
 }
 
@@ -111,6 +111,6 @@ func (ci *ChunkInfo) ChangeDiscoverStatus(rootCid boson.Address, s chunkinfo.Pul
 	}
 }
 
-func (ci *ChunkInfo) DelFile(rootCid, overlay boson.Address) bool {
+func (ci *ChunkInfo) DelFile(rootCid boson.Address) bool {
 	return true
 }
