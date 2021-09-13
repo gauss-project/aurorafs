@@ -166,7 +166,7 @@ func (s *Service) DoFindNode(ctx context.Context, target, peer boson.Address, po
 	s.metrics.DoFindNode.Inc()
 	stream, err := s.streamer.NewStream(ctx, peer, nil, protocolName, protocolVersion, streamFindNode)
 	if err != nil {
-		s.logger.Errorf("hive2: DoFindNode NewStream, err=%s", err)
+		s.logger.Errorf("hive2: DoFindNode NewStream %s, err=%s", peer.String(), err)
 		return
 	}
 
@@ -238,8 +238,6 @@ func (s *Service) startCheckPeersHandler() {
 
 func (s *Service) checkAndAddPeers(ctx context.Context, result resultChan) {
 
-	var peersToAdd []boson.Address
-	mtx := sync.Mutex{}
 	wg := sync.WaitGroup{}
 
 	for _, p := range result.pb.Peers {
@@ -283,20 +281,17 @@ func (s *Service) checkAndAddPeers(ctx context.Context, result resultChan) {
 				return
 			}
 
-			mtx.Lock()
-			peersToAdd = append(peersToAdd, auroraAddress.Overlay)
-			mtx.Unlock()
+			if s.addPeersHandler != nil {
+				s.addPeersHandler(auroraAddress.Overlay)
+			}
+			<-time.After(time.Millisecond * 200)
+			result.syncResult <- auroraAddress.Overlay
+
 		}(p)
 	}
 
 	wg.Wait()
 
-	if s.addPeersHandler != nil && len(peersToAdd) > 0 {
-		s.addPeersHandler(peersToAdd...)
-	}
-	for _, v := range peersToAdd {
-		result.syncResult <- v
-	}
 	close(result.syncResult)
 }
 
