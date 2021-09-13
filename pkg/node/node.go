@@ -411,7 +411,7 @@ func NewBee(addr string, bosonAddress boson.Address, publicKey ecdsa.PublicKey, 
 	}
 	b.localstoreCloser = storer
 
-	retrieve := retrieval.New(bosonAddress, p2ps, route, storer, logger, tracer)
+	retrieve := retrieval.New(bosonAddress, p2ps, route, storer, o.FullNode, logger, tracer)
 	if err = p2ps.AddProtocol(retrieve.Protocol()); err != nil {
 		return nil, fmt.Errorf("retrieval service: %w", err)
 	}
