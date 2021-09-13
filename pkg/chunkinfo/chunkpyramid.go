@@ -144,8 +144,9 @@ func (ci *ChunkInfo) doFindChunkPyramid(ctx context.Context, authInfo []byte, ro
 	}
 	req := pb.ChunkPyramidHashReq{
 		RootCid: rootCid.Bytes(),
+		Target:  overlay.Bytes(),
 	}
-	resp, err := ci.sendPyramid(ctx, overlay, streamPyramidHashName, req)
+	resp, err := ci.sendPyramids(ctx, overlay, streamPyramidHashName, req)
 	if err != nil {
 		return err
 	}
@@ -168,4 +169,19 @@ func (cp *chunkPyramid) getCidStore(rootCid, cid boson.Address) int {
 	cp.RLock()
 	defer cp.RUnlock()
 	return cp.pyramid[rootCid.String()][cid.String()]
+}
+
+func (cp *chunkPyramid) getRootHash(rootCID string) int {
+	cp.RLock()
+	defer cp.RUnlock()
+	if cid, ok := cp.pyramid[rootCID]; ok {
+		return len(cid)
+	}
+	return 0
+}
+func (cp *chunkPyramid) delRootCid(rootCID boson.Address) bool {
+	cp.Lock()
+	defer cp.Unlock()
+	delete(cp.pyramid, rootCID.String())
+	return true
 }

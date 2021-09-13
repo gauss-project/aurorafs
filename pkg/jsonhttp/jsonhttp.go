@@ -77,6 +77,7 @@ func Respond(w http.ResponseWriter, statusCode int, response interface{}) {
 		w.Header().Set("Content-Type", DefaultContentTypeHeader)
 	}
 	w.WriteHeader(statusCode)
+
 	fmt.Fprintln(w, b.String())
 }
 

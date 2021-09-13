@@ -360,11 +360,14 @@ func NewBee(addr string, bosonAddress boson.Address, publicKey ecdsa.PublicKey, 
 		return nil, fmt.Errorf("hive service: %w", err)
 	}
 
-	kad := kademlia.New(bosonAddress, addressBook, hiveObj, p2ps, metricsDB, logger, kademlia.Options{
+	kad, err := kademlia.New(bosonAddress, addressBook, hiveObj, p2ps, metricsDB, logger, kademlia.Options{
 		Bootnodes:    bootnodes,
 		BootnodeMode: o.BootnodeMode,
 		BinMaxPeers:  o.KadBinMaxPeers,
 	})
+	if err != nil {
+		return nil, fmt.Errorf("unable to create kademlia: %w", err)
+	}
 	b.topologyCloser = kad
 	hiveObj.SetAddPeersHandler(kad.AddPeers)
 	hiveObj.SetConfig(hive2.Config{Kad: kad, Base: bosonAddress}) // hive2
@@ -387,6 +390,7 @@ func NewBee(addr string, bosonAddress boson.Address, publicKey ecdsa.PublicKey, 
 		AddressBook: addressBook,
 		NetworkID:   networkID,
 		LightNodes:  lightNodes,
+		Stream:      p2ps,
 	})
 
 	var path string
@@ -416,7 +420,7 @@ func NewBee(addr string, bosonAddress boson.Address, publicKey ecdsa.PublicKey, 
 
 	traversalService := traversal.NewService(ns)
 
-	chunkInfo := chunkinfo.New(p2ps, logger, traversalService, stateStore, route, o.OracleEndpoint)
+	chunkInfo := chunkinfo.New(bosonAddress, p2ps, logger, traversalService, stateStore, route, o.OracleEndpoint)
 	if err := chunkInfo.InitChunkInfo(); err != nil {
 		return nil, fmt.Errorf("chunk info init: %w", err)
 	}

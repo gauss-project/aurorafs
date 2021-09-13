@@ -18,10 +18,9 @@ type Discovery struct {
 	isHive2 bool
 }
 
-func NewDiscovery(isHive2 bool) *Discovery {
+func NewDiscovery() *Discovery {
 	return &Discovery{
 		records: make(map[string][]boson.Address),
-		isHive2: isHive2,
 	}
 }
 
@@ -57,7 +56,7 @@ func (d *Discovery) Reset() {
 	d.records = make(map[string][]boson.Address)
 }
 
-func (d *Discovery) DoFindNode(ctx context.Context, peer boson.Address, pos []int32, limit int32) (res chan boson.Address, total int32, err error) {
+func (d *Discovery) DoFindNode(ctx context.Context, target, peer boson.Address, pos []int32, limit int32) (res chan boson.Address, err error) {
 	return
 }
 
@@ -67,4 +66,8 @@ func (d *Discovery) IsStart() bool {
 
 func (d *Discovery) IsHive2() bool {
 	return d.isHive2
+}
+
+func (d *Discovery) SetHive2(is bool) {
+	d.isHive2 = is
 }

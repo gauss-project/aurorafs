@@ -7,15 +7,19 @@ package api
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/gauss-project/aurorafs/pkg/aurora"
+	"github.com/gauss-project/aurorafs/pkg/traversal"
 	"io"
 	"io/ioutil"
 	"mime"
 	"mime/multipart"
 	"net/http"
 	"os"
+	"sort"
 	"strconv"
 	"time"
 
@@ -39,6 +43,12 @@ const (
 // fileUploadResponse is returned when an HTTP request to upload a file is successful
 type fileUploadResponse struct {
 	Reference boson.Address `json:"reference"`
+}
+type fileListResponse struct {
+	FileHash  string              `json:"fileHash"`
+	Size      int                 `json:"size"`
+	PinState  bool                `json:"pinState"`
+	BitVector aurora.BitVectorApi `json:"bitVector"`
 }
 
 // fileUploadHandler uploads the file and its metadata supplied as:
@@ -230,7 +240,7 @@ type fileUploadInfo struct {
 // fileDownloadHandler downloads the file given the entry's reference.
 func (s *server) fileDownloadHandler(w http.ResponseWriter, r *http.Request) {
 	logger := tracing.NewLoggerWithTraceID(r.Context(), s.logger)
-	nameOrHex := mux.Vars(r)["addr"]
+	nameOrHex := mux.Vars(r)["address"]
 
 	address, err := s.resolveNameOrAddress(nameOrHex)
 	if err != nil {
@@ -356,4 +366,88 @@ func (s *server) downloadHandler(w http.ResponseWriter, r *http.Request, referen
 	w.Header().Set("Access-Control-Expose-Headers", "Content-Disposition")
 
 	http.ServeContent(w, r, "", time.Now(), langos.NewBufferedLangos(reader, lookaheadBufferSize(l)))
+}
+
+func (s *server) fileDelete(w http.ResponseWriter, r *http.Request) {
+	addr, err := boson.ParseHexAddress(mux.Vars(r)["address"])
+	if err != nil {
+		s.logger.Debugf("pin files: parse address: %v", err)
+		s.logger.Error("pin files: parse address")
+		jsonhttp.BadRequest(w, "bad address")
+		return
+	}
+
+	//There is no direct return success.
+	has, err := s.storer.Has(r.Context(), storage.ModeHasRetrievalData, addr)
+	if err != nil {
+		jsonhttp.OK(w, nil)
+		return
+	}
+
+	if !has {
+		_, err := s.storer.Get(r.Context(), storage.ModeGetRequest, addr)
+		if err != nil {
+			s.logger.Debugf("pin chunk: netstore get: %v", err)
+			s.logger.Error("pin chunk: netstore")
+
+			jsonhttp.NotFound(w, nil)
+			return
+		}
+	}
+
+	ok := s.chunkInfo.DelFile(addr, s.overlay)
+	if !ok {
+		jsonhttp.InternalServerError(w, "Error in chunk deletion.")
+		return
+	}
+	ctx := r.Context()
+
+	chunkAddressFn := s.delpinChunkAddressFn(ctx, addr)
+
+	err = s.traversal.TraverseFileAddresses(ctx, addr, chunkAddressFn)
+	if err != nil {
+		s.logger.Debugf("pin files: traverse chunks: %v, addr %s", err, addr)
+
+		if errors.Is(err, traversal.ErrInvalidType) {
+			s.logger.Error("pin files: invalid type")
+			jsonhttp.BadRequest(w, "invalid type")
+			return
+		}
+
+		s.logger.Error("pin files: cannot pin")
+		jsonhttp.InternalServerError(w, "cannot pin")
+		return
+	}
+
+	jsonhttp.OK(w, nil)
+}
+
+func (s *server) fileList(w http.ResponseWriter, r *http.Request) {
+	responseList := make([]fileListResponse, 0)
+
+	fileListInfo, addressList := s.chunkInfo.GetFileList(s.overlay)
+
+	if len(fileListInfo) > 0 && len(addressList) > 0 {
+		yes, err := s.storer.HasMulti(context.Background(), storage.ModeHasPin, addressList...)
+		if err != nil {
+			return
+		}
+		for i, v := range addressList {
+			//fileListInfo[v.String()].PinState = yes[i]
+			Response := fileListResponse{}
+			Response.FileHash = v.String()
+			Response.Size = fileListInfo[v.String()].TreeSize
+			Response.PinState = yes[i]
+			Response.BitVector = fileListInfo[v.String()].Bitvector
+			responseList = append(responseList, Response)
+		}
+		if len(responseList) > 0 {
+			sort.Slice(responseList, func(i, j int) bool {
+				return responseList[i].FileHash < responseList[j].FileHash
+			})
+		}
+
+		fmt.Println(responseList)
+	}
+	jsonhttp.OK(w, responseList)
 }

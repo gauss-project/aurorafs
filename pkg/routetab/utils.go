@@ -188,3 +188,14 @@ func GetClosestNeighbor(routes []RouteItem) []boson.Address {
 	}
 	return addresses
 }
+
+func GetClosestNeighborLimit(routes []RouteItem, limit int) (out []boson.Address) {
+	list := GetClosestNeighbor(routes)
+	for k, v := range list {
+		out = append(out, v)
+		if k+1 == limit {
+			return
+		}
+	}
+	return
+}

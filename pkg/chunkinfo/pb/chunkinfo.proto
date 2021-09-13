@@ -10,6 +10,7 @@ option go_package = "pb";
 
 message ChunkPyramidHashReq {
   bytes RootCid = 1;
+  bytes target = 2;
 }
 
 message ChunkPyramidHashResp{
@@ -19,6 +20,7 @@ message ChunkPyramidHashResp{
 message ChunkPyramidChunkReq {
   bytes Hash = 1;
   bytes RootCid = 2;
+  bytes target = 3;
 }
 
 message ChunkPyramidChunkResp{
@@ -27,10 +29,13 @@ message ChunkPyramidChunkResp{
 
 message ChunkInfoReq {
   bytes RootCid = 1;
-  int64 CreateTime = 2;
+  bytes target = 2;
+  bytes req = 3;
 }
 
 message ChunkInfoResp {
   bytes RootCid = 1;
-  map<string, bytes> Presence = 2;
+  bytes target = 2;
+  bytes req = 3;
+  map<string, bytes> Presence = 4;
 }

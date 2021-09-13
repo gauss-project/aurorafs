@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/gauss-project/aurorafs/pkg/aurora"
 	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/logging"
 	"github.com/gauss-project/aurorafs/pkg/p2p"
@@ -32,10 +33,15 @@ type Interface interface {
 	GetChunkPyramid(rootCid boson.Address) []*boson.Address
 
 	IsDiscover(rootCid boson.Address) bool
+
+	GetFileList(overlay boson.Address) (fileListInfo map[string]*aurora.FileInfo, rootList []boson.Address)
+
+	DelFile(rootCid, overlay boson.Address) bool
 }
 
 // ChunkInfo
 type ChunkInfo struct {
+	addr         boson.Address
 	storer       storage.StateStorer
 	traversal    traversal.Service
 	route        routetab.RouteTab
@@ -54,10 +60,11 @@ type ChunkInfo struct {
 }
 
 // New
-func New(streamer p2p.Streamer, logger logging.Logger, traversal traversal.Service, storer storage.StateStorer, route routetab.RouteTab, oracleUrl string) *ChunkInfo {
+func New(addr boson.Address, streamer p2p.Streamer, logger logging.Logger, traversal traversal.Service, storer storage.StateStorer, route routetab.RouteTab, oracleUrl string) *ChunkInfo {
 	queues := make(map[string]*queue)
 	t := time.NewTimer(Time * time.Second)
 	return &ChunkInfo{
+		addr:      addr,
 		storer:    storer,
 		route:     route,
 		ct:        newChunkInfoTabNeighbor(),
@@ -138,9 +145,14 @@ func (ci *ChunkInfo) Init(ctx context.Context, authInfo []byte, rootCid boson.Ad
 		a, _ := boson.ParseHexAddress(addr)
 		overlays = append(overlays, a)
 	}
+	return ci.FindChunkInfo(ctx, authInfo, rootCid, overlays)
+}
 
+// FindChunkInfo
+func (ci *ChunkInfo) FindChunkInfo(ctx context.Context, authInfo []byte, rootCid boson.Address, overlays []boson.Address) bool {
 	ticker := time.NewTicker(chunkInfoRetryIntervalDuration)
 	defer ticker.Stop()
+	count := len(overlays)
 
 	var (
 		peerAttempt  int
@@ -154,7 +166,7 @@ func (ci *ChunkInfo) Init(ctx context.Context, authInfo []byte, rootCid boson.Ad
 				return true
 			}
 			if first {
-				ci.FindChunkInfo(ctx, authInfo, rootCid, overlays)
+				ci.findChunkInfo(ctx, authInfo, rootCid, overlays)
 				first = false
 			}
 		} else if peerAttempt < count {
@@ -176,13 +188,11 @@ func (ci *ChunkInfo) Init(ctx context.Context, authInfo []byte, rootCid boson.Ad
 		}
 		if peersResults >= count {
 			return false
-
 		}
 	}
 }
 
-// FindChunkInfo
-func (ci *ChunkInfo) FindChunkInfo(ctx context.Context, authInfo []byte, rootCid boson.Address, overlays []boson.Address) {
+func (ci *ChunkInfo) findChunkInfo(ctx context.Context, authInfo []byte, rootCid boson.Address, overlays []boson.Address) {
 	go ci.triggerTimeOut()
 	ci.cpd.updatePendingFinder(rootCid)
 	if ci.getQueue(rootCid.String()) == nil {
@@ -233,6 +243,40 @@ func (ci *ChunkInfo) IsDiscover(rootCid boson.Address) bool {
 	}
 
 	return false
+}
+
+func (ci *ChunkInfo) GetFileList(overlay boson.Address) (fileListInfo map[string]*aurora.FileInfo, rootList []boson.Address) {
+	ci.ct.RLock()
+	chunkInfo := ci.ct.presence
+	ci.ct.RUnlock()
+	fileListInfo = make(map[string]*aurora.FileInfo)
+	for root, node := range chunkInfo {
+		if v, ok := node[overlay.String()]; ok {
+			file := &aurora.FileInfo{}
+			file.PinState = false
+			file.TreeSize = ci.cp.getRootHash(root) - v.Len()
+			file.Bitvector.B = v.Bytes()
+			file.Bitvector.Len = v.Len()
+			fileListInfo[root] = file
+			rootList = append(rootList, boson.MustParseHexAddress(root))
+		}
+	}
+	return
+}
+
+func (ci *ChunkInfo) DelFile(rootCid, overlay boson.Address) bool {
+	ci.queuesLk.Lock()
+	defer ci.queuesLk.Unlock()
+
+	err := ci.storer.Delete(generateKey(keyPrefix, rootCid, overlay))
+	if err != nil {
+		return false
+	}
+	if ok := ci.cp.delRootCid(rootCid); ok {
+		return ci.ct.delPresence(rootCid)
+	} else {
+		return false
+	}
 }
 
 func generateKey(keyPrefix string, rootCid, overlay boson.Address) string {

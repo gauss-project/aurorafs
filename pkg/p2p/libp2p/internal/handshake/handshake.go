@@ -72,7 +72,7 @@ type Service struct {
 	receivedHandshakes    map[libp2ppeer.ID]struct{}
 	receivedHandshakesMu  sync.Mutex
 	logger                logging.Logger
-
+	libp2pID              libp2ppeer.ID
 	network.Notifiee // handshake service can be the receiver for network.Notify
 }
 
@@ -108,7 +108,7 @@ func (i *Info) LightString() string {
 }
 
 // New creates a new handshake Service.
-func New(signer crypto.Signer, advertisableAddresser AdvertisableAddressResolver, overlay boson.Address, networkID uint64, fullNode bool, welcomeMessage string, logger logging.Logger) (*Service, error) {
+func New(signer crypto.Signer, advertisableAddresser AdvertisableAddressResolver, overlay boson.Address, networkID uint64, fullNode bool, welcomeMessage string, ownPeerID libp2ppeer.ID, logger logging.Logger) (*Service, error) {
 	if len(welcomeMessage) > MaxWelcomeMessageLength {
 		return nil, ErrWelcomeMessageLength
 	}
@@ -122,6 +122,7 @@ func New(signer crypto.Signer, advertisableAddresser AdvertisableAddressResolver
 		nodeMode:              Model{Bv: bv},
 		receivedHandshakes:    make(map[libp2ppeer.ID]struct{}),
 		logger:                logger,
+		libp2pID:              ownPeerID,
 		Notifiee:              new(network.NoopNotifiee),
 	}
 	svc.welcomeMessage.Store(welcomeMessage)
@@ -164,6 +165,16 @@ func (s *Service) Handshake(ctx context.Context, stream p2p.Stream, peerMultiadd
 	observedUnderlay, err := ma.NewMultiaddrBytes(resp.Syn.ObservedUnderlay)
 	if err != nil {
 		return nil, ErrInvalidSyn
+	}
+
+	observedUnderlayAddrInfo, err := libp2ppeer.AddrInfoFromP2pAddr(observedUnderlay)
+	if err != nil {
+		return nil, fmt.Errorf("extract addr from P2P: %w", err)
+	}
+
+	if s.libp2pID != observedUnderlayAddrInfo.ID {
+		//NOTE eventually we will return error here, but for now we want to gather some statistics
+		s.logger.Warningf("received peer ID %s does not match ours: %s", observedUnderlayAddrInfo.ID, s.libp2pID)
 	}
 
 	advertisableUnderlay, err := s.advertisableAddresser.Resolve(observedUnderlay)

@@ -43,10 +43,20 @@ func (s *server) setupRouting() {
 			web.FinalHandlerFunc(s.fileUploadHandler),
 		),
 	})
-	handle(router, "/files/{addr}", jsonhttp.MethodHandler{
+	handle(router, "/filesList", jsonhttp.MethodHandler{
+		"GET": web.ChainHandlers(
+			s.newTracingHandler("fileList-get"),
+			web.FinalHandlerFunc(s.fileList),
+		),
+	})
+	handle(router, "/files/{address}", jsonhttp.MethodHandler{
 		"GET": web.ChainHandlers(
 			s.newTracingHandler("files-download"),
 			web.FinalHandlerFunc(s.fileDownloadHandler),
+		),
+		"DELETE": web.ChainHandlers(
+			s.newTracingHandler("files-delete"),
+			web.FinalHandlerFunc(s.fileDelete),
 		),
 	})
 
@@ -54,6 +64,25 @@ func (s *server) setupRouting() {
 		"POST": web.ChainHandlers(
 			s.newTracingHandler("dirs-upload"),
 			web.FinalHandlerFunc(s.dirUploadHandler),
+		),
+	})
+
+	handle(router, "/aurora/{address}", jsonhttp.MethodHandler{
+		"GET": http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			u := r.URL
+			u.Path += "/"
+			http.Redirect(w, r, u.String(), http.StatusPermanentRedirect)
+		}),
+		"DELETE": web.ChainHandlers(
+			s.newTracingHandler("aurora-delete"),
+			web.FinalHandlerFunc(s.dirDelHandler),
+		),
+	})
+
+	handle(router, "/aurora/{address}/{path:.*}", jsonhttp.MethodHandler{
+		"GET": web.ChainHandlers(
+			s.newTracingHandler("aurora-download"),
+			web.FinalHandlerFunc(s.bzzDownloadHandler),
 		),
 	})
 
@@ -85,18 +114,6 @@ func (s *server) setupRouting() {
 		"POST": web.ChainHandlers(
 			jsonhttp.NewMaxBodyBytesHandler(boson.ChunkWithSpanSize),
 			web.FinalHandlerFunc(s.socUploadHandler),
-		),
-	})
-
-	handle(router, "/aurora/{address}", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		u := r.URL
-		u.Path += "/"
-		http.Redirect(w, r, u.String(), http.StatusPermanentRedirect)
-	}))
-	handle(router, "/aurora/{address}/{path:.*}", jsonhttp.MethodHandler{
-		"GET": web.ChainHandlers(
-			s.newTracingHandler("aurora-download"),
-			web.FinalHandlerFunc(s.bzzDownloadHandler),
 		),
 	})
 

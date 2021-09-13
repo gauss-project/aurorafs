@@ -3,26 +3,24 @@ package hive2_test
 import (
 	"context"
 	"errors"
-	"fmt"
 	"github.com/gauss-project/aurorafs/pkg/addressbook"
 	"github.com/gauss-project/aurorafs/pkg/aurora"
 	"github.com/gauss-project/aurorafs/pkg/boson"
+	"github.com/gauss-project/aurorafs/pkg/boson/test"
 	"github.com/gauss-project/aurorafs/pkg/crypto"
 	"github.com/gauss-project/aurorafs/pkg/hive2"
 	"github.com/gauss-project/aurorafs/pkg/logging"
-	p2p "github.com/gauss-project/aurorafs/pkg/p2p"
-	"github.com/gauss-project/aurorafs/pkg/p2p/libp2p"
+	"github.com/gauss-project/aurorafs/pkg/p2p"
 	p2pmock "github.com/gauss-project/aurorafs/pkg/p2p/mock"
 	"github.com/gauss-project/aurorafs/pkg/p2p/streamtest"
 	"github.com/gauss-project/aurorafs/pkg/shed"
 	mockstate "github.com/gauss-project/aurorafs/pkg/statestore/mock"
 	"github.com/gauss-project/aurorafs/pkg/topology/kademlia"
-	"github.com/gauss-project/aurorafs/pkg/topology/lightnode"
-	"github.com/gauss-project/aurorafs/pkg/tracing"
 	ma "github.com/multiformats/go-multiaddr"
 	"github.com/sirupsen/logrus"
 	"io"
 	"testing"
+	"time"
 )
 
 const underlayBase = "/ip4/127.0.0.1/tcp/1634/dns/"
@@ -31,69 +29,66 @@ var (
 	nonConnectableAddress, _        = ma.NewMultiaddr(underlayBase + "16Uiu2HAkx8ULY8cTXhdVAcMmLcH9AsTKz6uBQ7DPLKRjMLgBVYkA")
 	noopLogger                      = logging.New(io.Discard, logrus.TraceLevel)
 	networkId                uint64 = 0
-	portArray                       = []int{16330}
 )
 
 type Node struct {
-	peer   *aurora.Address
-	signer crypto.Signer
-	book   addressbook.Interface
-	p2ps   *streamtest.Recorder
-	Hive2  *hive2.Service
-	kad    *kademlia.Kad
-}
-
-func newNode(t *testing.T) *Node {
-	t.Helper()
-
-	addr, kad, signer, ab := newTestKademlia(t)
-	stream := streamtest.New(streamtest.WithBaseAddr(addr.Overlay))
-
-	h := hive2.New(stream, ab, networkId, noopLogger)
-	h.SetConfig(hive2.Config{Kad: kad})
-
-	return &Node{
-		peer:   addr,
-		signer: signer,
-		book:   ab,
-		p2ps:   stream,
-		Hive2:  h,
-		kad:    kad,
-	}
+	overlay boson.Address
+	addr    *aurora.Address
+	peer    p2p.Peer
+	signer  crypto.Signer
+	book    addressbook.Interface
+	p2ps    p2p.Service
+	kad     *kademlia.Kad
+	stream  *streamtest.Recorder
+	*hive2.Service
 }
 
 func p2pMock(ab addressbook.Interface, overlay boson.Address, signer crypto.Signer) p2p.Service {
-	p2ps := p2pmock.New(p2pmock.WithConnectFunc(func(ctx context.Context, underlay ma.Multiaddr) (*aurora.Address, error) {
-		if underlay.Equal(nonConnectableAddress) {
-			return nil, errors.New("non reachable node")
-		}
-		addresses, err := ab.Addresses()
-		if err != nil {
-			return nil, errors.New("could not fetch addresbook addresses")
-		}
-
-		for _, a := range addresses {
-			if a.Underlay.Equal(underlay) {
-				return &a, nil
+	p2ps := p2pmock.New(
+		p2pmock.WithConnectFunc(func(ctx context.Context, underlay ma.Multiaddr) (*aurora.Address, error) {
+			if underlay.Equal(nonConnectableAddress) {
+				return nil, errors.New("non reachable node")
 			}
-		}
+			addresses, err := ab.Addresses()
+			if err != nil {
+				return nil, errors.New("could not fetch addressBook addresses")
+			}
 
-		bzzAddr, err := aurora.NewAddress(signer, underlay, overlay, networkId)
-		if err != nil {
-			return nil, err
-		}
+			for _, a := range addresses {
+				if a.Underlay.Equal(underlay) {
+					return &a, nil
+				}
+			}
 
-		if err := ab.Put(overlay, *bzzAddr); err != nil {
-			return nil, err
-		}
+			bzzAddr, err := aurora.NewAddress(signer, underlay, overlay, networkId)
+			if err != nil {
+				return nil, err
+			}
 
-		return bzzAddr, nil
-	}))
+			if err := ab.Put(overlay, *bzzAddr); err != nil {
+				return nil, err
+			}
+
+			return bzzAddr, nil
+		}),
+		p2pmock.WithPeersFunc(func() (out []p2p.Peer) {
+			_ = ab.IterateOverlays(func(address boson.Address) (bool, error) {
+				out = append(out, p2p.Peer{
+					Address:  address,
+					FullNode: true,
+				})
+				return false, nil
+			})
+			return out
+		}),
+	)
 
 	return p2ps
 }
 
-func newTestKademlia(t *testing.T) (*aurora.Address, *kademlia.Kad, crypto.Signer, addressbook.Interface) {
+func newTestNode(t *testing.T, peer boson.Address, po int) *Node {
+	t.Helper()
+
 	metricsDB, err := shed.NewDB("", nil)
 	if err != nil {
 		t.Fatal(err)
@@ -103,39 +98,50 @@ func newTestKademlia(t *testing.T) (*aurora.Address, *kademlia.Kad, crypto.Signe
 			t.Fatal(err)
 		}
 	})
-	port := portArray[len(portArray)-1] + 1
-	portArray = append(portArray, port)
-	base, signer := randomAddress(t)
-	lightNodes := lightnode.NewContainer(base.Overlay)
-	tracer, tracerCloser, err := tracing.NewTracer(&tracing.Options{})
-	defer tracerCloser.Close()
+
+	base, signer := randomAddress(t, peer, po)
 	ab := addressbook.New(mockstate.NewStateStore()) // address book
-	p2ps, err := libp2p.New(context.TODO(), signer, networkId, base.Overlay, fmt.Sprintf(":%d", port), ab, mockstate.NewStateStore(), lightNodes, noopLogger, tracer, libp2p.Options{FullNode: true})
+	p2ps := p2pMock(ab, base.Overlay, signer)
+
+	stream := streamtest.New(streamtest.WithBaseAddr(base.Overlay))
+	Hive2 := hive2.New(stream, ab, networkId, noopLogger)
+
+	kad, err := kademlia.New(base.Overlay, ab, Hive2, p2ps, metricsDB, noopLogger, kademlia.Options{BinMaxPeers: 5}) // kademlia instance
 	if err != nil {
 		t.Fatal(err)
 	}
-	var (
-		disc = hive2.New(p2ps, ab, networkId, noopLogger)                                                           // mock discovery protocol
-		kad  = kademlia.New(base.Overlay, ab, disc, p2ps, metricsDB, noopLogger, kademlia.Options{BinMaxPeers: 10}) // kademlia instance
-	)
 	p2ps.SetPickyNotifier(kad)
-	disc.SetConfig(hive2.Config{Kad: kad})
-	err = kad.Start(context.TODO())
-	if err != nil {
-		t.Fatal(err)
+
+	Hive2.SetAddPeersHandler(kad.AddPeers)
+	Hive2.SetConfig(hive2.Config{
+		Kad:  kad,
+		Base: base.Overlay,
+	})
+
+	return &Node{
+		overlay: base.Overlay,
+		addr:    base,
+		peer:    p2p.Peer{Address: base.Overlay},
+		signer:  signer,
+		book:    ab,
+		p2ps:    p2ps,
+		kad:     kad,
+		stream:  stream,
+		Service: Hive2,
 	}
-	return base, kad, signer, ab
 }
 
-func randomAddress(t *testing.T) (addr *aurora.Address, signer crypto.Signer) {
+func randomAddress(t *testing.T, base boson.Address, po int) (addr *aurora.Address, signer crypto.Signer) {
 	pk, _ := crypto.GenerateSecp256k1Key()
 	signer = crypto.NewDefaultSigner(pk)
-	base, _ := crypto.NewOverlayAddress(pk.PublicKey, networkId)
+
+	p := test.RandomAddressAt(base, po)
+	//base, _ := crypto.NewOverlayAddress(pk.PublicKey, networkId)
 	mu, err := ma.NewMultiaddr(underlayBase + base.String())
 	if err != nil {
 		t.Fatal(err)
 	}
-	auroraAddr, err := aurora.NewAddress(signer, mu, base, networkId)
+	auroraAddr, err := aurora.NewAddress(signer, mu, p, networkId)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -156,28 +162,252 @@ func (s *Node) addOne(t *testing.T, peer *aurora.Address, connect bool) {
 	}
 }
 
+func (s *Node) connect(t *testing.T, peer boson.Address) {
+	t.Helper()
+	multiaddr, err := ma.NewMultiaddr(underlayBase + peer.String())
+	if err != nil {
+		t.Fatal(err)
+	}
+	pk, _ := crypto.GenerateSecp256k1Key()
+	signer := crypto.NewDefaultSigner(pk)
+
+	auroraAddr, err := aurora.NewAddress(signer, multiaddr, peer, networkId)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = s.book.Put(peer, *auroraAddr); err != nil {
+		t.Fatal(err)
+	}
+	err = s.kad.Connected(context.TODO(), p2p.Peer{Address: peer}, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+func (s *Node) connectMore(t *testing.T, base boson.Address, po, count int) (list []boson.Address) {
+	for i := 0; i < count; i++ {
+		p3 := test.RandomAddressAt(base, po)
+		s.connect(t, p3)
+		list = append(list, p3)
+		//t.Logf("po=%d %s", po, p3.String())
+	}
+	return
+}
+
+func TestLookupDistances(t *testing.T) {
+	a := test.RandomAddress()
+
+	t.Run("normal distances calc", func(t *testing.T) {
+		b := test.RandomAddressAt(a, 1)
+		res := hive2.LookupDistances(a, b)
+		if len(res) != 3 {
+			t.Fatalf("exp len(res)=3, got %d", len(res))
+		}
+		if res[0] != 1 {
+			t.Fatalf("exp po=1, got %d", res[0])
+		}
+		if res[1] != 2 {
+			t.Fatalf("exp po=2, got %d", res[1])
+		}
+		if res[2] != 0 {
+			t.Fatalf("exp po=0, got %d", res[2])
+		}
+	})
+
+	t.Run("most left distances calc", func(t *testing.T) {
+		b := test.RandomAddressAt(a, 0)
+		res := hive2.LookupDistances(a, b)
+		if len(res) != 3 {
+			t.Fatalf("exp len(res)=3, got %d", len(res))
+		}
+		if res[0] != 0 {
+			t.Fatalf("exp po=0, got %d", res[0])
+		}
+		if res[1] != 1 {
+			t.Fatalf("exp po=1, got %d", res[1])
+		}
+		if res[2] != 2 {
+			t.Fatalf("exp po=2, got %d", res[2])
+		}
+	})
+
+	t.Run("most right distances calc", func(t *testing.T) {
+		b := test.RandomAddressAt(a, 31)
+		res := hive2.LookupDistances(a, b)
+		if len(res) != 3 {
+			t.Fatalf("exp len(res)=3, got %d", len(res))
+		}
+		if res[0] != 31 {
+			t.Fatalf("exp po=31, got %d", res[0])
+		}
+		if res[1] != 30 {
+			t.Fatalf("exp po=30, got %d", res[1])
+		}
+		if res[2] != 29 {
+			t.Fatalf("exp po=29, got %d", res[2])
+		}
+	})
+
+}
+
+func checkChan(t *testing.T, ch chan boson.Address, list []boson.Address) (total int) {
+	t.Helper()
+	for {
+		select {
+		case addr := <-ch:
+			if addr.IsZero() {
+				return
+			}
+			has := false
+			for _, v := range list {
+				if v.Equal(addr) {
+					has = true
+				}
+			}
+			if !has {
+				t.Fatalf("received expected find %s, got nil", addr.String())
+			}
+			total++
+		}
+	}
+}
+
 func TestService_DoFindNode(t *testing.T) {
+	ctx := context.Background()
 
-	nodes := make([]*Node, 20)
-	for i := 0; i < 20; i++ {
-		nodes[i] = newNode(t)
+	a := newTestNode(t, test.RandomAddress(), -1)
+	b := newTestNode(t, test.RandomAddress(), -1)
+
+	a.addOne(t, b.addr, true)
+	b.addOne(t, a.addr, true)
+
+	a.stream.SetProtocols(b.Protocol())
+	b.stream.SetProtocols(a.Protocol())
+
+	err := a.kad.Start(ctx)
+	if err != nil {
+		t.Fatal(err)
 	}
 
-	nodes[0].addOne(t, nodes[1].peer, true)
-	nodes[1].addOne(t, nodes[0].peer, true)
+	pos := hive2.LookupDistances(a.overlay, b.overlay)
 
+	t.Run("skip self", func(t *testing.T) {
+		// skip self
+		res, err := a.DoFindNode(ctx, a.overlay, b.overlay, pos, 2)
+		if err != nil {
+			t.Fatal(err)
+		}
+		total := checkChan(t, res, nil)
+		if total != 0 {
+			t.Fatalf("exp received 0 peer, got %d", total)
+		}
+	})
 
-	for i := 2; i < 20; i++ {
-		nodes[1].addOne(t, nodes[i].peer, true)
-	}
-	s1 := nodes[1].kad.Snapshot()
-	if s1.Connected != 19 {
-		t.Fatalf("connected expected 19 got %d", s1.Connected)
-	}
-	s0 := nodes[0].kad.Snapshot()
-	if s0.Connected != 1 {
-		t.Fatalf("connected expected 1 got %d", s0.Connected)
-	}
-	//nodes[0].kad
+	// connected 2
+	p2List := b.connectMore(t, a.overlay, int(pos[0]), 3)
+	t.Run("connected 2", func(t *testing.T) {
+		s0 := a.kad.Snapshot()
+		if s0.Connected != 1 {
+			t.Fatalf("connected expected 1 got %d", s0.Connected)
+		}
 
+		res, err := a.DoFindNode(ctx, a.overlay, b.overlay, pos, 2)
+		if err != nil {
+			t.Fatal(err)
+		}
+		total := checkChan(t, res, p2List)
+		if total != 2 {
+			t.Fatalf("exp received 2 peer, got %d", total)
+		}
+		time.Sleep(time.Millisecond * 100)
+		s01 := a.kad.Snapshot()
+		if s01.Connected != 3 {
+			t.Fatalf("connected expected 3 got %d", s01.Connected)
+		}
+	})
+
+	// connected max
+	p3List := b.connectMore(t, a.overlay, int(pos[1]), 20)
+	posReq := []int32{pos[1]}
+	res1, err := a.DoFindNode(ctx, a.overlay, b.overlay, posReq, 16)
+	if err != nil {
+		t.Fatal(err)
+	}
+	total := checkChan(t, res1, p3List)
+	if total != 16 {
+		t.Fatalf("exp received 16 peer, got %d", total)
+	}
+	time.Sleep(time.Millisecond * 100)
+	s03 := a.kad.Snapshot()
+	if s03.Connected != 19 {
+		t.Fatalf("connected expected 19 got %d", s03.Connected)
+	}
+
+}
+
+func TestService_Lookup(t *testing.T) {
+	ctx := context.Background()
+
+	a := newTestNode(t, test.RandomAddress(), -1)
+	b := newTestNode(t, a.overlay, 5)
+	c := newTestNode(t, a.overlay, 5)
+
+	a.addOne(t, b.addr, true)
+	//b.addOne(t, a.addr, true)
+	b.addOne(t, c.addr, true)
+	//c.addOne(t, b.addr, true)
+
+	a.SetStreamer(streamtest.New(
+		streamtest.WithBaseAddr(a.overlay),
+		streamtest.WithPeerProtocols(map[string]p2p.ProtocolSpec{
+			b.overlay.String(): b.Protocol(),
+			c.overlay.String(): c.Protocol(),
+		}),
+	))
+
+	b.SetStreamer(streamtest.New(
+		streamtest.WithBaseAddr(b.overlay),
+		streamtest.WithPeerProtocols(map[string]p2p.ProtocolSpec{
+			a.overlay.String(): a.Protocol(),
+			c.overlay.String(): c.Protocol(),
+		}),
+	))
+	c.SetStreamer(streamtest.New(
+		streamtest.WithBaseAddr(c.overlay),
+		streamtest.WithPeerProtocols(map[string]p2p.ProtocolSpec{
+			b.overlay.String(): b.Protocol(),
+			a.overlay.String(): a.Protocol(),
+		}),
+	))
+
+	err := a.kad.Start(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = b.kad.Start(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = c.kad.Start(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	//t.Logf("a %s", a.overlay)
+	//t.Logf("b %s", b.overlay)
+	//t.Logf("c %s", c.overlay)
+	//pos := hive2.LookupDistances(a.overlay, b.overlay)
+	//b.connectMore(t, a.overlay, int(pos[0]), 2)
+
+	posC := hive2.LookupDistances(a.overlay, c.overlay)
+	c.connectMore(t, a.overlay, int(posC[1]), 3)
+
+	hive2.NewLookup(a.overlay, a.Service).Run()
+
+	// skip saturated po
+	time.Sleep(time.Millisecond * 100)
+	s03 := a.kad.Snapshot()
+	if s03.Connected != 4 {
+		t.Fatalf("connected expected 4 got %d", s03.Connected)
+	}
 }
