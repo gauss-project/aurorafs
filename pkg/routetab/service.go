@@ -309,7 +309,7 @@ func (s *Service) Connect(ctx context.Context, target boson.Address) error {
 	return s.connect(ctx, target)
 }
 
-func (s *Service) GetTargetNeighbor(ctx context.Context, target boson.Address) (addresses []boson.Address, err error) {
+func (s *Service) GetTargetNeighbor(ctx context.Context, target boson.Address, limit int) (addresses []boson.Address, err error) {
 	var routes []RouteItem
 	_, routes, err = s.GetRoute(ctx, target)
 	if err != nil {
@@ -319,7 +319,7 @@ func (s *Service) GetTargetNeighbor(ctx context.Context, target boson.Address) (
 			return
 		}
 	}
-	addresses = GetClosestNeighbor(routes)
+	addresses = GetClosestNeighborLimit(routes, limit)
 	return
 }
 

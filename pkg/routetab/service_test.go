@@ -907,4 +907,8 @@ func TestGetClosestNeighbor(t *testing.T) {
 	if !got[2].Equal(boson.MustParseHexAddress("0606")) {
 		t.Fatalf("expected address 0606  got %s", got[0].String())
 	}
+	got1 := routetab.GetClosestNeighborLimit(list,2)
+	if len(got1) != 2 {
+		t.Fatalf("expected len(GetClosestNeighbor) 2 got %d", len(got))
+	}
 }
