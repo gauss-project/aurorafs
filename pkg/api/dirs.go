@@ -11,6 +11,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/gauss-project/aurorafs/pkg/storage"
+	"github.com/gauss-project/aurorafs/pkg/traversal"
+	"github.com/gorilla/mux"
 	"io"
 	"mime"
 	"net/http"
@@ -271,4 +274,59 @@ func storeFile(ctx context.Context, fileInfo *fileUploadInfo, p pipelineFunc, en
 	}
 
 	return ref, nil
+}
+
+func (s *server) dirDelHandler(w http.ResponseWriter, r *http.Request) {
+	addr, err := boson.ParseHexAddress(mux.Vars(r)["address"])
+	if err != nil {
+		s.logger.Debugf("pin files: parse address: %v", err)
+		s.logger.Error("pin files: parse address")
+		jsonhttp.BadRequest(w, "bad address")
+		return
+	}
+
+	//There is no direct return success.
+	has, err := s.storer.Has(r.Context(), storage.ModeHasRetrievalData, addr)
+	if err != nil {
+		jsonhttp.OK(w, nil)
+		return
+	}
+
+	if !has {
+		_, err := s.storer.Get(r.Context(), storage.ModeGetRequest, addr)
+		if err != nil {
+			s.logger.Debugf("pin chunk: netstore get: %v", err)
+			s.logger.Error("pin chunk: netstore")
+
+			jsonhttp.NotFound(w, nil)
+			return
+		}
+	}
+
+	ok := s.chunkInfo.DelFile(addr, s.overlay)
+	if !ok {
+		jsonhttp.InternalServerError(w, "Error in chunk deletion.")
+		return
+	}
+	ctx := r.Context()
+
+	chunkAddressFn := s.delpinChunkAddressFn(ctx, addr)
+
+	err = s.traversal.TraverseManifestAddresses(ctx, addr, chunkAddressFn)
+	if err != nil {
+		s.logger.Debugf("pin files: traverse chunks: %v, addr %s", err, addr)
+
+		if errors.Is(err, traversal.ErrInvalidType) {
+			s.logger.Error("pin files: invalid type")
+			jsonhttp.BadRequest(w, "invalid type")
+			return
+		}
+
+		s.logger.Error("pin files: cannot pin")
+		jsonhttp.InternalServerError(w, "cannot pin")
+		return
+	}
+
+	jsonhttp.OK(w, nil)
+
 }

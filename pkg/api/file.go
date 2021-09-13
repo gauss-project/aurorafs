@@ -19,6 +19,7 @@ import (
 	"mime/multipart"
 	"net/http"
 	"os"
+	"sort"
 	"strconv"
 	"time"
 
@@ -44,10 +45,10 @@ type fileUploadResponse struct {
 	Reference boson.Address `json:"reference"`
 }
 type fileListResponse struct {
-	FileHash  string
-	Size      int
-	PinState  bool
-	BitVector aurora.BitVectorApi
+	FileHash  string              `json:"fileHash"`
+	Size      int                 `json:"size"`
+	PinState  bool                `json:"pinState"`
+	BitVector aurora.BitVectorApi `json:"bitVector"`
 }
 
 // fileUploadHandler uploads the file and its metadata supplied as:
@@ -239,7 +240,7 @@ type fileUploadInfo struct {
 // fileDownloadHandler downloads the file given the entry's reference.
 func (s *server) fileDownloadHandler(w http.ResponseWriter, r *http.Request) {
 	logger := tracing.NewLoggerWithTraceID(r.Context(), s.logger)
-	nameOrHex := mux.Vars(r)["addr"]
+	nameOrHex := mux.Vars(r)["address"]
 
 	address, err := s.resolveNameOrAddress(nameOrHex)
 	if err != nil {
@@ -368,7 +369,7 @@ func (s *server) downloadHandler(w http.ResponseWriter, r *http.Request, referen
 }
 
 func (s *server) fileDelete(w http.ResponseWriter, r *http.Request) {
-	addr, err := boson.ParseHexAddress(mux.Vars(r)["addr"])
+	addr, err := boson.ParseHexAddress(mux.Vars(r)["address"])
 	if err != nil {
 		s.logger.Debugf("pin files: parse address: %v", err)
 		s.logger.Error("pin files: parse address")
@@ -425,6 +426,7 @@ func (s *server) fileList(w http.ResponseWriter, r *http.Request) {
 	responseList := make([]fileListResponse, 0)
 
 	fileListInfo, addressList := s.chunkInfo.GetFileList(s.overlay)
+
 	if len(fileListInfo) > 0 && len(addressList) > 0 {
 		yes, err := s.storer.HasMulti(context.Background(), storage.ModeHasPin, addressList...)
 		if err != nil {
@@ -439,6 +441,13 @@ func (s *server) fileList(w http.ResponseWriter, r *http.Request) {
 			Response.BitVector = fileListInfo[v.String()].Bitvector
 			responseList = append(responseList, Response)
 		}
+		if len(responseList) > 0 {
+			sort.Slice(responseList, func(i, j int) bool {
+				return responseList[i].FileHash < responseList[j].FileHash
+			})
+		}
+
+		fmt.Println(responseList)
 	}
 	jsonhttp.OK(w, responseList)
 }

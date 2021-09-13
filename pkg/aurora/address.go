@@ -38,14 +38,14 @@ type addressJSON struct {
 }
 
 type FileInfo struct {
-	TreeSize  int
-	Bitvector BitVectorApi
-	PinState  bool
+	TreeSize  int          `json:"treeSize"`
+	Bitvector BitVectorApi `json:"bitvector"`
+	PinState  bool         `json:"pinState"`
 }
 
 type BitVectorApi struct {
-	Len int
-	B   []byte
+	Len int    `json:"len"`
+	B   []byte `json:"b"`
 }
 
 func NewAddress(signer crypto.Signer, underlay ma.Multiaddr, overlay boson.Address, networkID uint64) (*Address, error) {
