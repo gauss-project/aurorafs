@@ -16,6 +16,11 @@ func newChunkPyramid() *chunkPyramid {
 	return &chunkPyramid{pyramid: make(map[string]map[string]int)}
 }
 
+func (cp *chunkPyramid) delRootCid(rootCID boson.Address) bool {
+	delete(cp.pyramid, rootCID.String())
+	return true
+}
+
 type pendingFinderInfo struct {
 	// rootCid
 	finder map[string]struct{}
@@ -112,5 +117,5 @@ func (ci *ChunkInfo) ChangeDiscoverStatus(rootCid boson.Address, s chunkinfo.Pul
 }
 
 func (ci *ChunkInfo) DelFile(rootCid boson.Address) bool {
-	return true
+	return ci.cp.delRootCid(rootCid)
 }

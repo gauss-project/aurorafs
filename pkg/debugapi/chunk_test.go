@@ -64,7 +64,7 @@ func TestHasChunkHandler(t *testing.T) {
 				Code:    http.StatusOK,
 			}),
 		)
-		yes, err := mockStorer.Has(context.Background(), storage.ModeHasRetrievalData, key)
+		yes, err := mockStorer.Has(context.Background(), storage.ModeHasChunk, key)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -81,7 +81,7 @@ func TestHasChunkHandler(t *testing.T) {
 				Code:    http.StatusOK,
 			}),
 		)
-		yes, err := mockStorer.Has(context.Background(), storage.ModeHasRetrievalData, boson.NewAddress([]byte(notPresentChunkAddress)))
+		yes, err := mockStorer.Has(context.Background(), storage.ModeHasChunk, boson.NewAddress([]byte(notPresentChunkAddress)))
 		if err != nil {
 			t.Fatal(err)
 		}

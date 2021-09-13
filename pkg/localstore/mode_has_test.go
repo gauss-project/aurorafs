@@ -23,6 +23,7 @@ import (
 	"testing"
 	"time"
 
+	chunkinfo "github.com/gauss-project/aurorafs/pkg/chunkinfo/mock"
 	"github.com/gauss-project/aurorafs/pkg/storage"
 )
 
@@ -30,6 +31,8 @@ import (
 // the stored chunk and false for one that is not stored.
 func TestHas(t *testing.T) {
 	db := newTestDB(t, nil)
+	ci := chunkinfo.New()
+	db.Config(ci)
 
 	ch := generateTestRandomChunk()
 
@@ -38,7 +41,7 @@ func TestHas(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	has, err := db.Has(context.Background(), ch.Address())
+	has, err := db.Has(context.Background(), storage.ModeHasChunk, ch.Address())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -48,7 +51,7 @@ func TestHas(t *testing.T) {
 
 	missingChunk := generateTestRandomChunk()
 
-	has, err = db.Has(context.Background(), missingChunk.Address())
+	has, err = db.Has(context.Background(), storage.ModeHasChunk, missingChunk.Address())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -64,6 +67,8 @@ func TestHasMulti(t *testing.T) {
 	for _, tc := range multiChunkTestCases {
 		t.Run(tc.name, func(t *testing.T) {
 			db := newTestDB(t, nil)
+			ci := chunkinfo.New()
+			db.Config(ci)
 
 			chunks := generateTestRandomChunks(tc.count)
 			want := make([]bool, tc.count)
@@ -80,7 +85,7 @@ func TestHasMulti(t *testing.T) {
 				want[i] = true
 			}
 
-			got, err := db.HasMulti(context.Background(), chunkAddresses(chunks)...)
+			got, err := db.HasMulti(context.Background(), storage.ModeHasChunk, chunkAddresses(chunks)...)
 			if err != nil {
 				t.Fatal(err)
 			}
