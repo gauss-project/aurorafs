@@ -45,7 +45,7 @@ func (ci *ChunkInfo) Protocol() p2p.ProtocolSpec {
 
 func (ci *ChunkInfo) sendDatas(ctx context.Context, address boson.Address, streamName string, msg interface{}) error {
 	if err := ci.route.Connect(ctx, address); err != nil {
-		overlays, errs := ci.route.GetTargetNeighbor(ctx, address)
+		overlays, errs := ci.route.GetTargetNeighbor(ctx, address, 3)
 		if errs != nil {
 			ci.logger.Errorf("[chunk info] connect: %w", errs)
 			return errs
@@ -87,13 +87,13 @@ func (ci *ChunkInfo) sendData(ctx context.Context, address boson.Address, stream
 	case streamChunkInfoReqName:
 		req := msg.(pb.ChunkInfoReq)
 		if err := w.WriteMsgWithContext(ctx, &req); err != nil {
-			ci.logger.Errorf(" [chunk info] write message: %w", err)
+			ci.logger.Errorf("[chunk info req] write message: %w", err)
 			return err
 		}
 	case streamChunkInfoRespName:
 		req := msg.(pb.ChunkInfoResp)
 		if err := w.WriteMsgWithContext(ctx, &req); err != nil {
-			ci.logger.Errorf("write message: %w", err)
+			ci.logger.Errorf("[chunk info resp] write message: %w", err)
 			return err
 		}
 	}
@@ -105,7 +105,7 @@ func (ci *ChunkInfo) sendData(ctx context.Context, address boson.Address, stream
 func (ci *ChunkInfo) sendPyramids(ctx context.Context, address boson.Address, streamName string, msg interface{}) (interface{}, error) {
 
 	if err := ci.route.Connect(ctx, address); err != nil {
-		overlays, errs := ci.route.GetTargetNeighbor(ctx, address)
+		overlays, errs := ci.route.GetTargetNeighbor(ctx, address, 3)
 		if errs != nil {
 			ci.logger.Errorf("[pyramid info] connect: %w", errs)
 			return nil, errs
