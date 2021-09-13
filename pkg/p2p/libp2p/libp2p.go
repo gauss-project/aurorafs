@@ -52,7 +52,10 @@ var (
 	_ p2p.DebugService = (*Service)(nil)
 )
 
-const defaultLightNodeLimit = 100
+const (
+	defaultLightNodeLimit = 100
+	peerUserAgentTimeout  = time.Second
+)
 
 type Service struct {
 	ctx               context.Context
@@ -225,7 +228,7 @@ func New(ctx context.Context, signer beecrypto.Signer, networkID uint64, overlay
 		advertisableAddresser = natAddrResolver
 	}
 
-	handshakeService, err := handshake.New(signer, advertisableAddresser, overlay, networkID, o.FullNode, o.WelcomeMessage, logger)
+	handshakeService, err := handshake.New(signer, advertisableAddresser, overlay, networkID, o.FullNode, o.WelcomeMessage, h.ID(), logger)
 	if err != nil {
 		return nil, fmt.Errorf("handshake service: %w", err)
 	}
@@ -335,7 +338,7 @@ func (s *Service) handleIncoming(stream network.Stream) {
 			_ = s.host.Network().ClosePeer(peerID)
 			return
 		}
-		// hive2
+
 		if !i.NodeMode.IsFull() && s.lightNodes.Count() >= s.lightNodeLimit {
 			s.logger.Warningf("stream handler: light node upper limit %d, don't want incoming peer %s. disconnecting", s.lightNodeLimit, overlay)
 			_ = handshakeStream.Reset()
@@ -349,7 +352,7 @@ func (s *Service) handleIncoming(stream network.Stream) {
 		if err = handshakeStream.FullClose(); err != nil {
 			s.logger.Debugf("stream handler: could not close stream %s: %v", overlay, err)
 			s.logger.Errorf("stream handler: unable to handshake with peer %v", overlay)
-			_ = s.Disconnect(overlay)
+			_ = s.Disconnect(overlay, "unable to close handshake stream")
 		}
 		return
 	}
@@ -357,7 +360,7 @@ func (s *Service) handleIncoming(stream network.Stream) {
 	if err = handshakeStream.FullClose(); err != nil {
 		s.logger.Debugf("stream handler: could not close stream %s: %v", overlay, err)
 		s.logger.Errorf("stream handler: unable to handshake with peer %v", overlay)
-		_ = s.Disconnect(overlay)
+		_ = s.Disconnect(overlay, "could not fully close stream on handshake")
 		return
 	}
 
@@ -366,7 +369,7 @@ func (s *Service) handleIncoming(stream network.Stream) {
 		if err != nil {
 			s.logger.Debugf("stream handler: addressbook put error %s: %v", peerID, err)
 			s.logger.Errorf("stream handler: unable to persist peer %v", peerID)
-			_ = s.Disconnect(i.BzzAddress.Overlay)
+			_ = s.Disconnect(i.BzzAddress.Overlay, "unable to persist peer in addressbook")
 			return
 		}
 	}
@@ -378,7 +381,7 @@ func (s *Service) handleIncoming(stream network.Stream) {
 		if tn.ConnectIn != nil {
 			if err := tn.ConnectIn(s.ctx, peer); err != nil {
 				s.logger.Debugf("stream handler: connectIn: protocol: %s, version:%s, peer: %s: %v", tn.Name, tn.Version, overlay, err)
-				_ = s.Disconnect(overlay)
+				_ = s.Disconnect(overlay, "failed to process inbound connection notifier")
 				s.protocolsmu.RUnlock()
 				return
 			}
@@ -399,12 +402,12 @@ func (s *Service) handleIncoming(stream network.Stream) {
 				p, err := s.lightNodes.RandomPeer(peer.Address)
 				if err != nil {
 					s.logger.Debugf("stream handler: cant find a peer slot for light node: %v", err)
-					_ = s.Disconnect(peer.Address)
+					_ = s.Disconnect(peer.Address, "unable to find peer slot for light node")
 					return
 				} else {
 					s.logger.Tracef("stream handler: kicking away light node %s to make room for %s", p.String(), peer.Address.String())
 					s.metrics.KickedOutPeersCount.Inc()
-					_ = s.Disconnect(p)
+					_ = s.Disconnect(p, "kicking away light node to make room for peer")
 					return
 				}
 			}
@@ -420,7 +423,7 @@ func (s *Service) handleIncoming(stream network.Stream) {
 				// interface, in addition to the possibility of deciding whether
 				// a peer connection is wanted prior to adding the peer to the
 				// peer registry and starting the protocols.
-				_ = s.Disconnect(overlay)
+				_ = s.Disconnect(overlay, "unable to signal connection notifier")
 				return
 			}
 			// when a full node connects, we gossip about it to the
@@ -440,11 +443,11 @@ func (s *Service) handleIncoming(stream network.Stream) {
 	s.metrics.HandledStreamCount.Inc()
 	if !s.peers.Exists(overlay) {
 		s.logger.Warningf("stream handler: inbound peer %s does not exist, disconnecting", overlay)
-		_ = s.Disconnect(overlay)
+		_ = s.Disconnect(overlay, "unknown inbound peer")
 		return
 	}
 
-	peerUserAgent := appendSpace(s.peerUserAgent(peerID))
+	peerUserAgent := appendSpace(s.peerUserAgent(s.ctx, peerID))
 
 	s.logger.Debugf("stream handler: successfully connected to peer %s%s%s (inbound)", i.BzzAddress.ShortString(), i.LightString(), peerUserAgent)
 	s.logger.Infof("stream handler: successfully connected to peer %s%s%s (inbound)", i.BzzAddress.Overlay, i.LightString(), peerUserAgent)
@@ -509,14 +512,14 @@ func (s *Service) AddProtocol(p p2p.ProtocolSpec) (err error) {
 				if errors.As(err, &de) {
 					logger.Tracef("libp2p handler(%s): disconnecting %s", p.Name, overlay.String())
 					_ = stream.Reset()
-					_ = s.Disconnect(overlay)
+					_ = s.Disconnect(overlay, de.Error())
 					logger.Tracef("handler(%s): disconnecting %s due to disconnect error", p.Name, overlay.String())
 				}
 
 				var bpe *p2p.BlockPeerError
 				if errors.As(err, &bpe) {
 					_ = stream.Reset()
-					if err := s.Blocklist(overlay, bpe.Duration()); err != nil {
+					if err := s.Blocklist(overlay, bpe.Duration(), bpe.Error()); err != nil {
 						logger.Debugf("blocklist: could not blocklist peer %s: %v", peerID, err)
 						logger.Errorf("unable to blocklist peer %v", peerID)
 					}
@@ -562,16 +565,16 @@ func (s *Service) NATManager() basichost.NATManager {
 	return s.natManager
 }
 
-func (s *Service) Blocklist(overlay boson.Address, duration time.Duration) error {
-	s.logger.Tracef("libp2p blocklist: peer %s for %v", overlay.String(), duration)
+func (s *Service) Blocklist(overlay boson.Address, duration time.Duration, reason string) error {
+	s.logger.Tracef("libp2p blocklist: peer %s for %v reason: %s", overlay.String(), duration, reason)
 	if err := s.blocklist.Add(overlay, duration); err != nil {
 		s.metrics.BlocklistedPeerErrCount.Inc()
-		_ = s.Disconnect(overlay)
+		_ = s.Disconnect(overlay, "failed blocklisting peer")
 		return fmt.Errorf("blocklist peer %s: %v", overlay, err)
 	}
 	s.metrics.BlocklistedPeerCount.Inc()
 
-	_ = s.Disconnect(overlay)
+	_ = s.Disconnect(overlay, "blocklisting peer")
 	return nil
 }
 
@@ -659,7 +662,7 @@ func (s *Service) Connect(ctx context.Context, addr ma.Multiaddr) (address *auro
 
 	if exists := s.peers.addIfNotExists(stream.Conn(), overlay, i.NodeMode.IsFull()); exists {
 		if err := handshakeStream.FullClose(); err != nil {
-			_ = s.Disconnect(overlay)
+			_ = s.Disconnect(overlay, "failed closing handshake stream after connect")
 			return nil, fmt.Errorf("peer exists, full close: %w", err)
 		}
 
@@ -667,14 +670,14 @@ func (s *Service) Connect(ctx context.Context, addr ma.Multiaddr) (address *auro
 	}
 
 	if err := handshakeStream.FullClose(); err != nil {
-		_ = s.Disconnect(overlay)
+		_ = s.Disconnect(overlay, "could not fully close handshake stream after connect")
 		return nil, fmt.Errorf("connect full close %w", err)
 	}
 
 	if i.NodeMode.IsFull() {
 		err = s.addressbook.Put(overlay, *i.BzzAddress)
 		if err != nil {
-			_ = s.Disconnect(overlay)
+			_ = s.Disconnect(overlay, "failed storing peer in addressbook")
 			return nil, fmt.Errorf("storing bzz address: %w", err)
 		}
 	}
@@ -684,7 +687,7 @@ func (s *Service) Connect(ctx context.Context, addr ma.Multiaddr) (address *auro
 		if tn.ConnectOut != nil {
 			if err := tn.ConnectOut(ctx, p2p.Peer{Address: overlay, FullNode: i.NodeMode.IsFull()}); err != nil {
 				s.logger.Debugf("connectOut: protocol: %s, version:%s, peer: %s: %v", tn.Name, tn.Version, overlay, err)
-				_ = s.Disconnect(overlay)
+				_ = s.Disconnect(overlay, "failed to process outbound connection notifier")
 				s.protocolsmu.RUnlock()
 				return nil, fmt.Errorf("connectOut: protocol: %s, version:%s: %w", tn.Name, tn.Version, err)
 			}
@@ -693,23 +696,23 @@ func (s *Service) Connect(ctx context.Context, addr ma.Multiaddr) (address *auro
 	s.protocolsmu.RUnlock()
 
 	if !s.peers.Exists(overlay) {
-		_ = s.Disconnect(overlay)
+		_ = s.Disconnect(overlay, "outbound peer does not exist")
 		return nil, fmt.Errorf("libp2p connect: peer %s does not exist %w", overlay, p2p.ErrPeerNotFound)
 	}
 
 	s.metrics.CreatedConnectionCount.Inc()
 
-	peerUserAgent := appendSpace(s.peerUserAgent(info.ID))
+	peerUserAgent := appendSpace(s.peerUserAgent(ctx, info.ID))
 
 	s.logger.Debugf("successfully connected to peer %s%s%s (outbound)", i.BzzAddress.ShortString(), i.LightString(), peerUserAgent)
 	s.logger.Infof("successfully connected to peer %s%s%s (outbound)", overlay, i.LightString(), peerUserAgent)
 	return i.BzzAddress, nil
 }
 
-func (s *Service) Disconnect(overlay boson.Address) error {
+func (s *Service) Disconnect(overlay boson.Address, reason string) error {
 	s.metrics.DisconnectCount.Inc()
 
-	s.logger.Debugf("libp2p disconnect: disconnecting peer %s", overlay)
+	s.logger.Debugf("libp2p disconnect: disconnecting peer %s reason: %s", overlay, reason)
 
 	// found is checked at the bottom of the function
 	found, full, peerID := s.peers.remove(overlay)
@@ -890,8 +893,26 @@ func (s *Service) Ping(ctx context.Context, addr ma.Multiaddr) (rtt time.Duratio
 // peerUserAgent returns User Agent string of the connected peer if the peer
 // provides it. It ignores the default libp2p user agent string
 // "github.com/libp2p/go-libp2p" and returns empty string in that case.
-func (s *Service) peerUserAgent(peerID libp2ppeer.ID) string {
-	v, err := s.host.Peerstore().Get(peerID, "AgentVersion")
+func (s *Service) peerUserAgent(ctx context.Context, peerID libp2ppeer.ID) string {
+	ctx, cancel := context.WithTimeout(ctx, peerUserAgentTimeout)
+	defer cancel()
+	var (
+		v   interface{}
+		err error
+	)
+	// Peerstore may not contain all keys and values right after the connections is created.
+	// This retry mechanism ensures more reliable user agent propagation.
+	for iterate := true; iterate; {
+		v, err = s.host.Peerstore().Get(peerID, "AgentVersion")
+		if err == nil {
+			break
+		}
+		select {
+		case <-ctx.Done():
+			iterate = false
+		case <-time.After(50 * time.Millisecond):
+		}
+	}
 	if err != nil {
 		// error is ignored as user agent is informative only
 		return ""

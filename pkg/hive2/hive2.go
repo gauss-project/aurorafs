@@ -8,7 +8,6 @@ import (
 	"github.com/gauss-project/aurorafs/pkg/addressbook"
 	"github.com/gauss-project/aurorafs/pkg/aurora"
 	"github.com/gauss-project/aurorafs/pkg/boson"
-	"github.com/gauss-project/aurorafs/pkg/boson/test"
 	"github.com/gauss-project/aurorafs/pkg/hive2/pb"
 	"github.com/gauss-project/aurorafs/pkg/logging"
 	"github.com/gauss-project/aurorafs/pkg/p2p"
@@ -30,9 +29,6 @@ const (
 	pingTimeout            = time.Second * 5 // time to wait for ping to succeed
 	batchValidationTimeout = 5 * time.Minute // prevent lock contention on peer validation
 
-	lookupPoLimit           = 3 // the number of hive2 used to find node for near po count.
-	lookupNeighborPeerLimit = 3
-	findNodePeerLimit       = 16
 )
 
 type Service struct {
@@ -134,24 +130,26 @@ func (s *Service) onFindNode(ctx context.Context, peer p2p.Peer, stream p2p.Stre
 	}
 	resp := &pb.Peers{}
 
-	_ = s.config.Kad.EachPeerRev(func(address boson.Address, u uint8) (stop, jumpToNext bool, err error) {
-		for _, v := range req.Po {
-			if uint8(v) == u {
-				p, _ := s.addressBook.Get(address)
-				if p != nil {
-					resp.Peers = append(resp.Peers, &pb.AuroraAddress{
-						Underlay:  p.Underlay.Bytes(),
-						Signature: p.Signature,
-						Overlay:   p.Overlay.Bytes(),
-					})
-					if len(resp.Peers) >= int(req.Limit) {
-						return true, false, nil
-					}
+	target := boson.NewAddress(req.Target)
+	_ = s.config.Kad.EachPeer(func(address boson.Address, u uint8) (stop, jumpToNext bool, err error) {
+		if address.Equal(peer.Address) {
+			return false, false, nil
+		}
+		po := boson.Proximity(target.Bytes(), address.Bytes())
+		if inArray(po, req.Pos) {
+			p, _ := s.addressBook.Get(address)
+			if p != nil {
+				resp.Peers = append(resp.Peers, &pb.AuroraAddress{
+					Underlay:  p.Underlay.Bytes(),
+					Signature: p.Signature,
+					Overlay:   p.Overlay.Bytes(),
+				})
+				if len(resp.Peers) >= int(req.Limit) {
+					return true, false, nil
 				}
-				return false, false, nil
 			}
 		}
-		return false, true, nil
+		return false, false, nil
 	})
 
 	s.metrics.OnFindNodePeers.Add(float64(len(resp.Peers)))
@@ -164,11 +162,11 @@ func (s *Service) onFindNode(ctx context.Context, peer p2p.Peer, stream p2p.Stre
 	return nil
 }
 
-func (s *Service) DoFindNode(ctx context.Context, peer boson.Address, pos []int32, limit int32) (res chan boson.Address, total int32, err error) {
+func (s *Service) DoFindNode(ctx context.Context, target, peer boson.Address, pos []int32, limit int32) (res chan boson.Address, err error) {
 	s.metrics.DoFindNode.Inc()
 	stream, err := s.streamer.NewStream(ctx, peer, nil, protocolName, protocolVersion, streamFindNode)
 	if err != nil {
-		s.logger.Errorf("hive2: DoFindNode NewStream, err=%s", err)
+		s.logger.Errorf("hive2: DoFindNode NewStream %s, err=%s", peer.String(), err)
 		return
 	}
 
@@ -177,8 +175,9 @@ func (s *Service) DoFindNode(ctx context.Context, peer boson.Address, pos []int3
 
 	w, r := protobuf.NewWriterAndReader(stream)
 	err = w.WriteMsgWithContext(ctx1, &pb.FindNodeReq{
-		Po:    pos,
-		Limit: limit,
+		Target: target.Bytes(),
+		Pos:    pos,
+		Limit:  limit,
 	})
 	if err != nil {
 		_ = stream.Reset()
@@ -195,17 +194,17 @@ func (s *Service) DoFindNode(ctx context.Context, peer boson.Address, pos []int3
 
 	s.metrics.DoFindNodePeers.Add(float64(len(result.Peers)))
 
-	res = make(chan boson.Address)
+	res = make(chan boson.Address, 1)
 	select {
 	case s.peersChan <- resultChan{
 		pb:         result,
 		syncResult: res,
 	}:
 	case <-s.quit:
-		return res, 0, errors.New("failed to process peers, shutting down hive2")
+		return res, errors.New("failed to process peers, shutting down hive2")
 	}
 
-	return res, int32(len(result.Peers)), nil
+	return res, nil
 }
 
 func (s *Service) startCheckPeersHandler() {
@@ -239,8 +238,6 @@ func (s *Service) startCheckPeersHandler() {
 
 func (s *Service) checkAndAddPeers(ctx context.Context, result resultChan) {
 
-	var peersToAdd []boson.Address
-	mtx := sync.Mutex{}
 	wg := sync.WaitGroup{}
 
 	for _, p := range result.pb.Peers {
@@ -284,20 +281,17 @@ func (s *Service) checkAndAddPeers(ctx context.Context, result resultChan) {
 				return
 			}
 
-			mtx.Lock()
-			peersToAdd = append(peersToAdd, auroraAddress.Overlay)
-			mtx.Unlock()
+			if s.addPeersHandler != nil {
+				s.addPeersHandler(auroraAddress.Overlay)
+			}
+			<-time.After(time.Millisecond * 200)
+			result.syncResult <- auroraAddress.Overlay
+
 		}(p)
 	}
 
 	wg.Wait()
 
-	if s.addPeersHandler != nil && len(peersToAdd) > 0 {
-		s.addPeersHandler(peersToAdd...)
-	}
-	for _, v := range peersToAdd {
-		result.syncResult <- v
-	}
 	close(result.syncResult)
 }
 
@@ -317,117 +311,4 @@ func (s *Service) Start() {
 
 func (s *Service) IsHive2() bool {
 	return true
-}
-
-// discover is a forever loop that manages the find to new peers
-func (s *Service) discover() {
-	defer s.wg.Done()
-	defer s.logger.Debugf("hive2 discover loop exited")
-
-	worker := func() {
-		start := time.Now()
-		s.logger.Debugf("hive2 discover start...")
-		defer s.logger.Debugf("hive2 discover took %s to finish", time.Since(start))
-		stop, jumpNext, _ := s.startFindNode(s.config.Base, 0)
-		if stop {
-			return
-		}
-		if jumpNext {
-			for i := 0; i < 3; i++ {
-				dest := test.RandomAddress()
-				stop, _, _ = s.startFindNode(dest, 0)
-				if stop {
-					return
-				}
-			}
-		}
-	}
-
-	tick := time.NewTicker(time.Minute * 30)
-	tickFirst := time.NewTicker(time.Second * 30)
-	runWorkC := make(chan struct{}, 1)
-	for {
-		select {
-		case <-s.quit:
-			return
-		case <-tickFirst.C:
-			// wait for kademlia have A certain amount of saturation
-			// when boot maybe have many peer in address book
-			runWorkC <- struct{}{}
-			tickFirst.Stop()
-		case <-tick.C:
-			runWorkC <- struct{}{}
-		case <-runWorkC:
-			worker()
-		}
-	}
-}
-
-func (s *Service) startFindNode(target boson.Address, total int32) (stop bool, jumpNext bool, count int32) {
-	var ch chan boson.Address
-	ch, stop, jumpNext, count = s.lookup(target, total)
-	if stop || jumpNext {
-		return
-	}
-	for addr := <-ch; !addr.IsZero(); {
-		stop, jumpNext, count = s.startFindNode(addr, count)
-		if stop || jumpNext {
-			return
-		}
-	}
-	return
-}
-
-func (s *Service) lookup(target boson.Address, total int32) (ch chan boson.Address, stop bool, jumpNext bool, count int32) {
-	lookupBin := s.config.Kad.NotSaturatedBin()
-	if len(lookupBin) == 0 {
-		stop = true
-		return
-	}
-	// need discover
-	peers, err := s.config.Kad.ClosestPeers(target, lookupNeighborPeerLimit)
-	if err != nil {
-		s.logger.Warningf("ClosestPeers %s", err)
-		return
-	}
-	for _, dest := range peers {
-		pos := lookupDistances(target, dest, lookupPoLimit, lookupBin)
-		if len(pos) > 0 {
-			var cnt int32
-			ch, cnt, _ = s.DoFindNode(context.Background(), dest, pos, findNodePeerLimit-total)
-			count = total + cnt
-			if count >= findNodePeerLimit {
-				jumpNext = true
-				return
-			}
-		}
-	}
-	jumpNext = true
-	return
-}
-
-// e.g. lookupRequestLimit=3
-// for a target with Proximity(target, dest) = 5 the result is [5, 6, 4].
-// skip saturation po
-func lookupDistances(target, dest boson.Address, lookupRequestLimit int, pick []uint8) (pos []int32) {
-	po := boson.Proximity(target.Bytes(), dest.Bytes())
-	pos = append(pos, int32(po))
-	for i := uint8(1); len(pos) < lookupRequestLimit; i++ {
-		if po+i <= boson.MaxPO && inArray(po+i, pick) {
-			pos = append(pos, int32(po+i))
-		}
-		if po-i > 0 && inArray(po-i, pick) {
-			pos = append(pos, int32(po-i))
-		}
-	}
-	return pos
-}
-
-func inArray(i uint8, pick []uint8) bool {
-	for _, v := range pick {
-		if v == i {
-			return true
-		}
-	}
-	return false
 }

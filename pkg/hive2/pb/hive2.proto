@@ -19,6 +19,7 @@ message AuroraAddress {
 }
 
 message FindNodeReq {
-    repeated int32 Po = 1;
-    int32 Limit = 2;
+    bytes Target = 1;
+    repeated int32 Pos = 2;
+    int32 Limit = 3;
 }

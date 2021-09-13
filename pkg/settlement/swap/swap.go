@@ -11,6 +11,7 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/crypto"
 	"github.com/gauss-project/aurorafs/pkg/logging"
 	"github.com/gauss-project/aurorafs/pkg/p2p"
@@ -18,7 +19,6 @@ import (
 	"github.com/gauss-project/aurorafs/pkg/settlement/swap/chequebook"
 	"github.com/gauss-project/aurorafs/pkg/settlement/swap/swapprotocol"
 	"github.com/gauss-project/aurorafs/pkg/storage"
-	"github.com/gauss-project/aurorafs/pkg/boson"
 )
 
 var (
@@ -114,7 +114,7 @@ func (s *Service) Pay(ctx context.Context, peer boson.Address, amount *big.Int) 
 	}
 	if !known {
 		s.logger.Warningf("disconnecting non-swap peer %v", peer)
-		err = s.p2pService.Disconnect(peer)
+		err = s.p2pService.Disconnect(peer, "non-swap peer")
 		if err != nil {
 			return err
 		}

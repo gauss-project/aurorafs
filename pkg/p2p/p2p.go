@@ -34,10 +34,10 @@ type Connect interface {
 }
 
 type Disconnecter interface {
-	Disconnect(overlay boson.Address) error
+	Disconnect(overlay boson.Address, reason string) error
 	// Blocklist will disconnect a peer and put it on a blocklist (blocking in & out connections) for provided duration
 	// duration 0 is treated as an infinite duration
-	Blocklist(overlay boson.Address, duration time.Duration) error
+	Blocklist(overlay boson.Address, duration time.Duration, reason string) error
 }
 
 type Halter interface {
@@ -72,12 +72,6 @@ type Streamer interface {
 
 type StreamerDisconnecter interface {
 	Streamer
-	Disconnecter
-}
-
-type StreamerConnect interface {
-	Streamer
-	Connect
 	Disconnecter
 }
 
