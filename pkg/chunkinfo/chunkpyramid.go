@@ -144,8 +144,9 @@ func (ci *ChunkInfo) doFindChunkPyramid(ctx context.Context, authInfo []byte, ro
 	}
 	req := pb.ChunkPyramidHashReq{
 		RootCid: rootCid.Bytes(),
+		Target:  overlay.Bytes(),
 	}
-	resp, err := ci.sendPyramid(ctx, overlay, streamPyramidHashName, req)
+	resp, err := ci.sendPyramids(ctx, overlay, streamPyramidHashName, req)
 	if err != nil {
 		return err
 	}

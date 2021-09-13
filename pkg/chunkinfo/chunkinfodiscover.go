@@ -7,7 +7,6 @@ import (
 	"github.com/gauss-project/aurorafs/pkg/chunkinfo/pb"
 	"strings"
 	"sync"
-	"time"
 )
 
 var discoverKeyPrefix = "discover-"
@@ -115,12 +114,12 @@ func (ci *ChunkInfo) updateChunkInfo(rootCid, overlay boson.Address, bv []byte) 
 }
 
 // createChunkInfoReq
-func (cd *chunkInfoDiscover) createChunkInfoReq(rootCid boson.Address) pb.ChunkInfoReq {
-	ciReq := pb.ChunkInfoReq{RootCid: rootCid.Bytes(), CreateTime: time.Now().Unix()}
+func (cd *chunkInfoDiscover) createChunkInfoReq(rootCid, target, req boson.Address) pb.ChunkInfoReq {
+	ciReq := pb.ChunkInfoReq{RootCid: rootCid.Bytes(), Target: target.Bytes(), Req: req.Bytes()}
 	return ciReq
 }
 
 // doFindChunkInfo
 func (ci *ChunkInfo) doFindChunkInfo(ctx context.Context, authInfo []byte, rootCid boson.Address) {
-	go ci.queueProcess(ctx, rootCid)
+	ci.queueProcess(ctx, rootCid)
 }

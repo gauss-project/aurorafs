@@ -41,6 +41,7 @@ type Interface interface {
 
 // ChunkInfo
 type ChunkInfo struct {
+	addr         boson.Address
 	storer       storage.StateStorer
 	traversal    traversal.Service
 	route        routetab.RouteTab
@@ -59,10 +60,11 @@ type ChunkInfo struct {
 }
 
 // New
-func New(streamer p2p.Streamer, logger logging.Logger, traversal traversal.Service, storer storage.StateStorer, route routetab.RouteTab, oracleUrl string) *ChunkInfo {
+func New(addr boson.Address, streamer p2p.Streamer, logger logging.Logger, traversal traversal.Service, storer storage.StateStorer, route routetab.RouteTab, oracleUrl string) *ChunkInfo {
 	queues := make(map[string]*queue)
 	t := time.NewTimer(Time * time.Second)
 	return &ChunkInfo{
+		addr:      addr,
 		storer:    storer,
 		route:     route,
 		ct:        newChunkInfoTabNeighbor(),
@@ -143,9 +145,14 @@ func (ci *ChunkInfo) Init(ctx context.Context, authInfo []byte, rootCid boson.Ad
 		a, _ := boson.ParseHexAddress(addr)
 		overlays = append(overlays, a)
 	}
+	return ci.FindChunkInfo(ctx, authInfo, rootCid, overlays)
+}
 
+// FindChunkInfo
+func (ci *ChunkInfo) FindChunkInfo(ctx context.Context, authInfo []byte, rootCid boson.Address, overlays []boson.Address) bool {
 	ticker := time.NewTicker(chunkInfoRetryIntervalDuration)
 	defer ticker.Stop()
+	count := len(overlays)
 
 	var (
 		peerAttempt  int
@@ -159,7 +166,7 @@ func (ci *ChunkInfo) Init(ctx context.Context, authInfo []byte, rootCid boson.Ad
 				return true
 			}
 			if first {
-				ci.FindChunkInfo(ctx, authInfo, rootCid, overlays)
+				ci.findChunkInfo(ctx, authInfo, rootCid, overlays)
 				first = false
 			}
 		} else if peerAttempt < count {
@@ -181,13 +188,11 @@ func (ci *ChunkInfo) Init(ctx context.Context, authInfo []byte, rootCid boson.Ad
 		}
 		if peersResults >= count {
 			return false
-
 		}
 	}
 }
 
-// FindChunkInfo
-func (ci *ChunkInfo) FindChunkInfo(ctx context.Context, authInfo []byte, rootCid boson.Address, overlays []boson.Address) {
+func (ci *ChunkInfo) findChunkInfo(ctx context.Context, authInfo []byte, rootCid boson.Address, overlays []boson.Address) {
 	go ci.triggerTimeOut()
 	ci.cpd.updatePendingFinder(rootCid)
 	if ci.getQueue(rootCid.String()) == nil {
