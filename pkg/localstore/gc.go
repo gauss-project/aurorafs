@@ -18,6 +18,7 @@ package localstore
 
 import (
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/gauss-project/aurorafs/pkg/boson"
@@ -174,6 +175,10 @@ func (db *DB) collectGarbage() (collectedCount uint64, done bool, err error) {
 		err = db.gcQueueIndex.PutInBatch(batch, item)
 		if err != nil {
 			return 0, false, err
+		}
+		del := db.discover.DelFile(boson.NewAddress(item.Address))
+		if !del {
+			return 0, false, fmt.Errorf("chunkinfo report delete %s failed", boson.NewAddress(item.Address))
 		}
 		// delete from retrieve, gc
 		err = db.retrievalDataIndex.DeleteInBatch(batch, item)

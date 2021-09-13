@@ -14,6 +14,7 @@ import (
 	"github.com/gauss-project/aurorafs/pkg/jsonhttp/jsonhttptest"
 	"github.com/gauss-project/aurorafs/pkg/logging"
 	"github.com/gauss-project/aurorafs/pkg/p2p/streamtest"
+	rmock "github.com/gauss-project/aurorafs/pkg/routetab/mock"
 	statestore "github.com/gauss-project/aurorafs/pkg/statestore/mock"
 	localstore "github.com/gauss-project/aurorafs/pkg/storage/mock"
 	"github.com/gauss-project/aurorafs/pkg/traversal"
@@ -32,14 +33,14 @@ func TestPinFilesHandler(t *testing.T) {
 		mockStorer       = localstore.NewStorer()
 		mockStateStorer  = statestore.NewStateStore()
 		traversalService = traversal.NewService(mockStorer)
-
-		chunkinfo = func() *chunkinfo.ChunkInfo {
+		mockRouteTable   = rmock.NewMockRouteTable()
+		chunkinfo        = func() *chunkinfo.ChunkInfo {
 			logger := logging.New(ioutil.Discard, 0)
 			serverAddress := boson.MustParseHexAddress("01")
 			recorder := streamtest.New(
 				streamtest.WithBaseAddr(serverAddress),
 			)
-			chuninfo := chunkinfo.New(recorder, logger, traversalService, mockStateStorer, "127.0.0.1:8000")
+			chuninfo := chunkinfo.New(serverAddress, recorder, logger, traversalService, mockStateStorer, &mockRouteTable, "127.0.0.1:8000")
 			return chuninfo
 		}
 
