@@ -4,6 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
+	"strings"
+	"sync"
+	"time"
+
 	"github.com/gauss-project/aurorafs/pkg/aurora"
 	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/logging"
@@ -12,15 +18,10 @@ import (
 	"github.com/gauss-project/aurorafs/pkg/storage"
 	traversal "github.com/gauss-project/aurorafs/pkg/traversal"
 	"golang.org/x/sync/singleflight"
-	"io"
-	"net/http"
-	"strings"
-	"sync"
-	"time"
 )
 
 type Interface interface {
-	FindChunkInfo(ctx context.Context, authInfo []byte, rootCid boson.Address, overlays []boson.Address)
+	FindChunkInfo(ctx context.Context, authInfo []byte, rootCid boson.Address, overlays []boson.Address) bool
 
 	GetChunkInfo(rootCid boson.Address, cid boson.Address) [][]byte
 
