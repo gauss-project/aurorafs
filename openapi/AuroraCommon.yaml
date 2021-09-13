@@ -6,8 +6,8 @@ info:
     \*****bzzz*****
 
 externalDocs:
-  description: Browse the documentation @ the Swarm Docs
-  url: "https://docs.boson.eth"
+  description: Browse the documentation @ the aurorafs Docs
+  url: ""
 
 paths: {}
 components:
@@ -16,58 +16,13 @@ components:
       type: object
       properties:
         address:
-          $ref: "#/components/schemas/SwarmAddress"
-
-    Addresses:
-      type: object
-      properties:
-        overlay:
-          $ref: "#/components/schemas/SwarmAddress"
-        underlay:
-          type: array
-          items:
-            $ref: "#/components/schemas/P2PUnderlay"
-        ethereum:
-          $ref: "#/components/schemas/EthereumAddress"
-        public_key:
-          $ref: "#/components/schemas/PublicKey"
-        pss_public_key:
-          $ref: "#/components/schemas/PublicKey"
-
-    Balance:
-      type: object
-      properties:
-        peer:
-          $ref: "#/components/schemas/SwarmAddress"
-        balance:
-          type: integer
-
-    Balances:
-      type: object
-      properties:
-        balances:
-          type: array
-          items:
-            $ref: "#/components/schemas/Balance"
-
-    BzzChunksPinned:
-      type: object
-      properties:
-        chunks:
-          type: array
-          items:
-            type: object
-            properties:
-              address:
-                type: string
-              pinCounter:
-                type: integer
+          $ref: "#/components/schemas/AuroraAddress"
 
     BzzTopology:
       type: object
       properties:
         baseAddr:
-          $ref: "#/components/schemas/SwarmAddress"
+          $ref: "#/components/schemas/AuroraAddress"
         population:
           type: integer
         connected:
@@ -92,48 +47,6 @@ components:
               connectedPeers:
                 type: object
 
-    Cheque:
-      type: object
-      properties:
-        beneficiary:
-          $ref: "#/components/schemas/EthereumAddress"
-        chequebook:
-          $ref: "#/components/schemas/EthereumAddress"
-        payout:
-          type: integer
-
-    ChequeAllPeersResponse:
-      type: object
-      properties:
-        lastcheques:
-          type: array
-          items:
-            $ref: "#/components/schemas/ChequePeerResponse"
-
-    ChequePeerResponse:
-      type: object
-      properties:
-        peer:
-          $ref: "#/components/schemas/SwarmAddress"
-        lastreceived:
-          $ref: "#/components/schemas/Cheque"
-        lastsent:
-          $ref: "#/components/schemas/Cheque"
-
-    ChequebookBalance:
-      type: object
-      properties:
-        totalBalance:
-          type: integer
-        availableBalance:
-          type: integer
-
-    ChequebookAddress:
-      type: object
-      properties:
-        chequebookaddress:
-          $ref: "#/components/schemas/EthereumAddress"
-
     DateTime:
       type: string
       format: date-time
@@ -145,27 +58,43 @@ components:
       type: string
       example: "5.0018ms"
 
-    EthereumAddress:
-      type: string
-      pattern: "^[A-Fa-f0-9]{40}$"
-      example: "36b7efd913ca4cf880b8eeac5093fa27b0825906"
-
     FileName:
       type: string
-
-    GasLimit:
-      type: integer
-      minimum: 0
-      maximum: 18446744073709551615
-
-    GasPrice:
-      type: integer
 
     Hash:
       type: object
       properties:
         hash:
-          $ref: "#/components/schemas/SwarmAddress"
+          $ref: "#/components/schemas/AuroraAddress"
+
+    BitVector:
+      type: object
+      properties:
+        len:
+          type: integer
+        b:
+          type: string
+
+    NewFileResponse:
+      type: object
+      properties:
+        fileHash:
+          $ref: "#/components/schemas/Hash"
+        size:
+          type: integer
+        pinState:
+          type: boolean
+        bitVector:
+          $ref: "#/components/schemas/BitVector"
+
+    FileList:
+      type: object
+      properties:
+        tags:
+          type: array
+          nullable: true
+          items:
+            $ref: "#/components/schemas/NewFileResponse"
 
     HexString:
       type: string
@@ -175,55 +104,6 @@ components:
     MultiAddress:
       type: string
 
-    NewTagRequest:
-      type: object
-      properties:
-        address:
-          $ref: "#/components/schemas/SwarmAddress"
-
-    NewTagResponse:
-      type: object
-      properties:
-        uid:
-          $ref: "#/components/schemas/Uid"
-        startedAt:
-          $ref: "#/components/schemas/DateTime"
-        total:
-          type: integer
-        processed:
-          type: integer
-        synced:
-          type: integer
-
-    NewTagDebugResponse:
-      type: object
-      properties:
-        total:
-          type: integer
-        split:
-          type: integer
-        seen:
-          type: integer
-        stored:
-          type: integer
-        sent:
-          type: integer
-        synced:
-          type: integer
-        uid:
-          $ref: "#/components/schemas/Uid"
-        address:
-          $ref: "#/components/schemas/SwarmAddress"
-        startedAt:
-          $ref: "#/components/schemas/DateTime"
-
-    TagsList:
-      type: object
-      properties:
-        tags:
-          type: array
-          items:
-            $ref: "#/components/schemas/NewTagResponse"
 
     P2PUnderlay:
       type: string
@@ -241,27 +121,29 @@ components:
       type: object
       properties:
         address:
-          $ref: "#/components/schemas/SwarmAddress"
+          $ref: "#/components/schemas/AuroraAddress"
         pinCounter:
           type: integer
 
-    PssRecipient:
-      type: string
-
-    PssTargets:
-      type: string
-
-    PssTopic:
-      type: string
-
     ProblemDetails:
       type: string
+
+    Reference:
+      description: File RootCid
+      type: string
+      example: "4e071970bf456afc85c67889f4ce877ac31f2b317653c93e27d837b98dc3f2ac"
 
     ReferenceResponse:
       type: object
       properties:
         reference:
-          $ref: "#/components/schemas/SwarmReference"
+          $ref: "#/components/schemas/Reference"
+
+    AuroraReference:
+      oneOf:
+        - $ref: "#/components/schemas/AuroraAddress"
+        - $ref: "#/components/schemas/AuroraEncryptedReference"
+        - $ref: "#/components/schemas/DomainName"
 
     Response:
       type: object
@@ -283,39 +165,14 @@ components:
         status:
           type: string
 
-    Settlement:
-      type: object
-      properties:
-        peer:
-          $ref: "#/components/schemas/SwarmAddress"
-        received:
-          type: integer
-        sent:
-          type: integer
 
-    Settlements:
-      type: object
-      properties:
-        totalreceived:
-          type: integer
-        totalsent:
-          type: integer
-        settlements:
-          type: array
-          items:
-            $ref: "#/components/schemas/Settlement"
-
-    SwarmAddress:
+    AuroraAddress:
       type: string
       pattern: "^[A-Fa-f0-9]{64}$"
       example: "36b7efd913ca4cf880b8eeac5093fa27b0825906c600685b6abdd6566e6cfe8f"
 
-    PublicKey:
-      type: string
-      pattern: "^[A-Fa-f0-9]{66}$"
-      example: "02ab7473879005929d10ce7d4f626412dad9fe56b0a6622038931d26bd79abf0a4"
 
-    SwarmEncryptedReference:
+    AuroraEncryptedReference:
       type: string
       pattern: "^[A-Fa-f0-9]{128}$"
       example: "36b7efd913ca4cf880b8eeac5093fa27b0825906c600685b6abdd6566e6cfe8f2d2810619d29b5dbefd5d74abce25d58b81b251baddb9c3871cf0d6967deaae2"
@@ -325,56 +182,6 @@ components:
       pattern: '^[A-Za-z0-9]+\.[A-Za-z0-9]+$'
       example: "boson.eth"
 
-    SwarmOnlyReference:
-      oneOf:
-        - $ref: "#/components/schemas/SwarmAddress"
-        - $ref: "#/components/schemas/SwarmEncryptedReference"
-
-    SwarmReference:
-      oneOf:
-        - $ref: "#/components/schemas/SwarmAddress"
-        - $ref: "#/components/schemas/SwarmEncryptedReference"
-        - $ref: "#/components/schemas/DomainName"
-
-    SwapCashoutResult:
-      type: object
-      properties:
-        recipient:
-          $ref: "#/components/schemas/EthereumAddress"
-        lastPayout:
-          type: integer
-        bounced:
-          type: boolean
-
-    SwapCashoutStatus:
-      type: object
-      properties:
-        peer:
-          $ref: "#/components/schemas/SwarmAddress"
-        chequebook:
-          $ref: "#/components/schemas/EthereumAddress"
-        cumulativePayout:
-          type: integer
-        beneficiary:
-          $ref: "#/components/schemas/EthereumAddress"
-        transactionHash:
-          $ref: "#/components/schemas/TransactionHash"
-        result:
-          $ref: "#/components/schemas/SwapCashoutResult"
-
-    TagName:
-      type: string
-
-    TransactionHash:
-      type: string
-      pattern: "^[A-Fa-f0-9]{64}$"
-      example: "e28a34ffe7b1710c1baf97ca6d71d81b7f159a9920910876856c8d94dd7be4ae"
-
-    TransactionResponse:
-      type: object
-      properties:
-        transactionHash:
-          $ref: "#/components/schemas/TransactionHash"
 
     Uid:
       type: integer
@@ -385,30 +192,39 @@ components:
         welcome_message:
           type: string
 
-    FeedType:
-      type: string
-      pattern: "^(sequence|epoch)$"
+
 
   headers:
-    SwarmTag:
+    AuroraTag:
       description: "Tag UID"
       schema:
-        $ref: "SwarmCommon.yaml#/components/schemas/Uid"
+        $ref: "AuroraCommon.yaml#/components/schemas/Uid"
 
-    SwarmFeedIndex:
-      description: "The index of the found update"
+    AuroraNoneMatch:
+      description: "If-None-Match Batch file operation"
       schema:
-        $ref: "#/components/schemas/HexString"
+        $ref: "AuroraCommon.yaml#/components/schemas/Uid"
 
-    SwarmFeedIndexNext:
-      description: "The index of the next possible update"
+    AuroraContentLength:
+      description: ""
       schema:
-        $ref: "#/components/schemas/HexString"
-
-    SwarmRecoveryTargets:
-      description: "The targets provided for recovery"
+        $ref: "AuroraCommon.yaml#/components/schemas/Uid"
+    AuroraDecompressedLength:
+      description: ""
       schema:
-        type: string
+        $ref: "AuroraCommon.yaml#/components/schemas/Uid"
+    AuroraAccessHeaders:
+      description: ""
+      schema:
+        $ref: "AuroraCommon.yaml#/components/schemas/Uid"
+    AuroraIndexDocument:
+      description: "Boson-Index-Document"
+      schema:
+        $ref: "AuroraCommon.yaml#/components/schemas/Uid"
+    AuroraErrorDocument:
+      description: "Boson-Error-Document"
+      schema:
+        $ref: "AuroraCommon.yaml#/components/schemas/Uid"
 
     ETag:
       description: |
@@ -421,48 +237,17 @@ components:
         type: string
 
   parameters:
-
-    GasPriceParameter:
-      in: header
-      name: gas-price
-      schema:
-        $ref: "SwarmCommon.yaml#/components/schemas/GasPrice"
-      required: false
-      description: "Gas price for transaction"
-
-    GasLimitParameter:
-      in: header
-      name: gas-limit
-      schema:
-        $ref: "SwarmCommon.yaml#/components/schemas/GasLimit"
-      required: false
-      description: "Gas limit for transaction"
-
-    SwarmRecoveryTargetsParameter:
-      in: query
-      name: targets
-      schema:
-        type: string
-      required: false
-      description: Global pinning targets prefix
-
-    SwarmTagParameter:
-      in: header
-      name: boson-tag
-      schema:
-        $ref: "SwarmCommon.yaml#/components/schemas/Uid"
-      required: false
-      description: Associate upload with an existing Tag UID
-
-    SwarmPinParameter:
+    AuroraPinParameter:
       in: header
       name: boson-pin
       schema:
         type: boolean
       required: false
-      description: Represents the pinning state of the chunk
+      description: >
+        Represents if the uploaded data should be also locally pinned on the node.
+        Warning! Not available for nodes that run in Gateway mode!
 
-    SwarmEncryptParameter:
+    AuroraEncryptParameter:
       in: header
       name: boson-encrypt
       schema:
@@ -470,30 +255,87 @@ components:
       required: false
       description: Represents the encrypting state of the file
 
-    ContentTypePreserved:
+
+    AuroraReferenceContentType:
       in: header
-      name: Content-Type
+      name: content-type
       schema:
         type: string
       description: The specified content-type is preserved for download of the asset
 
-    SwarmIndexDocumentParameter:
+    AuroraNoneMatch:
+      in: header
+      name: if-none-match
+      schema:
+        type: string
+      description: This is to specify whether to upload files in batches
+
+    AuroraContentDisposition:
+      in: header
+      name: content-disposition
+      schema:
+        type: string
+      description:
+
+    AuroraContentLength:
+      in: header
+      name: content-length
+      schema:
+        type: string
+      description:
+
+    AuroraDecompressedLength:
+      in: header
+      name: decompressed-content-length
+      schema:
+        type: string
+      description:
+
+    AuroraAccessHeaders:
+      in: header
+      name: access-control-expose-headers
+      schema:
+        type: string
+      description:
+
+    AuroraIndexDocument:
       in: header
       name: boson-index-document
       schema:
         type: string
-        example: index.html
-      required: false
-      description: Default file to be referenced on path, if exists under that path
+      description:
 
-    SwarmErrorDocumentParameter:
+    AuroraErrorDocument:
       in: header
       name: boson-error-document
       schema:
         type: string
-        example: error.html
+      description:
+
+    AuroraRecoveryTargetsParameter:
+      in: query
+      name: targets
+      schema:
+        type: string
       required: false
-      description: Configure custom error document to be returned when a specified path can not be found in collection
+      description: Global pinning targets prefix
+
+    GasPriceParameter:
+      in: header
+      name: gas-price
+      schema:
+        $ref: "AuroraCommon.yaml#/components/schemas/GasPrice"
+      required: false
+      description: "Gas price for transaction"
+
+    GasLimitParameter:
+      in: header
+      name: gas-limit
+      schema:
+        $ref: "AuroraCommon.yaml#/components/schemas/GasLimit"
+      required: false
+      description: "Gas limit for transaction"
+
 
   responses:
     "204":

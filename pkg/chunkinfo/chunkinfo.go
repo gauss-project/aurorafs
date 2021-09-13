@@ -263,7 +263,7 @@ func (ci *ChunkInfo) DelFile(rootCid, overlay boson.Address) bool {
 	ci.queuesLk.Lock()
 	defer ci.queuesLk.Unlock()
 
-	err := ci.storer.Delete(generateKey(discoverKeyPrefix, rootCid, overlay))
+	err := ci.storer.Delete(generateKey(keyPrefix, rootCid, overlay))
 	if err != nil {
 		return false
 	}
