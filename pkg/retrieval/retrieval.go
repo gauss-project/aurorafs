@@ -59,6 +59,8 @@ const (
 	retrieveChunkTimeout          = 10 * time.Second
 	retrieveRetryIntervalDuration = 5 * time.Second
 	maxPeers                      = 5
+	totalRouteCount 			  = 5
+	totalBackupRouteCount 		  = 5
 )
 
 func New(addr boson.Address, streamer p2p.Streamer, routeTable routetab.RouteTab, storer storage.Storer, isFullNode bool, logger logging.Logger, tracer *tracing.Tracer) *Service {
@@ -103,15 +105,13 @@ func (s *Service) RetrieveChunk(ctx context.Context, rootAddr, chunkAddr boson.A
 	v, _, err := s.singleflight.Do(ctx,flightRoute, func(ctx context.Context) (interface{}, error) {
 		var (
 			maxRequestAttemp int = 2
-			totalRouteCount int = 5
-			totalBackupRouteCount int = 5
 			resultC = make(chan retrievalResult, totalRouteCount)
 		)
 
 		ticker := time.NewTicker(retrieveRetryIntervalDuration)
 		defer ticker.Stop()
 
-		routeList := s.getRetrievalRouteList(ctx, rootAddr, chunkAddr, totalRouteCount, totalBackupRouteCount)
+		routeList := s.getRetrievalRouteList(ctx, rootAddr, chunkAddr)
 		if len(routeList)==0{
 			return nil, fmt.Errorf("no route available")
 		}
@@ -375,7 +375,7 @@ func (s *Service) handler(ctx context.Context, p p2p.Peer, stream p2p.Stream) (e
 	return nil
 }
 
-func (s *Service) getRetrievalRouteList(ctx context.Context, rootAddr, chunkAddr boson.Address, routeCount, backupRouteCount int) []aco.Route{
+func (s *Service) getRetrievalRouteList(ctx context.Context, rootAddr, chunkAddr boson.Address) []aco.Route{
 	chunkResult := s.chunkinfo.GetChunkInfo(rootAddr, chunkAddr)
 	if len(chunkResult) == 0{
 		// return nil, fmt.Errorf("no result from chunkinfo")
@@ -393,7 +393,7 @@ func (s *Service) getRetrievalRouteList(ctx context.Context, rootAddr, chunkAddr
 		newRoute := aco.NewRoute(node, node)
 		directRouteList[i] = newRoute
 	}
-	directRouteAcoIndexList := s.acoServer.GetRouteAcoIndex(directRouteList, routeCount)
+	directRouteAcoIndexList := s.acoServer.GetRouteAcoIndex(directRouteList, totalRouteCount)
 
 	routList := make([]aco.Route, 0)
 	for _, acoIndex := range directRouteAcoIndexList{
@@ -405,14 +405,14 @@ func (s *Service) getRetrievalRouteList(ctx context.Context, rootAddr, chunkAddr
 	if len(directRouteAcoIndexList) > 0{
 		acoIndex0 := directRouteAcoIndexList[0]
 		targetNode := directRouteList[acoIndex0].TargetNode
-		if neighborNodeList, err := s.routeTab.GetTargetNeighbor(ctx, targetNode); err == nil{
+		if neighborNodeList, err := s.routeTab.GetTargetNeighbor(ctx, targetNode, totalBackupRouteCount); err == nil{
 			backupRouteList := make([]aco.Route, len(neighborNodeList))
 			for i, node := range neighborNodeList{
 				linkNode := node
 				newRoute := aco.NewRoute(linkNode, targetNode)
 				backupRouteList[i] = newRoute
 			}
-			backupAcoIndexList := s.acoServer.GetRouteAcoIndex(backupRouteList, backupRouteCount)
+			backupAcoIndexList := s.acoServer.GetRouteAcoIndex(backupRouteList, totalBackupRouteCount)
 
 			for _, acoIndex := range backupAcoIndexList{
 				newRoute := backupRouteList[acoIndex]

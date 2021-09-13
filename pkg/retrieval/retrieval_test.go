@@ -255,7 +255,7 @@ func TestRetrievalChunk(t *testing.T) {
 		clientChunkInfo.OnChunkTransferred(chunk.Address(), rootAddr, serverAddress)
 		client.Config(clientChunkInfo)
 
-		if got, _ := forwarderStorer.Has(context.Background(), chunk.Address()); got {
+		if got, _ := forwarderStorer.Has(context.Background(), storage.ModeHasRetrievalData, chunk.Address()); got {
 			t.Fatalf("forwarder node already has chunk")
 		}
 
@@ -267,7 +267,7 @@ func TestRetrievalChunk(t *testing.T) {
 			t.Fatalf("got data %x, want %x", got.Data(), chunk.Data())
 		}
 
-		if got, _ := forwarderStorer.Has(context.Background(), chunk.Address()); !got {
+		if got, _ := forwarderStorer.Has(context.Background(), storage.ModeHasRetrievalData, chunk.Address()); !got {
 			t.Fatalf("forwarder did not cache chunk")
 		}
 	})
@@ -349,7 +349,7 @@ func TestNeighborRetrieval(t *testing.T) {
 			t.Fatalf("got data %x, want %x", got.Data(), chunk.Data())
 		}
 
-		if got, _ := neighborStorer.Has(context.Background(), chunk.Address()); !got {
+		if got, _ := neighborStorer.Has(context.Background(), storage.ModeHasRetrievalData, chunk.Address()); !got {
 			t.Fatalf("neighbor did not cache chunk")
 		}
 	})
@@ -542,7 +542,7 @@ func (r *mockRouteTable) Connect(ctx context.Context, target boson.Address) (err
 	return
 }
 
-func (r *mockRouteTable) GetTargetNeighbor(ctx context.Context, target boson.Address) ([]boson.Address, error) {
+func (r *mockRouteTable) GetTargetNeighbor(ctx context.Context, target boson.Address, limit int) ([]boson.Address, error) {
 	// nodeList := make([]boson.Address, 0)
 	// return nodeList, nil
 	return r.neighborMap[target.String()], nil
@@ -574,7 +574,14 @@ func NewMockChunkInfo() *mockChunkInfo {
 	}
 }
 
-func (c *mockChunkInfo) FindChunkInfo(ctx context.Context, authInfo []byte, rootCid boson.Address, overlays []boson.Address) {
+func (c *mockChunkInfo) DelFile(rootCid, overlay boson.Address) bool{
+	return false
+}
+func (c *mockChunkInfo) GetFileList(overlay boson.Address) (fileListInfo map[string]*aurora.FileInfo, rootList []boson.Address){
+	return
+}
+func (c *mockChunkInfo) FindChunkInfo(ctx context.Context, authInfo []byte, rootCid boson.Address, overlays []boson.Address) bool{
+	return false
 }
 
 func (c *mockChunkInfo) GetChunkInfo(rootCid boson.Address, cid boson.Address) [][]byte {
