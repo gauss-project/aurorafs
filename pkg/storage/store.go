@@ -53,10 +53,12 @@ const (
 
 type ModeHas int
 
-//Pin modes
+// Hasser modes.
 const (
+	// ModeHasPin: when checked for pin files
 	ModeHasPin ModeHas = iota
-	ModeHasRetrievalData
+	// ModeHasChunk: when checked for chunk data
+	ModeHasChunk
 )
 
 // ModePut enumerates different Putter modes.

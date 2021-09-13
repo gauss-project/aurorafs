@@ -286,7 +286,7 @@ func (s *server) dirDelHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	//There is no direct return success.
-	has, err := s.storer.Has(r.Context(), storage.ModeHasRetrievalData, addr)
+	has, err := s.storer.Has(r.Context(), storage.ModeHasChunk, addr)
 	if err != nil {
 		jsonhttp.OK(w, nil)
 		return
@@ -303,7 +303,7 @@ func (s *server) dirDelHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	ok := s.chunkInfo.DelFile(addr, s.overlay)
+	ok := s.chunkInfo.DelFile(addr)
 	if !ok {
 		jsonhttp.InternalServerError(w, "Error in chunk deletion.")
 		return

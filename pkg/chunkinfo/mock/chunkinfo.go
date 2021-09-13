@@ -16,6 +16,11 @@ func newChunkPyramid() *chunkPyramid {
 	return &chunkPyramid{pyramid: make(map[string]map[string]int)}
 }
 
+func (cp *chunkPyramid) delRootCid(rootCID boson.Address) bool {
+	delete(cp.pyramid, rootCID.String())
+	return true
+}
+
 type pendingFinderInfo struct {
 	// rootCid
 	finder map[string]struct{}
@@ -39,7 +44,7 @@ func New() *ChunkInfo {
 	}
 }
 
-func (ci *ChunkInfo) FindChunkInfo(_ context.Context, authInfo []byte, rootCid boson.Address, overlays []boson.Address) {
+func (ci *ChunkInfo) FindChunkInfo(_ context.Context, authInfo []byte, rootCid boson.Address, overlays []boson.Address) bool {
 	panic("not implemented")
 }
 
@@ -111,6 +116,6 @@ func (ci *ChunkInfo) ChangeDiscoverStatus(rootCid boson.Address, s chunkinfo.Pul
 	}
 }
 
-func (ci *ChunkInfo) DelFile(rootCid, overlay boson.Address) bool {
-	return true
+func (ci *ChunkInfo) DelFile(rootCid boson.Address) bool {
+	return ci.cp.delRootCid(rootCid)
 }

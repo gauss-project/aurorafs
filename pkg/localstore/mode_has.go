@@ -25,20 +25,19 @@ import (
 )
 
 // Has returns true if the chunk is stored in database.
-func (db *DB) Has(ctx context.Context, hasMode storage.ModeHas, addr boson.Address) (bool, error) {
+func (db *DB) Has(ctx context.Context, mode storage.ModeHas, addr boson.Address) (bool, error) {
 	var has bool
 	var err error
 
 	db.metrics.ModeHas.Inc()
 	defer totalTimeMetric(db.metrics.TotalTimeHas, time.Now())
-	switch hasMode {
+	switch mode {
 	case storage.ModeHasPin:
 		has, err = db.pinIndex.Has(addressToItem(addr))
-	case storage.ModeHasRetrievalData:
+	case storage.ModeHasChunk:
 		has, err = db.retrievalDataIndex.Has(addressToItem(addr))
 	default:
-		has, err = db.retrievalDataIndex.Has(addressToItem(addr))
-
+		return false, ErrInvalidMode
 	}
 
 	if err != nil {
@@ -59,7 +58,7 @@ func (db *DB) HasMulti(ctx context.Context, hasMode storage.ModeHas, addrs ...bo
 	switch hasMode {
 	case storage.ModeHasPin:
 		have, err = db.pinIndex.HasMulti(addressesToItems(addrs...)...)
-	case storage.ModeHasRetrievalData:
+	case storage.ModeHasChunk:
 		have, err = db.retrievalDataIndex.HasMulti(addressesToItems(addrs...)...)
 	default:
 		have, err = db.retrievalDataIndex.HasMulti(addressesToItems(addrs...)...)

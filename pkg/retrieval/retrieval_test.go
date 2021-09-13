@@ -255,7 +255,7 @@ func TestRetrievalChunk(t *testing.T) {
 		clientChunkInfo.OnChunkTransferred(chunk.Address(), rootAddr, serverAddress)
 		client.Config(clientChunkInfo)
 
-		if got, _ := forwarderStorer.Has(context.Background(), storage.ModeHasRetrievalData, chunk.Address()); got {
+		if got, _ := forwarderStorer.Has(context.Background(), storage.ModeHasChunk, chunk.Address()); got {
 			t.Fatalf("forwarder node already has chunk")
 		}
 
@@ -267,7 +267,7 @@ func TestRetrievalChunk(t *testing.T) {
 			t.Fatalf("got data %x, want %x", got.Data(), chunk.Data())
 		}
 
-		if got, _ := forwarderStorer.Has(context.Background(), storage.ModeHasRetrievalData, chunk.Address()); !got {
+		if got, _ := forwarderStorer.Has(context.Background(), storage.ModeHasChunk, chunk.Address()); !got {
 			t.Fatalf("forwarder did not cache chunk")
 		}
 	})
@@ -349,7 +349,7 @@ func TestNeighborRetrieval(t *testing.T) {
 			t.Fatalf("got data %x, want %x", got.Data(), chunk.Data())
 		}
 
-		if got, _ := neighborStorer.Has(context.Background(), storage.ModeHasRetrievalData, chunk.Address()); !got {
+		if got, _ := neighborStorer.Has(context.Background(), storage.ModeHasChunk, chunk.Address()); !got {
 			t.Fatalf("neighbor did not cache chunk")
 		}
 	})
