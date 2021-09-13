@@ -7,7 +7,6 @@ package streamtest
 import (
 	"context"
 	"errors"
-	"github.com/gauss-project/aurorafs/pkg/aurora"
 	"io"
 	"sync"
 	"testing"
@@ -390,34 +389,17 @@ type RecorderDisconnecter struct {
 	disconnected map[string]struct{}
 	blocklisted  map[string]time.Duration
 	mu           sync.RWMutex
-
-	connected   map[string]struct{}
-	connectFunc func(ctx context.Context, addr ma.Multiaddr) (address *aurora.Address, err error)
 }
 
 func NewRecorderDisconnecter(r *Recorder) *RecorderDisconnecter {
 	return &RecorderDisconnecter{
 		Recorder:     r,
-		connected:    make(map[string]struct{}),
 		disconnected: make(map[string]struct{}),
 		blocklisted:  make(map[string]time.Duration),
 	}
 }
 
-func (r *RecorderDisconnecter) SetConnectFun(f func(ctx context.Context, addr ma.Multiaddr) (address *aurora.Address, err error)) {
-	r.connectFunc = f
-}
-
-func (r *RecorderDisconnecter) Connect(ctx context.Context, ma ma.Multiaddr) (address *aurora.Address, err error) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-
-	r.connected[ma.String()] = struct{}{}
-
-	return r.connectFunc(ctx, ma)
-}
-
-func (r *RecorderDisconnecter) Disconnect(overlay boson.Address) error {
+func (r *RecorderDisconnecter) Disconnect(overlay boson.Address, _ string) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
@@ -425,7 +407,7 @@ func (r *RecorderDisconnecter) Disconnect(overlay boson.Address) error {
 	return nil
 }
 
-func (r *RecorderDisconnecter) Blocklist(overlay boson.Address, d time.Duration) error {
+func (r *RecorderDisconnecter) Blocklist(overlay boson.Address, d time.Duration, _ string) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 

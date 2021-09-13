@@ -127,8 +127,9 @@ func (m *AuroraAddress) GetOverlay() []byte {
 }
 
 type FindNodeReq struct {
-	Po    []int32 `protobuf:"varint,1,rep,packed,name=Po,proto3" json:"Po,omitempty"`
-	Limit int32   `protobuf:"varint,2,opt,name=Limit,proto3" json:"Limit,omitempty"`
+	Target []byte  `protobuf:"bytes,1,opt,name=Target,proto3" json:"Target,omitempty"`
+	Pos    []int32 `protobuf:"varint,2,rep,packed,name=Pos,proto3" json:"Pos,omitempty"`
+	Limit  int32   `protobuf:"varint,3,opt,name=Limit,proto3" json:"Limit,omitempty"`
 }
 
 func (m *FindNodeReq) Reset()         { *m = FindNodeReq{} }
@@ -164,9 +165,16 @@ func (m *FindNodeReq) XXX_DiscardUnknown() {
 
 var xxx_messageInfo_FindNodeReq proto.InternalMessageInfo
 
-func (m *FindNodeReq) GetPo() []int32 {
+func (m *FindNodeReq) GetTarget() []byte {
 	if m != nil {
-		return m.Po
+		return m.Target
+	}
+	return nil
+}
+
+func (m *FindNodeReq) GetPos() []int32 {
+	if m != nil {
+		return m.Pos
 	}
 	return nil
 }
@@ -187,7 +195,7 @@ func init() {
 func init() { proto.RegisterFile("hive2.proto", fileDescriptor_d197abd1020d898a) }
 
 var fileDescriptor_d197abd1020d898a = []byte{
-	// 222 bytes of a gzipped FileDescriptorProto
+	// 239 bytes of a gzipped FileDescriptorProto
 	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xe2, 0xe2, 0xce, 0xc8, 0x2c, 0x4b,
 	0x35, 0xd2, 0x2b, 0x28, 0xca, 0x2f, 0xc9, 0x17, 0x62, 0x01, 0x71, 0x94, 0x8c, 0xb8, 0x58, 0x03,
 	0x52, 0x53, 0x8b, 0x8a, 0x85, 0x34, 0xb9, 0x58, 0x0b, 0x40, 0x0c, 0x09, 0x46, 0x05, 0x66, 0x0d,
@@ -196,12 +204,13 @@ var fileDescriptor_d197abd1020d898a = []byte{
 	0x47, 0x68, 0x5e, 0x4a, 0x6a, 0x51, 0x4e, 0x62, 0xa5, 0x04, 0xa3, 0x02, 0xa3, 0x06, 0x4f, 0x10,
 	0x9c, 0x2f, 0x24, 0xc3, 0xc5, 0x19, 0x9c, 0x99, 0x9e, 0x97, 0x58, 0x52, 0x5a, 0x94, 0x2a, 0xc1,
 	0x04, 0x96, 0x44, 0x08, 0x08, 0x49, 0x70, 0xb1, 0xfb, 0x97, 0x41, 0x34, 0x32, 0x83, 0xe5, 0x60,
-	0x5c, 0x25, 0x63, 0x2e, 0x6e, 0xb7, 0xcc, 0xbc, 0x14, 0xbf, 0xfc, 0x94, 0xd4, 0xa0, 0xd4, 0x42,
-	0x21, 0x3e, 0x2e, 0xa6, 0x80, 0x7c, 0xb0, 0xdb, 0x58, 0x83, 0x98, 0x02, 0xf2, 0x85, 0x44, 0xb8,
-	0x58, 0x7d, 0x32, 0x73, 0x33, 0x4b, 0xc0, 0x46, 0xb2, 0x06, 0x41, 0x38, 0x4e, 0x32, 0x27, 0x1e,
-	0xc9, 0x31, 0x5e, 0x78, 0x24, 0xc7, 0xf8, 0xe0, 0x91, 0x1c, 0xe3, 0x84, 0xc7, 0x72, 0x0c, 0x17,
-	0x1e, 0xcb, 0x31, 0xdc, 0x78, 0x2c, 0xc7, 0x10, 0xc5, 0x54, 0x90, 0x94, 0xc4, 0x06, 0xf6, 0xb8,
-	0x31, 0x20, 0x00, 0x00, 0xff, 0xff, 0x5e, 0x2e, 0xc2, 0x5d, 0x07, 0x01, 0x00, 0x00,
+	0x5c, 0x25, 0x5f, 0x2e, 0x6e, 0xb7, 0xcc, 0xbc, 0x14, 0xbf, 0xfc, 0x94, 0xd4, 0xa0, 0xd4, 0x42,
+	0x21, 0x31, 0x2e, 0xb6, 0x90, 0xc4, 0xa2, 0xf4, 0xd4, 0x12, 0xa8, 0x05, 0x50, 0x9e, 0x90, 0x00,
+	0x17, 0x73, 0x40, 0x7e, 0xb1, 0x04, 0x93, 0x02, 0xb3, 0x06, 0x6b, 0x10, 0x88, 0x29, 0x24, 0xc2,
+	0xc5, 0xea, 0x93, 0x99, 0x9b, 0x59, 0x02, 0x36, 0x90, 0x35, 0x08, 0xc2, 0x71, 0x92, 0x39, 0xf1,
+	0x48, 0x8e, 0xf1, 0xc2, 0x23, 0x39, 0xc6, 0x07, 0x8f, 0xe4, 0x18, 0x27, 0x3c, 0x96, 0x63, 0xb8,
+	0xf0, 0x58, 0x8e, 0xe1, 0xc6, 0x63, 0x39, 0x86, 0x28, 0xa6, 0x82, 0xa4, 0x24, 0x36, 0x70, 0x90,
+	0x18, 0x03, 0x02, 0x00, 0x00, 0xff, 0xff, 0xe0, 0xcb, 0xcb, 0x1c, 0x21, 0x01, 0x00, 0x00,
 }
 
 func (m *Peers) Marshal() (dAtA []byte, err error) {
@@ -308,12 +317,12 @@ func (m *FindNodeReq) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 	if m.Limit != 0 {
 		i = encodeVarintHive2(dAtA, i, uint64(m.Limit))
 		i--
-		dAtA[i] = 0x10
+		dAtA[i] = 0x18
 	}
-	if len(m.Po) > 0 {
-		dAtA2 := make([]byte, len(m.Po)*10)
+	if len(m.Pos) > 0 {
+		dAtA2 := make([]byte, len(m.Pos)*10)
 		var j1 int
-		for _, num1 := range m.Po {
+		for _, num1 := range m.Pos {
 			num := uint64(num1)
 			for num >= 1<<7 {
 				dAtA2[j1] = uint8(uint64(num)&0x7f | 0x80)
@@ -326,6 +335,13 @@ func (m *FindNodeReq) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 		i -= j1
 		copy(dAtA[i:], dAtA2[:j1])
 		i = encodeVarintHive2(dAtA, i, uint64(j1))
+		i--
+		dAtA[i] = 0x12
+	}
+	if len(m.Target) > 0 {
+		i -= len(m.Target)
+		copy(dAtA[i:], m.Target)
+		i = encodeVarintHive2(dAtA, i, uint64(len(m.Target)))
 		i--
 		dAtA[i] = 0xa
 	}
@@ -385,9 +401,13 @@ func (m *FindNodeReq) Size() (n int) {
 	}
 	var l int
 	_ = l
-	if len(m.Po) > 0 {
+	l = len(m.Target)
+	if l > 0 {
+		n += 1 + l + sovHive2(uint64(l))
+	}
+	if len(m.Pos) > 0 {
 		l = 0
-		for _, e := range m.Po {
+		for _, e := range m.Pos {
 			l += sovHive2(uint64(e))
 		}
 		n += 1 + sovHive2(uint64(l)) + l
@@ -670,6 +690,40 @@ func (m *FindNodeReq) Unmarshal(dAtA []byte) error {
 		}
 		switch fieldNum {
 		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Target", wireType)
+			}
+			var byteLen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowHive2
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				byteLen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if byteLen < 0 {
+				return ErrInvalidLengthHive2
+			}
+			postIndex := iNdEx + byteLen
+			if postIndex < 0 {
+				return ErrInvalidLengthHive2
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Target = append(m.Target[:0], dAtA[iNdEx:postIndex]...)
+			if m.Target == nil {
+				m.Target = []byte{}
+			}
+			iNdEx = postIndex
+		case 2:
 			if wireType == 0 {
 				var v int32
 				for shift := uint(0); ; shift += 7 {
@@ -686,7 +740,7 @@ func (m *FindNodeReq) Unmarshal(dAtA []byte) error {
 						break
 					}
 				}
-				m.Po = append(m.Po, v)
+				m.Pos = append(m.Pos, v)
 			} else if wireType == 2 {
 				var packedLen int
 				for shift := uint(0); ; shift += 7 {
@@ -721,8 +775,8 @@ func (m *FindNodeReq) Unmarshal(dAtA []byte) error {
 					}
 				}
 				elementCount = count
-				if elementCount != 0 && len(m.Po) == 0 {
-					m.Po = make([]int32, 0, elementCount)
+				if elementCount != 0 && len(m.Pos) == 0 {
+					m.Pos = make([]int32, 0, elementCount)
 				}
 				for iNdEx < postIndex {
 					var v int32
@@ -740,12 +794,12 @@ func (m *FindNodeReq) Unmarshal(dAtA []byte) error {
 							break
 						}
 					}
-					m.Po = append(m.Po, v)
+					m.Pos = append(m.Pos, v)
 				}
 			} else {
-				return fmt.Errorf("proto: wrong wireType = %d for field Po", wireType)
+				return fmt.Errorf("proto: wrong wireType = %d for field Pos", wireType)
 			}
-		case 2:
+		case 3:
 			if wireType != 0 {
 				return fmt.Errorf("proto: wrong wireType = %d for field Limit", wireType)
 			}
