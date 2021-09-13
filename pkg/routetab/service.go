@@ -36,7 +36,7 @@ type RouteTab interface {
 	GetRoute(ctx context.Context, target boson.Address) (dest *aurora.Address, routes []RouteItem, err error)
 	FindRoute(ctx context.Context, target boson.Address) (dest *aurora.Address, route []RouteItem, err error)
 	Connect(ctx context.Context, target boson.Address) error
-	GetTargetNeighbor(ctx context.Context, target boson.Address) (addresses []boson.Address, err error)
+	GetTargetNeighbor(ctx context.Context, target boson.Address, limit int) (addresses []boson.Address, err error)
 	IsNeighbor(dest boson.Address) (has bool)
 }
 
