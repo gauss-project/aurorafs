@@ -308,27 +308,34 @@ func TestHandlerChunkInfoRespRelay(t *testing.T) {
 }
 
 func TestHandlerPyramid(t *testing.T) {
+	targetAddress := boson.MustParseHexAddress("03")
 	serverAddress := boson.MustParseHexAddress("02")
 	clientAddress := boson.MustParseHexAddress("01")
 	ctx := context.Background()
 	rootCid, s := mockUploadFile(t)
-	server := mockChunkInfo(s, nil, serverAddress)
+
+	target := mockChunkInfo(s, nil, targetAddress)
+	targetRecorder := streamtest.New(
+		streamtest.WithProtocols(target.Protocol()),
+		streamtest.WithBaseAddr(targetAddress),
+	)
+	server := mockChunkInfo(s, targetRecorder, serverAddress)
 	tree, _ := server.getChunkPyramid(ctx, rootCid)
 	pram, _ := server.traversal.CheckTrieData(ctx, rootCid, tree)
-	if err := server.OnChunkTransferred(boson.NewAddress(pram[0][1]), rootCid, serverAddress); err != nil {
+	if err := target.OnChunkTransferred(boson.NewAddress(pram[0][1]), rootCid, targetAddress); err != nil {
 		t.Fatal(err)
 	}
 	recorder := streamtest.New(
 		streamtest.WithProtocols(server.Protocol()),
-		streamtest.WithBaseAddr(clientAddress),
+		streamtest.WithBaseAddr(serverAddress),
 	)
 	client := mockChunkInfo(s, recorder, clientAddress)
-	err := client.doFindChunkPyramid(context.Background(), nil, rootCid, serverAddress)
+	err := client.doFindChunkPyramid(context.Background(), nil, rootCid, targetAddress)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	records, err := recorder.Records(serverAddress, "chunkinfo", "1.0.0", "chunkpyramidhash")
+	records, err := recorder.Records(targetAddress, "chunkinfo", "1.0.0", "chunkpyramidhash")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -345,7 +352,7 @@ func TestHandlerPyramid(t *testing.T) {
 	}
 	t.Log(messages)
 
-	recordsChunk, err := recorder.Records(serverAddress, "chunkinfo", "1.0.0", "chunkpyramidchunk")
+	recordsChunk, err := recorder.Records(targetAddress, "chunkinfo", "1.0.0", "chunkpyramidchunk")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -360,7 +367,7 @@ func TestHandlerPyramid(t *testing.T) {
 	}
 	t.Log(chunkMessage)
 
-	cids := client.cp.getChunkCid(rootCid)
+	cids := server.cp.getChunkCid(rootCid)
 	t.Log(cids)
 	if cids == nil || len(cids) == 0 {
 		t.Fatalf("chunk pyramid is nil")
