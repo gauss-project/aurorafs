@@ -146,11 +146,11 @@ func (ci *ChunkInfo) doFindChunkPyramid(ctx context.Context, authInfo []byte, ro
 		RootCid: rootCid.Bytes(),
 		Target:  overlay.Bytes(),
 	}
-	resp, err := ci.sendPyramids(ctx, overlay, streamPyramidHashName, req)
+	resp, target, err := ci.sendPyramids(ctx, overlay, streamPyramidHashName, req)
 	if err != nil {
 		return err
 	}
-	return ci.onChunkPyramidResp(ctx, nil, boson.NewAddress(req.RootCid), overlay, resp.(pb.ChunkPyramidHashResp))
+	return ci.onChunkPyramidResp(ctx, nil, boson.NewAddress(req.RootCid), target, resp.(pb.ChunkPyramidHashResp))
 }
 
 func (cp *chunkPyramid) getChunkCid(rootCid boson.Address) []*boson.Address {

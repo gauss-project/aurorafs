@@ -48,6 +48,7 @@ type ChunkInfo struct {
 	route        routetab.RouteTab
 	streamer     p2p.Streamer
 	logger       logging.Logger
+	metrics      metrics
 	t            *time.Timer
 	tt           *timeoutTrigger
 	queuesLk     sync.RWMutex
@@ -68,6 +69,7 @@ func New(addr boson.Address, streamer p2p.Streamer, logger logging.Logger, trave
 		addr:      addr,
 		storer:    storer,
 		route:     route,
+		metrics:   newMetrics(),
 		ct:        newChunkInfoTabNeighbor(),
 		cd:        newChunkInfoDiscover(),
 		cp:        newChunkPyramid(),
