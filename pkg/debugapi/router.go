@@ -97,7 +97,9 @@ func (s *Service) newRouter() *mux.Router {
 			web.FinalHandlerFunc(s.setWelcomeMessageHandler),
 		),
 	})
-
+	router.Handle("/chunk/info/{rootCid}", jsonhttp.MethodHandler{
+		"GET": http.HandlerFunc(s.chunkinfoHandler),
+	})
 	//router.Handle("/balances", jsonhttp.MethodHandler{
 	//	"GET": http.HandlerFunc(s.compensatedBalancesHandler),
 	//})
