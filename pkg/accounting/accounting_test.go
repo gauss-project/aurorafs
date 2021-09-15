@@ -1,7 +1,3 @@
-// Copyright 2020 The Swarm Authors. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
-
 package accounting_test
 
 import (
@@ -12,11 +8,11 @@ import (
 	"testing"
 
 	"github.com/gauss-project/aurorafs/pkg/accounting"
+	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/logging"
 	"github.com/gauss-project/aurorafs/pkg/p2p"
 	mockSettlement "github.com/gauss-project/aurorafs/pkg/settlement/swap/mock"
 	"github.com/gauss-project/aurorafs/pkg/statestore/mock"
-	"github.com/gauss-project/aurorafs/pkg/boson"
 )
 
 const (
@@ -31,8 +27,8 @@ var (
 
 // booking represents an accounting action and the expected result afterwards
 type booking struct {
-	peer  boson.Address
-	price int64 // Credit if <0, Debit otherwise
+	peer            boson.Address
+	price           int64 // Credit if <0, Debit otherwise
 	expectedBalance int64
 }
 

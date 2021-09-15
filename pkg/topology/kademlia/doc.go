@@ -1,7 +1,3 @@
-// Copyright 2020 The Swarm Authors. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
-
 /*
 Package kademlia provides an implementation of the topology.Driver interface
 in a way that a kademlia connectivity is actively maintained by the node.
@@ -37,15 +33,15 @@ a bin size too short, which in turn means that connections should be established
 within this bin. Empty bins have special status in terms of depth calculation
 and as mentioned before they are prioritized over deeper, non empty bins and
 they constitute as the node's depth when the latter is recalculated.
-For the rationale behind this please refer to the appropriate chapters in the book of Swarm.
+For the rationale behind this please refer to the appropriate chapters in the book of Aurora.
 
 A special case of the `manage()` functionality is that when we iterate over
 peers and we come across a peer that has PO >= depth, we would always like
 to connect to that peer. This should always be enforced within the bounds of
 the `binSaturated` function and guarantees an ever increasing kademlia depth
-in an ever-increasing size of Swarm, resulting in smaller areas of responsibility
+in an ever-increasing size of Aurora, resulting in smaller areas of responsibility
 for the nodes, maintaining a general upper bound of the assigned nominal
-area of responsibility in terms of actual storage requirement. See book of Swarm for more details.
+area of responsibility in terms of actual storage requirement. See book of Aurora for more details.
 
 Worth to note is that `manage()` will always try to initiate connections when
 a bin is not saturated, however currently it will not try to eliminate connections

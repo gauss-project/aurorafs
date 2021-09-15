@@ -1,7 +1,3 @@
-// Copyright 2020 The Swarm Authors. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
-
 package chequebook_test
 
 import (
@@ -12,11 +8,11 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethersphere/sw3-bindings/v3/simpleswapfactory"
 	"github.com/gauss-project/aurorafs/pkg/settlement/swap/chequebook"
 	"github.com/gauss-project/aurorafs/pkg/settlement/swap/transaction"
 	"github.com/gauss-project/aurorafs/pkg/settlement/swap/transaction/backendmock"
 	transactionmock "github.com/gauss-project/aurorafs/pkg/settlement/swap/transaction/mock"
-	"github.com/ethersphere/sw3-bindings/v3/simpleswapfactory"
 )
 
 var (

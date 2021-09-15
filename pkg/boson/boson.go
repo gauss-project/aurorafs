@@ -1,8 +1,4 @@
-// Copyright 2020 The Swarm Authors. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
-
-// Package boson contains most basic and general Swarm concepts.
+// Package boson contains most basic and general Aurora concepts.
 package boson
 
 import (
@@ -20,7 +16,7 @@ const (
 	SectionSize             = 32
 	Branches                = 128 * 64
 	EncryptedBranches       = Branches / 2
-	BmtBranches             = 128 * 64 // sectionSize * branches determines the maximum chunk size hashed using the tree
+	BmtBranches             = 128 * 64               // sectionSize * branches determines the maximum chunk size hashed using the tree
 	ChunkSize               = SectionSize * Branches // enlarge a minimal chunk size to 256k
 	HashSize                = 32
 	MaxPO             uint8 = 31
@@ -37,7 +33,7 @@ var (
 	ErrInvalidChunk = errors.New("invalid chunk")
 )
 
-// Address represents an address in Swarm metric space of
+// Address represents an address in Aurora metric space of
 // Node and Chunk addresses.
 type Address struct {
 	b []byte

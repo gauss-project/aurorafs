@@ -1,7 +1,3 @@
-// Copyright 2020 The Swarm Authors. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
-
 package api_test
 
 import (
@@ -23,11 +19,11 @@ import (
 // downloading and requesting a resource that cannot be found.
 func TestBytes(t *testing.T) {
 	var (
-		resource       = "/bytes"
-		targets        = "0x222"
-		expHash        = "29a5fb121ce96194ba8b7b823a1f9c6af87e1791f824940a53b5a7efe3f790d9"
-		mockStorer     = mock.NewStorer()
-		client, _, _   = newTestServer(t, testServerOptions{
+		resource     = "/bytes"
+		targets      = "0x222"
+		expHash      = "29a5fb121ce96194ba8b7b823a1f9c6af87e1791f824940a53b5a7efe3f790d9"
+		mockStorer   = mock.NewStorer()
+		client, _, _ = newTestServer(t, testServerOptions{
 			Storer: mockStorer,
 
 			Logger: logging.New(ioutil.Discard, 5),

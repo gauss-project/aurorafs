@@ -1,16 +1,12 @@
-// Copyright 2020 The Swarm Authors. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
-
 package entry
 
 import (
 	"errors"
 	"math"
 
+	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/collection"
 	"github.com/gauss-project/aurorafs/pkg/encryption"
-	"github.com/gauss-project/aurorafs/pkg/boson"
 )
 
 var (

@@ -15,7 +15,7 @@
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
 /*
-Package localstore provides disk storage layer for Swarm Chunk persistence.
+Package localstore provides disk storage layer for Aurora Chunk persistence.
 It uses boson/shed abstractions.
 
 The main type is DB which manages the storage by providing methods to

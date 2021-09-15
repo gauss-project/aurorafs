@@ -1,7 +1,3 @@
-// Copyright 2020 The Swarm Authors. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
-
 package jsonhttptest_test
 
 import (
@@ -70,7 +66,7 @@ func TestRequest_url(t *testing.T) {
 }
 
 func TestRequest_responseHeader(t *testing.T) {
-	headerName := "Swarm-Header"
+	headerName := "Aurora-Header"
 	headerValue := "somevalue"
 	var gotValue string
 
@@ -202,7 +198,7 @@ func TestWithMultipartRequest(t *testing.T) {
 }
 
 func TestWithRequestHeader(t *testing.T) {
-	headerName := "Swarm-Header"
+	headerName := "Aurora-Header"
 	headerValue := "somevalue"
 	var gotValue string
 
