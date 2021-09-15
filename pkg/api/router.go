@@ -46,7 +46,7 @@ func (s *server) setupRouting() {
 	handle(router, "/filesList", jsonhttp.MethodHandler{
 		"GET": web.ChainHandlers(
 			s.newTracingHandler("fileList-get"),
-			web.FinalHandlerFunc(s.fileList),
+			web.FinalHandlerFunc(s.fileListHandler),
 		),
 	})
 	handle(router, "/files/{address}", jsonhttp.MethodHandler{
@@ -56,7 +56,7 @@ func (s *server) setupRouting() {
 		),
 		"DELETE": web.ChainHandlers(
 			s.newTracingHandler("files-delete"),
-			web.FinalHandlerFunc(s.deleteHandler),
+			web.FinalHandlerFunc(s.fileDeleteHandler),
 		),
 	})
 
@@ -75,14 +75,14 @@ func (s *server) setupRouting() {
 		}),
 		"DELETE": web.ChainHandlers(
 			s.newTracingHandler("aurora-delete"),
-			web.FinalHandlerFunc(s.dirDelHandler),
+			web.FinalHandlerFunc(s.dirDeleteHandler),
 		),
 	})
 
 	handle(router, "/aurora/{address}/{path:.*}", jsonhttp.MethodHandler{
 		"GET": web.ChainHandlers(
 			s.newTracingHandler("aurora-download"),
-			web.FinalHandlerFunc(s.bzzDownloadHandler),
+			web.FinalHandlerFunc(s.dirDownloadHandler),
 		),
 	})
 

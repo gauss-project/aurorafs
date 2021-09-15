@@ -277,7 +277,7 @@ func storeFile(ctx context.Context, fileInfo *fileUploadInfo, p pipelineFunc, en
 	return ref, nil
 }
 
-func (s *server) dirDelHandler(w http.ResponseWriter, r *http.Request) {
+func (s *server) dirDeleteHandler(w http.ResponseWriter, r *http.Request) {
 	addr, err := boson.ParseHexAddress(mux.Vars(r)["address"])
 	if err != nil {
 		s.logger.Debugf("delete aurora: parse address: %v", err)
@@ -312,9 +312,9 @@ func (s *server) dirDelHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	ctx := r.Context()
 
-	chunkAddressFn := s.chunkDelHandler(ctx, addr)
+	fn := s.deleteChunkFn(ctx, addr)
 
-	err = s.traversal.TraverseManifestAddresses(ctx, addr, chunkAddressFn)
+	err = s.traversal.TraverseManifestAddresses(ctx, addr, fn)
 	if err != nil {
 		s.logger.Debugf("delete aurora: traverse chunks: %v, addr %s", err, addr)
 

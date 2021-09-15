@@ -114,7 +114,8 @@ func (s *server) chunkGetHandler(w http.ResponseWriter, r *http.Request) {
 	_, _ = io.Copy(w, bytes.NewReader(chunk.Data()))
 }
 
-func (s *server) chunkDelHandler(ctx context.Context, reference boson.Address) func(address boson.Address) error {
+// deleteChunkFn return iterator but skip reference hash.
+func (s *server) deleteChunkFn(ctx context.Context, reference boson.Address) func(address boson.Address) error {
 	return func(address boson.Address) error {
 		if !address.Equal(reference) {
 			err := s.storer.Set(ctx, storage.ModeSetRemove, address)

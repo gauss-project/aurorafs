@@ -364,7 +364,7 @@ func (s *server) downloadHandler(w http.ResponseWriter, r *http.Request, referen
 	http.ServeContent(w, r, "", time.Now(), langos.NewBufferedLangos(reader, lookaheadBufferSize(l)))
 }
 
-func (s *server) deleteHandler(w http.ResponseWriter, r *http.Request) {
+func (s *server) fileDeleteHandler(w http.ResponseWriter, r *http.Request) {
 	addr, err := boson.ParseHexAddress(mux.Vars(r)["address"])
 	if err != nil {
 		s.logger.Debugf("delete files: parse address: %v", err)
@@ -399,9 +399,9 @@ func (s *server) deleteHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	ctx := r.Context()
 
-	chunkAddressFn := s.chunkDelHandler(ctx, addr)
+	fn := s.deleteChunkFn(ctx, addr)
 
-	err = s.traversal.TraverseFileAddresses(ctx, addr, chunkAddressFn)
+	err = s.traversal.TraverseFileAddresses(ctx, addr, fn)
 	if err != nil {
 		s.logger.Debugf("delete files: traverse chunks: %v, addr %s", err, addr)
 
@@ -425,7 +425,7 @@ func (s *server) deleteHandler(w http.ResponseWriter, r *http.Request) {
 	jsonhttp.OK(w, nil)
 }
 
-func (s *server) fileList(w http.ResponseWriter, r *http.Request) {
+func (s *server) fileListHandler(w http.ResponseWriter, r *http.Request) {
 	responseList := make([]fileListResponse, 0)
 
 	fileListInfo, addressList := s.chunkInfo.GetFileList(s.overlay)
