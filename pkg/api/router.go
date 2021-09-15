@@ -56,7 +56,7 @@ func (s *server) setupRouting() {
 		),
 		"DELETE": web.ChainHandlers(
 			s.newTracingHandler("files-delete"),
-			web.FinalHandlerFunc(s.fileDelete),
+			web.FinalHandlerFunc(s.deleteHandler),
 		),
 	})
 

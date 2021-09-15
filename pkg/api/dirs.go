@@ -11,6 +11,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/gauss-project/aurorafs/pkg/sctx"
 	"github.com/gauss-project/aurorafs/pkg/storage"
 	"github.com/gauss-project/aurorafs/pkg/traversal"
 	"github.com/gorilla/mux"
@@ -286,6 +287,7 @@ func (s *server) dirDelHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	//There is no direct return success.
+	r.WithContext(sctx.SetRootCID(r.Context(), addr))
 	has, err := s.storer.Has(r.Context(), storage.ModeHasChunk, addr)
 	if err != nil {
 		jsonhttp.OK(w, nil)
@@ -310,7 +312,7 @@ func (s *server) dirDelHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	ctx := r.Context()
 
-	chunkAddressFn := s.delpinChunkAddressFn(ctx, addr)
+	chunkAddressFn := s.chunkDelHandler(ctx, addr)
 
 	err = s.traversal.TraverseManifestAddresses(ctx, addr, chunkAddressFn)
 	if err != nil {
@@ -324,6 +326,13 @@ func (s *server) dirDelHandler(w http.ResponseWriter, r *http.Request) {
 
 		s.logger.Error("delete aurora: cannot delete")
 		jsonhttp.InternalServerError(w, "cannot delete")
+		return
+	}
+
+	err = s.storer.Set(ctx, storage.ModeSetRemove, addr)
+	if err != nil {
+		s.logger.Debugf("delete aurora: Error in deleting file rootcid")
+		jsonhttp.InternalServerError(w, "Error in deleting file rootcid")
 		return
 	}
 
