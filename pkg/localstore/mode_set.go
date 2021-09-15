@@ -220,13 +220,11 @@ func (db *DB) setRemove(batch *leveldb.Batch, addr, rootAddr boson.Address) (gcS
 	default:
 		return 0, err
 	}
-
-	db.metrics.GCStoreAccessTimeStamps.Set(float64(rootItem.AccessTimestamp))
-
-	err = db.retrievalAccessIndex.DeleteInBatch(batch, rootItem)
+	i, err = db.retrievalDataIndex.Get(rootItem)
 	if err != nil {
 		return 0, err
 	}
+	rootItem.BinID = i.BinID
 	// a check is needed for decrementing gcSize
 	// as delete is not reporting if the key/value pair
 	// is deleted or not
@@ -245,6 +243,12 @@ func (db *DB) setRemove(batch *leveldb.Batch, addr, rootAddr boson.Address) (gcS
 			return 0, err
 		}
 	} else {
+		db.metrics.GCStoreAccessTimeStamps.Set(float64(rootItem.AccessTimestamp))
+		err = db.retrievalAccessIndex.DeleteInBatch(batch, rootItem)
+		if err != nil {
+			return 0, err
+		}
+
 		err = db.gcIndex.DeleteInBatch(batch, gcItem)
 		if err != nil {
 			return 0, err

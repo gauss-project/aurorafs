@@ -364,7 +364,7 @@ func (s *server) downloadHandler(w http.ResponseWriter, r *http.Request, referen
 	http.ServeContent(w, r, "", time.Now(), langos.NewBufferedLangos(reader, lookaheadBufferSize(l)))
 }
 
-func (s *server) fileDelete(w http.ResponseWriter, r *http.Request) {
+func (s *server) fileDeleteHandler(w http.ResponseWriter, r *http.Request) {
 	addr, err := boson.ParseHexAddress(mux.Vars(r)["address"])
 	if err != nil {
 		s.logger.Debugf("delete files: parse address: %v", err)
@@ -373,6 +373,7 @@ func (s *server) fileDelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	r = r.WithContext(sctx.SetRootCID(r.Context(), addr))
 	//There is no direct return success.
 	has, err := s.storer.Has(r.Context(), storage.ModeHasChunk, addr)
 	if err != nil {
@@ -398,9 +399,9 @@ func (s *server) fileDelete(w http.ResponseWriter, r *http.Request) {
 	}
 	ctx := r.Context()
 
-	chunkAddressFn := s.delpinChunkAddressFn(ctx, addr)
+	fn := s.deleteChunkFn(ctx, addr)
 
-	err = s.traversal.TraverseFileAddresses(ctx, addr, chunkAddressFn)
+	err = s.traversal.TraverseFileAddresses(ctx, addr, fn)
 	if err != nil {
 		s.logger.Debugf("delete files: traverse chunks: %v, addr %s", err, addr)
 
@@ -415,10 +416,16 @@ func (s *server) fileDelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	err = s.storer.Set(ctx, storage.ModeSetRemove, addr)
+	if err != nil {
+		s.logger.Debugf("delete files: Error in deleting file rootcid")
+		jsonhttp.InternalServerError(w, "Error in deleting file rootcid")
+		return
+	}
 	jsonhttp.OK(w, nil)
 }
 
-func (s *server) fileList(w http.ResponseWriter, r *http.Request) {
+func (s *server) fileListHandler(w http.ResponseWriter, r *http.Request) {
 	responseList := make([]fileListResponse, 0)
 
 	fileListInfo, addressList := s.chunkInfo.GetFileList(s.overlay)

@@ -11,6 +11,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/gauss-project/aurorafs/pkg/sctx"
 	"github.com/gauss-project/aurorafs/pkg/storage"
 	"github.com/gauss-project/aurorafs/pkg/traversal"
 	"github.com/gorilla/mux"
@@ -276,7 +277,7 @@ func storeFile(ctx context.Context, fileInfo *fileUploadInfo, p pipelineFunc, en
 	return ref, nil
 }
 
-func (s *server) dirDelHandler(w http.ResponseWriter, r *http.Request) {
+func (s *server) dirDeleteHandler(w http.ResponseWriter, r *http.Request) {
 	addr, err := boson.ParseHexAddress(mux.Vars(r)["address"])
 	if err != nil {
 		s.logger.Debugf("delete aurora: parse address: %v", err)
@@ -286,6 +287,7 @@ func (s *server) dirDelHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	//There is no direct return success.
+	r = r.WithContext(sctx.SetRootCID(r.Context(), addr))
 	has, err := s.storer.Has(r.Context(), storage.ModeHasChunk, addr)
 	if err != nil {
 		jsonhttp.OK(w, nil)
@@ -310,9 +312,9 @@ func (s *server) dirDelHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	ctx := r.Context()
 
-	chunkAddressFn := s.delpinChunkAddressFn(ctx, addr)
+	fn := s.deleteChunkFn(ctx, addr)
 
-	err = s.traversal.TraverseManifestAddresses(ctx, addr, chunkAddressFn)
+	err = s.traversal.TraverseManifestAddresses(ctx, addr, fn)
 	if err != nil {
 		s.logger.Debugf("delete aurora: traverse chunks: %v, addr %s", err, addr)
 
@@ -324,6 +326,13 @@ func (s *server) dirDelHandler(w http.ResponseWriter, r *http.Request) {
 
 		s.logger.Error("delete aurora: cannot delete")
 		jsonhttp.InternalServerError(w, "cannot delete")
+		return
+	}
+
+	err = s.storer.Set(ctx, storage.ModeSetRemove, addr)
+	if err != nil {
+		s.logger.Debugf("delete aurora: Error in deleting file rootcid")
+		jsonhttp.InternalServerError(w, "Error in deleting file rootcid")
 		return
 	}
 
