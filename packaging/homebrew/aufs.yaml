@@ -1,4 +1,4 @@
-## Bee configuration - https://gateway.ethswarm.org/bzz/docs.swarm.eth/docs/installation/configuration/
+## Aurora configuration -
 
 ## HTTP API listen address (default ":1633")
 # api-addr: :1633
@@ -36,7 +36,7 @@ debug-api-enable: true
 # global-pinning-enable: false
 ## NAT exposed address
 # nat-addr: ""
-## ID of the Swarm network (default 1)
+## ID of the Aurora network (default 1)
 # network-id: 1
 ## P2P listen address (default ":1634")
 # p2p-addr: :1634

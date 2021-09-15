@@ -1,7 +1,3 @@
-// Copyright 2020 The Swarm Authors. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
-
 package debugapi_test
 
 import (
@@ -36,8 +32,8 @@ import (
 )
 
 type testServerOptions struct {
-	Overlay   boson.Address
-	PublicKey ecdsa.PublicKey
+	Overlay            boson.Address
+	PublicKey          ecdsa.PublicKey
 	PSSPublicKey       ecdsa.PublicKey
 	EthereumAddress    common.Address
 	CORSAllowedOrigins []string
@@ -65,7 +61,7 @@ func newTestServer(t *testing.T, o testServerOptions) *testServer {
 	//swapserv := swapmock.NewApiInterface(o.SwapOpts...)
 	ln := lightnode.NewContainer(o.Overlay)
 	s := debugapi.New(o.Overlay, o.PublicKey, o.PSSPublicKey, o.EthereumAddress, logging.New(ioutil.Discard, 0), nil, o.CORSAllowedOrigins)
-	s.Configure(o.P2P, o.Pingpong, topologyDriver,ln, o.Storer)
+	s.Configure(o.P2P, o.Pingpong, topologyDriver, ln, o.Storer)
 	ts := httptest.NewServer(s)
 	t.Cleanup(ts.Close)
 

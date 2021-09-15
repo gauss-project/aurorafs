@@ -1,7 +1,3 @@
-// Copyright 2020 The Swarm Authors. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
-
 /*
 Package tracing helps with the propagation of the tracing span through context
 in the system. It does this for operations contained to single node, as well as

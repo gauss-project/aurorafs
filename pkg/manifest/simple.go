@@ -1,7 +1,3 @@
-// Copyright 2020 The Swarm Authors. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
-
 package manifest
 
 import (
@@ -9,9 +5,9 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/gauss-project/aurorafs/pkg/file"
-	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/ethersphere/manifest/simple"
+	"github.com/gauss-project/aurorafs/pkg/boson"
+	"github.com/gauss-project/aurorafs/pkg/file"
 )
 
 const (

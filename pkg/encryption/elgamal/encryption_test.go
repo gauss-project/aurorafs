@@ -1,7 +1,3 @@
-// Copyright 2020 The Swarm Authors. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
-
 package elgamal_test
 
 import (
@@ -10,9 +6,9 @@ import (
 	"io"
 	"testing"
 
+	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/crypto"
 	"github.com/gauss-project/aurorafs/pkg/encryption/elgamal"
-	"github.com/gauss-project/aurorafs/pkg/boson"
 )
 
 func TestElgamalCorrect(t *testing.T) {

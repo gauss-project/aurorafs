@@ -1,7 +1,3 @@
-// Copyright 2020 The Swarm Authors. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
-
 package handshake
 
 import (
@@ -73,7 +69,7 @@ type Service struct {
 	receivedHandshakesMu  sync.Mutex
 	logger                logging.Logger
 	libp2pID              libp2ppeer.ID
-	network.Notifiee // handshake service can be the receiver for network.Notify
+	network.Notifiee      // handshake service can be the receiver for network.Notify
 }
 
 type Model struct {
