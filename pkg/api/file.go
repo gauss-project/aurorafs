@@ -324,7 +324,7 @@ func (s *server) fileDownloadHandler(w http.ResponseWriter, r *http.Request) {
 	s.downloadHandler(w, r, e.Reference(), additionalHeaders, true)
 }
 
-// downloadHandler contains common logic for dowloading Swarm file from API
+// downloadHandler contains common logic for dowloading Aurora file from API
 func (s *server) downloadHandler(w http.ResponseWriter, r *http.Request, reference boson.Address, additionalHeaders http.Header, etag bool) {
 	logger := tracing.NewLoggerWithTraceID(r.Context(), s.logger)
 

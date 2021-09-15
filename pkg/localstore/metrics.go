@@ -1,7 +1,3 @@
-// Copyright 2020 The Swarm Authors. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
-
 package localstore
 
 import (
@@ -10,37 +6,37 @@ import (
 )
 
 type metrics struct {
-	TotalTimeGCLock                 prometheus.Counter
-	TotalTimeGCFirstItem            prometheus.Counter
-	TotalTimeCollectGarbage         prometheus.Counter
-	TotalTimeGet                    prometheus.Counter
-	TotalTimeUpdateGC               prometheus.Counter
-	TotalTimeGetMulti               prometheus.Counter
-	TotalTimeHas                    prometheus.Counter
-	TotalTimeHasMulti               prometheus.Counter
-	TotalTimePut                    prometheus.Counter
-	TotalTimeSet                    prometheus.Counter
+	TotalTimeGCLock         prometheus.Counter
+	TotalTimeGCFirstItem    prometheus.Counter
+	TotalTimeCollectGarbage prometheus.Counter
+	TotalTimeGet            prometheus.Counter
+	TotalTimeUpdateGC       prometheus.Counter
+	TotalTimeGetMulti       prometheus.Counter
+	TotalTimeHas            prometheus.Counter
+	TotalTimeHasMulti       prometheus.Counter
+	TotalTimePut            prometheus.Counter
+	TotalTimeSet            prometheus.Counter
 
-	GCCounter                prometheus.Counter
-	GCErrorCounter           prometheus.Counter
-	GCCollectedCounter       prometheus.Counter
-	GCCommittedCounter       prometheus.Counter
-	GCRemovedCounter         prometheus.Counter
-	GCUpdate                 prometheus.Counter
-	GCUpdateError            prometheus.Counter
+	GCCounter          prometheus.Counter
+	GCErrorCounter     prometheus.Counter
+	GCCollectedCounter prometheus.Counter
+	GCCommittedCounter prometheus.Counter
+	GCRemovedCounter   prometheus.Counter
+	GCUpdate           prometheus.Counter
+	GCUpdateError      prometheus.Counter
 
-	ModeGet                       prometheus.Counter
-	ModeGetFailure                prometheus.Counter
-	ModeGetMulti                  prometheus.Counter
-	ModeGetMultiFailure           prometheus.Counter
-	ModePut                       prometheus.Counter
-	ModePutFailure                prometheus.Counter
-	ModeSet                       prometheus.Counter
-	ModeSetFailure                prometheus.Counter
-	ModeHas                       prometheus.Counter
-	ModeHasFailure                prometheus.Counter
-	ModeHasMulti                  prometheus.Counter
-	ModeHasMultiFailure           prometheus.Counter
+	ModeGet             prometheus.Counter
+	ModeGetFailure      prometheus.Counter
+	ModeGetMulti        prometheus.Counter
+	ModeGetMultiFailure prometheus.Counter
+	ModePut             prometheus.Counter
+	ModePutFailure      prometheus.Counter
+	ModeSet             prometheus.Counter
+	ModeSetFailure      prometheus.Counter
+	ModeHas             prometheus.Counter
+	ModeHasFailure      prometheus.Counter
+	ModeHasMulti        prometheus.Counter
+	ModeHasMultiFailure prometheus.Counter
 
 	GCSize                  prometheus.Gauge
 	GCWaitRemove            prometheus.Gauge

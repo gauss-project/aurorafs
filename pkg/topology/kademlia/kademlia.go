@@ -1,7 +1,3 @@
-// Copyright 2020 The Swarm Authors. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
-
 package kademlia
 
 import (
@@ -73,7 +69,7 @@ type Options struct {
 	BinMaxPeers     int // every k bucket max connes
 }
 
-// Kad is the Swarm forwarding kademlia implementation.
+// Kad is the Aurora forwarding kademlia implementation.
 type Kad struct {
 	base              boson.Address         // this node's overlay address
 	discovery         discovery.Driver      // the discovery driver

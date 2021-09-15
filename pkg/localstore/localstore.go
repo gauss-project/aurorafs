@@ -1,4 +1,3 @@
-// Copyright 2018 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -57,7 +56,7 @@ var (
 // DB is the local store implementation and holds
 // database related objects.
 type DB struct {
-	shed *shed.DB
+	shed     *shed.DB
 	discover chunkinfo.Interface
 
 	// schema name of loaded data
@@ -72,7 +71,7 @@ type DB struct {
 	binIDs shed.Uint64Vector
 
 	// garbage collection index
-	gcIndex shed.Index
+	gcIndex      shed.Index
 	gcQueueIndex shed.Index
 
 	// pin files Index
@@ -317,7 +316,7 @@ func New(path string, baseKey []byte, o *Options, logger logging.Logger) (db *DB
 	}
 	db.gcQueueIndex, err = db.shed.NewIndex("GCounter|Hash->nil", shed.IndexFuncs{
 		EncodeKey: func(fields shed.Item) (key []byte, err error) {
-			b := make([]byte, 8, 8 + len(fields.Address))
+			b := make([]byte, 8, 8+len(fields.Address))
 			binary.BigEndian.PutUint64(b[:8], fields.GCounter)
 			key = append(b, fields.Address...)
 			return key, nil

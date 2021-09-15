@@ -1,4 +1,3 @@
-// Copyright 2018 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -217,7 +216,7 @@ func (db *DB) recycleGarbageWorker() {
 	var (
 		recycleCount uint64
 		removeChunks uint64
-		closed bool
+		closed       bool
 	)
 
 	defer close(db.recycleGarbageWorkerDone)

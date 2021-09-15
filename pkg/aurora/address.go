@@ -1,7 +1,3 @@
-// Copyright 2020 The Swarm Authors. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
-
 // Package aurora exposes the data structure and operations
 // necessary on the aurora.Address type which used in the handshake
 // protocol, address-book and hive protocol.

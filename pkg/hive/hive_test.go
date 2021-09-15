@@ -1,7 +1,3 @@
-// Copyright 2020 The Swarm Authors. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
-
 package hive_test
 
 import (
@@ -144,9 +140,9 @@ func TestBroadcastPeers(t *testing.T) {
 		}
 
 		wantMsgs[i/hive.MaxBatchSize].Peers = append(wantMsgs[i/hive.MaxBatchSize].Peers, &pb.BzzAddress{
-			Overlay:     bzzAddresses[i].Overlay.Bytes(),
-			Underlay:    bzzAddresses[i].Underlay.Bytes(),
-			Signature:   bzzAddresses[i].Signature,
+			Overlay:   bzzAddresses[i].Overlay.Bytes(),
+			Underlay:  bzzAddresses[i].Underlay.Bytes(),
+			Signature: bzzAddresses[i].Signature,
 		})
 	}
 

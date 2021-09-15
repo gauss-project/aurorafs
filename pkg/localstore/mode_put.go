@@ -1,4 +1,3 @@
-// Copyright 2018 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -81,7 +80,7 @@ func (db *DB) put(mode storage.ModePut, rootAddr boson.Address, chs ...boson.Chu
 
 	// variables that provide information for operations
 	// to be done after write batch function successfully executes
-	var gcSizeChange int64                      // number to add or subtract from gcSize
+	var gcSizeChange int64 // number to add or subtract from gcSize
 
 	exist = make([]bool, len(chs))
 

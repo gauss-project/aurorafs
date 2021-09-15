@@ -1,20 +1,8 @@
-// Copyright 2020 The Swarm Authors. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
-
 package file_test
 
 import (
 	"bytes"
 	"context"
-	"io/ioutil"
-	"net/http/httptest"
-	"net/url"
-	"os"
-	"path/filepath"
-	"strconv"
-	"testing"
-
 	cmdfile "github.com/gauss-project/aurorafs/cmd/internal/file"
 	"github.com/gauss-project/aurorafs/pkg/api"
 	"github.com/gauss-project/aurorafs/pkg/boson"
@@ -22,6 +10,13 @@ import (
 	"github.com/gauss-project/aurorafs/pkg/storage"
 	"github.com/gauss-project/aurorafs/pkg/storage/mock"
 	testingc "github.com/gauss-project/aurorafs/pkg/storage/testing"
+	"io/ioutil"
+	"net/http/httptest"
+	"net/url"
+	"os"
+	"path/filepath"
+	"strconv"
+	"testing"
 )
 
 const (
@@ -153,7 +148,9 @@ func newTestServer(t *testing.T, storer storage.Storer) *url.URL {
 	t.Helper()
 	logger := logging.New(ioutil.Discard, 0)
 	//store := statestore.NewStateStore()
-	s := api.New( storer,   nil, nil, logger, nil, api.Options{})
+	rootCid, _ := boson.ParseHexAddress("6aa47f0d31e20784005cb2148b6fed85e538f829698ef552bb590be1bfa7e643")
+	s := api.New(storer, nil, rootCid, nil, nil, logger, nil, api.Options{})
+
 	ts := httptest.NewServer(s)
 	srvUrl, err := url.Parse(ts.URL)
 	if err != nil {

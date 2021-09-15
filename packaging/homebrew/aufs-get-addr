@@ -15,7 +15,7 @@ After you fix configuration run 'bee-get-addr' again.
 Please make sure there is sufficient eth and bzz available on $ETH_ADDRESS address.
 You can get both Goerli ETH and Goerli BZZ now via the bzzaar at https://bzz.ethswarm.org/?transaction=buy&amount=10&slippage=30&receiver=0x$ETH_ADDRESS
 
-After you get the funds start service with 'brew services start swarm-bee'.
+After you get the funds start service with 'brew services start Aurora'.
         "
         ;;
 esac

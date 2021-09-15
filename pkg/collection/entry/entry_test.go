@@ -1,14 +1,10 @@
-// Copyright 2020 The Swarm Authors. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
-
 package entry_test
 
 import (
 	"testing"
 
-	"github.com/gauss-project/aurorafs/pkg/collection/entry"
 	"github.com/gauss-project/aurorafs/pkg/boson/test"
+	"github.com/gauss-project/aurorafs/pkg/collection/entry"
 )
 
 // TestEntrySerialize verifies integrity of serialization.

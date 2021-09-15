@@ -47,18 +47,18 @@ func TestPinAuroras(t *testing.T) {
 
 	files := []f{
 		{
-			data: []byte("<h1>Swarm"),
+			data: []byte("<h1>Aurora"),
 			name: "index.html",
 			dir:  "",
 		},
-		{data: []byte("<h2>Swarm"),
+		{data: []byte("<h2>Aurora"),
 			name: "user.html",
 			dir:  "",
 		},
 	}
 	files1 := []f{
 		{
-			data: []byte("<h1>Swarm"),
+			data: []byte("<h1>Aurora"),
 			name: "index.html",
 			dir:  "",
 		},

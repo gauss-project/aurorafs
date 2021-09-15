@@ -1,7 +1,3 @@
-// Copyright 2020 The Swarm Authors. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
-
 package api
 
 import (
@@ -27,7 +23,6 @@ type chunkAddressResponse struct {
 
 func (s *server) chunkUploadHandler(w http.ResponseWriter, r *http.Request) {
 	var (
-
 		ctx = r.Context()
 		err error
 	)
@@ -64,7 +59,7 @@ func (s *server) chunkUploadHandler(w http.ResponseWriter, r *http.Request) {
 		s.logger.Error("chunk upload: chunk write error")
 		jsonhttp.BadRequest(w, "chunk write error")
 		return
-	} else if len(seen) > 0 && seen[0]  {
+	} else if len(seen) > 0 && seen[0] {
 
 		s.logger.Debugf("chunk upload: increment tag", err)
 		s.logger.Error("chunk upload: increment tag")
@@ -72,13 +67,11 @@ func (s *server) chunkUploadHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-
 	jsonhttp.OK(w, chunkAddressResponse{Reference: chunk.Address()})
 }
 
 func (s *server) chunkGetHandler(w http.ResponseWriter, r *http.Request) {
 	targets := r.URL.Query().Get("targets")
-
 
 	nameOrHex := mux.Vars(r)["addr"]
 	ctx := r.Context()

@@ -1,7 +1,3 @@
-// Copyright 2020 The Swarm Authors. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
-
 package chequebook
 
 import (
@@ -12,8 +8,8 @@ import (
 
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/gauss-project/aurorafs/pkg/settlement/swap/transaction"
 	"github.com/ethersphere/sw3-bindings/v3/simpleswapfactory"
+	"github.com/gauss-project/aurorafs/pkg/settlement/swap/transaction"
 	"golang.org/x/net/context"
 )
 

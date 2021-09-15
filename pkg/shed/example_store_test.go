@@ -1,4 +1,3 @@
-// Copyright 2018 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -25,10 +24,10 @@ import (
 	"log"
 	"time"
 
+	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/shed"
 	"github.com/gauss-project/aurorafs/pkg/storage"
 	"github.com/gauss-project/aurorafs/pkg/storage/testing"
-	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/syndtr/goleveldb/leveldb"
 )
 

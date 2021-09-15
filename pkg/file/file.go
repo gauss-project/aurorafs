@@ -1,7 +1,3 @@
-// Copyright 2020 The Swarm Authors. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
-
 // Package file provides interfaces for file-oriented operations.
 package file
 
@@ -39,7 +35,7 @@ type Joiner interface {
 //
 // Data is read from the provided reader.
 // If the dataLength parameter is 0, data is read until io.EOF is encountered.
-// When EOF is received and splitting is done, the resulting Swarm Address is returned.
+// When EOF is received and splitting is done, the resulting Aurora Address is returned.
 type Splitter interface {
 	Split(ctx context.Context, dataIn io.ReadCloser, dataLength int64, toEncrypt bool) (addr boson.Address, err error)
 }

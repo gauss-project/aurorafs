@@ -1,7 +1,3 @@
-// Copyright 2020 The Swarm Authors. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
-
 package swap_test
 
 import (
@@ -12,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/crypto"
 	"github.com/gauss-project/aurorafs/pkg/logging"
 	mockp2p "github.com/gauss-project/aurorafs/pkg/p2p/mock"
@@ -20,7 +17,6 @@ import (
 	mockchequebook "github.com/gauss-project/aurorafs/pkg/settlement/swap/chequebook/mock"
 	mockchequestore "github.com/gauss-project/aurorafs/pkg/settlement/swap/chequestore/mock"
 	mockstore "github.com/gauss-project/aurorafs/pkg/statestore/mock"
-	"github.com/gauss-project/aurorafs/pkg/boson"
 )
 
 type swapProtocolMock struct {
@@ -415,7 +411,7 @@ func TestPayUnknownBeneficiary(t *testing.T) {
 		networkID,
 		&cashoutMock{},
 		mockp2p.New(
-			mockp2p.WithDisconnectFunc(func(disconnectPeer boson.Address) error {
+			mockp2p.WithDisconnectFunc(func(disconnectPeer boson.Address, reason string) error {
 				if !peer.Equal(disconnectPeer) {
 					t.Fatalf("disconnecting wrong peer. wanted %v, got %v", peer, disconnectPeer)
 				}

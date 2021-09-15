@@ -1,4 +1,3 @@
-// Copyright 2019 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -21,8 +20,8 @@ import (
 	"context"
 	"testing"
 
-	"github.com/gauss-project/aurorafs/pkg/storage"
 	"github.com/gauss-project/aurorafs/pkg/boson"
+	"github.com/gauss-project/aurorafs/pkg/storage"
 )
 
 // TestExportImport constructs two databases, one to put and export

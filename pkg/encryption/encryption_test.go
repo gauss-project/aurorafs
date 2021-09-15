@@ -1,4 +1,3 @@
-// Copyright 2018 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -23,8 +22,8 @@ import (
 	"math/rand"
 	"testing"
 
-	"github.com/gauss-project/aurorafs/pkg/encryption"
 	"github.com/gauss-project/aurorafs/pkg/boson"
+	"github.com/gauss-project/aurorafs/pkg/encryption"
 	"golang.org/x/crypto/sha3"
 )
 

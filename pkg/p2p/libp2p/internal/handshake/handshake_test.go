@@ -1,7 +1,3 @@
-// Copyright 2020 The Swarm Authors. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
-
 package handshake_test
 
 import (
@@ -87,7 +83,7 @@ func TestHandshake(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	bv,_ := bitvector.New(1)
+	bv, _ := bitvector.New(1)
 	bv.Set(0)
 	nodeModel := handshake.Model{Bv: bv}
 	node1Info := handshake.Info{
@@ -100,7 +96,6 @@ func TestHandshake(t *testing.T) {
 	}
 
 	aaddresser := &AdvertisableAddresserMock{}
-
 
 	handshakeService, err := handshake.New(signer1, aaddresser, node1Info.BzzAddress.Overlay, networkID, true, testWelcomeMessage, node1AddrInfo.ID, logger)
 	if err != nil {
@@ -165,7 +160,7 @@ func TestHandshake(t *testing.T) {
 		if ack.NetworkID != networkID {
 			t.Fatal("bad ack - networkID")
 		}
-		bv1,_ := bitvector.NewFromBytes(ack.NodeMode,1)
+		bv1, _ := bitvector.NewFromBytes(ack.NodeMode, 1)
 		nb := handshake.Model{Bv: bv1}
 		if nb.IsFull() != true {
 			t.Fatal("bad ack - full node")
@@ -438,7 +433,7 @@ func TestHandshake(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		bv2,_ := bitvector.NewFromBytes(got.Ack.NodeMode,1)
+		bv2, _ := bitvector.NewFromBytes(got.Ack.NodeMode, 1)
 		nb2 := handshake.Model{Bv: bv2}
 		testInfo(t, node1Info, handshake.Info{
 			BzzAddress: bzzAddress,
@@ -610,7 +605,7 @@ func TestHandshake(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		bv3,_ := bitvector.NewFromBytes(got.Ack.NodeMode,1)
+		bv3, _ := bitvector.NewFromBytes(got.Ack.NodeMode, 1)
 		nb3 := handshake.Model{Bv: bv3}
 		testInfo(t, node1Info, handshake.Info{
 			BzzAddress: bzzAddress,

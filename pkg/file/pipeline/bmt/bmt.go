@@ -1,15 +1,11 @@
-// Copyright 2020 The Swarm Authors. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
-
 package bmt
 
 import (
 	"errors"
 
 	"github.com/gauss-project/aurorafs/pkg/bmtpool"
-	"github.com/gauss-project/aurorafs/pkg/file/pipeline"
 	"github.com/gauss-project/aurorafs/pkg/boson"
+	"github.com/gauss-project/aurorafs/pkg/file/pipeline"
 )
 
 var (

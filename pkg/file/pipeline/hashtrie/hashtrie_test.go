@@ -1,7 +1,3 @@
-// Copyright 2021 The Swarm Authors. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
-
 package hashtrie_test
 
 import (
@@ -10,13 +6,13 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/file/pipeline"
 	"github.com/gauss-project/aurorafs/pkg/file/pipeline/bmt"
 	"github.com/gauss-project/aurorafs/pkg/file/pipeline/hashtrie"
 	"github.com/gauss-project/aurorafs/pkg/file/pipeline/store"
 	"github.com/gauss-project/aurorafs/pkg/storage"
 	"github.com/gauss-project/aurorafs/pkg/storage/mock"
-	"github.com/gauss-project/aurorafs/pkg/boson"
 )
 
 var (
