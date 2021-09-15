@@ -1,7 +1,3 @@
-// Copyright 2020 The Swarm Authors. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
-
 // Package debugapi exposes the debug API used to
 // control and analyze low-level and runtime
 // features and functionalities of Bee.

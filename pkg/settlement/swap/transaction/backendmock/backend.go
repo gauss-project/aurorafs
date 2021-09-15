@@ -114,6 +114,11 @@ func (m *backendMock) BalanceAt(ctx context.Context, address common.Address, blo
 	return nil, errors.New("not implemented")
 }
 
+func (m *backendMock) SuggestGasTipCap(ctx context.Context) (*big.Int, error) {
+	var i big.Int
+	return &i, nil
+}
+
 func New(opts ...Option) transaction.Backend {
 	mock := new(backendMock)
 	for _, o := range opts {

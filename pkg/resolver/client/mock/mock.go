@@ -1,12 +1,8 @@
-// Copyright 2020 The Swarm Authors. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
-
 package mock
 
 import (
-	"github.com/gauss-project/aurorafs/pkg/resolver/client"
 	"github.com/gauss-project/aurorafs/pkg/boson"
+	"github.com/gauss-project/aurorafs/pkg/resolver/client"
 )
 
 // Ensure mock Client implements the Client interface.

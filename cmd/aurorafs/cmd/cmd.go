@@ -1,7 +1,3 @@
-// Copyright 2020 The Swarm Authors. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
-
 package cmd
 
 import (
@@ -204,7 +200,7 @@ func (c *command) setAllFlags(cmd *cobra.Command) {
 	cmd.Flags().String(optionNameOracleAPIAddr, "", "link to oracle api service")
 	cmd.Flags().Bool(optionNameDebugAPIEnable, false, "enable debug HTTP API")
 	cmd.Flags().String(optionNameDebugAPIAddr, ":1635", "debug HTTP API listen address")
-	cmd.Flags().Uint64(optionNameNetworkID, 1, "ID of the Swarm network")
+	cmd.Flags().Uint64(optionNameNetworkID, 1, "ID of the Aurora network")
 	cmd.Flags().StringSlice(optionCORSAllowedOrigins, []string{}, "origins with CORS headers enabled")
 	cmd.Flags().Bool(optionNameStandalone, false, "whether we want the node to start with no listen addresses for p2p")
 	cmd.Flags().Bool(optionNameDevMode, false, "run dev mode")

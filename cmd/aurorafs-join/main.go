@@ -94,8 +94,8 @@ func main() {
 	c := &cobra.Command{
 		Use:   "join [hash]",
 		Args:  cobra.ExactArgs(1),
-		Short: "Retrieve data from Swarm",
-		Long: `Assembles chunked data from referenced by a root Swarm Hash.
+		Short: "Retrieve data from Aurora",
+		Long: `Assembles chunked data from referenced by a root Aurora Hash.
 
 Will output retrieved data to stdout.`,
 		RunE:         Join,

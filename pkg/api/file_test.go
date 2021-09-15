@@ -1,7 +1,3 @@
-// Copyright 2020 The Swarm Authors. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
-
 package api_test
 
 import (
@@ -31,9 +27,8 @@ func TestFiles(t *testing.T) {
 		fileDownloadResource = func(addr string) string { return "/files/" + addr }
 		simpleData           = []byte("this is a simple text")
 
-		client, _, _         = newTestServer(t, testServerOptions{
+		client, _, _ = newTestServer(t, testServerOptions{
 			Storer: mock.NewStorer(),
-
 		})
 	)
 

@@ -121,10 +121,17 @@ func (cn *chunkInfoTabNeighbor) createChunkInfoResp(rootCid boson.Address, ctn m
 	return pb.ChunkInfoResp{RootCid: rootCid.Bytes(), Target: target, Req: req, Presence: ctn}
 }
 
-func (cn *chunkInfoTabNeighbor) delPresence(rootCid boson.Address) bool {
-	cn.Lock()
-	defer cn.Unlock()
-	delete(cn.presence, rootCid.String())
-	delete(cn.overlays, rootCid.String())
+func (ci *ChunkInfo) delPresence(rootCid boson.Address) bool {
+	ci.ct.Lock()
+	defer ci.ct.Unlock()
+
+	err := ci.storer.Delete(generateKey(keyPrefix, rootCid, ci.addr))
+	if err != nil {
+		return false
+	}
+
+	delete(ci.ct.presence, rootCid.String())
+	delete(ci.ct.overlays, rootCid.String())
+
 	return true
 }

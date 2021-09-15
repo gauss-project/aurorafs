@@ -1,7 +1,3 @@
-// Copyright 2020 The Swarm Authors. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
-
 package multiresolver_test
 
 import (
@@ -11,11 +7,11 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/logging"
 	"github.com/gauss-project/aurorafs/pkg/resolver"
 	"github.com/gauss-project/aurorafs/pkg/resolver/mock"
 	"github.com/gauss-project/aurorafs/pkg/resolver/multiresolver"
-	"github.com/gauss-project/aurorafs/pkg/boson"
 )
 
 type Address = boson.Address

@@ -125,7 +125,7 @@ func (h *hashTrieWriter) levelSize(level int) int {
 	return h.cursors[level] - h.cursors[level+1]
 }
 
-// Sum returns the Swarm merkle-root content-addressed hash
+// Sum returns the Aurora merkle-root content-addressed hash
 // of an arbitrary-length binary data.
 // The algorithm it uses is as follows:
 //	- From level 1 till maxLevel 8, iterate:

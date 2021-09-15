@@ -111,6 +111,14 @@ func (d *mock) Peers() []boson.Address {
 	return d.peers
 }
 
+func (d *mock) EachKnownPeer(f topology.EachPeerFunc) error {
+	return nil
+}
+
+func (d *mock) EachKnownPeerRev(f topology.EachPeerFunc) error {
+	return nil
+}
+
 func (d *mock) ClosestPeer(addr boson.Address, wantSelf bool, skipPeers ...boson.Address) (peerAddr boson.Address, err error) {
 	if len(skipPeers) == 0 {
 		if d.closestPeerErr != nil {
@@ -159,6 +167,10 @@ func (d *mock) ClosestPeer(addr boson.Address, wantSelf bool, skipPeers ...boson
 	}
 
 	return peerAddr, nil
+}
+
+func (d *mock) ClosestPeers(addr boson.Address, limit int, skipPeers ...boson.Address) ([]boson.Address, error) {
+	return nil, nil
 }
 
 func (d *mock) SubscribePeersChange() (c <-chan struct{}, unsubscribe func()) {
