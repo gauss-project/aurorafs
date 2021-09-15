@@ -1,7 +1,3 @@
-// Copyright 2021 The Swarm Authors. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
-
 // Package ratelimit provides a mechanism to rate limit requests based on a string key,
 // refill rate and burst amount. Under the hood, it's a token bucket of size burst amount,
 // that refills at the refill rate.

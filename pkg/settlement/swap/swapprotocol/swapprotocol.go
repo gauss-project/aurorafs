@@ -1,7 +1,3 @@
-// Copyright 2020 The Swarm Authors. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
-
 package swapprotocol
 
 import (
@@ -12,12 +8,12 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/logging"
 	"github.com/gauss-project/aurorafs/pkg/p2p"
 	"github.com/gauss-project/aurorafs/pkg/p2p/protobuf"
 	"github.com/gauss-project/aurorafs/pkg/settlement/swap/chequebook"
 	"github.com/gauss-project/aurorafs/pkg/settlement/swap/swapprotocol/pb"
-	"github.com/gauss-project/aurorafs/pkg/boson"
 )
 
 const (

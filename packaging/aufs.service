@@ -1,5 +1,5 @@
 [Unit]
-Description=Bee - Ethereum Swarm node
+Description= - Ethereum Aurora node
 Documentation=https://docs.aufs.io
 After=network.target
 

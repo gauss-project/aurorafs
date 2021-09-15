@@ -1,7 +1,3 @@
-// Copyright 2021 The Swarm Authors. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
-
 package api_test
 
 import (
@@ -22,10 +18,10 @@ import (
 
 func TestSOC(t *testing.T) {
 	var (
-		testData       = []byte("foo")
-		socResource    = func(owner, id, sig string) string { return fmt.Sprintf("/soc/%s/%s?sig=%s", owner, id, sig) }
-		mockStorer     = mock.NewStorer()
-		client, _, _   = newTestServer(t, testServerOptions{
+		testData     = []byte("foo")
+		socResource  = func(owner, id, sig string) string { return fmt.Sprintf("/soc/%s/%s?sig=%s", owner, id, sig) }
+		mockStorer   = mock.NewStorer()
+		client, _, _ = newTestServer(t, testServerOptions{
 			Storer: mockStorer,
 		})
 	)

@@ -1,7 +1,3 @@
-// Copyright 2021 The Swarm Authors. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
-
 package erc20_test
 
 import (
@@ -10,11 +6,11 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethersphere/sw3-bindings/v3/simpleswapfactory"
 	"github.com/gauss-project/aurorafs/pkg/settlement/swap/erc20"
 	"github.com/gauss-project/aurorafs/pkg/settlement/swap/transaction"
 	backendmock "github.com/gauss-project/aurorafs/pkg/settlement/swap/transaction/backendmock"
 	transactionmock "github.com/gauss-project/aurorafs/pkg/settlement/swap/transaction/mock"
-	"github.com/ethersphere/sw3-bindings/v3/simpleswapfactory"
 )
 
 var (

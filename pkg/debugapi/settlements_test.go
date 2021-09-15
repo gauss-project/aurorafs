@@ -1,7 +1,3 @@
-// Copyright 2020 The Swarm Authors. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
-
 package debugapi_test
 
 import (
@@ -11,12 +7,12 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/debugapi"
 	"github.com/gauss-project/aurorafs/pkg/jsonhttp"
 	"github.com/gauss-project/aurorafs/pkg/jsonhttp/jsonhttptest"
 	"github.com/gauss-project/aurorafs/pkg/settlement"
 	"github.com/gauss-project/aurorafs/pkg/settlement/swap/mock"
-	"github.com/gauss-project/aurorafs/pkg/boson"
 )
 
 func TestSettlements(t *testing.T) {

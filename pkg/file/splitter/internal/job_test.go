@@ -1,7 +1,3 @@
-// Copyright 2020 The Swarm Authors. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
-
 package internal_test
 
 import (
@@ -10,11 +6,11 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/file/splitter/internal"
 	test "github.com/gauss-project/aurorafs/pkg/file/testing"
 	"github.com/gauss-project/aurorafs/pkg/storage"
 	"github.com/gauss-project/aurorafs/pkg/storage/mock"
-	"github.com/gauss-project/aurorafs/pkg/boson"
 )
 
 var (

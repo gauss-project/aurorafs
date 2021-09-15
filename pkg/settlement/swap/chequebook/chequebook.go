@@ -1,7 +1,3 @@
-// Copyright 2020 The Swarm Authors. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
-
 package chequebook
 
 import (
@@ -14,10 +10,10 @@ import (
 
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethersphere/sw3-bindings/v3/simpleswapfactory"
 	"github.com/gauss-project/aurorafs/pkg/settlement/swap/erc20"
 	"github.com/gauss-project/aurorafs/pkg/settlement/swap/transaction"
 	"github.com/gauss-project/aurorafs/pkg/storage"
-	"github.com/ethersphere/sw3-bindings/v3/simpleswapfactory"
 )
 
 // SendChequeFunc is a function to send cheques.
