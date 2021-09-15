@@ -1,7 +1,3 @@
-// Copyright 2020 The Boson Authors. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
-
 package api_test
 
 import (
@@ -36,7 +32,7 @@ func TestDirs(t *testing.T) {
 		ctx                  = context.Background()
 		storer               = mock.NewStorer()
 		client, _, _         = newTestServer(t, testServerOptions{
-			Storer:          storer,
+			Storer: storer,
 
 			Logger:          logging.New(ioutil.Discard, 5),
 			PreventRedirect: true,
@@ -86,9 +82,9 @@ func TestDirs(t *testing.T) {
 
 	// valid tars
 	for _, tc := range []struct {
-		name              string
-		expectedReference boson.Address
-		encrypt           bool
+		name                string
+		expectedReference   boson.Address
+		encrypt             bool
 		wantIndexFilename   string
 		wantErrorFilename   string
 		indexFilenameOption jsonhttptest.Option

@@ -1,5 +1,5 @@
 // Package manifest contains the abstractions needed for
-// collection representation in Swarm. It uses implementations
+// collection representation in Aurora. It uses implementations
 // in ethersphere/manifest repo under the hood.
 package manifest
 

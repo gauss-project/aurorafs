@@ -1,7 +1,3 @@
-// Copyright 2020 The Swarm Authors. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
-
 package libp2p
 
 import (
@@ -9,10 +5,10 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/p2p"
 	"github.com/gauss-project/aurorafs/pkg/p2p/libp2p/internal/headers/pb"
 	"github.com/gauss-project/aurorafs/pkg/p2p/protobuf"
-	"github.com/gauss-project/aurorafs/pkg/boson"
 )
 
 var sendHeadersTimeout = 10 * time.Second

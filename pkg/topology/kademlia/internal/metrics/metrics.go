@@ -1,7 +1,3 @@
-// Copyright 2021 The Swarm Authors. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
-
 // Package metrics provides service for collecting various metrics about peers.
 // It is intended to be used with the kademlia where the metrics are collected.
 package metrics
@@ -132,7 +128,6 @@ type Counters struct {
 	sessionConnDirection PeerConnectionDirection
 }
 
-
 // UnmarshalJSON unmarshal just the persistent counters.
 func (cs *Counters) UnmarshalJSON(b []byte) (err error) {
 	var val persistentCounters
@@ -158,7 +153,6 @@ func (cs *Counters) MarshalJSON() ([]byte, error) {
 	cs.Unlock()
 	return json.Marshal(val)
 }
-
 
 // snapshot returns current snapshot of counters referenced to the given t.
 func (cs *Counters) snapshot(t time.Time) *Snapshot {
@@ -210,7 +204,7 @@ func NewCollector(db *shed.DB) (*Collector, error) {
 }
 
 // Collector collects various metrics about
-// peers specified be the swarm.Address.
+// peers specified be the Aurora.Address.
 type Collector struct {
 	counters    sync.Map
 	persistence *shed.StructField
