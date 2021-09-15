@@ -42,13 +42,12 @@ func (s *server) setupRouting() {
 			s.newTracingHandler("files-upload"),
 			web.FinalHandlerFunc(s.fileUploadHandler),
 		),
-	})
-	handle(router, "/filesList", jsonhttp.MethodHandler{
 		"GET": web.ChainHandlers(
-			s.newTracingHandler("fileList-get"),
-			web.FinalHandlerFunc(s.fileList),
+			s.newTracingHandler("files-list"),
+			web.FinalHandlerFunc(s.fileListHandler),
 		),
 	})
+
 	handle(router, "/files/{address}", jsonhttp.MethodHandler{
 		"GET": web.ChainHandlers(
 			s.newTracingHandler("files-download"),
@@ -56,7 +55,7 @@ func (s *server) setupRouting() {
 		),
 		"DELETE": web.ChainHandlers(
 			s.newTracingHandler("files-delete"),
-			web.FinalHandlerFunc(s.fileDelete),
+			web.FinalHandlerFunc(s.fileDeleteHandler),
 		),
 	})
 
@@ -75,14 +74,14 @@ func (s *server) setupRouting() {
 		}),
 		"DELETE": web.ChainHandlers(
 			s.newTracingHandler("aurora-delete"),
-			web.FinalHandlerFunc(s.dirDelHandler),
+			web.FinalHandlerFunc(s.dirDeleteHandler),
 		),
 	})
 
 	handle(router, "/aurora/{address}/{path:.*}", jsonhttp.MethodHandler{
 		"GET": web.ChainHandlers(
 			s.newTracingHandler("aurora-download"),
-			web.FinalHandlerFunc(s.bzzDownloadHandler),
+			web.FinalHandlerFunc(s.dirDownloadHandler),
 		),
 	})
 
@@ -127,6 +126,7 @@ func (s *server) setupRouting() {
 			web.FinalHandlerFunc(s.unpinFile),
 		),
 	})
+
 	handle(router, "/pin/aurora/{address}", jsonhttp.MethodHandler{
 		"POST": web.ChainHandlers(
 			s.newTracingHandler("pin-aurora-post"),

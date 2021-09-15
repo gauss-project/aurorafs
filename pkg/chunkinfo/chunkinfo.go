@@ -173,9 +173,6 @@ func (ci *ChunkInfo) FindChunkInfo(ctx context.Context, authInfo []byte, rootCid
 				first = false
 			}
 		} else if peerAttempt < count {
-			if ci.getQueue(rootCid.String()) == nil {
-				ci.newQueue(rootCid.String())
-			}
 			if err := ci.doFindChunkPyramid(ctx, nil, rootCid, overlays[peerAttempt]); err != nil {
 				errorC <- err
 			}
@@ -279,7 +276,7 @@ func (ci *ChunkInfo) DelFile(rootCid boson.Address) bool {
 	if !ci.cp.delRootCid(rootCid) {
 		return false
 	}
-
+	delete(ci.queues, rootCid.String())
 	return ci.delPresence(rootCid)
 
 }

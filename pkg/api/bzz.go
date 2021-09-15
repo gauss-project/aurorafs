@@ -23,7 +23,7 @@ import (
 	"github.com/gauss-project/aurorafs/pkg/tracing"
 )
 
-func (s *server) bzzDownloadHandler(w http.ResponseWriter, r *http.Request) {
+func (s *server) dirDownloadHandler(w http.ResponseWriter, r *http.Request) {
 	logger := tracing.NewLoggerWithTraceID(r.Context(), s.logger)
 	ls := loadsave.New(s.storer, storage.ModePutRequest, false)
 	feedDereferenced := false
