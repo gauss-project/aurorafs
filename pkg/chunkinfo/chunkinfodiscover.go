@@ -73,6 +73,16 @@ func (ci *ChunkInfo) getChunkInfo(rootCid, cid boson.Address) [][]byte {
 	return res
 }
 
+func (ci *ChunkInfo) getChunkInfoOverlays(rootCid boson.Address) []string {
+	ci.cd.RLock()
+	defer ci.cd.RUnlock()
+	res := make([]string, 0)
+	for overlay, _ := range ci.cd.presence[rootCid.String()] {
+		res = append(res, overlay)
+	}
+	return res
+}
+
 func (cd *chunkInfoDiscover) putChunkInfoDiscover(rootCid, overlay boson.Address, vector bitvector.BitVector) {
 	cd.Lock()
 	defer cd.Unlock()

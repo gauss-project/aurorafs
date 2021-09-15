@@ -25,6 +25,8 @@ type Interface interface {
 
 	GetChunkInfo(rootCid boson.Address, cid boson.Address) [][]byte
 
+	GetChunkInfoOverlays(rootCid boson.Address) []string
+
 	CancelFindChunkInfo(rootCid boson.Address)
 
 	OnChunkTransferred(cid boson.Address, rootCid boson.Address, overlays boson.Address) error
@@ -212,7 +214,9 @@ func (ci *ChunkInfo) findChunkInfo(ctx context.Context, authInfo []byte, rootCid
 func (ci *ChunkInfo) GetChunkInfo(rootCid boson.Address, cid boson.Address) [][]byte {
 	return ci.getChunkInfo(rootCid, cid)
 }
-
+func (ci *ChunkInfo) GetChunkInfoOverlays(rootCid boson.Address) []string {
+	return ci.getChunkInfoOverlays(rootCid)
+}
 // CancelFindChunkInfo
 func (ci *ChunkInfo) CancelFindChunkInfo(rootCid boson.Address) {
 	ci.cpd.cancelPendingFinder(rootCid)
