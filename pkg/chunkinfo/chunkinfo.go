@@ -25,7 +25,7 @@ type Interface interface {
 
 	GetChunkInfo(rootCid boson.Address, cid boson.Address) [][]byte
 
-	GetChunkInfoOverlays(rootCid boson.Address) []string
+	GetChunkInfoOverlays(rootCid boson.Address) map[string]aurora.BitVectorApi
 
 	CancelFindChunkInfo(rootCid boson.Address)
 
@@ -214,9 +214,11 @@ func (ci *ChunkInfo) findChunkInfo(ctx context.Context, authInfo []byte, rootCid
 func (ci *ChunkInfo) GetChunkInfo(rootCid boson.Address, cid boson.Address) [][]byte {
 	return ci.getChunkInfo(rootCid, cid)
 }
-func (ci *ChunkInfo) GetChunkInfoOverlays(rootCid boson.Address) []string {
+
+func (ci *ChunkInfo) GetChunkInfoOverlays(rootCid boson.Address) map[string]aurora.BitVectorApi {
 	return ci.getChunkInfoOverlays(rootCid)
 }
+
 // CancelFindChunkInfo
 func (ci *ChunkInfo) CancelFindChunkInfo(rootCid boson.Address) {
 	ci.cpd.cancelPendingFinder(rootCid)
