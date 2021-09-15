@@ -239,7 +239,9 @@ func (s *Service) onRouteResp(ctx context.Context, p p2p.Peer, stream p2p.Stream
 func (s *Service) FindRoute(ctx context.Context, target boson.Address) (dest *aurora.Address, routes []RouteItem, err error) {
 	dest, routes, err = s.GetRoute(ctx, target)
 	if err != nil {
-		s.logger.Debugf("route: FindRoute target=%s %s", target.String(), err.Error())
+		if !errors.Is(err, ErrNotFound) {
+			s.logger.Errorf("route: FindRoute target=%s %s", target.String(), err.Error())
+		}
 		if s.IsNeighbor(target) {
 			err = fmt.Errorf("target=%s is neighbor", target.String())
 			return
@@ -311,13 +313,9 @@ func (s *Service) Connect(ctx context.Context, target boson.Address) error {
 
 func (s *Service) GetTargetNeighbor(ctx context.Context, target boson.Address, limit int) (addresses []boson.Address, err error) {
 	var routes []RouteItem
-	_, routes, err = s.GetRoute(ctx, target)
+	_, routes, err = s.FindRoute(ctx, target)
 	if err != nil {
-		s.logger.Debugf("route: GetTargetNeighbor err=%s", err.Error())
-		_, routes, err = s.FindRoute(ctx, target)
-		if err != nil {
-			return
-		}
+		return
 	}
 	addresses = GetClosestNeighborLimit(routes, limit)
 	return

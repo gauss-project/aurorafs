@@ -171,7 +171,7 @@ func TestBzz(t *testing.T) {
 func TestFeedIndirection(t *testing.T) {
 	// first, "upload" some content for the update
 	var (
-		updateData = []byte("<h1>Swarm Feeds Hello World!</h1>")
+		updateData = []byte("<h1>Aurora Feeds Hello World!</h1>")
 
 		logger       = logging.New(ioutil.Discard, 0)
 		storer       = smock.NewStorer()

@@ -1,7 +1,3 @@
-// Copyright 2020 The Swarm Authors. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
-
 package netstore_test
 
 import (
@@ -98,12 +94,10 @@ func TestNetstoreNoRetrieval(t *testing.T) {
 func TestRecovery(t *testing.T) {
 	callbackWasCalled := make(chan bool, 1)
 
-
 	retrieve, _, nstore := newRetrievingNetstore()
 	addr := boson.MustParseHexAddress("deadbeef")
 	retrieve.failure = true
 	ctx := context.Background()
-
 
 	_, err := nstore.Get(ctx, storage.ModeGetRequest, addr)
 	if err != nil && !errors.Is(err, netstore.ErrRecoveryAttempt) {
@@ -124,7 +118,6 @@ func TestInvalidRecoveryFunction(t *testing.T) {
 	retrieve.failure = true
 	ctx := context.Background()
 
-
 	_, err := nstore.Get(ctx, storage.ModeGetRequest, addr)
 	if err != nil && err.Error() != "chunk not found" {
 		t.Fatal(err)
@@ -136,17 +129,17 @@ func newRetrievingNetstore() (ret *retrievalMock, mockStore, ns storage.Storer) 
 	retrieve := &retrievalMock{}
 	store := mock.NewStorer()
 	logger := logging.New(ioutil.Discard, 0)
-	return retrieve, store, netstore.New(store,  retrieve, logger)
+	return retrieve, store, netstore.New(store, retrieve, logger)
 }
 
 type retrievalMock struct {
 	called    bool
 	callCount int32
-	failure bool
-	addr    boson.Address
+	failure   bool
+	addr      boson.Address
 }
 
-func (r *retrievalMock) RetrieveChunk(ctx context.Context, addr boson.Address) (chunk boson.Chunk, err error) {
+func (r *retrievalMock) RetrieveChunk(ctx context.Context, rootAddr, addr boson.Address) (chunk boson.Chunk, err error) {
 	if r.failure {
 		return nil, fmt.Errorf("chunk not found")
 	}
@@ -159,7 +152,6 @@ func (r *retrievalMock) RetrieveChunk(ctx context.Context, addr boson.Address) (
 type mockRecovery struct {
 	callbackC chan bool
 }
-
 
 func (r *mockRecovery) RetrieveChunk(ctx context.Context, addr boson.Address) (chunk boson.Chunk, err error) {
 	return nil, fmt.Errorf("chunk not found")
