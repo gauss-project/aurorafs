@@ -287,7 +287,7 @@ func (s *server) dirDeleteHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	//There is no direct return success.
-	r.WithContext(sctx.SetRootCID(r.Context(), addr))
+	r = r.WithContext(sctx.SetRootCID(r.Context(), addr))
 	has, err := s.storer.Has(r.Context(), storage.ModeHasChunk, addr)
 	if err != nil {
 		jsonhttp.OK(w, nil)
