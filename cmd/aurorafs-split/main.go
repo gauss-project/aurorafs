@@ -112,7 +112,7 @@ func main() {
 		Use:   "split [datafile]",
 		Args:  cobra.RangeArgs(0, 1),
 		Short: "Split data into boson chunks",
-		Long: `Creates and stores Swarm chunks from input data.
+		Long: `Creates and stores Aurora chunks from input data.
 
 If datafile is not given, data will be read from standard in. In this case the --count flag must be set 
 to the length of the input.

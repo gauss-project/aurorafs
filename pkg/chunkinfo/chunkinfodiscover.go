@@ -84,6 +84,24 @@ func (cd *chunkInfoDiscover) putChunkInfoDiscover(rootCid, overlay boson.Address
 	cd.presence[rc][overlay.String()] = &vector
 }
 
+func (ci *ChunkInfo) delDiscoverPresence(rootCid boson.Address) bool {
+	ci.cd.Lock()
+	defer ci.cd.Unlock()
+
+	if v, ok := ci.cd.presence[rootCid.String()]; ok {
+		for k, _ := range v {
+			err := ci.storer.Delete(generateKey(discoverKeyPrefix, rootCid, boson.MustParseHexAddress(k)))
+			if err != nil {
+				return false
+			}
+		}
+	}
+
+	delete(ci.cd.presence, rootCid.String())
+	delete(ci.cd.overlays, rootCid.String())
+	return true
+}
+
 // updateChunkInfo
 func (ci *ChunkInfo) updateChunkInfo(rootCid, overlay boson.Address, bv []byte) {
 	ci.cd.Lock()

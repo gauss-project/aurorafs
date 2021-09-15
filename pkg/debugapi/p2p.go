@@ -1,7 +1,3 @@
-// Copyright 2020 The Swarm Authors. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
-
 package debugapi
 
 import (
@@ -9,15 +5,15 @@ import (
 	"net/http"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/crypto"
 	"github.com/gauss-project/aurorafs/pkg/jsonhttp"
-	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/multiformats/go-multiaddr"
 )
 
 type addressesResponse struct {
-	Overlay  boson.Address         `json:"overlay"`
-	Underlay []multiaddr.Multiaddr `json:"underlay"`
+	Overlay      boson.Address         `json:"overlay"`
+	Underlay     []multiaddr.Multiaddr `json:"underlay"`
 	Ethereum     common.Address        `json:"ethereum"`
 	PublicKey    string                `json:"public_key"`
 	PSSPublicKey string                `json:"pss_public_key"`
