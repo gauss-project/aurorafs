@@ -3,6 +3,7 @@ package debugapi
 import (
 	"errors"
 	"net/http"
+	"time"
 
 	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/jsonhttp"
@@ -67,6 +68,43 @@ func (s *Service) peerDisconnectHandler(w http.ResponseWriter, r *http.Request) 
 	jsonhttp.OK(w, nil)
 }
 
+func (s *Service) peerBlockingHandler(w http.ResponseWriter, r *http.Request) {
+	addr := mux.Vars(r)["address"]
+	reason := r.URL.Query().Get("reason")
+	timeout := r.URL.Query().Get("timeout")
+
+	swarmAddr, err := boson.ParseHexAddress(addr)
+	if err != nil {
+		s.logger.Debugf("debug api: parse peer address %s: %v", addr, err)
+		jsonhttp.BadRequest(w, "invalid peer address")
+		return
+	}
+
+	duration, err := time.ParseDuration(timeout)
+	if err != nil {
+		s.logger.Debugf("debug api: parse block timeout %s: %v", timeout, err)
+		jsonhttp.BadRequest(w, "invalid block timeout")
+		return
+	}
+
+	if reason == "" {
+		reason = "unknown reason"
+	}
+
+	if err := s.p2p.Blocklist(swarmAddr, duration, reason); err != nil {
+		s.logger.Debugf("debug api: peer blocking %s: %v", addr, err)
+		if errors.Is(err, p2p.ErrPeerNotFound) {
+			jsonhttp.BadRequest(w, "peer not found")
+			return
+		}
+		s.logger.Errorf("unable to block peer %s", addr)
+		jsonhttp.InternalServerError(w, err)
+		return
+	}
+
+	jsonhttp.OK(w, nil)
+}
+
 type peersResponse struct {
 	Peers []p2p.Peer `json:"peers"`
 }
@@ -74,5 +112,18 @@ type peersResponse struct {
 func (s *Service) peersHandler(w http.ResponseWriter, r *http.Request) {
 	jsonhttp.OK(w, peersResponse{
 		Peers: s.p2p.Peers(),
+	})
+}
+
+func (s *Service) blocklistedPeersHandler(w http.ResponseWriter, r *http.Request) {
+	peers, err := s.p2p.BlocklistedPeers()
+	if err != nil {
+		s.logger.Debugf("debug api: blocklisted peers: %v", err)
+		jsonhttp.InternalServerError(w, nil)
+		return
+	}
+
+	jsonhttp.OK(w, peersResponse{
+		Peers: peers,
 	})
 }
