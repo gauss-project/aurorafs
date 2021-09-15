@@ -1,7 +1,3 @@
-// Copyright 2020 The Swarm Authors. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
-
 package api_test
 
 import (
@@ -30,8 +26,8 @@ func TestChunkUploadDownload(t *testing.T) {
 		resourceTargets = func(addr boson.Address) string { return "/chunks/" + addr.String() + "?targets=" + targets }
 		chunk           = testingc.GenerateTestRandomChunk()
 
-		mockStorer      = mock.NewStorer()
-		client, _, _    = newTestServer(t, testServerOptions{
+		mockStorer   = mock.NewStorer()
+		client, _, _ = newTestServer(t, testServerOptions{
 			Storer: mockStorer,
 		})
 	)
@@ -67,7 +63,6 @@ func TestChunkUploadDownload(t *testing.T) {
 		jsonhttptest.Request(t, client, http.MethodPost, chunksEndpoint, http.StatusOK,
 			jsonhttptest.WithRequestBody(bytes.NewReader(chunk.Data())),
 			jsonhttptest.WithExpectedJSONResponse(api.ChunkAddressResponse{Reference: chunk.Address()}),
-
 		)
 
 		// Also check if the chunk is NOT pinned
@@ -90,7 +85,6 @@ func TestChunkUploadDownload(t *testing.T) {
 		jsonhttptest.Request(t, client, http.MethodPost, chunksEndpoint, http.StatusOK,
 			jsonhttptest.WithRequestBody(bytes.NewReader(chunk.Data())),
 			jsonhttptest.WithExpectedJSONResponse(api.ChunkAddressResponse{Reference: chunk.Address()}),
-
 		)
 
 		// Also check if the chunk is pinned

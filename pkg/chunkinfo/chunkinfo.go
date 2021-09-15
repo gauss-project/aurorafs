@@ -268,18 +268,20 @@ func (ci *ChunkInfo) GetFileList(overlay boson.Address) (fileListInfo map[string
 }
 
 func (ci *ChunkInfo) DelFile(rootCid boson.Address) bool {
+
 	ci.queuesLk.Lock()
 	defer ci.queuesLk.Unlock()
 
-	err := ci.storer.Delete(generateKey(keyPrefix, rootCid, ci.addr))
-	if err != nil {
+	if !ci.delDiscoverPresence(rootCid) {
 		return false
 	}
-	if ok := ci.cp.delRootCid(rootCid); ok {
-		return ci.ct.delPresence(rootCid)
-	} else {
+
+	if !ci.cp.delRootCid(rootCid) {
 		return false
 	}
+
+	return ci.delPresence(rootCid)
+
 }
 
 func generateKey(keyPrefix string, rootCid, overlay boson.Address) string {

@@ -1,7 +1,3 @@
-// Copyright 2020 The Swarm Authors. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
-
 package cmd
 
 import (
@@ -38,14 +34,14 @@ import (
 )
 
 const (
-	serviceName = "SwarmBeeSvc"
+	serviceName = "AuroraBeeSvc"
 )
 
 func (c *command) initStartCmd() (err error) {
 
 	cmd := &cobra.Command{
 		Use:   "start",
-		Short: "Start a Swarm node",
+		Short: "Start a Aurora node",
 		RunE: func(cmd *cobra.Command, args []string) (err error) {
 			if len(args) > 0 {
 				return cmd.Help()
@@ -126,34 +122,34 @@ func (c *command) initStartCmd() (err error) {
 				DBDisableSeeksCompaction: c.config.GetBool(optionNameDBDisableSeeksCompaction),
 				APIAddr:                  c.config.GetString(optionNameAPIAddr),
 				DebugAPIAddr:             debugAPIAddr,
-				Addr:                     c.config.GetString(optionNameP2PAddr),
-				NATAddr:                  c.config.GetString(optionNameNATAddr),
-				EnableWS:                 c.config.GetBool(optionNameP2PWSEnable),
-				EnableQUIC:               c.config.GetBool(optionNameP2PQUICEnable),
-				WelcomeMessage:           c.config.GetString(optionWelcomeMessage),
-				Bootnodes:                c.config.GetStringSlice(optionNameBootnodes),
-				FullNode:                 fullNode,
-				OracleEndpoint:           c.config.GetString(optionNameOracleAPIAddr),
-				CORSAllowedOrigins:       c.config.GetStringSlice(optionCORSAllowedOrigins),
-				Standalone:               c.config.GetBool(optionNameStandalone),
-				IsDev:                    c.config.GetBool(optionNameDevMode),
-				TracingEnabled:           c.config.GetBool(optionNameTracingEnabled),
-				TracingEndpoint:          c.config.GetString(optionNameTracingEndpoint),
-				TracingServiceName:       c.config.GetString(optionNameTracingServiceName),
-				Logger:                   logger,
-				GlobalPinningEnabled:     c.config.GetBool(optionNameGlobalPinningEnabled),
-				PaymentThreshold:         c.config.GetString(optionNamePaymentThreshold),
-				PaymentTolerance:         c.config.GetString(optionNamePaymentTolerance),
-				PaymentEarly:             c.config.GetString(optionNamePaymentEarly),
-				ResolverConnectionCfgs:   resolverCfgs,
-				GatewayMode:              c.config.GetBool(optionNameGatewayMode),
-				BootnodeMode:             bootNode,
-				SwapEndpoint:             c.config.GetString(optionNameSwapEndpoint),
-				SwapFactoryAddress:       c.config.GetString(optionNameSwapFactoryAddress),
-				SwapInitialDeposit:       c.config.GetString(optionNameSwapInitialDeposit),
-				SwapEnable:               c.config.GetBool(optionNameSwapEnable),
-				KadBinMaxPeers:           c.config.GetInt(optionNameBinMaxPeers),
-				LightNodeMaxPeers:        c.config.GetInt(optionNameLightMaxPeers),
+				//Addr:                     c.config.GetString(optionNameP2PAddr),
+				NATAddr:            c.config.GetString(optionNameNATAddr),
+				EnableWS:           c.config.GetBool(optionNameP2PWSEnable),
+				EnableQUIC:         c.config.GetBool(optionNameP2PQUICEnable),
+				WelcomeMessage:     c.config.GetString(optionWelcomeMessage),
+				Bootnodes:          c.config.GetStringSlice(optionNameBootnodes),
+				FullNode:           fullNode,
+				OracleEndpoint:     c.config.GetString(optionNameOracleAPIAddr),
+				CORSAllowedOrigins: c.config.GetStringSlice(optionCORSAllowedOrigins),
+				Standalone:         c.config.GetBool(optionNameStandalone),
+				IsDev:              c.config.GetBool(optionNameDevMode),
+				TracingEnabled:     c.config.GetBool(optionNameTracingEnabled),
+				TracingEndpoint:    c.config.GetString(optionNameTracingEndpoint),
+				TracingServiceName: c.config.GetString(optionNameTracingServiceName),
+				Logger:             logger,
+				//GlobalPinningEnabled:     c.config.GetBool(optionNameGlobalPinningEnabled),
+				//PaymentThreshold:         c.config.GetString(optionNamePaymentThreshold),
+				//PaymentTolerance:         c.config.GetString(optionNamePaymentTolerance),
+				//PaymentEarly:             c.config.GetString(optionNamePaymentEarly),
+				ResolverConnectionCfgs: resolverCfgs,
+				GatewayMode:            c.config.GetBool(optionNameGatewayMode),
+				BootnodeMode:           bootNode,
+				//SwapEndpoint:             c.config.GetString(optionNameSwapEndpoint),
+				//SwapFactoryAddress:       c.config.GetString(optionNameSwapFactoryAddress),
+				//SwapInitialDeposit:       c.config.GetString(optionNameSwapInitialDeposit),
+				//SwapEnable:               c.config.GetBool(optionNameSwapEnable),
+				KadBinMaxPeers:    c.config.GetInt(optionNameBinMaxPeers),
+				LightNodeMaxPeers: c.config.GetInt(optionNameLightMaxPeers),
 			})
 			if err != nil {
 				return err
@@ -200,7 +196,7 @@ func (c *command) initStartCmd() (err error) {
 				s, err := service.New(p, &service.Config{
 					Name:        serviceName,
 					DisplayName: "Bee",
-					Description: "Bee, Swarm client.",
+					Description: "Bee, Aurora client.",
 				})
 				if err != nil {
 					return err

@@ -1,7 +1,3 @@
-// Copyright 2020 The Swarm Authors. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
-
 package ens
 
 import (
@@ -14,8 +10,8 @@ import (
 	"github.com/ethereum/go-ethereum/ethclient"
 	goens "github.com/wealdtech/go-ens/v3"
 
-	"github.com/gauss-project/aurorafs/pkg/resolver/client"
 	"github.com/gauss-project/aurorafs/pkg/boson"
+	"github.com/gauss-project/aurorafs/pkg/resolver/client"
 )
 
 const (

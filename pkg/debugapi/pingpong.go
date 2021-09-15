@@ -1,16 +1,12 @@
-// Copyright 2020 The Swarm Authors. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
-
 package debugapi
 
 import (
 	"errors"
 	"net/http"
 
+	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/jsonhttp"
 	"github.com/gauss-project/aurorafs/pkg/p2p"
-	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gorilla/mux"
 )
 

@@ -72,34 +72,34 @@ type Options struct {
 	DBDisableSeeksCompaction bool
 	APIAddr                  string
 	DebugAPIAddr             string
-	Addr                     string
-	NATAddr                  string
-	EnableWS                 bool
-	EnableQUIC               bool
-	WelcomeMessage           string
-	Bootnodes                []string
-	OracleEndpoint           string
-	CORSAllowedOrigins       []string
-	Logger                   logging.Logger
-	Standalone               bool
-	IsDev                    bool
-	TracingEnabled           bool
-	TracingEndpoint          string
-	TracingServiceName       string
-	GlobalPinningEnabled     bool
-	PaymentThreshold         string
-	PaymentTolerance         string
-	PaymentEarly             string
-	ResolverConnectionCfgs   []multiresolver.ConnectionConfig
-	GatewayMode              bool
-	BootnodeMode             bool
-	SwapEndpoint             string
-	SwapFactoryAddress       string
-	SwapInitialDeposit       string
-	SwapEnable               bool
-	FullNode                 bool
-	KadBinMaxPeers           int
-	LightNodeMaxPeers        int
+	//Addr                     string
+	NATAddr            string
+	EnableWS           bool
+	EnableQUIC         bool
+	WelcomeMessage     string
+	Bootnodes          []string
+	OracleEndpoint     string
+	CORSAllowedOrigins []string
+	Logger             logging.Logger
+	Standalone         bool
+	IsDev              bool
+	TracingEnabled     bool
+	TracingEndpoint    string
+	TracingServiceName string
+	//GlobalPinningEnabled     bool
+	//PaymentThreshold         string
+	//PaymentTolerance         string
+	//PaymentEarly             string
+	ResolverConnectionCfgs []multiresolver.ConnectionConfig
+	GatewayMode            bool
+	BootnodeMode           bool
+	//SwapEndpoint             string
+	//SwapFactoryAddress       string
+	//SwapInitialDeposit       string
+	//SwapEnable               bool
+	FullNode          bool
+	KadBinMaxPeers    int
+	LightNodeMaxPeers int
 }
 
 func NewBee(addr string, bosonAddress boson.Address, publicKey ecdsa.PublicKey, signer crypto.Signer, networkID uint64, logger logging.Logger, libp2pPrivateKey, pssPrivateKey *ecdsa.PrivateKey, o Options) (b *Bee, err error) {

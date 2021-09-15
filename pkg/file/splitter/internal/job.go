@@ -44,8 +44,8 @@ type SimpleSplitterJob struct {
 	cursors    []int  // section write position, indexed per level
 	buffer     []byte // keeps data and hashes, indexed by cursors
 
-	toEncrypt  bool // to encryrpt the chunks or not
-	refSize    int64
+	toEncrypt bool // to encryrpt the chunks or not
+	refSize   int64
 }
 
 // NewSimpleSplitterJob creates a new SimpleSplitterJob.
@@ -66,8 +66,8 @@ func NewSimpleSplitterJob(ctx context.Context, putter Putter, spanLength int64, 
 		cursors:    make([]int, levelBufferLimit),
 		buffer:     make([]byte, boson.ChunkWithSpanSize*levelBufferLimit*2), // double size as temp workaround for weak calculation of needed buffer space
 
-		toEncrypt:  toEncrypt,
-		refSize:    refSize,
+		toEncrypt: toEncrypt,
+		refSize:   refSize,
 	}
 }
 
@@ -99,7 +99,7 @@ func (j *SimpleSplitterJob) Write(b []byte) (int, error) {
 	return len(b), nil
 }
 
-// Sum returns the Swarm hash of the data.
+// Sum returns the Aurora hash of the data.
 func (j *SimpleSplitterJob) Sum(b []byte) []byte {
 	return j.digest()
 }
@@ -156,8 +156,6 @@ func (s *SimpleSplitterJob) sumLevel(lvl int) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-
-
 
 	_, err = s.putter.Put(s.ctx, ch)
 	if err != nil {
@@ -285,5 +283,3 @@ func (s *SimpleSplitterJob) newSpanEncryption(key encryption.Key) encryption.Int
 func (s *SimpleSplitterJob) newDataEncryption(key encryption.Key) encryption.Interface {
 	return encryption.New(key, int(boson.ChunkSize), 0, sha3.NewLegacyKeccak256)
 }
-
-

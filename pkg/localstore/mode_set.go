@@ -244,16 +244,14 @@ func (db *DB) setRemove(batch *leveldb.Batch, addr, rootAddr boson.Address) (gcS
 		if err != nil {
 			return 0, err
 		}
-		return 0, nil
 	} else {
 		err = db.gcIndex.DeleteInBatch(batch, gcItem)
 		if err != nil {
 			return 0, err
 		}
-		return -1, nil
 	}
 
-	return 0, nil
+	return -1, nil
 }
 
 // setPin increments pin counter for the chunk by updating

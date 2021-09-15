@@ -279,8 +279,8 @@ func storeFile(ctx context.Context, fileInfo *fileUploadInfo, p pipelineFunc, en
 func (s *server) dirDelHandler(w http.ResponseWriter, r *http.Request) {
 	addr, err := boson.ParseHexAddress(mux.Vars(r)["address"])
 	if err != nil {
-		s.logger.Debugf("pin files: parse address: %v", err)
-		s.logger.Error("pin files: parse address")
+		s.logger.Debugf("delete aurora: parse address: %v", err)
+		s.logger.Error("delete aurora: parse address")
 		jsonhttp.BadRequest(w, "bad address")
 		return
 	}
@@ -295,8 +295,8 @@ func (s *server) dirDelHandler(w http.ResponseWriter, r *http.Request) {
 	if !has {
 		_, err := s.storer.Get(r.Context(), storage.ModeGetRequest, addr)
 		if err != nil {
-			s.logger.Debugf("pin chunk: netstore get: %v", err)
-			s.logger.Error("pin chunk: netstore")
+			s.logger.Debugf("delete aurora: netstore get: %v", err)
+			s.logger.Error("delete aurora: netstore")
 
 			jsonhttp.NotFound(w, nil)
 			return
@@ -305,7 +305,7 @@ func (s *server) dirDelHandler(w http.ResponseWriter, r *http.Request) {
 
 	ok := s.chunkInfo.DelFile(addr)
 	if !ok {
-		jsonhttp.InternalServerError(w, "Error in chunk deletion.")
+		jsonhttp.InternalServerError(w, "Error in aurora deletion.")
 		return
 	}
 	ctx := r.Context()
@@ -314,16 +314,16 @@ func (s *server) dirDelHandler(w http.ResponseWriter, r *http.Request) {
 
 	err = s.traversal.TraverseManifestAddresses(ctx, addr, chunkAddressFn)
 	if err != nil {
-		s.logger.Debugf("pin files: traverse chunks: %v, addr %s", err, addr)
+		s.logger.Debugf("delete aurora: traverse chunks: %v, addr %s", err, addr)
 
 		if errors.Is(err, traversal.ErrInvalidType) {
-			s.logger.Error("pin files: invalid type")
+			s.logger.Error("delete aurora: invalid type")
 			jsonhttp.BadRequest(w, "invalid type")
 			return
 		}
 
-		s.logger.Error("pin files: cannot pin")
-		jsonhttp.InternalServerError(w, "cannot pin")
+		s.logger.Error("delete aurora: cannot delete")
+		jsonhttp.InternalServerError(w, "cannot delete")
 		return
 	}
 
