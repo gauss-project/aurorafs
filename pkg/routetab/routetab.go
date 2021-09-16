@@ -61,18 +61,19 @@ func newRouteTable(store storage.StateStorer, logger logging.Logger, met metrics
 }
 
 func (rt *routeTable) Remove(target boson.Address) {
-	dest := target.String()
-	key := rt.prefix + dest
+	mKey := common.BytesToHash(target.Bytes())
+
+	key := rt.prefix + mKey.String()
 	rt.mu.Lock(key)
 	defer rt.mu.Unlock(key)
 
-	mKey := common.BytesToHash(target.Bytes())
 	delete(rt.items, mKey)
 }
 
 func (rt *routeTable) Set(target boson.Address, routes []RouteItem) error {
-	dest := target.String()
-	key := rt.prefix + dest
+	mKey := common.BytesToHash(target.Bytes())
+
+	key := rt.prefix + mKey.String()
 	rt.mu.Lock(key)
 	defer rt.mu.Unlock(key)
 
@@ -85,7 +86,6 @@ func (rt *routeTable) Set(target boson.Address, routes []RouteItem) error {
 	//	return err
 	//}
 
-	mKey := common.BytesToHash(target.Bytes())
 	old := rt.items[mKey]
 
 	if len(old) > 0 {
@@ -104,8 +104,9 @@ func (rt *routeTable) Set(target boson.Address, routes []RouteItem) error {
 }
 
 func (rt *routeTable) Get(target boson.Address) (routes []RouteItem, err error) {
-	dest := target.String()
-	key := rt.prefix + dest
+	mKey := common.BytesToHash(target.Bytes())
+
+	key := rt.prefix + mKey.String()
 	rt.mu.Lock(key)
 	defer rt.mu.Unlock(key)
 
@@ -120,7 +121,6 @@ func (rt *routeTable) Get(target boson.Address) (routes []RouteItem, err error) 
 	//	rt.logger.Errorf(err.Error())
 	//}
 
-	mKey := common.BytesToHash(target.Bytes())
 	routes = rt.items[mKey]
 	if len(routes) == 0 {
 		err = ErrNotFound
