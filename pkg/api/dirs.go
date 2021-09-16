@@ -278,19 +278,22 @@ func storeFile(ctx context.Context, fileInfo *fileUploadInfo, p pipelineFunc, en
 }
 
 func (s *server) dirDeleteHandler(w http.ResponseWriter, r *http.Request) {
-	hash, err := boson.ParseHexAddress(mux.Vars(r)["address"])
+	addr := mux.Vars(r)["address"]
+	hash, err := boson.ParseHexAddress(addr)
 	if err != nil {
 		s.logger.Debugf("delete aurora: parse address: %w", err)
-		s.logger.Error("delete aurora: parse address")
-		jsonhttp.BadRequest(w, "bad address")
+		s.logger.Errorf("delete aurora: parse address %s", addr)
+		jsonhttp.BadRequest(w, "invalid address")
 		return
 	}
 
+	r = r.WithContext(sctx.SetRootCID(sctx.SetLocalGet(r.Context()), hash))
+
 	// There is no direct return success.
-	r = r.WithContext(sctx.SetRootCID(r.Context(), hash))
 	has, err := s.storer.Has(r.Context(), storage.ModeHasChunk, hash)
 	if err != nil {
-		s.logger.Debugf("delete aurora: localstore: %w", err)
+		s.logger.Debugf("delete aurora: check %s exists: %w", hash, err)
+		s.logger.Errorf("delete aurora: check %s exists", hash)
 		jsonhttp.InternalServerError(w, err)
 		return
 	}
@@ -313,6 +316,7 @@ func (s *server) dirDeleteHandler(w http.ResponseWriter, r *http.Request) {
 		}
 
 		s.logger.Debugf("delete aurora: traverse chunks: %w", err)
+		s.logger.Errorf("delete aurora: traverse chunks %s", hash)
 		jsonhttp.InternalServerError(w, "Dirs deletion occur error")
 		return
 	}
@@ -321,6 +325,7 @@ func (s *server) dirDeleteHandler(w http.ResponseWriter, r *http.Request) {
 		err = s.storer.Set(r.Context(), storage.ModeSetRemove, addr)
 		if err != nil {
 			s.logger.Debugf("delete aurora: remove chunk: %w", err)
+			s.logger.Errorf("delete aurora: remove chunk %s", addr)
 			jsonhttp.InternalServerError(w, "Dirs deletion occur error")
 			return
 		}
@@ -328,7 +333,7 @@ func (s *server) dirDeleteHandler(w http.ResponseWriter, r *http.Request) {
 
 	ok := s.chunkInfo.DelFile(hash)
 	if !ok {
-		s.logger.Error("delete aurora: chunk info report delete failed")
+		s.logger.Errorf("delete aurora: chunk info report delete %s failed", hash)
 		jsonhttp.InternalServerError(w, "Dirs deletion occur error")
 		return
 	}

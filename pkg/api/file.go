@@ -365,11 +365,12 @@ func (s *server) downloadHandler(w http.ResponseWriter, r *http.Request, referen
 }
 
 func (s *server) fileDeleteHandler(w http.ResponseWriter, r *http.Request) {
-	hash, err := boson.ParseHexAddress(mux.Vars(r)["address"])
+	addr := mux.Vars(r)["address"]
+	hash, err := boson.ParseHexAddress(addr)
 	if err != nil {
 		s.logger.Debugf("delete file: parse address: %w", err)
-		s.logger.Error("delete file: parse address")
-		jsonhttp.BadRequest(w, "bad address")
+		s.logger.Errorf("delete file: parse address %s", addr)
+		jsonhttp.BadRequest(w, "invalid address")
 		return
 	}
 
@@ -379,7 +380,8 @@ func (s *server) fileDeleteHandler(w http.ResponseWriter, r *http.Request) {
 	// There is no direct return success.
 	has, err := s.storer.Has(r.Context(), storage.ModeHasChunk, hash)
 	if err != nil {
-		s.logger.Debugf("delete file: localstore: %w", err)
+		s.logger.Debugf("delete file: check %s exists: %w", hash, err)
+		s.logger.Errorf("delete file: check %s exists", hash)
 		jsonhttp.InternalServerError(w, err)
 		return
 	}
@@ -401,6 +403,7 @@ func (s *server) fileDeleteHandler(w http.ResponseWriter, r *http.Request) {
 		}
 
 		s.logger.Debugf("delete file: traverse chunks: %w", err)
+		s.logger.Errorf("delete file: traverse chunks %s", hash)
 		jsonhttp.InternalServerError(w, "File deletion occur error")
 		return
 	}
@@ -409,6 +412,7 @@ func (s *server) fileDeleteHandler(w http.ResponseWriter, r *http.Request) {
 		err = s.storer.Set(r.Context(), storage.ModeSetRemove, addr)
 		if err != nil {
 			s.logger.Debugf("delete file: remove chunk: %w", err)
+			s.logger.Errorf("delete file: remove chunk %s", addr)
 			jsonhttp.InternalServerError(w, "File deletion occur error")
 			return
 		}
@@ -417,7 +421,7 @@ func (s *server) fileDeleteHandler(w http.ResponseWriter, r *http.Request) {
 
 	ok := s.chunkInfo.DelFile(hash)
 	if !ok {
-		s.logger.Error("delete file: chunk info report delete failed")
+		s.logger.Errorf("delete file: chunk info report delete %s failed", hash)
 		jsonhttp.InternalServerError(w, "File deleting occur error")
 		return
 	}
