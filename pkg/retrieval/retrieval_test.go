@@ -29,7 +29,6 @@ import (
 	"github.com/gauss-project/aurorafs/pkg/storage"
 	storemock "github.com/gauss-project/aurorafs/pkg/storage/mock"
 	"github.com/gauss-project/aurorafs/pkg/topology"
-
 	// "io"
 	// "os"
 	// "github.com/sirupsen/logrus"
@@ -284,7 +283,6 @@ func TestNeighborRetrieval(t *testing.T) {
 
 	logger := logging.New(ioutil.Discard, 0)
 
-
 	address := boson.MustParseHexAddress("8a74889a73c23fe2be037886c6b709e3175b95b8deea9c95eeda0dbc60740bd8")
 	data := []uint8{3, 0, 0, 0, 0, 0, 0, 0, 102, 111, 111}
 
@@ -413,7 +411,7 @@ func TestRetrievePreemptiveRetry(t *testing.T) {
 
 	server1RouteTable := mockRouteTable{
 		rejectAddrList: []boson.Address{serverAddress2},
-		neighborMap: map[string][]boson.Address{},
+		neighborMap:    map[string][]boson.Address{},
 	}
 
 	server1 := retrieval.New(serverAddress1, nil, &server1RouteTable, serverStorer1, true, logger, nil)
@@ -574,13 +572,13 @@ func NewMockChunkInfo() *mockChunkInfo {
 	}
 }
 
-func (c *mockChunkInfo) DelFile(rootCid, overlay boson.Address) bool{
+func (c *mockChunkInfo) DelFile(rootCid boson.Address) bool {
 	return false
 }
-func (c *mockChunkInfo) GetFileList(overlay boson.Address) (fileListInfo map[string]*aurora.FileInfo, rootList []boson.Address){
+func (c *mockChunkInfo) GetFileList(overlay boson.Address) (fileListInfo map[string]*aurora.FileInfo, rootList []boson.Address) {
 	return
 }
-func (c *mockChunkInfo) FindChunkInfo(ctx context.Context, authInfo []byte, rootCid boson.Address, overlays []boson.Address) bool{
+func (c *mockChunkInfo) FindChunkInfo(ctx context.Context, authInfo []byte, rootCid boson.Address, overlays []boson.Address) bool {
 	return false
 }
 
@@ -610,6 +608,10 @@ func (c *mockChunkInfo) GetChunkPyramid(rootCid boson.Address) []*boson.Address 
 
 func (c *mockChunkInfo) IsDiscover(rootCid boson.Address) bool {
 	return false
+}
+
+func (c *mockChunkInfo) GetChunkInfoOverlays(rootCid boson.Address) map[string]aurora.BitVectorApi {
+	return nil
 }
 
 // hasher is a helper function to hash a given data based on the given span.

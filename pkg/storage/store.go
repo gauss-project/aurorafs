@@ -1,5 +1,5 @@
 // Package storage provides implementation contracts and notions
-// used across storage-aware components in Bee.
+// used across storage-aware components in aurora.
 package storage
 
 import (

@@ -14,7 +14,7 @@ import (
 func TestTracing(t *testing.T) {
 	tracer1, closer1, err := tracing.NewTracer(&tracing.Options{
 		Enabled:     true,
-		ServiceName: "bee-test",
+		ServiceName: "aurora-test",
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -23,7 +23,7 @@ func TestTracing(t *testing.T) {
 
 	tracer2, closer2, err := tracing.NewTracer(&tracing.Options{
 		Enabled:     true,
-		ServiceName: "bee-test",
+		ServiceName: "aurora-test",
 	})
 	if err != nil {
 		t.Fatal(err)

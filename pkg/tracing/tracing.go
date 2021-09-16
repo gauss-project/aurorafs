@@ -37,7 +37,7 @@ const (
 	TraceContextHeaderName = "boson-trace-id"
 
 	// TraceBaggageHeaderPrefix is the prefix for http headers used to propagate baggage.
-	TraceBaggageHeaderPrefix = "swarmctx-"
+	TraceBaggageHeaderPrefix = "aufsctx-"
 )
 
 // Tracer connect to a tracing server and handles tracing spans and contexts

@@ -270,7 +270,7 @@ func New(ctx context.Context, signer beecrypto.Signer, networkID uint64, overlay
 	}
 
 	// Construct protocols.
-	id := protocol.ID(p2p.NewSwarmStreamName(handshake.ProtocolName, handshake.ProtocolVersion, handshake.StreamName))
+	id := protocol.ID(p2p.NewAuroraStreamName(handshake.ProtocolName, handshake.ProtocolVersion, handshake.StreamName))
 	matcher, err := s.protocolSemverMatcher(id)
 	if err != nil {
 		return nil, fmt.Errorf("protocol version match %s: %w", id, err)
@@ -456,7 +456,7 @@ func (s *Service) SetPickyNotifier(n p2p.PickyNotifier) {
 func (s *Service) AddProtocol(p p2p.ProtocolSpec) (err error) {
 	for _, ss := range p.StreamSpecs {
 		ss := ss
-		id := protocol.ID(p2p.NewSwarmStreamName(p.Name, p.Version, ss.Name))
+		id := protocol.ID(p2p.NewAuroraStreamName(p.Name, p.Version, ss.Name))
 		matcher, err := s.protocolSemverMatcher(id)
 		if err != nil {
 			return fmt.Errorf("protocol version match %s: %w", id, err)
@@ -811,8 +811,8 @@ func (s *Service) NewStream(ctx context.Context, overlay boson.Address, headers 
 }
 
 func (s *Service) newStreamForPeerID(ctx context.Context, peerID libp2ppeer.ID, protocolName, protocolVersion, streamName string) (network.Stream, error) {
-	swarmStreamName := p2p.NewSwarmStreamName(protocolName, protocolVersion, streamName)
-	st, err := s.host.NewStream(ctx, peerID, protocol.ID(swarmStreamName))
+	auroraStreamName := p2p.NewAuroraStreamName(protocolName, protocolVersion, streamName)
+	st, err := s.host.NewStream(ctx, peerID, protocol.ID(auroraStreamName))
 	if err != nil {
 		if st != nil {
 			s.logger.Debug("stream experienced unexpected early close")
@@ -821,7 +821,7 @@ func (s *Service) newStreamForPeerID(ctx context.Context, peerID libp2ppeer.ID, 
 		if err == multistream.ErrNotSupported || err == multistream.ErrIncorrectVersion {
 			return nil, p2p.NewIncompatibleStreamError(err)
 		}
-		return nil, fmt.Errorf("create stream %q to %q: %w", swarmStreamName, peerID, err)
+		return nil, fmt.Errorf("create stream %q to %q: %w", auroraStreamName, peerID, err)
 	}
 	s.metrics.CreatedStreamCount.Inc()
 	return st, nil

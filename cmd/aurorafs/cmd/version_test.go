@@ -17,7 +17,7 @@ func TestVersionCmd(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	want := bee.Version + "\n"
+	want := aufs.Version + "\n"
 	got := outputBuf.String()
 	if got != want {
 		t.Errorf("got output %q, want %q", got, want)
