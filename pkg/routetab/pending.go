@@ -43,17 +43,17 @@ func newPendCallResTab(addr boson.Address, logger logging.Logger, met metrics) *
 	}
 }
 
-func (pend *pendCallResTab) Add(target, src boson.Address, resCh chan struct{}) error {
-	key := target.String()
+func (pend *pendCallResTab) Add(target, src boson.Address, resCh chan struct{}) (has bool) {
+	mKey := common.BytesToHash(target.Bytes())
+
 	pending := pendCallResItem{
 		src:        src,
 		createTime: time.Now(),
 		resCh:      resCh,
 	}
-	mKey := common.BytesToHash(target.Bytes())
 
-	pend.mu.Lock(key)
-	defer pend.mu.Unlock(key)
+	pend.mu.Lock(mKey.String())
+	defer pend.mu.Unlock(mKey.String())
 
 	res, ok := pend.items[mKey]
 	if ok {
@@ -65,19 +65,19 @@ func (pend *pendCallResTab) Add(target, src boson.Address, resCh chan struct{}) 
 			now = append(now, v)
 		}
 		pend.items[mKey] = append(now, pending)
+		has = true
 	} else {
 		pend.items[mKey] = pendingCallResArray{pending}
 	}
-	return nil
+	return
 }
 
 func (pend *pendCallResTab) Forward(ctx context.Context, s *Service, target *aurora.Address, routes []RouteItem) error {
-	key := target.String()
-
-	pend.mu.Lock(key)
-	defer pend.mu.Unlock(key)
-
 	mKey := common.BytesToHash(target.Overlay.Bytes())
+
+	pend.mu.Lock(mKey.String())
+	defer pend.mu.Unlock(mKey.String())
+
 	res := pend.items[mKey]
 	for _, v := range res {
 		if !v.src.Equal(pend.addr) {
@@ -93,13 +93,13 @@ func (pend *pendCallResTab) Forward(ctx context.Context, s *Service, target *aur
 }
 
 func (pend *pendCallResTab) Gc(expire time.Duration) {
-	for destKey, item := range pend.items {
-		pend.mu.TryLockFunc(destKey.String(), func() {
+	for mKey, item := range pend.items {
+		pend.mu.TryLockFunc(mKey.String(), func() {
 			var now pendingCallResArray
 			for i := len(item) - 1; i >= 0; i-- {
 				if time.Since(item[i].createTime).Seconds() >= expire.Seconds() {
 					if i == len(item)-1 {
-						delete(pend.items, destKey)
+						delete(pend.items, mKey)
 					} else {
 						now = item[i:]
 					}
@@ -107,7 +107,7 @@ func (pend *pendCallResTab) Gc(expire time.Duration) {
 				}
 			}
 			if len(now) > 0 {
-				pend.items[destKey] = now
+				pend.items[mKey] = now
 			}
 		})
 	}

@@ -711,17 +711,17 @@ func TestPendCallResTab_Gc(t *testing.T) {
 	target2 := test.RandomAddress()
 	src1 := test.RandomAddress()
 	src2 := test.RandomAddress()
-	err := pend.Add(target1, src1, nil)
-	if err != nil {
-		t.Fatalf("route: pending add %s", err)
+	has := pend.Add(target1, src1, nil)
+	if has {
+		t.Fatalf("route: pending add exp false, got true")
 	}
-	err = pend.Add(target1, src2, nil)
-	if err != nil {
-		t.Fatalf("route: pending add %s", err)
+	has1 := pend.Add(target1, src2, nil)
+	if !has1 {
+		t.Fatalf("route: pending add exp true, got false")
 	}
-	err = pend.Add(target2, src2, nil)
-	if err != nil {
-		t.Fatalf("route: pending add %s", err)
+	has2 := pend.Add(target2, src2, nil)
+	if has2 {
+		t.Fatalf("route: pending add exp false, got true")
 	}
 	pend.Gc(time.Second)
 
