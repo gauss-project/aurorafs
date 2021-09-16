@@ -43,7 +43,7 @@ func newPendCallResTab(addr boson.Address, logger logging.Logger, met metrics) *
 	}
 }
 
-func (pend *pendCallResTab) Add(target, src boson.Address, resCh chan struct{}) error {
+func (pend *pendCallResTab) Add(target, src boson.Address, resCh chan struct{}) (has bool) {
 	mKey := common.BytesToHash(target.Bytes())
 
 	pending := pendCallResItem{
@@ -65,10 +65,11 @@ func (pend *pendCallResTab) Add(target, src boson.Address, resCh chan struct{}) 
 			now = append(now, v)
 		}
 		pend.items[mKey] = append(now, pending)
+		has = true
 	} else {
 		pend.items[mKey] = pendingCallResArray{pending}
 	}
-	return nil
+	return
 }
 
 func (pend *pendCallResTab) Forward(ctx context.Context, s *Service, target *aurora.Address, routes []RouteItem) error {
