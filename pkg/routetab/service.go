@@ -437,14 +437,11 @@ func (s *Service) doRouteReq(ctx context.Context, src, peer, target boson.Addres
 	if req.Alpha == 0 {
 		req.Alpha = defaultNeighborAlpha
 	}
-	err := s.pendingCalls.Add(target, src, ch)
-	if err != nil {
-		s.metrics.TotalErrors.Inc()
-		s.logger.Errorf("route: doReq pendingCalls.Add: %s", err.Error())
-		return
+	has := s.pendingCalls.Add(target, src, ch)
+	if !has {
+		s.sendDataToNode(ctx, peer, streamOnRouteReq, req)
+		s.metrics.FindRouteReqSentCount.Inc()
 	}
-	s.sendDataToNode(ctx, peer, streamOnRouteReq, req)
-	s.metrics.FindRouteReqSentCount.Inc()
 }
 
 func (s *Service) doRouteResp(ctx context.Context, peer boson.Address, target *aurora.Address, routes []RouteItem) {
