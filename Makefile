@@ -14,13 +14,13 @@ all: build lint vet test-race binary
 binary: export CGO_ENABLED=0
 binary: dist FORCE
 	$(GO) version
-	$(GO) build -trimpath -ldflags "$(LDFLAGS)" -o dist/bee ./cmd/bee
+	$(GO) build -trimpath -ldflags "$(LDFLAGS)" -o dist/aurorafs ./cmd/aurorafs
 
 .PHONY: binaries
 binaries: binary
-	$(GO) build -trimpath -ldflags "$(LDFLAGS)" -o dist/bee-file ./cmd/bee-file
-	$(GO) build -trimpath -ldflags "$(LDFLAGS)" -o dist/bee-join ./cmd/bee-join
-	$(GO) build -trimpath -ldflags "$(LDFLAGS)" -o dist/bee-split ./cmd/bee-split
+	$(GO) build -trimpath -ldflags "$(LDFLAGS)" -o dist/aurorafs-file ./cmd/aurorafs-file
+	$(GO) build -trimpath -ldflags "$(LDFLAGS)" -o dist/aurorafs-join ./cmd/aurorafs-join
+	$(GO) build -trimpath -ldflags "$(LDFLAGS)" -o dist/aurorafs-split ./cmd/aurorafs-split
 
 dist:
 	mkdir $@

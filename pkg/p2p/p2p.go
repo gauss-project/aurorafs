@@ -1,5 +1,5 @@
 // Package p2p provides the peer-to-peer abstractions used
-// across different protocols in Bee.
+// across different protocols in Aurora.
 package p2p
 
 import (
@@ -71,7 +71,7 @@ type StreamerDisconnecter interface {
 	Disconnecter
 }
 
-// Pinger interface is used to ping a underlay address which is not yet known to the bee node.
+// Pinger interface is used to ping a underlay address which is not yet known to the aurora node.
 // It uses libp2p's default ping protocol. This is different from the PingPong protocol as this
 // is meant to be used before we know a particular underlay and we can consider it useful
 type Pinger interface {
@@ -135,8 +135,8 @@ const (
 	HeaderNameTracingSpanContext = "tracing-span-context"
 )
 
-// NewSwarmStreamName constructs a libp2p compatible stream name out of
+// NewAuroraStreamName constructs a libp2p compatible stream name out of
 // protocol name and version and stream name.
-func NewSwarmStreamName(protocol, version, stream string) string {
+func NewAuroraStreamName(protocol, version, stream string) string {
 	return "/boson/" + protocol + "/" + version + "/" + stream
 }

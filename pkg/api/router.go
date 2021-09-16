@@ -26,7 +26,7 @@ func (s *server) setupRouting() {
 	router.NotFoundHandler = http.HandlerFunc(jsonhttp.NotFoundHandler)
 
 	router.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		fmt.Fprintln(w, "Ethereum Boson Bee")
+		fmt.Fprintln(w, "Ethereum Boson aurora")
 	})
 
 	router.HandleFunc("/robots.txt", func(w http.ResponseWriter, r *http.Request) {

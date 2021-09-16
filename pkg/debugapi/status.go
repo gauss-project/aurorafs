@@ -15,6 +15,6 @@ type statusResponse struct {
 func statusHandler(w http.ResponseWriter, r *http.Request) {
 	jsonhttp.OK(w, statusResponse{
 		Status:  "ok",
-		Version: bee.Version,
+		Version: aufs.Version,
 	})
 }

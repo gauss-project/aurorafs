@@ -20,13 +20,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     useradd -r -g aurorafs --uid 999 --no-log-init -m aurorafs;
 
 # make sure mounted volumes have correct permissions
-RUN mkdir -p /home/aurorafs/.aurorafs && chown 999:999 /home/aurorafs/.aurorafs
+RUN mkdir -p /home/aurorafs/.aurora && chown 999:999 /home/aurorafs/.aurora
 
-COPY --from=build /src/dist/bee /usr/local/bin/bee
+COPY --from=build /src/dist/aurora /usr/local/bin/aurora
 
 EXPOSE 1633 1634 1635
-USER bee
-WORKDIR /home/bee
-VOLUME /home/bee/.bee
+USER aurora
+WORKDIR /home/aurorafs
+VOLUME /home/aurorafs/.aurora
 
-ENTRYPOINT ["bee"]
+ENTRYPOINT ["aurora"]

@@ -46,14 +46,14 @@ func (s *Service) peerConnectHandler(w http.ResponseWriter, r *http.Request) {
 
 func (s *Service) peerDisconnectHandler(w http.ResponseWriter, r *http.Request) {
 	addr := mux.Vars(r)["address"]
-	swarmAddr, err := boson.ParseHexAddress(addr)
+	auroraAddr, err := boson.ParseHexAddress(addr)
 	if err != nil {
 		s.logger.Debugf("debug api: parse peer address %s: %v", addr, err)
 		jsonhttp.BadRequest(w, "invalid peer address")
 		return
 	}
 
-	if err := s.p2p.Disconnect(swarmAddr, "user requested disconnect"); err != nil {
+	if err := s.p2p.Disconnect(auroraAddr, "user requested disconnect"); err != nil {
 		s.logger.Debugf("debug api: peer disconnect %s: %v", addr, err)
 		if errors.Is(err, p2p.ErrPeerNotFound) {
 			jsonhttp.BadRequest(w, "peer not found")

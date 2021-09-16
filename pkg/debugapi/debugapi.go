@@ -1,6 +1,6 @@
 // Package debugapi exposes the debug API used to
 // control and analyze low-level and runtime
-// features and functionalities of Bee.
+// features and functionalities of Aurora.
 package debugapi
 
 import (
@@ -36,7 +36,7 @@ type Service struct {
 	tracer          *tracing.Tracer
 	lightNodes      *lightnode.Container
 
-	chunkInfo       chunkinfo.Interface
+	chunkInfo chunkinfo.Interface
 	//accounting         accounting.Interface
 	//settlement         settlement.Interface
 	//chequebookEnabled  bool
@@ -78,7 +78,7 @@ func (s *Service) Configure(p2p p2p.DebugService, pingpong pingpong.Interface, t
 	s.topologyDriver = topologyDriver
 	s.storer = storer
 	s.lightNodes = lightNodes
-	s.chunkInfo= chunkinfo
+	s.chunkInfo = chunkinfo
 	//s.accounting = accounting
 	//s.settlement = settlement
 	//s.chequebookEnabled = chequebookEnabled

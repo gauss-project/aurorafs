@@ -10,7 +10,7 @@ CLEF_CHAINID=5
 ## HTTP API listen address (default :1633)
 # aufs_API_ADDR=:1633
 ## initial nodes to connect to (default [/dnsaddr/bootnode.ethswarm.org])
-# aufs_BOOTNODE=[/dnsaddr/bootnode.ethswarm.org]
+
 ## cause the node to always accept incoming connections
 # aufs_BOOTNODE_MODE=false
 ## enable clef signer
@@ -43,7 +43,7 @@ aufs_CLEF_SIGNER_ENABLE=true
 # aufs_GLOBAL_PINNING_ENABLE=false
 ## NAT exposed address
 # aufs_NAT_ADDR=
-## ID of the Swarm network (default 1)
+## ID of the Aurora network (default 1)
 # aufs_NETWORK_ID=1
 ## P2P listen address (default :1634)
 # aufs_P2P_ADDR=:1634

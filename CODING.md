@@ -1,6 +1,6 @@
 # Coding guide
 
-This project is written in Go programming language and follows a community accepted coding styles and practices defined in [Effective Go](https://golang.org/doc/effective_go.html) and [Go Code Review Comments](https://github.com/golang/go/wiki/CodeReviewComments). This document defines additional guidelines specific to the Bee project.
+This project is written in Go programming language and follows a community accepted coding styles and practices defined in [Effective Go](https://golang.org/doc/effective_go.html) and [Go Code Review Comments](https://github.com/golang/go/wiki/CodeReviewComments). This document defines additional guidelines specific to the aurorafs project.
 
 Developers should keep their Go tooling up to date with the latest stable versions.
 
@@ -16,7 +16,7 @@ Executing `make test` should pass without any warnings or errors.
 
 ## Packages
 
-Go packages with the Bee project should have a single and well defined responsibility, clear exposed API and tests that cover expected behaviour. To ensure better modularity of the codebase, every package should be treated as a library that provides a specific functionality and that can be used as a module in other applications. Every package should have a well written godoc page which should be used as the entry point for understanding the package's responsibility. The same as using any other third-party package. If the package godoc is not clear and requires looking at the code to understand behaviour that it provides, documentation should be improved.
+Go packages with the Aurorafs project should have a single and well defined responsibility, clear exposed API and tests that cover expected behaviour. To ensure better modularity of the codebase, every package should be treated as a library that provides a specific functionality and that can be used as a module in other applications. Every package should have a well written godoc page which should be used as the entry point for understanding the package's responsibility. The same as using any other third-party package. If the package godoc is not clear and requires looking at the code to understand behaviour that it provides, documentation should be improved.
 
 ## Concurrency
 

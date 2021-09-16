@@ -6,7 +6,7 @@ import (
 	goens "github.com/wealdtech/go-ens/v3"
 )
 
-const SwarmContentHashPrefix = swarmContentHashPrefix
+const AuroraContentHashPrefix = auroraContentHashPrefix
 
 var ErrNotImplemented = errNotImplemented
 
