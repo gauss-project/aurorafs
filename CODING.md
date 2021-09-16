@@ -1,6 +1,6 @@
 # Coding guide
 
-This project is written in Go programming language and follows a community accepted coding styles and practices defined in [Effective Go](https://golang.org/doc/effective_go.html) and [Go Code Review Comments](https://github.com/golang/go/wiki/CodeReviewComments). This document defines additional guidelines specific to the aurora project.
+This project is written in Go programming language and follows a community accepted coding styles and practices defined in [Effective Go](https://golang.org/doc/effective_go.html) and [Go Code Review Comments](https://github.com/golang/go/wiki/CodeReviewComments). This document defines additional guidelines specific to the aurorafs project.
 
 Developers should keep their Go tooling up to date with the latest stable versions.
 
