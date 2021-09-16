@@ -1,4 +1,4 @@
-# Configuration for bee daemon
+# Configuration for aurora daemon
 
 #AUFS_SWAP_ENDPOINT=http://localhost:8545
 #AUFS_RESOLVER_OPTIONS=

@@ -5,8 +5,7 @@ case "$RESP" in
     Error*)
         echo "
 Enabled clef-signer but clef is not running.
-Check https://docs.ethswarm.org/ for more info.
-After you fix configuration run 'bee-get-addr' again.
+After you fix configuration run 'aurora-get-addr' again.
         "
         ;;
     *)

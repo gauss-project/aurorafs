@@ -41,7 +41,7 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
-type Bee struct {
+type Aurora struct {
 	p2pService     io.Closer
 	p2pCancel      context.CancelFunc
 	apiCloser      io.Closer
@@ -98,7 +98,7 @@ type Options struct {
 	LightNodeMaxPeers int
 }
 
-func NewBee(addr string, bosonAddress boson.Address, publicKey ecdsa.PublicKey, signer crypto.Signer, networkID uint64, logger logging.Logger, libp2pPrivateKey, pssPrivateKey *ecdsa.PrivateKey, o Options) (b *Bee, err error) {
+func NewAurora(addr string, bosonAddress boson.Address, publicKey ecdsa.PublicKey, signer crypto.Signer, networkID uint64, logger logging.Logger, libp2pPrivateKey, pssPrivateKey *ecdsa.PrivateKey, o Options) (b *Aurora, err error) {
 	tracer, tracerCloser, err := tracing.NewTracer(&tracing.Options{
 		Enabled:     o.TracingEnabled,
 		Endpoint:    o.TracingEndpoint,
@@ -118,7 +118,7 @@ func NewBee(addr string, bosonAddress boson.Address, publicKey ecdsa.PublicKey, 
 		}
 	}()
 
-	b = &Bee{
+	b = &Aurora{
 		p2pCancel:      p2pCancel,
 		errorLogWriter: logger.WriterLevel(logrus.ErrorLevel),
 		tracerCloser:   tracerCloser,
@@ -502,7 +502,7 @@ func NewBee(addr string, bosonAddress boson.Address, publicKey ecdsa.PublicKey, 
 	return b, nil
 }
 
-func (b *Bee) Shutdown(ctx context.Context) error {
+func (b *Aurora) Shutdown(ctx context.Context) error {
 	errs := new(multiError)
 
 	if b.apiCloser != nil {
