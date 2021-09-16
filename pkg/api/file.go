@@ -378,15 +378,16 @@ func (s *server) fileDeleteHandler(w http.ResponseWriter, r *http.Request) {
 	r = r.WithContext(sctx.SetRootCID(sctx.SetLocalGet(r.Context()), hash))
 
 	// There is no direct return success.
-	has, err := s.storer.Has(r.Context(), storage.ModeHasChunk, hash)
+	_, err = s.storer.Get(r.Context(), storage.ModeGetRequest, hash)
 	if err != nil {
+		if errors.Is(err, storage.ErrNotFound) {
+			jsonhttp.NotFound(w, nil)
+			return
+		}
+
 		s.logger.Debugf("delete file: check %s exists: %w", hash, err)
 		s.logger.Errorf("delete file: check %s exists", hash)
 		jsonhttp.InternalServerError(w, err)
-		return
-	}
-	if !has {
-		jsonhttp.NotFound(w, nil)
 		return
 	}
 
