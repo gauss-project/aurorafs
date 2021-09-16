@@ -27,6 +27,7 @@ type (
 	gasPriceKey       struct{}
 	gasLimitKey       struct{}
 	rootCIDKey        struct{}
+	localGetKey       struct{}
 )
 
 // SetHost sets the http request host in the context
@@ -77,4 +78,13 @@ func GetRootCID(ctx context.Context) boson.Address {
 		return v
 	}
 	return boson.ZeroAddress
+}
+
+func SetLocalGet(ctx context.Context) context.Context {
+	return context.WithValue(ctx, localGetKey{}, true)
+}
+
+func GetLocalGet(ctx context.Context) bool {
+	_, ok := ctx.Value(localGetKey{}).(bool)
+	return ok
 }

@@ -365,63 +365,63 @@ func (s *server) downloadHandler(w http.ResponseWriter, r *http.Request, referen
 }
 
 func (s *server) fileDeleteHandler(w http.ResponseWriter, r *http.Request) {
-	addr, err := boson.ParseHexAddress(mux.Vars(r)["address"])
+	hash, err := boson.ParseHexAddress(mux.Vars(r)["address"])
 	if err != nil {
-		s.logger.Debugf("delete files: parse address: %v", err)
-		s.logger.Error("delete files: parse address")
+		s.logger.Debugf("delete file: parse address: %w", err)
+		s.logger.Error("delete file: parse address")
 		jsonhttp.BadRequest(w, "bad address")
 		return
 	}
 
-	r = r.WithContext(sctx.SetRootCID(r.Context(), addr))
-	//There is no direct return success.
-	has, err := s.storer.Has(r.Context(), storage.ModeHasChunk, addr)
+	// MUST request local db
+	r = r.WithContext(sctx.SetRootCID(sctx.SetLocalGet(r.Context()), hash))
+
+	// There is no direct return success.
+	has, err := s.storer.Has(r.Context(), storage.ModeHasChunk, hash)
 	if err != nil {
-		jsonhttp.OK(w, nil)
+		s.logger.Debugf("delete file: localstore: %w", err)
+		jsonhttp.InternalServerError(w, err)
 		return
 	}
-
 	if !has {
-		_, err := s.storer.Get(r.Context(), storage.ModeGetRequest, addr)
-		if err != nil {
-			s.logger.Debugf("delete files: netstore get: %v", err)
-			s.logger.Error("delete files netstore")
-
-			jsonhttp.NotFound(w, nil)
-			return
-		}
-	}
-
-	ok := s.chunkInfo.DelFile(addr)
-	if !ok {
-		jsonhttp.InternalServerError(w, "Error in files deletion.")
+		jsonhttp.NotFound(w, nil)
 		return
 	}
-	ctx := r.Context()
 
-	fn := s.deleteChunkFn(ctx, addr)
+	addresses := make([]boson.Address, 0)
 
-	err = s.traversal.TraverseFileAddresses(ctx, addr, fn)
+	err = s.traversal.TraverseFileAddresses(r.Context(), hash, func(address boson.Address) error {
+		addresses = append(addresses, address)
+		return nil
+	})
 	if err != nil {
-		s.logger.Debugf("delete files: traverse chunks: %v, addr %s", err, addr)
-
 		if errors.Is(err, traversal.ErrInvalidType) {
-			s.logger.Error("delete files: invalid type")
-			jsonhttp.BadRequest(w, "invalid type")
+			jsonhttp.BadRequest(w, "invalid file")
 			return
 		}
 
-		s.logger.Error("delete files: cannot pin")
-		jsonhttp.InternalServerError(w, "cannot pin")
+		s.logger.Debugf("delete file: traverse chunks: %w", err)
+		jsonhttp.InternalServerError(w, "File deletion occur error")
 		return
 	}
 
-	err = s.storer.Set(ctx, storage.ModeSetRemove, addr)
-	if err != nil {
-		s.logger.Debugf("delete files: Error in deleting file rootcid")
-		jsonhttp.InternalServerError(w, "Error in deleting file rootcid")
+	for _, addr := range addresses {
+		err = s.storer.Set(r.Context(), storage.ModeSetRemove, addr)
+		if err != nil {
+			s.logger.Debugf("delete file: remove chunk: %w", err)
+			jsonhttp.InternalServerError(w, "File deletion occur error")
+			return
+		}
+	}
+
+
+	ok := s.chunkInfo.DelFile(hash)
+	if !ok {
+		s.logger.Error("delete file: chunk info report delete failed")
+		jsonhttp.InternalServerError(w, "File deleting occur error")
 		return
 	}
+
 	jsonhttp.OK(w, nil)
 }
 

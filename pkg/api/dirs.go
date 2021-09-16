@@ -278,64 +278,60 @@ func storeFile(ctx context.Context, fileInfo *fileUploadInfo, p pipelineFunc, en
 }
 
 func (s *server) dirDeleteHandler(w http.ResponseWriter, r *http.Request) {
-	addr, err := boson.ParseHexAddress(mux.Vars(r)["address"])
+	hash, err := boson.ParseHexAddress(mux.Vars(r)["address"])
 	if err != nil {
-		s.logger.Debugf("delete aurora: parse address: %v", err)
+		s.logger.Debugf("delete aurora: parse address: %w", err)
 		s.logger.Error("delete aurora: parse address")
 		jsonhttp.BadRequest(w, "bad address")
 		return
 	}
 
-	//There is no direct return success.
-	r = r.WithContext(sctx.SetRootCID(r.Context(), addr))
-	has, err := s.storer.Has(r.Context(), storage.ModeHasChunk, addr)
+	// There is no direct return success.
+	r = r.WithContext(sctx.SetRootCID(r.Context(), hash))
+	has, err := s.storer.Has(r.Context(), storage.ModeHasChunk, hash)
 	if err != nil {
-		jsonhttp.OK(w, nil)
+		s.logger.Debugf("delete aurora: localstore: %w", err)
+		jsonhttp.InternalServerError(w, err)
 		return
 	}
 
 	if !has {
-		_, err := s.storer.Get(r.Context(), storage.ModeGetRequest, addr)
-		if err != nil {
-			s.logger.Debugf("delete aurora: netstore get: %v", err)
-			s.logger.Error("delete aurora: netstore")
-
-			jsonhttp.NotFound(w, nil)
-			return
-		}
-	}
-
-	ok := s.chunkInfo.DelFile(addr)
-	if !ok {
-		jsonhttp.InternalServerError(w, "Error in aurora deletion.")
+		jsonhttp.NotFound(w, nil)
 		return
 	}
-	ctx := r.Context()
 
-	fn := s.deleteChunkFn(ctx, addr)
+	addresses := make([]boson.Address, 0)
 
-	err = s.traversal.TraverseManifestAddresses(ctx, addr, fn)
+	err = s.traversal.TraverseManifestAddresses(r.Context(), hash, func(address boson.Address) error {
+		addresses = append(addresses, address)
+		return nil
+	})
 	if err != nil {
-		s.logger.Debugf("delete aurora: traverse chunks: %v, addr %s", err, addr)
-
 		if errors.Is(err, traversal.ErrInvalidType) {
-			s.logger.Error("delete aurora: invalid type")
 			jsonhttp.BadRequest(w, "invalid type")
 			return
 		}
 
-		s.logger.Error("delete aurora: cannot delete")
-		jsonhttp.InternalServerError(w, "cannot delete")
+		s.logger.Debugf("delete aurora: traverse chunks: %w", err)
+		jsonhttp.InternalServerError(w, "Dirs deletion occur error")
 		return
 	}
 
-	err = s.storer.Set(ctx, storage.ModeSetRemove, addr)
-	if err != nil {
-		s.logger.Debugf("delete aurora: Error in deleting file rootcid")
-		jsonhttp.InternalServerError(w, "Error in deleting file rootcid")
+	for _, addr := range addresses {
+		err = s.storer.Set(r.Context(), storage.ModeSetRemove, addr)
+		if err != nil {
+			s.logger.Debugf("delete aurora: remove chunk: %w", err)
+			jsonhttp.InternalServerError(w, "Dirs deletion occur error")
+			return
+		}
+	}
+
+	ok := s.chunkInfo.DelFile(hash)
+	if !ok {
+		s.logger.Error("delete aurora: chunk info report delete failed")
+		jsonhttp.InternalServerError(w, "Dirs deletion occur error")
 		return
 	}
 
 	jsonhttp.OK(w, nil)
-
 }

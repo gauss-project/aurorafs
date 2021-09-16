@@ -38,15 +38,17 @@ func (s *store) Get(ctx context.Context, mode storage.ModeGet, addr boson.Addres
 	ch, err = s.Storer.Get(ctx, mode, addr)
 	if err != nil {
 		if errors.Is(err, storage.ErrNotFound) {
-			rootCID := sctx.GetRootCID(ctx)
-			if !rootCID.IsZero() {
-				// request from network
-				ch, err = s.retrieval.RetrieveChunk(ctx, rootCID, addr)
-				if err != nil {
-					return nil, storage.ErrNotFound
-				}
+			if !sctx.GetLocalGet(ctx) {
+				rootCID := sctx.GetRootCID(ctx)
+				if !rootCID.IsZero() {
+					// request from network
+					ch, err = s.retrieval.RetrieveChunk(ctx, rootCID, addr)
+					if err != nil {
+						return nil, storage.ErrNotFound
+					}
 
-				return ch, nil
+					return ch, nil
+				}
 			}
 			return nil, err
 		}
