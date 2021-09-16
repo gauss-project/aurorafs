@@ -27,7 +27,7 @@ const levelBufferLimit = 9
 //
 // After the job is constructed, Write must be called with up to ChunkSize byte slices
 // until the full data length has been written. The Sum should be called which will
-// return the SwarmHash of the data.
+// return the AuroraAddrHash of the data.
 //
 // Called Sum before the last Write, or Write after Sum has been called, may result in
 // error and will may result in undefined result.

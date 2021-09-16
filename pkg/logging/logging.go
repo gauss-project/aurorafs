@@ -1,5 +1,5 @@
 // Package logging provides the logger interface abstraction
-// and implementation for Bee. It uses logrus under the hood.
+// and implementation for Aurora. It uses logrus under the hood.
 package logging
 
 import (

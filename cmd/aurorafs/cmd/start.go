@@ -34,7 +34,7 @@ import (
 )
 
 const (
-	serviceName = "AuroraBeeSvc"
+	serviceName = "AuroraSvc"
 )
 
 func (c *command) initStartCmd() (err error) {
@@ -92,7 +92,7 @@ func (c *command) initStartCmd() (err error) {
 			aufsASCII := `Welcome to aurora file system`
 
 			fmt.Println(aufsASCII)
-			logger.Infof("version: %v", bee.Version)
+			logger.Infof("version: %v", aufs.Version)
 
 			debugAPIAddr := c.config.GetString(optionNameDebugAPIAddr)
 			if !c.config.GetBool(optionNameDebugAPIEnable) {
@@ -113,7 +113,7 @@ func (c *command) initStartCmd() (err error) {
 				logger.Info("start node mode full.")
 			}
 
-			b, err := node.NewBee(c.config.GetString(optionNameP2PAddr), signerConfig.address, *signerConfig.publicKey, signerConfig.signer, c.config.GetUint64(optionNameNetworkID), logger, signerConfig.libp2pPrivateKey, signerConfig.pssPrivateKey, node.Options{
+			b, err := node.NewAurora(c.config.GetString(optionNameP2PAddr), signerConfig.address, *signerConfig.publicKey, signerConfig.signer, c.config.GetUint64(optionNameNetworkID), logger, signerConfig.libp2pPrivateKey, signerConfig.pssPrivateKey, node.Options{
 				DataDir:                  c.config.GetString(optionNameDataDir),
 				DBCapacity:               c.config.GetUint64(optionNameDBCapacity),
 				DBOpenFilesLimit:         c.config.GetUint64(optionNameDBOpenFilesLimit),
@@ -195,8 +195,8 @@ func (c *command) initStartCmd() (err error) {
 			if isWindowsService {
 				s, err := service.New(p, &service.Config{
 					Name:        serviceName,
-					DisplayName: "Bee",
-					Description: "Bee, Aurora client.",
+					DisplayName: "Aurora",
+					Description: "Aurora client.",
 				})
 				if err != nil {
 					return err
@@ -350,12 +350,12 @@ func (c *command) configureSigner(cmd *cobra.Command, logger logging.Logger) (co
 		logger.Infof("using boson network address through clef: %s", address)
 	} else {
 		logger.Warning("clef is not enabled; portability and security of your keys is sub optimal")
-		swarmPrivateKey, created, err := keystore.Key("boson", password)
+		PrivateKey, created, err := keystore.Key("boson", password)
 		if err != nil {
 			return nil, fmt.Errorf("boson key: %w", err)
 		}
-		signer = crypto.NewDefaultSigner(swarmPrivateKey)
-		publicKey = &swarmPrivateKey.PublicKey
+		signer = crypto.NewDefaultSigner(PrivateKey)
+		publicKey = &PrivateKey.PublicKey
 
 		address, err = crypto.NewOverlayAddress(*publicKey, c.config.GetUint64(optionNameNetworkID))
 		if err != nil {

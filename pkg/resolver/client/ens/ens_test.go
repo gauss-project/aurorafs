@@ -115,7 +115,7 @@ func TestClose(t *testing.T) {
 func TestResolve(t *testing.T) {
 	testContractAddrString := "00000000000C2E074eC69A0dFb2997BA6C702e1B"
 	testContractAddr := common.HexToAddress(testContractAddrString)
-	testSwarmAddr := boson.MustParseHexAddress("aaabbbcc")
+	testAuroraAddr := boson.MustParseHexAddress("aaabbbcc")
 
 	testCases := []struct {
 		desc         string
@@ -146,14 +146,14 @@ func TestResolve(t *testing.T) {
 		{
 			desc: "resolve does not prefix address with /boson",
 			resolveFn: func(*goens.Registry, common.Address, string) (string, error) {
-				return testSwarmAddr.String(), nil
+				return testAuroraAddr.String(), nil
 			},
 			wantErr: ens.ErrInvalidContentHash,
 		},
 		{
 			desc: "resolve returns prefixed address",
 			resolveFn: func(*goens.Registry, common.Address, string) (string, error) {
-				return ens.SwarmContentHashPrefix + testSwarmAddr.String(), nil
+				return ens.AuroraContentHashPrefix + testAuroraAddr.String(), nil
 			},
 			wantErr: ens.ErrInvalidContentHash,
 		},
@@ -163,7 +163,7 @@ func TestResolve(t *testing.T) {
 				if c != testContractAddr {
 					return "", errors.New("invalid contract address")
 				}
-				return ens.SwarmContentHashPrefix + testSwarmAddr.String(), nil
+				return ens.AuroraContentHashPrefix + testAuroraAddr.String(), nil
 			},
 		},
 	}

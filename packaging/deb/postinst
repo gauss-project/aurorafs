@@ -13,9 +13,6 @@ Config: /etc/aufs/aufs.yaml
 
 aufs has SWAP enabled and by default is using slock.it goerli ethereum endpoint.
 It is recommended to use external signer with aufs.
-Check documentation for more info:
-- SWAP https://docs.ethswarm.org/docs/installation/manual#swap-bandwidth-incentives
-- External signer https://docs.ethswarm.org/docs/installation/aufs-clef
 
 After you finish configuration run 'sudo aufs-get-addr'.
         "

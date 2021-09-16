@@ -16,7 +16,7 @@ import (
 
 const (
 	defaultENSContractAddress = "00000000000C2E074eC69A0dFb2997BA6C7d2e1e"
-	swarmContentHashPrefix    = "/boson/"
+	auroraContentHashPrefix   = "/boson/"
 )
 
 // Address is the boson aurora address.
@@ -117,12 +117,12 @@ func (c *Client) Resolve(name string) (Address, error) {
 
 	// Ensure that the content hash string is in a valid format, eg.
 	// "/boson/<address>".
-	if !strings.HasPrefix(hash, swarmContentHashPrefix) {
+	if !strings.HasPrefix(hash, auroraContentHashPrefix) {
 		return boson.ZeroAddress, fmt.Errorf("contenthash %s: %w", hash, ErrInvalidContentHash)
 	}
 
 	// Trim the prefix and try to parse the result as a aurora address.
-	return boson.ParseHexAddress(strings.TrimPrefix(hash, swarmContentHashPrefix))
+	return boson.ParseHexAddress(strings.TrimPrefix(hash, auroraContentHashPrefix))
 }
 
 // Close closes the RPC connection with the client, terminating all unfinished
