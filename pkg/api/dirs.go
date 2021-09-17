@@ -7,10 +7,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/gauss-project/aurorafs/pkg/sctx"
-	"github.com/gauss-project/aurorafs/pkg/storage"
-	"github.com/gauss-project/aurorafs/pkg/traversal"
-	"github.com/gorilla/mux"
 	"io"
 	"mime"
 	"net/http"
@@ -25,7 +21,11 @@ import (
 	"github.com/gauss-project/aurorafs/pkg/jsonhttp"
 	"github.com/gauss-project/aurorafs/pkg/logging"
 	"github.com/gauss-project/aurorafs/pkg/manifest"
+	"github.com/gauss-project/aurorafs/pkg/sctx"
+	"github.com/gauss-project/aurorafs/pkg/storage"
 	"github.com/gauss-project/aurorafs/pkg/tracing"
+	"github.com/gorilla/mux"
+	"github.com/syndtr/goleveldb/leveldb"
 )
 
 const (
@@ -283,43 +283,48 @@ func (s *server) dirDeleteHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// MUST request local db
 	r = r.WithContext(sctx.SetRootCID(sctx.SetLocalGet(r.Context()), hash))
 
 	// There is no direct return success.
-	has, err := s.storer.Has(r.Context(), storage.ModeHasChunk, hash)
+	_, err = s.storer.Get(r.Context(), storage.ModeGetRequest, hash)
 	if err != nil {
+		if errors.Is(err, storage.ErrNotFound) {
+			jsonhttp.NotFound(w, nil)
+			return
+		}
+
 		s.logger.Debugf("delete aurora: check %s exists: %w", hash, err)
 		s.logger.Errorf("delete aurora: check %s exists", hash)
 		jsonhttp.InternalServerError(w, err)
 		return
 	}
 
-	if !has {
-		jsonhttp.NotFound(w, nil)
-		return
+	pyramid := s.chunkInfo.GetChunkPyramid(hash)
+	addresses := make([]boson.Address, len(pyramid))
+
+	for i, addr := range pyramid {
+		addresses[i] = *addr
 	}
 
-	addresses := make([]boson.Address, 0)
-
-	err = s.traversal.TraverseManifestAddresses(r.Context(), hash, func(address boson.Address) error {
-		addresses = append(addresses, address)
-		return nil
-	})
-	if err != nil {
-		if errors.Is(err, traversal.ErrInvalidType) {
-			jsonhttp.BadRequest(w, "invalid type")
-			return
-		}
-
-		s.logger.Debugf("delete aurora: traverse chunks: %w", err)
-		s.logger.Errorf("delete aurora: traverse chunks %s", hash)
-		jsonhttp.InternalServerError(w, "Dirs deletion occur error")
+	ok := s.chunkInfo.DelFile(hash)
+	if !ok {
+		s.logger.Errorf("delete aurora: chunk info report delete %s failed", hash)
+		jsonhttp.InternalServerError(w, "Dirs deleting occur error")
 		return
 	}
 
 	for _, addr := range addresses {
+		if addr.Equal(hash) {
+			continue
+		}
+
 		err = s.storer.Set(r.Context(), storage.ModeSetRemove, addr)
 		if err != nil {
+			if errors.Is(err, leveldb.ErrNotFound) {
+				continue
+			}
+
 			s.logger.Debugf("delete aurora: remove chunk: %w", err)
 			s.logger.Errorf("delete aurora: remove chunk %s", addr)
 			jsonhttp.InternalServerError(w, "Dirs deletion occur error")
@@ -327,11 +332,14 @@ func (s *server) dirDeleteHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	ok := s.chunkInfo.DelFile(hash)
-	if !ok {
-		s.logger.Errorf("delete aurora: chunk info report delete %s failed", hash)
-		jsonhttp.InternalServerError(w, "Dirs deletion occur error")
-		return
+	err = s.storer.Set(r.Context(), storage.ModeSetRemove, hash)
+	if err != nil {
+		if !errors.Is(err, leveldb.ErrNotFound) {
+			s.logger.Debugf("delete aurora: remove chunk: %w", err)
+			s.logger.Errorf("delete aurora: remove chunk %s", addr)
+			jsonhttp.InternalServerError(w, "Dirs deletion occur error")
+			return
+		}
 	}
 
 	jsonhttp.OK(w, nil)
