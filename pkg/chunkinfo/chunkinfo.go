@@ -253,8 +253,8 @@ func (ci *ChunkInfo) IsDiscover(rootCid boson.Address) bool {
 
 func (ci *ChunkInfo) GetFileList(overlay boson.Address) (fileListInfo map[string]*aurora.FileInfo, rootList []boson.Address) {
 	ci.ct.RLock()
+	defer ci.ct.RUnlock()
 	chunkInfo := ci.ct.presence
-	ci.ct.RUnlock()
 	fileListInfo = make(map[string]*aurora.FileInfo)
 	for root, node := range chunkInfo {
 		if v, ok := node[overlay.String()]; ok {
