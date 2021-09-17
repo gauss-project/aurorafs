@@ -1,9 +1,7 @@
-## Bee configuration - https://gateway.ethswarm.org/bzz/docs.swarm.eth/docs/installation/configuration/
+## Aurora configuration -
 
 ## HTTP API listen address (default ":1633")
 # api-addr: :1633
-## initial nodes to connect to (default [/dnsaddr/bootnode.ethswarm.org])
-# bootnode: [/dnsaddr/bootnode.ethswarm.org]
 ## enable clef signer
 # clef-signer-enable: false
 ## clef signer endpoint

@@ -1,7 +1,3 @@
-// Copyright 2020 The Swarm Authors. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.package storage
-
 package leveldb
 
 import (
@@ -57,7 +53,7 @@ func NewStateStore(path string, l logging.Logger) (storage.StateStorer, error) {
 		if err != nil {
 			return nil, fmt.Errorf("statestore recovery: %w", err)
 		}
-		l.Warning("statestore recovery ok! you are kindly request to inform us about the steps that preceded the last Bee shutdown.")
+		l.Warning("statestore recovery ok! you are kindly request to inform us about the steps that preceded the last aurora shutdown.")
 	}
 
 	s := &store{

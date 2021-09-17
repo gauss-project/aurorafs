@@ -1,8 +1,4 @@
-// Copyright 2020 The Boson Authors. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
-
-// Package api provides the functionality of the Bee
+// Package api provides the functionality of the aurora
 // client-facing HTTP API.
 package api
 

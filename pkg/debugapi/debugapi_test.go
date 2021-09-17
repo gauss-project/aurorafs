@@ -1,7 +1,3 @@
-// Copyright 2020 The Swarm Authors. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
-
 package debugapi_test
 
 import (
@@ -36,8 +32,8 @@ import (
 )
 
 type testServerOptions struct {
-	Overlay   boson.Address
-	PublicKey ecdsa.PublicKey
+	Overlay            boson.Address
+	PublicKey          ecdsa.PublicKey
 	PSSPublicKey       ecdsa.PublicKey
 	EthereumAddress    common.Address
 	CORSAllowedOrigins []string
@@ -65,7 +61,7 @@ func newTestServer(t *testing.T, o testServerOptions) *testServer {
 	//swapserv := swapmock.NewApiInterface(o.SwapOpts...)
 	ln := lightnode.NewContainer(o.Overlay)
 	s := debugapi.New(o.Overlay, o.PublicKey, o.PSSPublicKey, o.EthereumAddress, logging.New(ioutil.Discard, 0), nil, o.CORSAllowedOrigins)
-	s.Configure(o.P2P, o.Pingpong, topologyDriver,ln, o.Storer)
+	s.Configure(o.P2P, o.Pingpong, topologyDriver, ln, o.Storer, nil)
 	ts := httptest.NewServer(s)
 	t.Cleanup(ts.Close)
 
@@ -163,13 +159,13 @@ func TestServer_Configure(t *testing.T) {
 		}),
 	)
 
-	s.Configure(o.P2P, o.Pingpong, topologyDriver, ln, o.Storer)
+	s.Configure(o.P2P, o.Pingpong, topologyDriver, ln, o.Storer, nil)
 
 	testBasicRouter(t, client)
 	jsonhttptest.Request(t, client, http.MethodGet, "/readiness", http.StatusOK,
 		jsonhttptest.WithExpectedJSONResponse(debugapi.StatusResponse{
 			Status:  "ok",
-			Version: bee.Version,
+			Version: aufs.Version,
 		}),
 	)
 	jsonhttptest.Request(t, client, http.MethodGet, "/addresses", http.StatusOK,
@@ -189,7 +185,7 @@ func testBasicRouter(t *testing.T, client *http.Client) {
 	jsonhttptest.Request(t, client, http.MethodGet, "/health", http.StatusOK,
 		jsonhttptest.WithExpectedJSONResponse(debugapi.StatusResponse{
 			Status:  "ok",
-			Version: bee.Version,
+			Version: aufs.Version,
 		}),
 	)
 

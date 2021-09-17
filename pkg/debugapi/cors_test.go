@@ -1,7 +1,3 @@
-// Copyright 2021 The Swarm Authors. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
-
 package debugapi_test
 
 import (
@@ -21,31 +17,31 @@ func TestCORSHeaders(t *testing.T) {
 		},
 		{
 			name:           "no origin",
-			allowedOrigins: []string{"https://gateway.ethswarm.org"},
+			allowedOrigins: []string{"*"},
 			wantCORS:       false,
 		},
 		{
 			name:           "single explicit",
-			origin:         "https://gateway.ethswarm.org",
-			allowedOrigins: []string{"https://gateway.ethswarm.org"},
+			origin:         "*",
+			allowedOrigins: []string{"*"},
 			wantCORS:       true,
 		},
 		{
 			name:           "single explicit blocked",
 			origin:         "http://a-hacker.me",
-			allowedOrigins: []string{"https://gateway.ethswarm.org"},
+			allowedOrigins: []string{"*"},
 			wantCORS:       false,
 		},
 		{
 			name:           "multiple explicit",
-			origin:         "https://staging.gateway.ethswarm.org",
-			allowedOrigins: []string{"https://gateway.ethswarm.org", "https://staging.gateway.ethswarm.org"},
+			origin:         "*",
+			allowedOrigins: []string{"*", "*"},
 			wantCORS:       true,
 		},
 		{
 			name:           "multiple explicit blocked",
 			origin:         "http://a-hacker.me",
-			allowedOrigins: []string{"https://gateway.ethswarm.org", "https://staging.gateway.ethswarm.org"},
+			allowedOrigins: []string{"*", "*"},
 			wantCORS:       false,
 		},
 		{
@@ -56,19 +52,19 @@ func TestCORSHeaders(t *testing.T) {
 		},
 		{
 			name:           "wildcard",
-			origin:         "https://gateway.ethswarm.org",
+			origin:         "*",
 			allowedOrigins: []string{"*"},
 			wantCORS:       true,
 		},
 		{
 			name:           "with origin only",
-			origin:         "https://gateway.ethswarm.org",
+			origin:         "*",
 			allowedOrigins: nil,
 			wantCORS:       false,
 		},
 		{
 			name:           "with origin only not nil",
-			origin:         "https://gateway.ethswarm.org",
+			origin:         "*",
 			allowedOrigins: []string{},
 			wantCORS:       false,
 		},

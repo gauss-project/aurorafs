@@ -18,9 +18,9 @@ func newMetricsRegistry() (r *prometheus.Registry) {
 		prometheus.NewGauge(prometheus.GaugeOpts{
 			Namespace: metrics.Namespace,
 			Name:      "info",
-			Help:      "Bee information.",
+			Help:      "Aurora information.",
 			ConstLabels: prometheus.Labels{
-				"version": bee.Version,
+				"version": aufs.Version,
 			},
 		}),
 	)

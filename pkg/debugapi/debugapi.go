@@ -1,10 +1,11 @@
 // Package debugapi exposes the debug API used to
 // control and analyze low-level and runtime
-// features and functionalities of Bee.
+// features and functionalities of Aurora.
 package debugapi
 
 import (
 	"crypto/ecdsa"
+	"github.com/gauss-project/aurorafs/pkg/chunkinfo"
 	"github.com/gauss-project/aurorafs/pkg/topology/lightnode"
 	"net/http"
 	"sync"
@@ -35,6 +36,7 @@ type Service struct {
 	tracer          *tracing.Tracer
 	lightNodes      *lightnode.Container
 
+	chunkInfo chunkinfo.Interface
 	//accounting         accounting.Interface
 	//settlement         settlement.Interface
 	//chequebookEnabled  bool
@@ -70,12 +72,13 @@ func New(overlay boson.Address, publicKey, pssPublicKey ecdsa.PublicKey, ethereu
 // Configure injects required dependencies and configuration parameters and
 // constructs HTTP routes that depend on them. It is intended and safe to call
 // this method only once.
-func (s *Service) Configure(p2p p2p.DebugService, pingpong pingpong.Interface, topologyDriver topology.Driver, lightNodes *lightnode.Container, storer storage.Storer) {
+func (s *Service) Configure(p2p p2p.DebugService, pingpong pingpong.Interface, topologyDriver topology.Driver, lightNodes *lightnode.Container, storer storage.Storer, chunkinfo chunkinfo.Interface) {
 	s.p2p = p2p
 	s.pingpong = pingpong
 	s.topologyDriver = topologyDriver
 	s.storer = storer
 	s.lightNodes = lightNodes
+	s.chunkInfo = chunkinfo
 	//s.accounting = accounting
 	//s.settlement = settlement
 	//s.chequebookEnabled = chequebookEnabled

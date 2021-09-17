@@ -1,7 +1,3 @@
-// Copyright 2020 The Swarm Authors. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
-
 package libp2p_test
 
 import (
@@ -18,7 +14,7 @@ import (
 func TestTracing(t *testing.T) {
 	tracer1, closer1, err := tracing.NewTracer(&tracing.Options{
 		Enabled:     true,
-		ServiceName: "bee-test",
+		ServiceName: "aurora-test",
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -27,7 +23,7 @@ func TestTracing(t *testing.T) {
 
 	tracer2, closer2, err := tracing.NewTracer(&tracing.Options{
 		Enabled:     true,
-		ServiceName: "bee-test",
+		ServiceName: "aurora-test",
 	})
 	if err != nil {
 		t.Fatal(err)

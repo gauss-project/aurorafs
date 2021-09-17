@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 
-APP_NAME="bee"
+APP_NAME="aurora"
 REPO_URL="https://github.com/gauss-project/aurorafs"
 
 : "${USE_SUDO:="true"}"
-: "${BEE_INSTALL_DIR:="/usr/local/bin"}"
+: "${AURORA_INSTALL_DIR:="/usr/local/bin"}"
 
 detect_arch() {
   ARCH=$(uname -m)
@@ -62,13 +62,13 @@ supported() {
 # check_installed_version checks which version of aurorafs is installed and
 # if it needs to be changed.
 check_installed_version() {
-  if [[ -f "${BEE_INSTALL_DIR}/${APP_NAME}" ]]; then
+  if [[ -f "${AURORA_INSTALL_DIR}/${APP_NAME}" ]]; then
     local version=$(aurorafs version 2>&1)
     if [[ "${version%-*}" == "${TAG#v}" ]]; then
-      echo "bee ${version} is already ${DESIRED_VERSION:-latest}"
+      echo "Aurora ${version} is already ${DESIRED_VERSION:-latest}"
       return 0
     else
-      echo "bee ${TAG} is available. Changing from version ${version}."
+      echo "Aurora ${TAG} is available. Changing from version ${version}."
       return 1
     fi
   else
@@ -94,27 +94,27 @@ check_latest_version() {
 # download_file downloads the latest binary package and also the checksum
 # for that binary.
 download_file() {
-  BEE_DIST="bee-$OS-$ARCH"
+  AURORA_DIST="aurora-$OS-$ARCH"
   if [ "$OS" == "windows" ]; then
-    BEE_DIST="bee-$OS-$ARCH.exe"
+    AURORA_DIST="aurora-$OS-$ARCH.exe"
   fi
-  DOWNLOAD_URL="$REPO_URL/releases/download/$TAG/$BEE_DIST"
-  BEE_TMP_ROOT="$(mktemp -dt aurorafs-binary-XXXXXX)"
-  BEE_TMP_FILE="$BEE_TMP_ROOT/$BEE_DIST"
+  DOWNLOAD_URL="$REPO_URL/releases/download/$TAG/$AURORA_DIST"
+  AURORA_TMP_ROOT="$(mktemp -dt aurorafs-binary-XXXXXX)"
+  AURORA_TMP_FILE="$AURORA_TMP_ROOT/$AURORA_DIST"
   if command -v curl &> /dev/null; then
-    curl -SsL "$DOWNLOAD_URL" -o "$BEE_TMP_FILE"
+    curl -SsL "$DOWNLOAD_URL" -o "$AURORA_TMP_FILE"
   elif command -v wget &> /dev/null; then
-    wget -q -O "$BEE_TMP_FILE" "$DOWNLOAD_URL"
+    wget -q -O "$AURORA_TMP_FILE" "$DOWNLOAD_URL"
   fi
 }
 
 # install_file verifies the SHA256 for the file, then unpacks and
 # installs it.
 install_file() {
-  echo "Preparing to install $APP_NAME into ${BEE_INSTALL_DIR}"
-  run_as_root chmod +x "$BEE_TMP_FILE"
-  run_as_root cp "$BEE_TMP_FILE" "$BEE_INSTALL_DIR/$APP_NAME"
-  echo "$APP_NAME installed into $BEE_INSTALL_DIR/$APP_NAME"
+  echo "Preparing to install $APP_NAME into ${AURORA_INSTALL_DIR}"
+  run_as_root chmod +x "$AURORA_TMP_FILE"
+  run_as_root cp "$AURORA_TMP_FILE" "$AURORA_INSTALL_DIR/$APP_NAME"
+  echo "$APP_NAME installed into $AURORA_INSTALL_DIR/$APP_NAME"
 }
 
 # fail_trap is executed if an error occurs.
@@ -136,7 +136,7 @@ fail_trap() {
 # test_binary tests the installed client to make sure it is working.
 test_binary() {
   if ! command -v $APP_NAME &> /dev/null; then
-    echo "$APP_NAME not found. Is $BEE_INSTALL_DIR on your "'$PATH?'
+    echo "$APP_NAME not found. Is $AURORA_INSTALL_DIR on your "'$PATH?'
     exit 1
   fi
   echo "Run '$APP_NAME --help' to see what you can do with it."
@@ -151,8 +151,8 @@ help () {
 
 # cleanup temporary files
 cleanup() {
-  if [[ -d "${BEE_TMP_ROOT:-}" ]]; then
-    rm -rf "$BEE_TMP_ROOT"
+  if [[ -d "${AURORA_TMP_ROOT:-}" ]]; then
+    rm -rf "$AURORA_TMP_ROOT"
   fi
 }
 

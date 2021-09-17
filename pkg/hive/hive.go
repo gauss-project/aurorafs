@@ -1,7 +1,3 @@
-// Copyright 2020 The Swarm Authors. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
-
 // Package hive exposes the hive protocol implementation
 // which is the discovery protocol used to inform and be
 // informed about other peers in the network. It gossips

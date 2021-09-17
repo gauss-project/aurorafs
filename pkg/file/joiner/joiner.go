@@ -1,7 +1,3 @@
-// Copyright 2020 The Swarm Authors. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
-
 // Package joiner provides implementations of the file.Joiner interface
 package joiner
 
@@ -31,7 +27,7 @@ type joiner struct {
 	isSaveDataChunks bool
 
 	intermediateChunks map[string][]byte
-	isSaveIntChunks bool
+	isSaveIntChunks    bool
 
 	ctx    context.Context
 	getter storage.Getter
@@ -186,8 +182,8 @@ func subtrieSection(data []byte, startIdx, refLen int, subtrieSize int64) int64 
 	// where y is the size of the subtrie, refs are the number of references
 	// x is constant (the brute forced value) and l is the size of the last subtrie
 	var (
-		refs       = int64(len(data) / refLen) // how many references in the intermediate chunk
-		branching  = int64(boson.ChunkSize / refLen)      // branching factor is chunkSize divided by reference length
+		refs       = int64(len(data) / refLen)       // how many references in the intermediate chunk
+		branching  = int64(boson.ChunkSize / refLen) // branching factor is chunkSize divided by reference length
 		branchSize = int64(boson.ChunkSize)
 	)
 	for {

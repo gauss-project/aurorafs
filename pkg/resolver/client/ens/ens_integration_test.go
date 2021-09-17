@@ -1,7 +1,3 @@
-// Copyright 2020 The Swarm Authors. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
-
 // +build integration
 
 package ens_test
@@ -10,8 +6,8 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/gauss-project/aurorafs/pkg/resolver/client/ens"
 	"github.com/gauss-project/aurorafs/pkg/boson"
+	"github.com/gauss-project/aurorafs/pkg/resolver/client/ens"
 )
 
 func TestENSntegration(t *testing.T) {
@@ -23,9 +19,9 @@ func TestENSntegration(t *testing.T) {
 		desc            string
 		endpoint        string
 		contractAddress string
-		name    string
-		wantAdr boson.Address
-		wantErr error
+		name            string
+		wantAdr         boson.Address
+		wantErr         error
 	}{
 		// TODO: add a test targeting a resolver with an invalid contenthash
 		// record.

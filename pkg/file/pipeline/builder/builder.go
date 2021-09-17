@@ -1,7 +1,3 @@
-// Copyright 2020 The Swarm Authors. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
-
 package builder
 
 import (
@@ -9,6 +5,7 @@ import (
 	"fmt"
 	"io"
 
+	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/encryption"
 	"github.com/gauss-project/aurorafs/pkg/file/pipeline"
 	"github.com/gauss-project/aurorafs/pkg/file/pipeline/bmt"
@@ -17,7 +14,6 @@ import (
 	"github.com/gauss-project/aurorafs/pkg/file/pipeline/hashtrie"
 	"github.com/gauss-project/aurorafs/pkg/file/pipeline/store"
 	"github.com/gauss-project/aurorafs/pkg/storage"
-	"github.com/gauss-project/aurorafs/pkg/boson"
 )
 
 // NewPipelineBuilder returns the appropriate pipeline according to the specified parameters
@@ -53,7 +49,7 @@ func newShortPipelineFunc(ctx context.Context, s storage.Putter, mode storage.Mo
 // Note that the encryption writer will mutate the data to contain the encrypted span, but the span field
 // with the unencrypted span is preserved.
 func newEncryptionPipeline(ctx context.Context, s storage.Putter, mode storage.ModePut) pipeline.Interface {
-	tw := hashtrie.NewHashTrieWriter(boson.ChunkSize, boson.Branches / 2, boson.HashSize+encryption.KeyLength, newShortEncryptionPipelineFunc(ctx, s, mode))
+	tw := hashtrie.NewHashTrieWriter(boson.ChunkSize, boson.Branches/2, boson.HashSize+encryption.KeyLength, newShortEncryptionPipelineFunc(ctx, s, mode))
 	lsw := store.NewStoreWriter(ctx, s, mode, tw)
 	b := bmt.NewBmtWriter(lsw)
 	enc := enc.NewEncryptionWriter(encryption.NewChunkEncrypter(), b)

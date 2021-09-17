@@ -1,7 +1,3 @@
-// Copyright 2021 The Swarm Authors. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
-
 // Package metrics provides service for collecting various metrics about peers.
 // It is intended to be used with the kademlia where the metrics are collected.
 package waitnext

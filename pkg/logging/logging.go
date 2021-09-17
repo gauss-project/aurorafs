@@ -1,9 +1,5 @@
-// Copyright 2020 The Swarm Authors. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
-
 // Package logging provides the logger interface abstraction
-// and implementation for Bee. It uses logrus under the hood.
+// and implementation for Aurora. It uses logrus under the hood.
 package logging
 
 import (

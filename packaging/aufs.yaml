@@ -1,4 +1,4 @@
-## Bee configuration - https://gateway.ethswarm.org/bzz/docs.aufs.io
+
 
 ## HTTP API listen address (default ":1633")
 # api-addr: :1633

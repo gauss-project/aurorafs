@@ -1,7 +1,3 @@
-// Copyright 2020 The Swarm Authors. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
-
 package streamtest
 
 import (
@@ -152,7 +148,7 @@ func (r *Recorder) NewStream(ctx context.Context, addr boson.Address, h p2p.Head
 		}
 	}()
 
-	id := addr.String() + p2p.NewSwarmStreamName(protocolName, protocolVersion, streamName)
+	id := addr.String() + p2p.NewAuroraStreamName(protocolName, protocolVersion, streamName)
 
 	r.recordsMu.Lock()
 	defer r.recordsMu.Unlock()
@@ -169,7 +165,7 @@ func (r *Recorder) Ping(ctx context.Context, addr ma.Multiaddr) (rtt time.Durati
 }
 
 func (r *Recorder) Records(addr boson.Address, protocolName, protocolVersio, streamName string) ([]*Record, error) {
-	id := addr.String() + p2p.NewSwarmStreamName(protocolName, protocolVersio, streamName)
+	id := addr.String() + p2p.NewAuroraStreamName(protocolName, protocolVersio, streamName)
 
 	r.recordsMu.Lock()
 	defer r.recordsMu.Unlock()
