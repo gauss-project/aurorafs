@@ -134,7 +134,7 @@ func (ci *ChunkInfo) getChunkPyramidChunk(cxt context.Context, rootCid boson.Add
 	if err != nil {
 		return nil, err
 	}
-	return v[string(hash)], nil
+	return v[boson.NewAddress(hash).String()], nil
 }
 
 // doFindChunkPyramid
