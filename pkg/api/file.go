@@ -7,8 +7,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/gauss-project/aurorafs/pkg/aurora"
-	"github.com/gauss-project/aurorafs/pkg/traversal"
 	"io"
 	"io/ioutil"
 	"mime"
@@ -19,6 +17,8 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/ethersphere/langos"
+	"github.com/gauss-project/aurorafs/pkg/aurora"
 	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/collection/entry"
 	"github.com/gauss-project/aurorafs/pkg/file"
@@ -26,10 +26,9 @@ import (
 	"github.com/gauss-project/aurorafs/pkg/jsonhttp"
 	"github.com/gauss-project/aurorafs/pkg/sctx"
 	"github.com/gauss-project/aurorafs/pkg/storage"
-
-	"github.com/ethersphere/langos"
 	"github.com/gauss-project/aurorafs/pkg/tracing"
 	"github.com/gorilla/mux"
+	"github.com/syndtr/goleveldb/leveldb"
 )
 
 const (
@@ -391,27 +390,31 @@ func (s *server) fileDeleteHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	addresses := make([]boson.Address, 0)
+	pyramid := s.chunkInfo.GetChunkPyramid(hash)
+	addresses := make([]boson.Address, len(pyramid))
 
-	err = s.traversal.TraverseFileAddresses(r.Context(), hash, func(address boson.Address) error {
-		addresses = append(addresses, address)
-		return nil
-	})
-	if err != nil {
-		if errors.Is(err, traversal.ErrInvalidType) {
-			jsonhttp.BadRequest(w, "invalid file")
-			return
-		}
+	for i, addr := range pyramid {
+		addresses[i] = *addr
+	}
 
-		s.logger.Debugf("delete file: traverse chunks: %w", err)
-		s.logger.Errorf("delete file: traverse chunks %s", hash)
-		jsonhttp.InternalServerError(w, "File deletion occur error")
+	ok := s.chunkInfo.DelFile(hash)
+	if !ok {
+		s.logger.Errorf("delete file: chunk info report delete %s failed", hash)
+		jsonhttp.InternalServerError(w, "File deleting occur error")
 		return
 	}
 
 	for _, addr := range addresses {
+		if addr.Equal(hash) {
+			continue
+		}
+
 		err = s.storer.Set(r.Context(), storage.ModeSetRemove, addr)
 		if err != nil {
+			if errors.Is(err, leveldb.ErrNotFound) {
+				continue
+			}
+
 			s.logger.Debugf("delete file: remove chunk: %w", err)
 			s.logger.Errorf("delete file: remove chunk %s", addr)
 			jsonhttp.InternalServerError(w, "File deletion occur error")
@@ -419,12 +422,14 @@ func (s *server) fileDeleteHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-
-	ok := s.chunkInfo.DelFile(hash)
-	if !ok {
-		s.logger.Errorf("delete file: chunk info report delete %s failed", hash)
-		jsonhttp.InternalServerError(w, "File deleting occur error")
-		return
+	err = s.storer.Set(r.Context(), storage.ModeSetRemove, hash)
+	if err != nil {
+		if !errors.Is(err, leveldb.ErrNotFound) {
+			s.logger.Debugf("delete file: remove chunk: %w", err)
+			s.logger.Errorf("delete file: remove chunk %s", addr)
+			jsonhttp.InternalServerError(w, "File deletion occur error")
+			return
+		}
 	}
 
 	jsonhttp.OK(w, nil)
