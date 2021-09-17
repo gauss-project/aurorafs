@@ -44,16 +44,16 @@ func newPendCallResTab(addr boson.Address, logger logging.Logger, met metrics) *
 }
 
 func (pend *pendCallResTab) Add(target, src boson.Address, resCh chan struct{}) error {
-	key := target.String()
+
+	mKey := common.BytesToHash(target.Bytes())
 	pending := pendCallResItem{
 		src:        src,
 		createTime: time.Now(),
 		resCh:      resCh,
 	}
-	mKey := common.BytesToHash(target.Bytes())
 
-	pend.mu.Lock(key)
-	defer pend.mu.Unlock(key)
+	pend.mu.Lock(mKey.String())
+	defer pend.mu.Unlock(mKey.String())
 
 	res, ok := pend.items[mKey]
 	if ok {
