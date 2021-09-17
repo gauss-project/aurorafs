@@ -7,8 +7,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/gauss-project/aurorafs/pkg/aurora"
-	"github.com/gauss-project/aurorafs/pkg/traversal"
 	"io"
 	"io/ioutil"
 	"mime"
@@ -19,6 +17,8 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/ethersphere/langos"
+	"github.com/gauss-project/aurorafs/pkg/aurora"
 	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/collection/entry"
 	"github.com/gauss-project/aurorafs/pkg/file"
@@ -26,10 +26,9 @@ import (
 	"github.com/gauss-project/aurorafs/pkg/jsonhttp"
 	"github.com/gauss-project/aurorafs/pkg/sctx"
 	"github.com/gauss-project/aurorafs/pkg/storage"
-
-	"github.com/ethersphere/langos"
 	"github.com/gauss-project/aurorafs/pkg/tracing"
 	"github.com/gorilla/mux"
+	"github.com/syndtr/goleveldb/leveldb"
 )
 
 const (
@@ -365,63 +364,74 @@ func (s *server) downloadHandler(w http.ResponseWriter, r *http.Request, referen
 }
 
 func (s *server) fileDeleteHandler(w http.ResponseWriter, r *http.Request) {
-	addr, err := boson.ParseHexAddress(mux.Vars(r)["address"])
+	addr := mux.Vars(r)["address"]
+	hash, err := boson.ParseHexAddress(addr)
 	if err != nil {
-		s.logger.Debugf("delete files: parse address: %v", err)
-		s.logger.Error("delete files: parse address")
-		jsonhttp.BadRequest(w, "bad address")
+		s.logger.Debugf("delete file: parse address: %w", err)
+		s.logger.Errorf("delete file: parse address %s", addr)
+		jsonhttp.BadRequest(w, "invalid address")
 		return
 	}
 
-	r = r.WithContext(sctx.SetRootCID(r.Context(), addr))
-	//There is no direct return success.
-	has, err := s.storer.Has(r.Context(), storage.ModeHasChunk, addr)
+	// MUST request local db
+	r = r.WithContext(sctx.SetRootCID(sctx.SetLocalGet(r.Context()), hash))
+
+	// There is no direct return success.
+	_, err = s.storer.Get(r.Context(), storage.ModeGetRequest, hash)
 	if err != nil {
-		jsonhttp.OK(w, nil)
-		return
-	}
-
-	if !has {
-		_, err := s.storer.Get(r.Context(), storage.ModeGetRequest, addr)
-		if err != nil {
-			s.logger.Debugf("delete files: netstore get: %v", err)
-			s.logger.Error("delete files netstore")
-
+		if errors.Is(err, storage.ErrNotFound) {
 			jsonhttp.NotFound(w, nil)
 			return
 		}
-	}
 
-	ok := s.chunkInfo.DelFile(addr)
-	if !ok {
-		jsonhttp.InternalServerError(w, "Error in files deletion.")
+		s.logger.Debugf("delete file: check %s exists: %w", hash, err)
+		s.logger.Errorf("delete file: check %s exists", hash)
+		jsonhttp.InternalServerError(w, err)
 		return
 	}
-	ctx := r.Context()
 
-	fn := s.deleteChunkFn(ctx, addr)
+	pyramid := s.chunkInfo.GetChunkPyramid(hash)
+	addresses := make([]boson.Address, len(pyramid))
 
-	err = s.traversal.TraverseFileAddresses(ctx, addr, fn)
-	if err != nil {
-		s.logger.Debugf("delete files: traverse chunks: %v, addr %s", err, addr)
+	for i, addr := range pyramid {
+		addresses[i] = *addr
+	}
 
-		if errors.Is(err, traversal.ErrInvalidType) {
-			s.logger.Error("delete files: invalid type")
-			jsonhttp.BadRequest(w, "invalid type")
-			return
+	ok := s.chunkInfo.DelFile(hash)
+	if !ok {
+		s.logger.Errorf("delete file: chunk info report delete %s failed", hash)
+		jsonhttp.InternalServerError(w, "File deleting occur error")
+		return
+	}
+
+	for _, addr := range addresses {
+		if addr.Equal(hash) {
+			continue
 		}
 
-		s.logger.Error("delete files: cannot pin")
-		jsonhttp.InternalServerError(w, "cannot pin")
-		return
+		err = s.storer.Set(r.Context(), storage.ModeSetRemove, addr)
+		if err != nil {
+			if errors.Is(err, leveldb.ErrNotFound) {
+				continue
+			}
+
+			s.logger.Debugf("delete file: remove chunk: %w", err)
+			s.logger.Errorf("delete file: remove chunk %s", addr)
+			jsonhttp.InternalServerError(w, "File deletion occur error")
+			return
+		}
 	}
 
-	err = s.storer.Set(ctx, storage.ModeSetRemove, addr)
+	err = s.storer.Set(r.Context(), storage.ModeSetRemove, hash)
 	if err != nil {
-		s.logger.Debugf("delete files: Error in deleting file rootcid")
-		jsonhttp.InternalServerError(w, "Error in deleting file rootcid")
-		return
+		if !errors.Is(err, leveldb.ErrNotFound) {
+			s.logger.Debugf("delete file: remove chunk: %w", err)
+			s.logger.Errorf("delete file: remove chunk %s", addr)
+			jsonhttp.InternalServerError(w, "File deletion occur error")
+			return
+		}
 	}
+
 	jsonhttp.OK(w, nil)
 }
 
