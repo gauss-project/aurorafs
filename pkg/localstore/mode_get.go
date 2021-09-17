@@ -154,6 +154,9 @@ func (db *DB) updateGC(item shed.Item) (err error) {
 	if item.BinID == 0 {
 		i, err = db.retrievalDataIndex.Get(item)
 		if err != nil {
+			if errors.Is(err, leveldb.ErrNotFound) {
+				return db.retrievalAccessIndex.DeleteInBatch(batch, item)
+			}
 			return err
 		}
 		item.BinID = i.BinID

@@ -270,7 +270,7 @@ func (db *DB) setGC(batch *leveldb.Batch, item shed.Item) (gcSizeChange int64, e
 		}
 		i.Address = item.Address
 		i.AccessTimestamp = now()
-		err = db.retrievalAccessIndex.Put(i)
+		err = db.retrievalAccessIndex.PutInBatch(batch, i)
 		if err != nil {
 			return 0, err
 		}

@@ -32,7 +32,7 @@ func (ci *ChunkInfo) initChunkPyramid(ctx context.Context, rootCid boson.Address
 	}
 	hashs := make([][]byte, 0)
 	for k := range trie {
-		hashs = append(hashs, []byte(k))
+		hashs = append(hashs, boson.MustParseHexAddress(k).Bytes())
 	}
 	ci.updateChunkPyramid(rootCid, data, hashs)
 	return nil
@@ -104,7 +104,7 @@ func (ci *ChunkInfo) getChunkSize(cxt context.Context, rootCid boson.Address) (i
 	if ci.cp.pyramid[rootCid.String()] == nil {
 		hashs := make([][]byte, 0)
 		for k := range v {
-			hashs = append(hashs, []byte(k))
+			hashs = append(hashs, boson.MustParseHexAddress(k).Bytes())
 		}
 		ci.updateChunkPyramid(rootCid, trie, hashs)
 	}
@@ -124,7 +124,7 @@ func (ci *ChunkInfo) getChunkPyramidHash(cxt context.Context, rootCid boson.Addr
 	}
 	resp := make([][]byte, 0)
 	for k := range v {
-		resp = append(resp, []byte(k))
+		resp = append(resp, boson.MustParseHexAddress(k).Bytes())
 	}
 	return resp, nil
 }
@@ -134,7 +134,7 @@ func (ci *ChunkInfo) getChunkPyramidChunk(cxt context.Context, rootCid boson.Add
 	if err != nil {
 		return nil, err
 	}
-	return v[string(hash)], nil
+	return v[boson.NewAddress(hash).String()], nil
 }
 
 // doFindChunkPyramid

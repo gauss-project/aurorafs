@@ -2,7 +2,6 @@ package api
 
 import (
 	"bytes"
-	"context"
 	"errors"
 	"io"
 	"io/ioutil"
@@ -108,19 +107,4 @@ func (s *server) chunkGetHandler(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set(TargetsRecoveryHeader, targets)
 	}
 	_, _ = io.Copy(w, bytes.NewReader(chunk.Data()))
-}
-
-// deleteChunkFn return iterator but skip reference hash.
-func (s *server) deleteChunkFn(ctx context.Context, reference boson.Address) func(address boson.Address) error {
-	return func(address boson.Address) error {
-		if !address.Equal(reference) {
-			err := s.storer.Set(ctx, storage.ModeSetRemove, address)
-			if err != nil {
-				s.logger.Debugf("del traversal: for reference %s, address %s: %w", reference, address, err)
-				// continue un-pinning all chunks
-			}
-
-		}
-		return nil
-	}
 }
