@@ -10,12 +10,17 @@ import (
 // chunkPyramid Pyramid
 type chunkPyramid struct {
 	sync.RWMutex
-	// rootCid:cid
-	pyramid map[string]map[string]int
+	// rootCid:cid:bit len/count
+	pyramid map[string]map[string]pyramidCidCount
+}
+
+type pyramidCidCount struct {
+	sort  int
+	count *int
 }
 
 func newChunkPyramid() *chunkPyramid {
-	return &chunkPyramid{pyramid: make(map[string]map[string]int)}
+	return &chunkPyramid{pyramid: make(map[string]map[string]pyramidCidCount)}
 }
 
 func (ci *ChunkInfo) initChunkPyramid(ctx context.Context, rootCid boson.Address) error {
@@ -48,36 +53,39 @@ func (cp *chunkPyramid) checkPyramid(rootCid, cid boson.Address) bool {
 	return false
 }
 
-func (cp *chunkPyramid) putChunkPyramid(rootCid, cid boson.Address, sort int) {
-	cp.Lock()
-	defer cp.Unlock()
-	rc := rootCid.String()
-	if _, ok := cp.pyramid[rc]; !ok {
-		cp.pyramid[rc] = make(map[string]int)
-	}
-	cp.pyramid[rc][cid.String()] = sort
-}
-
 // updateChunkPyramid
 func (ci *ChunkInfo) updateChunkPyramid(rootCid boson.Address, pyramids [][][]byte, hashs [][]byte) {
 	ci.cp.Lock()
 	defer ci.cp.Unlock()
-	py := make(map[string]int)
-	var i int
+	py := make(map[string]pyramidCidCount)
+	var i, max, hashMax int
 	for _, p := range pyramids {
 		for _, x := range p {
-			py[boson.NewAddress(x).String()] = i
-			i++
+			if _, ok := py[boson.NewAddress(x).String()]; !ok {
+				py[boson.NewAddress(x).String()] = pyramidCidCount{
+					count: &max,
+					sort:  i,
+				}
+				i++
+			}
+			max++
 		}
 	}
+
 	for _, hash := range hashs {
-		py[boson.NewAddress(hash).String()] = -1
+		py[boson.NewAddress(hash).String()] = pyramidCidCount{
+			count: &hashMax,
+			sort:  -1,
+		}
+		hashMax++
 	}
 	ci.cp.pyramid[rootCid.String()] = py
 }
 
 // getChunkPyramid
 func (ci *ChunkInfo) getChunkPyramid(cxt context.Context, rootCid boson.Address) (map[string][]byte, error) {
+	ci.cp.RLock()
+	defer ci.cp.RUnlock()
 	v, err := ci.traversal.GetTrieData(cxt, rootCid)
 	if err != nil {
 		return nil, err
@@ -108,13 +116,13 @@ func (ci *ChunkInfo) getChunkSize(cxt context.Context, rootCid boson.Address) (i
 		}
 		ci.updateChunkPyramid(rootCid, trie, hashs)
 	}
-	var i int
-	for _, t := range trie {
-		for _, _ = range t {
-			i++
+	var max = 1
+	for _, i := range ci.cp.pyramid[rootCid.String()] {
+		if max < i.sort {
+			max = i.sort
 		}
 	}
-	return i, nil
+	return max, nil
 }
 
 func (ci *ChunkInfo) getChunkPyramidHash(cxt context.Context, rootCid boson.Address) ([][]byte, error) {
@@ -168,14 +176,29 @@ func (cp *chunkPyramid) getChunkCid(rootCid boson.Address) []*boson.Address {
 func (cp *chunkPyramid) getCidStore(rootCid, cid boson.Address) int {
 	cp.RLock()
 	defer cp.RUnlock()
-	return cp.pyramid[rootCid.String()][cid.String()]
+	return cp.pyramid[rootCid.String()][cid.String()].sort
+}
+
+func (cp *chunkPyramid) getRootChunk(rootCid string) int {
+	cp.RLock()
+	defer cp.RUnlock()
+
+	for _, v := range cp.pyramid[rootCid] {
+		if v.sort >= 0 {
+			return *v.count
+		}
+	}
+	return 0
 }
 
 func (cp *chunkPyramid) getRootHash(rootCID string) int {
 	cp.RLock()
 	defer cp.RUnlock()
-	if cid, ok := cp.pyramid[rootCID]; ok {
-		return len(cid)
+
+	for _, v := range cp.pyramid[rootCID] {
+		if v.sort < 0 {
+			return *v.count
+		}
 	}
 	return 0
 }

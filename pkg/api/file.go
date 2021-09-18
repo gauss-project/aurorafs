@@ -42,6 +42,7 @@ type fileUploadResponse struct {
 type fileListResponse struct {
 	FileHash  string              `json:"fileHash"`
 	Size      int                 `json:"size"`
+	FileSize  int                 `json:"fileSize"`
 	PinState  bool                `json:"pinState"`
 	BitVector aurora.BitVectorApi `json:"bitVector"`
 }
@@ -449,6 +450,7 @@ func (s *server) fileListHandler(w http.ResponseWriter, r *http.Request) {
 			//fileListInfo[v.String()].PinState = yes[i]
 			Response := fileListResponse{}
 			Response.FileHash = v.String()
+			Response.FileSize = fileListInfo[v.String()].FileSize
 			Response.Size = fileListInfo[v.String()].TreeSize
 			Response.PinState = yes[i]
 			Response.BitVector = fileListInfo[v.String()].Bitvector
