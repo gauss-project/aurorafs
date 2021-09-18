@@ -12,93 +12,97 @@ import (
 )
 
 func (s *server) pinAuroras(w http.ResponseWriter, r *http.Request) {
-	addr, err := boson.ParseHexAddress(mux.Vars(r)["address"])
+	addr := mux.Vars(r)["address"]
+	hash, err := boson.ParseHexAddress(addr)
 	if err != nil {
-		s.logger.Debugf("pin Auroras: parse address: %v", err)
-		s.logger.Error("pin Auroras: parse address")
-		jsonhttp.BadRequest(w, "bad address")
+		s.logger.Debugf("pin aurora: parse address %s: %v", addr, err)
+		s.logger.Errorf("pin aurora: parse address %s", addr)
+		jsonhttp.BadRequest(w, "invalid address")
 		return
 	}
 
-	has, err := s.storer.Has(r.Context(), storage.ModeHasChunk, addr)
+	pin, err := s.storer.Has(r.Context(), storage.ModeHasPin, hash)
 	if err != nil {
-		s.logger.Debugf("pin Auroras: localstore has: %v", err)
-		s.logger.Error("pin Auroras: store")
+		s.logger.Debugf("pin aurora: check %s pin: %v", hash, err)
+		s.logger.Error("pin aurora: check %s pin", hash)
 		jsonhttp.InternalServerError(w, err)
 		return
 	}
-
-	if !has {
-		_, err := s.storer.Get(r.Context(), storage.ModeGetRequest, addr)
-		if err != nil {
-			s.logger.Debugf("pin chunk: netstore get: %v", err)
-			s.logger.Error("pin chunk: netstore")
-
-			jsonhttp.NotFound(w, nil)
-			return
-		}
+	if pin {
+		jsonhttp.BadRequest(w, "dirs has pinned")
+		return
 	}
 
-	ctx := r.Context()
+	addresses := make([]boson.Address, 0)
 
-	chunkAddressFn := s.pinChunkAddressFn(ctx, addr)
-
-	err = s.traversal.TraverseManifestAddresses(ctx, addr, chunkAddressFn)
+	err = s.traversal.TraverseManifestAddresses(r.Context(), hash, func(address boson.Address) error {
+		addresses = append(addresses, address)
+		return nil
+	})
 	if err != nil {
-		s.logger.Debugf("pin Auroras: traverse chunks: %v, addr %s", err, addr)
-
 		if errors.Is(err, traversal.ErrInvalidType) {
-			s.logger.Error("pin Auroras: invalid type")
+			s.logger.Errorf("pin aurora: : for reference %s", hash)
 			jsonhttp.BadRequest(w, "invalid type")
 			return
 		}
 
-		s.logger.Error("pin Auroras: cannot pin")
-		jsonhttp.InternalServerError(w, "cannot pin")
+		s.logger.Debugf("pin aurora: traverse chunks: for reference %s: %v", hash, err)
+		s.logger.Errorf("pin aurora: traverse chunks: for reference %s", hash)
+		jsonhttp.InternalServerError(w, "dirs download not completed")
 		return
+	}
+
+	for _, addr := range addresses {
+		err = s.storer.Set(r.Context(), storage.ModeSetPin, addr)
+		if err != nil {
+			if errors.Is(err, storage.ErrNotFound) {
+				continue
+			}
+
+			s.logger.Debugf("pin aurora: set pin: for reference %s, address %s: %v", hash, addr, err)
+			s.logger.Errorf("pin aurora: set pin: for reference %s, address %s", hash, addr)
+			jsonhttp.InternalServerError(w, "dirs pin failed")
+		}
 	}
 
 	jsonhttp.OK(w, nil)
 }
 
 func (s *server) unpinAuroras(w http.ResponseWriter, r *http.Request) {
-	addr, err := boson.ParseHexAddress(mux.Vars(r)["address"])
+	addr := mux.Vars(r)["address"]
+	hash, err := boson.ParseHexAddress(addr)
 	if err != nil {
-		s.logger.Debugf("pin Auroras: parse address: %v", err)
-		s.logger.Error("pin Auroras: parse address")
-		jsonhttp.BadRequest(w, "bad address")
+		s.logger.Debugf("unpin aurora: parse address %s: %v", addr, err)
+		s.logger.Errorf("unpin aurora: parse address %s", addr)
+		jsonhttp.BadRequest(w, "invalid address")
 		return
 	}
 
-	has, err := s.storer.Has(r.Context(), storage.ModeHasChunk, addr)
+	pin, err := s.storer.Has(r.Context(), storage.ModeHasPin, hash)
 	if err != nil {
-		s.logger.Debugf("pin Auroras: localstore has: %v", err)
-		s.logger.Error("pin Auroras: store")
+		s.logger.Debugf("unpin aurora: check %s unpin: %v", hash, err)
+		s.logger.Errorf("unpin aurora: check %s unpin: %v", hash)
 		jsonhttp.InternalServerError(w, err)
 		return
 	}
-
-	if !has {
-		jsonhttp.NotFound(w, nil)
+	if !pin {
+		jsonhttp.BadRequest(w, "dirs has unpinned")
 		return
 	}
 
-	ctx := r.Context()
+	chunkAddressFn := s.unpinChunkAddressFn(r.Context(), hash)
 
-	chunkAddressFn := s.unpinChunkAddressFn(ctx, addr)
-
-	err = s.traversal.TraverseManifestAddresses(ctx, addr, chunkAddressFn)
+	err = s.traversal.TraverseManifestAddresses(r.Context(), hash, chunkAddressFn)
 	if err != nil {
-		s.logger.Debugf("pin Auroras: traverse chunks: %v, addr %s", err, addr)
-
 		if errors.Is(err, traversal.ErrInvalidType) {
-			s.logger.Error("pin Auroras: invalid type")
+			s.logger.Errorf("unpin aurora: for reference %s", hash)
 			jsonhttp.BadRequest(w, "invalid type")
 			return
 		}
 
-		s.logger.Error("pin Auroras: cannot unpin")
-		jsonhttp.InternalServerError(w, "cannot unpin")
+		s.logger.Debugf("unpin aurora: traverse chunks: for reference %s: %v", hash, err)
+		s.logger.Errorf("unpin aurora: traverse chunks: for reference %s: %v", hash)
+		jsonhttp.InternalServerError(w, "dirs unpin failed")
 		return
 	}
 

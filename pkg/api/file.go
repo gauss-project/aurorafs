@@ -392,17 +392,6 @@ func (s *server) fileDeleteHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	pin, err := s.storer.Has(r.Context(), storage.ModeHasPin, hash)
-	if err != nil {
-		s.logger.Debugf("delete file: check %s pin: %v", hash, err)
-		s.logger.Errorf("delete file: check %s pin", hash)
-		jsonhttp.InternalServerError(w, err)
-	}
-	if pin {
-		jsonhttp.Forbidden(w, "file has pinned")
-		return
-	}
-
 	pyramid := s.chunkInfo.GetChunkPyramid(hash)
 	chunkHashes := make([]chunkinfo.PyramidCidNum, len(pyramid))
 
