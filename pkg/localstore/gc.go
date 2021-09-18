@@ -255,20 +255,12 @@ func (db *DB) recycleGarbageWorker() {
 						goto next
 					}
 					if !pin {
-						exists, err := db.retrievalDataIndex.Has(i)
+						err = db.retrievalDataIndex.DeleteInBatch(batch, i)
 						if err != nil {
-							db.metrics.ModeHasFailure.Inc()
-							db.logger.Errorf("localstore: recycle garbage: check data failure: %v", err)
-							goto next
+							db.logger.Errorf("localstore: recycle garbage: delete chunk data: %v", err)
+							break
 						}
-						if exists {
-							err = db.retrievalDataIndex.DeleteInBatch(batch, i)
-							if err != nil {
-								db.logger.Errorf("localstore: recycle garbage: delete chunk data: %v", err)
-								break
-							}
-							removeChunks++
-						}
+						removeChunks++
 					}
 
 					// skip and write to db

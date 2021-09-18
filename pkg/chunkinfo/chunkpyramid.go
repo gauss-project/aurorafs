@@ -86,6 +86,7 @@ func (ci *ChunkInfo) updateChunkPyramid(rootCid boson.Address, pyramids [][][]by
 		py[boson.NewAddress(hash).String()] = pyramidCidCount{
 			count: &hashMax,
 			sort:  -1,
+			number: 1,
 		}
 		hashMax++
 	}
