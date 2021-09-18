@@ -6,9 +6,11 @@ import (
 
 	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/jsonhttp"
+	"github.com/gauss-project/aurorafs/pkg/sctx"
 	"github.com/gauss-project/aurorafs/pkg/storage"
 	"github.com/gauss-project/aurorafs/pkg/traversal"
 	"github.com/gorilla/mux"
+	"github.com/syndtr/goleveldb/leveldb"
 )
 
 func (s *server) pinAuroras(w http.ResponseWriter, r *http.Request) {
@@ -20,6 +22,9 @@ func (s *server) pinAuroras(w http.ResponseWriter, r *http.Request) {
 		jsonhttp.BadRequest(w, "invalid address")
 		return
 	}
+
+	// MUST request local db
+	r = r.WithContext(sctx.SetRootCID(sctx.SetLocalGet(r.Context()), hash))
 
 	pin, err := s.storer.Has(r.Context(), storage.ModeHasPin, hash)
 	if err != nil {
@@ -55,7 +60,7 @@ func (s *server) pinAuroras(w http.ResponseWriter, r *http.Request) {
 	for _, addr := range addresses {
 		err = s.storer.Set(r.Context(), storage.ModeSetPin, addr)
 		if err != nil {
-			if errors.Is(err, storage.ErrNotFound) {
+			if errors.Is(err, leveldb.ErrNotFound) {
 				continue
 			}
 
@@ -77,6 +82,9 @@ func (s *server) unpinAuroras(w http.ResponseWriter, r *http.Request) {
 		jsonhttp.BadRequest(w, "invalid address")
 		return
 	}
+
+	// MUST request local db
+	r = r.WithContext(sctx.SetRootCID(sctx.SetLocalGet(r.Context()), hash))
 
 	pin, err := s.storer.Has(r.Context(), storage.ModeHasPin, hash)
 	if err != nil {
