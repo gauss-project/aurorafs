@@ -20,6 +20,7 @@ import (
 	"github.com/ethersphere/langos"
 	"github.com/gauss-project/aurorafs/pkg/aurora"
 	"github.com/gauss-project/aurorafs/pkg/boson"
+	"github.com/gauss-project/aurorafs/pkg/chunkinfo"
 	"github.com/gauss-project/aurorafs/pkg/collection/entry"
 	"github.com/gauss-project/aurorafs/pkg/file"
 	"github.com/gauss-project/aurorafs/pkg/file/joiner"
@@ -368,7 +369,7 @@ func (s *server) fileDeleteHandler(w http.ResponseWriter, r *http.Request) {
 	addr := mux.Vars(r)["address"]
 	hash, err := boson.ParseHexAddress(addr)
 	if err != nil {
-		s.logger.Debugf("delete file: parse address: %w", err)
+		s.logger.Debugf("delete file: parse address: %v", err)
 		s.logger.Errorf("delete file: parse address %s", addr)
 		jsonhttp.BadRequest(w, "invalid address")
 		return
@@ -385,52 +386,61 @@ func (s *server) fileDeleteHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		s.logger.Debugf("delete file: check %s exists: %w", hash, err)
+		s.logger.Debugf("delete file: check %s exists: %v", hash, err)
 		s.logger.Errorf("delete file: check %s exists", hash)
 		jsonhttp.InternalServerError(w, err)
 		return
 	}
 
 	pyramid := s.chunkInfo.GetChunkPyramid(hash)
-	addresses := make([]boson.Address, len(pyramid))
+	chunkHashes := make([]chunkinfo.PyramidCidNum, len(pyramid))
 
-	for i, addr := range pyramid {
-		addresses[i] = *addr
+	for i, chunk := range pyramid {
+		chunkHashes[i] = *chunk
 	}
 
 	ok := s.chunkInfo.DelFile(hash)
 	if !ok {
-		s.logger.Errorf("delete file: chunk info report delete %s failed", hash)
-		jsonhttp.InternalServerError(w, "File deleting occur error")
+		s.logger.Errorf("delete file: chunk info report remove %s failed", hash)
+		jsonhttp.InternalServerError(w, "file deleting occur error")
 		return
 	}
 
-	for _, addr := range addresses {
-		if addr.Equal(hash) {
+	for _, chunkHash := range chunkHashes {
+		if chunkHash.Cid.Equal(hash) {
 			continue
 		}
 
-		err = s.storer.Set(r.Context(), storage.ModeSetRemove, addr)
-		if err != nil {
-			if errors.Is(err, leveldb.ErrNotFound) {
-				continue
-			}
+		for i := 0; i < chunkHash.Number; i++ {
+			err = s.storer.Set(r.Context(), storage.ModeSetRemove, chunkHash.Cid)
+			if err != nil {
+				if errors.Is(err, leveldb.ErrNotFound) {
+					continue
+				}
 
-			s.logger.Debugf("delete file: remove chunk: %w", err)
-			s.logger.Errorf("delete file: remove chunk %s", addr)
-			jsonhttp.InternalServerError(w, "File deletion occur error")
-			return
+				s.logger.Debugf("delete file: remove chunk: %v", err)
+				s.logger.Errorf("delete file: remove chunk %s", chunkHash.Cid)
+				jsonhttp.InternalServerError(w, "file deletion occur error")
+				return
+			}
 		}
 	}
 
 	err = s.storer.Set(r.Context(), storage.ModeSetRemove, hash)
 	if err != nil {
 		if !errors.Is(err, leveldb.ErrNotFound) {
-			s.logger.Debugf("delete file: remove chunk: %w", err)
-			s.logger.Errorf("delete file: remove chunk %s", addr)
-			jsonhttp.InternalServerError(w, "File deletion occur error")
+			s.logger.Debugf("delete file: remove chunk: %v", err)
+			s.logger.Errorf("delete file: remove chunk %s", hash)
+			jsonhttp.InternalServerError(w, "file deletion occur error")
 			return
 		}
+	}
+
+	ok = s.chunkInfo.DelPyramid(hash)
+	if !ok {
+		s.logger.Errorf("delete file: chunk info report delete %s related pyramid failed", hash)
+		jsonhttp.InternalServerError(w, "file deleting occur error")
+		return
 	}
 
 	jsonhttp.OK(w, nil)

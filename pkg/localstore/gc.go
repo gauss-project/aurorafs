@@ -247,7 +247,7 @@ func (db *DB) recycleGarbageWorker() {
 			for _, item := range candidates {
 				chunks := db.discover.GetChunkPyramid(boson.NewAddress(item.Address))
 				for _, chunk := range chunks {
-					i := addressToItem(*chunk)
+					i := addressToItem(chunk.Cid)
 					pin, err := db.pinIndex.Has(i)
 					if err != nil {
 						db.metrics.ModeHasFailure.Inc()

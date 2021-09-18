@@ -40,10 +40,9 @@ func (s *server) pinChunkAddressFn(ctx context.Context, reference boson.Address)
 
 func (s *server) unpinChunkAddressFn(ctx context.Context, reference boson.Address) func(address boson.Address) error {
 	return func(address boson.Address) error {
-
 		err := s.storer.Set(ctx, storage.ModeSetUnpin, address)
 		if err != nil {
-			s.logger.Debugf("unpin traversal: for reference %s, address %s: %w", reference, address, err)
+			s.logger.Debugf("unpin files: for reference %s, address %s: %v", reference, address, err)
 			// continue un-pinning all chunks
 		}
 
