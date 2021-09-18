@@ -79,6 +79,9 @@ func (ci *ChunkInfo) updateNeighborChunkInfo(rootCid, cid boson.Address, overlay
 	vb, ok := ci.ct.presence[rc][over]
 	if !ok {
 		v, _ := ci.getChunkSize(context.Background(), rootCid)
+		if v == 0 {
+			return nil
+		}
 		vb, _ = bitvector.New(v)
 		ci.ct.presence[rc][over] = vb
 	}

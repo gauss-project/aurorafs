@@ -131,6 +131,9 @@ func (ci *ChunkInfo) updateChunkInfo(rootCid, overlay boson.Address, bv []byte) 
 	vb, ok := ci.cd.presence[rc][overlay.String()]
 	if !ok {
 		v, _ := ci.getChunkSize(context.Background(), rootCid)
+		if v == 0 {
+			return
+		}
 		vb, _ = bitvector.NewFromBytes(bv, v)
 		ci.cd.presence[rc][overlay.String()] = vb
 	} else {
