@@ -35,13 +35,15 @@ type Interface interface {
 
 	Init(ctx context.Context, authInfo []byte, rootCid boson.Address) bool
 
-	GetChunkPyramid(rootCid boson.Address) []*boson.Address
+	GetChunkPyramid(rootCid boson.Address) []*PyramidCidNum
 
 	IsDiscover(rootCid boson.Address) bool
 
 	GetFileList(overlay boson.Address) (fileListInfo map[string]*aurora.FileInfo, rootList []boson.Address)
 
 	DelFile(rootCid boson.Address) bool
+
+	DelPyramid(rootCid boson.Address) bool
 }
 
 // ChunkInfo
@@ -235,7 +237,7 @@ func (ci *ChunkInfo) OnChunkTransferred(cid, rootCid boson.Address, overlay boso
 	return ci.updateNeighborChunkInfo(rootCid, cid, overlay)
 }
 
-func (ci *ChunkInfo) GetChunkPyramid(rootCid boson.Address) []*boson.Address {
+func (ci *ChunkInfo) GetChunkPyramid(rootCid boson.Address) []*PyramidCidNum {
 	return ci.cp.getChunkCid(rootCid)
 }
 
@@ -285,10 +287,11 @@ func (ci *ChunkInfo) DelFile(rootCid boson.Address) bool {
 	if !ci.delDiscoverPresence(rootCid) {
 		return false
 	}
-	if !ci.cp.delRootCid(rootCid) {
-		return false
-	}
 	return ci.delPresence(rootCid)
+}
+
+func (ci *ChunkInfo) DelPyramid(rootCid boson.Address) bool {
+	return ci.cp.delRootCid(rootCid)
 }
 
 func generateKey(keyPrefix string, rootCid, overlay boson.Address) string {
