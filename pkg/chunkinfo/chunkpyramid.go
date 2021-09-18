@@ -15,8 +15,14 @@ type chunkPyramid struct {
 }
 
 type pyramidCidCount struct {
-	sort  int
-	count *int
+	sort   int
+	count  *int
+	number int
+}
+
+type PyramidCidNum struct {
+	Cid    boson.Address
+	Number int
 }
 
 func newChunkPyramid() *chunkPyramid {
@@ -61,12 +67,14 @@ func (ci *ChunkInfo) updateChunkPyramid(rootCid boson.Address, pyramids [][][]by
 	var i, max, hashMax int
 	for _, p := range pyramids {
 		for _, x := range p {
-			if _, ok := py[boson.NewAddress(x).String()]; !ok {
+			if v, ok := py[boson.NewAddress(x).String()]; !ok {
 				py[boson.NewAddress(x).String()] = pyramidCidCount{
 					count: &max,
 					sort:  i,
 				}
 				i++
+			} else {
+				v.number = v.number + 1
 			}
 			max++
 		}
@@ -161,14 +169,15 @@ func (ci *ChunkInfo) doFindChunkPyramid(ctx context.Context, authInfo []byte, ro
 	return ci.onChunkPyramidResp(ctx, nil, boson.NewAddress(req.RootCid), target, resp.(pb.ChunkPyramidHashResp))
 }
 
-func (cp *chunkPyramid) getChunkCid(rootCid boson.Address) []*boson.Address {
+func (cp *chunkPyramid) getChunkCid(rootCid boson.Address) []*PyramidCidNum {
 	cp.RLock()
 	defer cp.RUnlock()
 	v := cp.pyramid[rootCid.String()]
-	cids := make([]*boson.Address, 0, len(v))
-	for overlay := range v {
+	cids := make([]*PyramidCidNum, 0, len(v))
+	for overlay, c := range v {
 		over := boson.MustParseHexAddress(overlay)
-		cids = append(cids, &over)
+		pcn := PyramidCidNum{Cid: over, Number: c.number}
+		cids = append(cids, &pcn)
 	}
 	return cids
 }
