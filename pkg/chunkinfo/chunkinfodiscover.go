@@ -74,13 +74,14 @@ func (ci *ChunkInfo) getChunkInfo(rootCid, cid boson.Address) [][]byte {
 	return res
 }
 
-func (ci *ChunkInfo) getChunkInfoOverlays(rootCid boson.Address) map[string]aurora.BitVectorApi {
+func (ci *ChunkInfo) getChunkInfoOverlays(rootCid boson.Address) []aurora.ChunkInfoOverlay {
 	ci.cd.RLock()
 	defer ci.cd.RUnlock()
-	res := make(map[string]aurora.BitVectorApi, 0)
+	res := make([]aurora.ChunkInfoOverlay, 0)
 	for overlay, bit := range ci.cd.presence[rootCid.String()] {
 		bv := aurora.BitVectorApi{Len: bit.Len(), B: bit.Bytes()}
-		res[overlay] = bv
+		cio := aurora.ChunkInfoOverlay{Overlay: overlay, Bit: bv}
+		res = append(res, cio)
 	}
 	return res
 }

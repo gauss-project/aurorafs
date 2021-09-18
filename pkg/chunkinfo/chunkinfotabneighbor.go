@@ -2,6 +2,7 @@ package chunkinfo
 
 import (
 	"context"
+	"github.com/gauss-project/aurorafs/pkg/aurora"
 	"github.com/gauss-project/aurorafs/pkg/bitvector"
 	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/chunkinfo/pb"
@@ -112,6 +113,18 @@ func (cn *chunkInfoTabNeighbor) getNeighborChunkInfo(rootCid boson.Address) map[
 	for _, overlay := range overlays {
 		bv := cn.presence[rc][overlay.String()]
 		res[overlay.String()] = bv.Bytes()
+	}
+	return res
+}
+
+func (ci *ChunkInfo) getChunkInfoServerOverlays(rootCid boson.Address) []aurora.ChunkInfoOverlay {
+	ci.ct.RLock()
+	defer ci.ct.RUnlock()
+	res := make([]aurora.ChunkInfoOverlay, 0)
+	for overlay, bit := range ci.ct.presence[rootCid.String()] {
+		bv := aurora.BitVectorApi{Len: bit.Len(), B: bit.Bytes()}
+		cio := aurora.ChunkInfoOverlay{Overlay: overlay, Bit: bv}
+		res = append(res, cio)
 	}
 	return res
 }

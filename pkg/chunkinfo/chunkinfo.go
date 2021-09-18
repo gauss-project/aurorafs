@@ -25,7 +25,9 @@ type Interface interface {
 
 	GetChunkInfo(rootCid boson.Address, cid boson.Address) [][]byte
 
-	GetChunkInfoOverlays(rootCid boson.Address) map[string]aurora.BitVectorApi
+	GetChunkInfoDiscoverOverlays(rootCid boson.Address) []aurora.ChunkInfoOverlay
+
+	GetChunkInfoServerOverlays(rootCid boson.Address) []aurora.ChunkInfoOverlay
 
 	CancelFindChunkInfo(rootCid boson.Address)
 
@@ -215,8 +217,12 @@ func (ci *ChunkInfo) GetChunkInfo(rootCid boson.Address, cid boson.Address) [][]
 	return ci.getChunkInfo(rootCid, cid)
 }
 
-func (ci *ChunkInfo) GetChunkInfoOverlays(rootCid boson.Address) map[string]aurora.BitVectorApi {
+func (ci *ChunkInfo) GetChunkInfoDiscoverOverlays(rootCid boson.Address) []aurora.ChunkInfoOverlay {
 	return ci.getChunkInfoOverlays(rootCid)
+}
+
+func (ci *ChunkInfo) GetChunkInfoServerOverlays(rootCid boson.Address) []aurora.ChunkInfoOverlay {
+	return ci.getChunkInfoServerOverlays(rootCid)
 }
 
 // CancelFindChunkInfo
@@ -260,7 +266,8 @@ func (ci *ChunkInfo) GetFileList(overlay boson.Address) (fileListInfo map[string
 		if v, ok := node[overlay.String()]; ok {
 			file := &aurora.FileInfo{}
 			file.PinState = false
-			file.TreeSize = ci.cp.getRootHash(root) - v.Len()
+			file.TreeSize = ci.cp.getRootHash(root)
+			file.FileSize = ci.cp.getRootChunk(root)
 			file.Bitvector.B = v.Bytes()
 			file.Bitvector.Len = v.Len()
 			fileListInfo[root] = file
