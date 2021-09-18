@@ -69,12 +69,14 @@ func (ci *ChunkInfo) updateChunkPyramid(rootCid boson.Address, pyramids [][][]by
 		for _, x := range p {
 			if v, ok := py[boson.NewAddress(x).String()]; !ok {
 				py[boson.NewAddress(x).String()] = pyramidCidCount{
-					count: &max,
-					sort:  i,
+					count:  &max,
+					sort:   i,
+					number: 1,
 				}
 				i++
 			} else {
 				v.number = v.number + 1
+				py[boson.NewAddress(x).String()] = v
 			}
 			max++
 		}
