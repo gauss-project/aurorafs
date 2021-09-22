@@ -15,6 +15,7 @@ import (
 	"strings"
 
 	"github.com/gauss-project/aurorafs/pkg/boson"
+	"github.com/gauss-project/aurorafs/pkg/chunkinfo"
 	"github.com/gauss-project/aurorafs/pkg/collection/entry"
 	"github.com/gauss-project/aurorafs/pkg/file"
 	"github.com/gauss-project/aurorafs/pkg/file/loadsave"
@@ -301,34 +302,36 @@ func (s *server) dirDeleteHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	pyramid := s.chunkInfo.GetChunkPyramid(hash)
-	addresses := make([]boson.Address, len(pyramid))
+	chunkHashes := make([]chunkinfo.PyramidCidNum, len(pyramid))
 
-	for i, addr := range pyramid {
-		addresses[i] = *addr
+	for i, chunk := range pyramid {
+		chunkHashes[i] = *chunk
 	}
 
 	ok := s.chunkInfo.DelFile(hash)
 	if !ok {
-		s.logger.Errorf("delete aurora: chunk info report delete %s failed", hash)
-		jsonhttp.InternalServerError(w, "Dirs deleting occur error")
+		s.logger.Errorf("delete aurora: chunk info report remove %s failed", hash)
+		jsonhttp.InternalServerError(w, "dirs deleting occur error")
 		return
 	}
 
-	for _, addr := range addresses {
-		if addr.Equal(hash) {
+	for _, chunk := range chunkHashes {
+		if chunk.Cid.Equal(hash) {
 			continue
 		}
 
-		err = s.storer.Set(r.Context(), storage.ModeSetRemove, addr)
-		if err != nil {
-			if errors.Is(err, leveldb.ErrNotFound) {
-				continue
-			}
+		for i := 0; i < chunk.Number; i++ {
+			err = s.storer.Set(r.Context(), storage.ModeSetRemove, chunk.Cid)
+			if err != nil {
+				if errors.Is(err, leveldb.ErrNotFound) {
+					continue
+				}
 
-			s.logger.Debugf("delete aurora: remove chunk: %w", err)
-			s.logger.Errorf("delete aurora: remove chunk %s", addr)
-			jsonhttp.InternalServerError(w, "Dirs deletion occur error")
-			return
+				s.logger.Debugf("delete aurora: remove chunk: %w", err)
+				s.logger.Errorf("delete aurora: remove chunk %s", chunk.Cid)
+				jsonhttp.InternalServerError(w, "dirs deletion occur error")
+				return
+			}
 		}
 	}
 
@@ -336,10 +339,17 @@ func (s *server) dirDeleteHandler(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		if !errors.Is(err, leveldb.ErrNotFound) {
 			s.logger.Debugf("delete aurora: remove chunk: %w", err)
-			s.logger.Errorf("delete aurora: remove chunk %s", addr)
-			jsonhttp.InternalServerError(w, "Dirs deletion occur error")
+			s.logger.Errorf("delete aurora: remove chunk %s", hash)
+			jsonhttp.InternalServerError(w, "dirs deletion occur error")
 			return
 		}
+	}
+
+	ok = s.chunkInfo.DelPyramid(hash)
+	if !ok {
+		s.logger.Errorf("delete aurora: chunk info report delete %s related pyramid failed", hash)
+		jsonhttp.InternalServerError(w, "dirs deleting occur error")
+		return
 	}
 
 	jsonhttp.OK(w, nil)

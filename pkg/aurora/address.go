@@ -35,8 +35,14 @@ type addressJSON struct {
 
 type FileInfo struct {
 	TreeSize  int          `json:"treeSize"`
+	FileSize  int          `json:"fileSize"`
 	Bitvector BitVectorApi `json:"bitvector"`
 	PinState  bool         `json:"pinState"`
+}
+
+type ChunkInfoOverlay struct {
+	Overlay string       `json:"overlay"`
+	Bit     BitVectorApi `json:"bit"`
 }
 
 type BitVectorApi struct {

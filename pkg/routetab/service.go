@@ -201,12 +201,12 @@ func (s *Service) onRouteReq(ctx context.Context, p p2p.Peer, stream p2p.Stream)
 		if !inPath(v.Bytes(), req.Path) {
 			// forward
 			req.Path = append(req.Path, p.Address.Bytes())
-			s.doRouteReq(ctx, s.addr, v, target, &req, nil)
-			s.logger.Tracef("route: handlerFindRouteReq target=%s forward=%s", target.String(), v.String())
+			s.doRouteReq(ctx, p.Address, v, target, &req, nil)
+			s.logger.Tracef("route: handlerFindRouteReq target=%s forward to %s", target.String(), v.String())
 			continue
 		}
 		// discard
-		s.logger.Tracef("route: handlerFindRouteReq target=%s discard, received path contains forward=%s", target.String(), v.String())
+		s.logger.Tracef("route: handlerFindRouteReq target=%s discard, received path contains forward to %s", target.String(), v.String())
 	}
 	return nil
 }
@@ -232,7 +232,7 @@ func (s *Service) onRouteResp(ctx context.Context, p p2p.Peer, stream p2p.Stream
 
 	s.metrics.FindRouteRespReceivedCount.Inc()
 
-	go s.saveRespRouteItem(ctx, p.Address, resp)
+	s.saveRespRouteItem(ctx, p.Address, resp)
 	return nil
 }
 

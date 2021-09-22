@@ -52,6 +52,14 @@ func (ci *ChunkInfo) GetChunkInfo(rootCid boson.Address, cid boson.Address) [][]
 	panic("not implemented")
 }
 
+func (ci *ChunkInfo) GetChunkInfoDiscoverOverlays(rootCid boson.Address) []aurora.ChunkInfoOverlay {
+	panic("not implemented")
+}
+
+func (ci *ChunkInfo) GetChunkInfoServerOverlays(rootCid boson.Address) []aurora.ChunkInfoOverlay {
+	panic("not implemented")
+}
+
 func (ci *ChunkInfo) CancelFindChunkInfo(rootCid boson.Address) {
 	if _, ok := ci.cpd.finder[rootCid.String()]; ok {
 		delete(ci.cpd.finder, rootCid.String())
@@ -70,12 +78,15 @@ func (ci *ChunkInfo) Init(ctx context.Context, authInfo []byte, rootCid boson.Ad
 	panic("not implemented")
 }
 
-func (ci *ChunkInfo) GetChunkPyramid(rootCid boson.Address) []*boson.Address {
+func (ci *ChunkInfo) GetChunkPyramid(rootCid boson.Address) []*chunkinfo.PyramidCidNum {
 	v := ci.cp.pyramid[rootCid.String()]
-	cids := make([]*boson.Address, 0, len(v))
-	for overlay := range v {
+	cids := make([]*chunkinfo.PyramidCidNum, 0, len(v))
+	for overlay, cnt := range v {
 		over := boson.MustParseHexAddress(overlay)
-		cids = append(cids, &over)
+		cids = append(cids, &chunkinfo.PyramidCidNum{
+			Cid: over,
+			Number: cnt,
+		})
 	}
 	return cids
 }
@@ -101,7 +112,7 @@ func (ci *ChunkInfo) PutChunkPyramid(rootCid, cid boson.Address, sort int) {
 	if _, ok := ci.cp.pyramid[rc]; !ok {
 		ci.cp.pyramid[rc] = make(map[string]int)
 	}
-	ci.cp.pyramid[rc][cid.String()] = sort
+	ci.cp.pyramid[rc][cid.String()]++
 }
 
 func (ci *ChunkInfo) ChangeDiscoverStatus(rootCid boson.Address, s chunkinfo.Pull) {
@@ -117,5 +128,9 @@ func (ci *ChunkInfo) ChangeDiscoverStatus(rootCid boson.Address, s chunkinfo.Pul
 }
 
 func (ci *ChunkInfo) DelFile(rootCid boson.Address) bool {
+	return true
+}
+
+func (ci *ChunkInfo) DelPyramid(rootCid boson.Address) bool {
 	return ci.cp.delRootCid(rootCid)
 }
