@@ -2,14 +2,15 @@ package api
 
 import (
 	"errors"
-	"github.com/gauss-project/aurorafs/pkg/sctx"
 	"net/http"
 
 	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/jsonhttp"
+	"github.com/gauss-project/aurorafs/pkg/sctx"
 	"github.com/gauss-project/aurorafs/pkg/storage"
 	"github.com/gauss-project/aurorafs/pkg/traversal"
 	"github.com/gorilla/mux"
+	"github.com/syndtr/goleveldb/leveldb"
 )
 
 func (s *server) pinFile(w http.ResponseWriter, r *http.Request) {
@@ -25,12 +26,15 @@ func (s *server) pinFile(w http.ResponseWriter, r *http.Request) {
 	// MUST request local db
 	r = r.WithContext(sctx.SetRootCID(sctx.SetLocalGet(r.Context()), hash))
 
-	_, err = s.storer.Get(r.Context(), storage.ModeGetRequest, hash)
+	pin, err := s.storer.Has(r.Context(), storage.ModeHasPin, hash)
 	if err != nil {
-		s.logger.Debugf("pin files: check %s exists: %v", addr, err)
-		s.logger.Errorf("pin files: check %s exists", addr)
-
-		jsonhttp.NotFound(w, nil)
+		s.logger.Debugf("pin files: check %s pin: %v", addr, err)
+		s.logger.Errorf("pin files: check %s pin", addr)
+		jsonhttp.InternalServerError(w, err)
+		return
+	}
+	if pin {
+		jsonhttp.BadRequest(w, "file has pinned")
 		return
 	}
 
@@ -56,7 +60,7 @@ func (s *server) pinFile(w http.ResponseWriter, r *http.Request) {
 	for _, addr := range addresses {
 		err = s.storer.Set(r.Context(), storage.ModeSetPin, addr)
 		if err != nil {
-			if errors.Is(err, storage.ErrNotFound) {
+			if errors.Is(err, leveldb.ErrNotFound) {
 				continue
 			}
 
@@ -82,16 +86,15 @@ func (s *server) unpinFile(w http.ResponseWriter, r *http.Request) {
 	// MUST request local db
 	r = r.WithContext(sctx.SetRootCID(sctx.SetLocalGet(r.Context()), hash))
 
-	_, err = s.storer.Get(r.Context(), storage.ModeGetRequest, hash)
+	pin, err := s.storer.Has(r.Context(), storage.ModeHasPin, hash)
 	if err != nil {
-		if errors.Is(err, storage.ErrNotFound) {
-			jsonhttp.NotFound(w, nil)
-			return
-		}
-
-		s.logger.Debugf("unpin files: check %s exists: %v", hash, err)
-		s.logger.Errorf("unpin files: check %s exists", hash)
+		s.logger.Debugf("unpin files: check %s pin: %v", hash, err)
+		s.logger.Errorf("unpin files: check %s pin", hash)
 		jsonhttp.InternalServerError(w, err)
+		return
+	}
+	if !pin {
+		jsonhttp.BadRequest(w, "file has unpinned")
 		return
 	}
 
