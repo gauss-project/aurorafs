@@ -25,7 +25,9 @@ type Interface interface {
 
 	GetChunkInfo(rootCid boson.Address, cid boson.Address) [][]byte
 
-	GetChunkInfoOverlays(rootCid boson.Address) map[string]aurora.BitVectorApi
+	GetChunkInfoDiscoverOverlays(rootCid boson.Address) []aurora.ChunkInfoOverlay
+
+	GetChunkInfoServerOverlays(rootCid boson.Address) []aurora.ChunkInfoOverlay
 
 	CancelFindChunkInfo(rootCid boson.Address)
 
@@ -33,13 +35,15 @@ type Interface interface {
 
 	Init(ctx context.Context, authInfo []byte, rootCid boson.Address) bool
 
-	GetChunkPyramid(rootCid boson.Address) []*boson.Address
+	GetChunkPyramid(rootCid boson.Address) []*PyramidCidNum
 
 	IsDiscover(rootCid boson.Address) bool
 
 	GetFileList(overlay boson.Address) (fileListInfo map[string]*aurora.FileInfo, rootList []boson.Address)
 
 	DelFile(rootCid boson.Address) bool
+
+	DelPyramid(rootCid boson.Address) bool
 }
 
 // ChunkInfo
@@ -215,8 +219,12 @@ func (ci *ChunkInfo) GetChunkInfo(rootCid boson.Address, cid boson.Address) [][]
 	return ci.getChunkInfo(rootCid, cid)
 }
 
-func (ci *ChunkInfo) GetChunkInfoOverlays(rootCid boson.Address) map[string]aurora.BitVectorApi {
+func (ci *ChunkInfo) GetChunkInfoDiscoverOverlays(rootCid boson.Address) []aurora.ChunkInfoOverlay {
 	return ci.getChunkInfoOverlays(rootCid)
+}
+
+func (ci *ChunkInfo) GetChunkInfoServerOverlays(rootCid boson.Address) []aurora.ChunkInfoOverlay {
+	return ci.getChunkInfoServerOverlays(rootCid)
 }
 
 // CancelFindChunkInfo
@@ -229,7 +237,7 @@ func (ci *ChunkInfo) OnChunkTransferred(cid, rootCid boson.Address, overlay boso
 	return ci.updateNeighborChunkInfo(rootCid, cid, overlay)
 }
 
-func (ci *ChunkInfo) GetChunkPyramid(rootCid boson.Address) []*boson.Address {
+func (ci *ChunkInfo) GetChunkPyramid(rootCid boson.Address) []*PyramidCidNum {
 	return ci.cp.getChunkCid(rootCid)
 }
 
@@ -260,7 +268,8 @@ func (ci *ChunkInfo) GetFileList(overlay boson.Address) (fileListInfo map[string
 		if v, ok := node[overlay.String()]; ok {
 			file := &aurora.FileInfo{}
 			file.PinState = false
-			file.TreeSize = ci.cp.getRootHash(root) - v.Len()
+			file.TreeSize = ci.cp.getRootHash(root)
+			file.FileSize = ci.cp.getRootChunk(root)
 			file.Bitvector.B = v.Bytes()
 			file.Bitvector.Len = v.Len()
 			fileListInfo[root] = file
@@ -278,10 +287,11 @@ func (ci *ChunkInfo) DelFile(rootCid boson.Address) bool {
 	if !ci.delDiscoverPresence(rootCid) {
 		return false
 	}
-	if !ci.cp.delRootCid(rootCid) {
-		return false
-	}
 	return ci.delPresence(rootCid)
+}
+
+func (ci *ChunkInfo) DelPyramid(rootCid boson.Address) bool {
+	return ci.cp.delRootCid(rootCid)
 }
 
 func generateKey(keyPrefix string, rootCid, overlay boson.Address) string {

@@ -1,4 +1,4 @@
-FROM golang:1.15 AS build
+FROM golang:1.16.8 AS build
 
 WORKDIR /src
 # enable modules caching in separate layer
@@ -20,13 +20,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     useradd -r -g aurorafs --uid 999 --no-log-init -m aurorafs;
 
 # make sure mounted volumes have correct permissions
-RUN mkdir -p /home/aurorafs/.aurora && chown 999:999 /home/aurorafs/.aurora
+RUN mkdir -p /home/aurorafs/.aurorafs && chown 999:999 /home/aurorafs/.aurorafs
 
-COPY --from=build /src/dist/aurora /usr/local/bin/aurora
+COPY --from=build /src/dist/aurorafs /usr/local/bin/aurorafs
 
 EXPOSE 1633 1634 1635
-USER aurora
+USER aurorafs
 WORKDIR /home/aurorafs
-VOLUME /home/aurorafs/.aurora
+VOLUME /home/aurorafs/.aurorafs
 
-ENTRYPOINT ["aurora"]
+ENTRYPOINT ["aurorafs"]
