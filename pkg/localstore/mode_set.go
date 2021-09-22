@@ -214,6 +214,8 @@ func (db *DB) setRemove(batch *leveldb.Batch, addr, rootAddr boson.Address) (gcS
 			if err != nil {
 				return 0, err
 			}
+			// chunk still pinned
+			return 0, nil
 		} else {
 			err = db.pinIndex.DeleteInBatch(batch, item)
 			if err != nil {
@@ -294,7 +296,10 @@ func (db *DB) setRemove(batch *leveldb.Batch, addr, rootAddr boson.Address) (gcS
 // Provided batch is updated.
 func (db *DB) setPin(batch *leveldb.Batch, item, rootItem shed.Item) (gcSizeChange int64, err error) {
 	i, err := db.pinIndex.Get(item)
-	if !errors.Is(err, leveldb.ErrNotFound) {
+	switch {
+	case err == nil:
+	case errors.Is(err, leveldb.ErrNotFound):
+	default:
 		return 0, err
 	}
 	item.PinCounter = i.PinCounter
@@ -319,26 +324,25 @@ func (db *DB) setPin(batch *leveldb.Batch, item, rootItem shed.Item) (gcSizeChan
 
 			gcItem, err = db.gcIndex.Get(rootItem)
 			if err != nil {
-				if errors.Is(err, leveldb.ErrNotFound) {
-					return 0, nil
-				}
-				return 0, err
-			}
-
-			if gcItem.GCounter == 1 {
-				err = db.gcIndex.DeleteInBatch(batch, gcItem)
-				if err != nil {
+				if !errors.Is(err, leveldb.ErrNotFound) {
 					return 0, err
 				}
 			} else {
-				gcItem.GCounter--
-				err = db.gcIndex.Put(gcItem)
-				if err != nil {
-					return 0, err
+				if gcItem.GCounter == 1 {
+					err = db.gcIndex.DeleteInBatch(batch, gcItem)
+					if err != nil {
+						return 0, err
+					}
+				} else {
+					gcItem.GCounter--
+					err = db.gcIndex.Put(gcItem)
+					if err != nil {
+						return 0, err
+					}
 				}
-			}
 
-			gcSizeChange--
+				gcSizeChange--
+			}
 		}
 	}
 
