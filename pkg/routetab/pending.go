@@ -43,6 +43,15 @@ func newPendCallResTab(addr boson.Address, logger logging.Logger, met metrics) *
 	}
 }
 
+func (pend *pendCallResTab) Delete(target boson.Address) {
+	mKey := common.BytesToHash(target.Bytes())
+
+	pend.mu.Lock(mKey.String())
+	defer pend.mu.Unlock(mKey.String())
+
+	delete(pend.items, mKey)
+}
+
 func (pend *pendCallResTab) Add(target, src boson.Address, resCh chan struct{}) (has bool) {
 	mKey := common.BytesToHash(target.Bytes())
 

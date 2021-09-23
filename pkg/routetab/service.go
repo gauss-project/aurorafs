@@ -240,7 +240,7 @@ func (s *Service) FindRoute(ctx context.Context, target boson.Address) (dest *au
 	dest, routes, err = s.GetRoute(ctx, target)
 	if err != nil {
 		if !errors.Is(err, ErrNotFound) {
-			s.logger.Errorf("route: FindRoute target=%s %s", target.String(), err.Error())
+			s.logger.Debugf("route: FindRoute target=%s %s", target.String(), err.Error())
 		}
 		if s.IsNeighbor(target) {
 			err = fmt.Errorf("target=%s is neighbor", target.String())
@@ -248,6 +248,7 @@ func (s *Service) FindRoute(ctx context.Context, target boson.Address) (dest *au
 		}
 		forward := s.getNeighbor(target, defaultNeighborAlpha)
 		if len(forward) > 0 {
+			tick := time.NewTicker(PendingTimeout)
 			ct, cancel := context.WithTimeout(ctx, PendingTimeout)
 			defer cancel()
 			resCh := make(chan struct{}, len(forward))
@@ -259,10 +260,14 @@ func (s *Service) FindRoute(ctx context.Context, target boson.Address) (dest *au
 				s.doRouteReq(ct, s.addr, v, target, req, resCh)
 			}
 			select {
-			case <-ct.Done():
-				close(resCh)
+			case <-tick.C:
+				s.pendingCalls.Delete(target)
 				s.metrics.TotalErrors.Inc()
 				err = fmt.Errorf("route: FindRoute dest %s timeout %.0fs", target.String(), PendingTimeout.Seconds())
+				s.logger.Errorf(err.Error())
+			case <-ct.Done():
+				s.pendingCalls.Delete(target)
+				err = fmt.Errorf("route: FindRoute dest %s ctx.Done %s", target.String(), ct.Err())
 				s.logger.Errorf(err.Error())
 			case <-resCh:
 				dest, routes, err = s.GetRoute(ctx, target)
