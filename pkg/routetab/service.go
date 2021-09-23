@@ -200,6 +200,9 @@ func (s *Service) onRouteReq(ctx context.Context, p p2p.Peer, stream p2p.Stream)
 	for _, v := range req.Path {
 		skip = append(skip, boson.NewAddress(v))
 	}
+	if len(skip) == 0 {
+		skip = append(skip, p.Address)
+	}
 	forward := s.getNeighbor(target, req.Alpha, skip...)
 	for _, v := range forward {
 		if !inPath(v.Bytes(), req.Path) {
