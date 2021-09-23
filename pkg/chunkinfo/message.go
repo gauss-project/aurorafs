@@ -7,6 +7,7 @@ import (
 	"github.com/gauss-project/aurorafs/pkg/chunkinfo/pb"
 	"github.com/gauss-project/aurorafs/pkg/p2p"
 	"github.com/gauss-project/aurorafs/pkg/p2p/protobuf"
+	"github.com/gauss-project/aurorafs/pkg/tracing"
 	"time"
 )
 
@@ -45,13 +46,16 @@ func (ci *ChunkInfo) Protocol() p2p.ProtocolSpec {
 }
 
 func (ci *ChunkInfo) sendDatas(ctx context.Context, address boson.Address, streamName string, msg interface{}) error {
-	if err := ci.route.Connect(ctx, address); err != nil {
+	topCtx := ctx
+	ctx1 := tracing.WithContext(context.Background(), tracing.FromContext(topCtx))
+	if err := ci.route.Connect(ctx1, address); err != nil {
 		overlays, errs := ci.route.GetTargetNeighbor(ctx, address, totalRouteCount)
 		if errs != nil {
 			ci.logger.Errorf("[chunk info] connect: %w", errs)
 			return errs
 		}
 		for i, overlay := range overlays {
+			ctx := tracing.WithContext(context.Background(), tracing.FromContext(topCtx))
 			if err := ci.sendData(ctx, overlay, streamName, msg); err != nil {
 				if i == len(overlays)-1 {
 					ci.metrics.ChunkInfoTotalErrors.Inc()
@@ -72,6 +76,7 @@ func (ci *ChunkInfo) sendData(ctx context.Context, address boson.Address, stream
 	if err := ci.route.Connect(ctx, address); err != nil {
 		return err
 	}
+
 	stream, err := ci.streamer.NewStream(ctx, address, nil, protocolName, protocolVersion, streamName)
 	if err != nil {
 		ci.logger.Errorf("[chunk info] new stream: %w", err)
@@ -88,6 +93,7 @@ func (ci *ChunkInfo) sendData(ctx context.Context, address boson.Address, stream
 	switch streamName {
 	case streamChunkInfoReqName:
 		req := msg.(pb.ChunkInfoReq)
+		ci.logger.Tracef("[chunk info] %s : %s %s", boson.NewAddress(req.GetRootCid()).String(), boson.NewAddress(req.GetTarget()).String(), boson.NewAddress(req.GetReq()).String())
 		if err := w.WriteMsgWithContext(ctx, &req); err != nil {
 			ci.logger.Errorf("[chunk info req] write message: %w", err)
 			return err
@@ -106,6 +112,7 @@ func (ci *ChunkInfo) sendData(ctx context.Context, address boson.Address, stream
 
 func (ci *ChunkInfo) sendPyramids(ctx context.Context, address boson.Address, streamName string, msg interface{}) (interface{}, boson.Address, error) {
 
+	topCtx := ctx
 	if err := ci.route.Connect(ctx, address); err != nil {
 		overlays, errs := ci.route.GetTargetNeighbor(ctx, address, totalRouteCount)
 		if errs != nil {
@@ -113,6 +120,7 @@ func (ci *ChunkInfo) sendPyramids(ctx context.Context, address boson.Address, st
 			return nil, boson.ZeroAddress, errs
 		}
 		for i, overlay := range overlays {
+			ctx := tracing.WithContext(context.Background(), tracing.FromContext(topCtx))
 			v, err := ci.sendPyramid(ctx, overlay, streamName, msg)
 			if err != nil {
 				if i == len(overlays)-1 {
@@ -205,7 +213,7 @@ func (ci *ChunkInfo) handlerChunkInfoResp(ctx context.Context, p p2p.Peer, strea
 	target := boson.NewAddress(resp.GetTarget())
 
 	if overlay.Equal(ci.addr) {
-		ci.onChunkInfoResp(ctx, nil, target, resp)
+		ci.onChunkInfoResp(context.Background(), nil, target, resp)
 	} else {
 		return ci.sendData(ctx, overlay, streamChunkInfoRespName, resp)
 	}

@@ -154,7 +154,7 @@ func (ci *ChunkInfo) Init(ctx context.Context, authInfo []byte, rootCid boson.Ad
 		a, _ := boson.ParseHexAddress(addr)
 		overlays = append(overlays, a)
 	}
-	return ci.FindChunkInfo(ctx, authInfo, rootCid, overlays)
+	return ci.FindChunkInfo(context.Background(), authInfo, rootCid, overlays)
 }
 
 // FindChunkInfo
