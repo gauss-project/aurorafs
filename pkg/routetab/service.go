@@ -196,7 +196,11 @@ func (s *Service) onRouteReq(ctx context.Context, p p2p.Peer, stream p2p.Stream)
 		return nil
 	}
 	// forward
-	forward := s.getNeighbor(target, req.Alpha)
+	skip := make([]boson.Address, 0)
+	for _, v := range req.Path {
+		skip = append(skip, boson.NewAddress(v))
+	}
+	forward := s.getNeighbor(target, req.Alpha, skip...)
 	for _, v := range forward {
 		if !inPath(v.Bytes(), req.Path) {
 			// forward
@@ -248,7 +252,6 @@ func (s *Service) FindRoute(ctx context.Context, target boson.Address) (dest *au
 		}
 		forward := s.getNeighbor(target, defaultNeighborAlpha)
 		if len(forward) > 0 {
-			tick := time.NewTicker(PendingTimeout)
 			ct, cancel := context.WithTimeout(ctx, PendingTimeout)
 			defer cancel()
 			resCh := make(chan struct{}, len(forward))
@@ -260,15 +263,14 @@ func (s *Service) FindRoute(ctx context.Context, target boson.Address) (dest *au
 				s.doRouteReq(ct, s.addr, v, target, req, resCh)
 			}
 			select {
-			case <-tick.C:
+			case <-ct.Done():
 				s.pendingCalls.Delete(target)
-				s.metrics.TotalErrors.Inc()
 				err = fmt.Errorf("route: FindRoute dest %s timeout %.0fs", target.String(), PendingTimeout.Seconds())
-				s.logger.Errorf(err.Error())
+				s.logger.Debugf(err.Error())
 			case <-ctx.Done():
 				s.pendingCalls.Delete(target)
-				err = fmt.Errorf("route: FindRoute dest %s ctx.Done %s", target.String(), ctx.Err())
-				s.logger.Errorf(err.Error())
+				err = fmt.Errorf("route: FindRoute dest %s praent ctx.Done %s", target.String(), ctx.Err())
+				s.logger.Debugf(err.Error())
 			case <-resCh:
 				dest, routes, err = s.GetRoute(ctx, target)
 			}
@@ -419,8 +421,8 @@ func (s *Service) saveRespRouteItem(ctx context.Context, neighbor boson.Address,
 	}
 }
 
-func (s *Service) getNeighbor(target boson.Address, alpha int32) (forward []boson.Address) {
-	forward, _ = s.kad.ClosestPeers(target, int(alpha))
+func (s *Service) getNeighbor(target boson.Address, alpha int32, skipPeers ...boson.Address) (forward []boson.Address) {
+	forward, _ = s.kad.ClosestPeers(target, int(alpha), skipPeers...)
 	return
 }
 
