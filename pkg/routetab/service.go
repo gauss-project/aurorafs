@@ -265,9 +265,9 @@ func (s *Service) FindRoute(ctx context.Context, target boson.Address) (dest *au
 				s.metrics.TotalErrors.Inc()
 				err = fmt.Errorf("route: FindRoute dest %s timeout %.0fs", target.String(), PendingTimeout.Seconds())
 				s.logger.Errorf(err.Error())
-			case <-ct.Done():
+			case <-ctx.Done():
 				s.pendingCalls.Delete(target)
-				err = fmt.Errorf("route: FindRoute dest %s ctx.Done %s", target.String(), ct.Err())
+				err = fmt.Errorf("route: FindRoute dest %s ctx.Done %s", target.String(), ctx.Err())
 				s.logger.Errorf(err.Error())
 			case <-resCh:
 				dest, routes, err = s.GetRoute(ctx, target)
