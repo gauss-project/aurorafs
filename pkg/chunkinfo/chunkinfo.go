@@ -90,7 +90,7 @@ func New(addr boson.Address, streamer p2p.Streamer, logger logging.Logger, trave
 	}
 }
 
-const chunkInfoRetryIntervalDuration = 5 * time.Second
+const chunkInfoRetryIntervalDuration = 1 * time.Second
 
 type Response struct {
 	StatusCode int             `json:"code"`

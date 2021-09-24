@@ -291,10 +291,10 @@ func (s *Service) GetRoute(_ context.Context, target boson.Address) (dest *auror
 	if err != nil {
 		return
 	}
-	dest, err = s.config.AddressBook.Get(target)
-	if err != nil {
-		s.routeTable.Remove(target)
-	}
+	//dest, err = s.config.AddressBook.Get(target)
+	//if err != nil {
+	//	s.routeTable.Remove(target)
+	//}
 	return
 }
 
@@ -353,6 +353,9 @@ func (s *Service) connect(ctx context.Context, peer boson.Address) (err error) {
 		auroraAddr, _, err = s.FindRoute(ctx, peer)
 		if err != nil {
 			return err
+		}
+		if auroraAddr == nil {
+			return errors.New("notfound underlay")
 		}
 	}
 
