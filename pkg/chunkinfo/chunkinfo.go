@@ -90,7 +90,7 @@ func New(addr boson.Address, streamer p2p.Streamer, logger logging.Logger, trave
 	}
 }
 
-const chunkInfoRetryIntervalDuration = 5 * time.Second
+const chunkInfoRetryIntervalDuration = 1 * time.Second
 
 type Response struct {
 	StatusCode int             `json:"code"`
@@ -154,7 +154,7 @@ func (ci *ChunkInfo) Init(ctx context.Context, authInfo []byte, rootCid boson.Ad
 		a, _ := boson.ParseHexAddress(addr)
 		overlays = append(overlays, a)
 	}
-	return ci.FindChunkInfo(ctx, authInfo, rootCid, overlays)
+	return ci.FindChunkInfo(context.Background(), authInfo, rootCid, overlays)
 }
 
 // FindChunkInfo

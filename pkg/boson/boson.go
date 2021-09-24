@@ -114,6 +114,12 @@ func (a Address) MarshalJSON() ([]byte, error) {
 	return json.Marshal(a.String())
 }
 
+// Closer returns if 'a' is closer to x than y
+func (a Address) Closer(x Address, y Address) (bool, error) {
+	cmp, err := DistanceCmp(x.b, a.b, y.b)
+	return cmp == 1, err
+}
+
 // ZeroAddress is the address that has no value.
 var ZeroAddress = NewAddress(nil)
 

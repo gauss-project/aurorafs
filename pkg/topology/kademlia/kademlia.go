@@ -1006,19 +1006,13 @@ func closestPeerFunc(closest *boson.Address, addr boson.Address, spf sanctionedP
 			*closest = peer
 			return false, false, nil
 		}
-		dcmp, err := boson.DistanceCmp(addr.Bytes(), closest.Bytes(), peer.Bytes())
+
+		closer, err := peer.Closer(addr, *closest)
 		if err != nil {
 			return false, false, err
 		}
-		switch dcmp {
-		case 0:
-			// do nothing
-		case -1:
-			// current peer is closer
+		if closer {
 			*closest = peer
-		case 1:
-			// closest is already closer to chunk
-			// do nothing
 		}
 		return false, false, nil
 	}
@@ -1066,19 +1060,12 @@ func (k *Kad) ClosestPeer(addr boson.Address, includeSelf bool, skipPeers ...bos
 			return false, false, nil
 		}
 
-		dcmp, err := boson.DistanceCmp(addr.Bytes(), closest.Bytes(), peer.Bytes())
+		closer, err := peer.Closer(addr, closest)
 		if err != nil {
 			return false, false, err
 		}
-		switch dcmp {
-		case 0:
-			// do nothing
-		case -1:
-			// current peer is closer
+		if closer {
 			closest = peer
-		case 1:
-			// closest is already closer to chunk
-			// do nothing
 		}
 		return false, false, nil
 	})
