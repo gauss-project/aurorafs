@@ -19,7 +19,7 @@ servers:
         default: "localhost"
         description: Base address of the local aurorafs node main API
       port:
-        default: 1633
+        default: "1633"
         description: Service port provided in aurorafs node config
   - url: "http://{apiRoot}:{port}"
     variables:
@@ -27,7 +27,7 @@ servers:
         default: "localhost"
         description: Base address of the local aurorafs node main API
       port:
-        default: 1633
+        default: "1633"
         description: Service port provided in aurorafs node config
 
 paths:
@@ -73,10 +73,6 @@ paths:
       summary: "git file list"
       tags:
         - File
-      parameters:
-
-      requestBody:
-
       responses:
         "200":
           description: List of tags
@@ -378,7 +374,7 @@ paths:
         - in: path
           name: owner
           schema:
-            $ref: "AuroraCommon.yaml#/components/schemas/EthereumAddress"
+            $ref: "AuroraCommon.yaml#/components/schemas/LinkAddress"
           required: true
           description: Owner
         - in: path

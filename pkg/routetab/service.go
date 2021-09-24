@@ -196,7 +196,14 @@ func (s *Service) onRouteReq(ctx context.Context, p p2p.Peer, stream p2p.Stream)
 		return nil
 	}
 	// forward
-	forward := s.getNeighbor(target, req.Alpha)
+	skip := make([]boson.Address, 0)
+	for _, v := range req.Path {
+		skip = append(skip, boson.NewAddress(v))
+	}
+	if len(skip) == 0 {
+		skip = append(skip, p.Address)
+	}
+	forward := s.getNeighbor(target, req.Alpha, skip...)
 	for _, v := range forward {
 		if !inPath(v.Bytes(), req.Path) {
 			// forward
@@ -240,7 +247,7 @@ func (s *Service) FindRoute(ctx context.Context, target boson.Address) (dest *au
 	dest, routes, err = s.GetRoute(ctx, target)
 	if err != nil {
 		if !errors.Is(err, ErrNotFound) {
-			s.logger.Errorf("route: FindRoute target=%s %s", target.String(), err.Error())
+			s.logger.Debugf("route: FindRoute target=%s %s", target.String(), err.Error())
 		}
 		if s.IsNeighbor(target) {
 			err = fmt.Errorf("target=%s is neighbor", target.String())
@@ -260,10 +267,13 @@ func (s *Service) FindRoute(ctx context.Context, target boson.Address) (dest *au
 			}
 			select {
 			case <-ct.Done():
-				close(resCh)
-				s.metrics.TotalErrors.Inc()
+				s.pendingCalls.Delete(target)
 				err = fmt.Errorf("route: FindRoute dest %s timeout %.0fs", target.String(), PendingTimeout.Seconds())
-				s.logger.Errorf(err.Error())
+				s.logger.Debugf(err.Error())
+			case <-ctx.Done():
+				s.pendingCalls.Delete(target)
+				err = fmt.Errorf("route: FindRoute dest %s praent ctx.Done %s", target.String(), ctx.Err())
+				s.logger.Debugf(err.Error())
 			case <-resCh:
 				dest, routes, err = s.GetRoute(ctx, target)
 			}
@@ -281,10 +291,10 @@ func (s *Service) GetRoute(_ context.Context, target boson.Address) (dest *auror
 	if err != nil {
 		return
 	}
-	dest, err = s.config.AddressBook.Get(target)
-	if err != nil {
-		s.routeTable.Remove(target)
-	}
+	//dest, err = s.config.AddressBook.Get(target)
+	//if err != nil {
+	//	s.routeTable.Remove(target)
+	//}
 	return
 }
 
@@ -343,6 +353,9 @@ func (s *Service) connect(ctx context.Context, peer boson.Address) (err error) {
 		auroraAddr, _, err = s.FindRoute(ctx, peer)
 		if err != nil {
 			return err
+		}
+		if auroraAddr == nil {
+			return errors.New("notfound underlay")
 		}
 	}
 
@@ -414,8 +427,8 @@ func (s *Service) saveRespRouteItem(ctx context.Context, neighbor boson.Address,
 	}
 }
 
-func (s *Service) getNeighbor(target boson.Address, alpha int32) (forward []boson.Address) {
-	forward, _ = s.kad.ClosestPeers(target, int(alpha))
+func (s *Service) getNeighbor(target boson.Address, alpha int32, skipPeers ...boson.Address) (forward []boson.Address) {
+	forward, _ = s.kad.ClosestPeers(target, int(alpha), skipPeers...)
 	return
 }
 
