@@ -101,6 +101,11 @@ components:
       pattern: "^([A-Fa-f0-9]+)$"
       example: "cf880b8eeac5093fa27b0825906c600685"
 
+    LinkAddress:
+      type: string
+      pattern: "^[A-Fa-f0-9]{40}$"
+      example: "36b7efd913ca4cf880b8eeac5093fa27b0825906"
+
     MultiAddress:
       type: string
 
@@ -206,15 +211,15 @@ components:
         $ref: "AuroraCommon.yaml#/components/schemas/Uid"
 
     AuroraContentLength:
-      description: ""
+      description: "length"
       schema:
         $ref: "AuroraCommon.yaml#/components/schemas/Uid"
     AuroraDecompressedLength:
-      description: ""
+      description: "length"
       schema:
         $ref: "AuroraCommon.yaml#/components/schemas/Uid"
     AuroraAccessHeaders:
-      description: ""
+      description: "headers"
       schema:
         $ref: "AuroraCommon.yaml#/components/schemas/Uid"
     AuroraIndexDocument:
@@ -275,42 +280,42 @@ components:
       name: content-disposition
       schema:
         type: string
-      description:
+      description: This is content-disposition
 
     AuroraContentLength:
       in: header
       name: content-length
       schema:
         type: string
-      description:
+      description: This is content-length
 
     AuroraDecompressedLength:
       in: header
       name: decompressed-content-length
       schema:
         type: string
-      description:
+      description: This is decompressed-content-length
 
     AuroraAccessHeaders:
       in: header
       name: access-control-expose-headers
       schema:
         type: string
-      description:
+      description: This is access-control-expose-headers
 
     AuroraIndexDocument:
       in: header
       name: boson-index-document
       schema:
         type: string
-      description:
+      description: This is boson-index-document
 
     AuroraErrorDocument:
       in: header
       name: boson-error-document
       schema:
         type: string
-      description:
+      description: This is boson-error-document
 
     AuroraRecoveryTargetsParameter:
       in: query
@@ -366,6 +371,12 @@ components:
             $ref: "#/components/schemas/ProblemDetails"
     "500":
       description: Internal Server Error
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/ProblemDetails"
+    "GatewayForbidden":
+      description: "Endpoint or header (pinning or encryption headers) forbidden in Gateway mode"
       content:
         application/problem+json:
           schema:

@@ -95,3 +95,13 @@ func TestAddress_MemberOf(t *testing.T) {
 	}
 
 }
+
+func TestCloser(t *testing.T) {
+	a := boson.MustParseHexAddress("9100000000000000000000000000000000000000000000000000000000000000")
+	x := boson.MustParseHexAddress("8200000000000000000000000000000000000000000000000000000000000000")
+	y := boson.MustParseHexAddress("1200000000000000000000000000000000000000000000000000000000000000")
+
+	if cmp, _ := x.Closer(a, y); !cmp {
+		t.Fatal("x is closer")
+	}
+}
