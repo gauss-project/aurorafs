@@ -28,6 +28,7 @@ type Driver interface {
 	io.Closer
 	Halter
 	Snapshot() *KadParams
+	DisconnectForce(addr boson.Address, reason string) error
 
 	EachKnownPeerer
 }

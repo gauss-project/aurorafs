@@ -16,12 +16,9 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/accounts/external"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/gauss-project/aurorafs"
 	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/crypto"
-	"github.com/gauss-project/aurorafs/pkg/crypto/clef"
 	"github.com/gauss-project/aurorafs/pkg/keystore"
 	filekeystore "github.com/gauss-project/aurorafs/pkg/keystore/file"
 	memkeystore "github.com/gauss-project/aurorafs/pkg/keystore/mem"
@@ -111,6 +108,8 @@ func (c *command) initStartCmd() (err error) {
 			}
 			if fullNode {
 				logger.Info("start node mode full.")
+			}else {
+				logger.Info("start node mode light.")
 			}
 
 			b, err := node.NewAurora(c.config.GetString(optionNameP2PAddr), signerConfig.address, *signerConfig.publicKey, signerConfig.signer, c.config.GetUint64(optionNameNetworkID), logger, signerConfig.libp2pPrivateKey, signerConfig.pssPrivateKey, node.Options{
@@ -305,51 +304,51 @@ func (c *command) configureSigner(cmd *cobra.Command, logger logging.Logger) (co
 		}
 	}
 
-	if c.config.GetBool(optionNameClefSignerEnable) {
-		endpoint := c.config.GetString(optionNameClefSignerEndpoint)
-		if endpoint == "" {
-			endpoint, err = clef.DefaultIpcPath()
-			if err != nil {
-				return nil, err
-			}
-		}
-
-		externalSigner, err := waitForClef(logger, 5, endpoint)
-		if err != nil {
-			return nil, err
-		}
-
-		clefRPC, err := rpc.Dial(endpoint)
-		if err != nil {
-			return nil, err
-		}
-
-		wantedAddress := c.config.GetString(optionNameClefSignerEthereumAddress)
-		var overlayEthAddress *common.Address = nil
-		// if wantedAddress was specified use that, otherwise clef account 0 will be selected.
-		if wantedAddress != "" {
-			ethAddress := common.HexToAddress(wantedAddress)
-			overlayEthAddress = &ethAddress
-		}
-
-		signer, err = clef.NewSigner(externalSigner, clefRPC, crypto.Recover, overlayEthAddress)
-		if err != nil {
-			return nil, err
-		}
-
-		publicKey, err = signer.PublicKey()
-		if err != nil {
-			return nil, err
-		}
-
-		address, err = crypto.NewOverlayAddress(*publicKey, c.config.GetUint64(optionNameNetworkID))
-		if err != nil {
-			return nil, err
-		}
-
-		logger.Infof("using boson network address through clef: %s", address)
-	} else {
-		logger.Warning("clef is not enabled; portability and security of your keys is sub optimal")
+	//if c.config.GetBool(optionNameClefSignerEnable) {
+	//	endpoint := c.config.GetString(optionNameClefSignerEndpoint)
+	//	if endpoint == "" {
+	//		endpoint, err = clef.DefaultIpcPath()
+	//		if err != nil {
+	//			return nil, err
+	//		}
+	//	}
+	//
+	//	externalSigner, err := waitForClef(logger, 5, endpoint)
+	//	if err != nil {
+	//		return nil, err
+	//	}
+	//
+	//	clefRPC, err := rpc.Dial(endpoint)
+	//	if err != nil {
+	//		return nil, err
+	//	}
+	//
+	//	wantedAddress := c.config.GetString(optionNameClefSignerEthereumAddress)
+	//	var overlayEthAddress *common.Address = nil
+	//	// if wantedAddress was specified use that, otherwise clef account 0 will be selected.
+	//	if wantedAddress != "" {
+	//		ethAddress := common.HexToAddress(wantedAddress)
+	//		overlayEthAddress = &ethAddress
+	//	}
+	//
+	//	signer, err = clef.NewSigner(externalSigner, clefRPC, crypto.Recover, overlayEthAddress)
+	//	if err != nil {
+	//		return nil, err
+	//	}
+	//
+	//	publicKey, err = signer.PublicKey()
+	//	if err != nil {
+	//		return nil, err
+	//	}
+	//
+	//	address, err = crypto.NewOverlayAddress(*publicKey, c.config.GetUint64(optionNameNetworkID))
+	//	if err != nil {
+	//		return nil, err
+	//	}
+	//
+	//	logger.Infof("using boson network address through clef: %s", address)
+	//} else {
+	//	logger.Warning("clef is not enabled; portability and security of your keys is sub optimal")
 		PrivateKey, created, err := keystore.Key("boson", password)
 		if err != nil {
 			return nil, fmt.Errorf("boson key: %w", err)
@@ -367,7 +366,7 @@ func (c *command) configureSigner(cmd *cobra.Command, logger logging.Logger) (co
 		} else {
 			logger.Infof("using existing boson network address: %s", address)
 		}
-	}
+	//}
 
 	logger.Infof("boson public key %x", crypto.EncodeSecp256k1PublicKey(publicKey))
 
@@ -394,11 +393,11 @@ func (c *command) configureSigner(cmd *cobra.Command, logger logging.Logger) (co
 	logger.Infof("pss public key %x", crypto.EncodeSecp256k1PublicKey(&pssPrivateKey.PublicKey))
 
 	// postinst and post scripts inside packaging/{deb,rpm} depend and parse on this log output
-	overlayEthAddress, err := signer.EthereumAddress()
-	if err != nil {
-		return nil, err
-	}
-	logger.Infof("using ethereum address %x", overlayEthAddress)
+	//overlayEthAddress, err := signer.EthereumAddress()
+	//if err != nil {
+	//	return nil, err
+	//}
+	//logger.Infof("using ethereum address %x", overlayEthAddress)
 
 	return &signerConfig{
 		signer:           signer,
