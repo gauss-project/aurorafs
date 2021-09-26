@@ -39,9 +39,9 @@ func (c *command) initDeployCmd() error {
 			}
 
 			dataDir := c.config.GetString(optionNameDataDir)
-			factoryAddress := c.config.GetString(optionNameSwapFactoryAddress)
-			swapInitialDeposit := c.config.GetString(optionNameSwapInitialDeposit)
-			swapEndpoint := c.config.GetString(optionNameSwapEndpoint)
+			//factoryAddress := c.config.GetString(optionNameSwapFactoryAddress)
+			//swapInitialDeposit := c.config.GetString(optionNameSwapInitialDeposit)
+			//swapEndpoint := c.config.GetString(optionNameSwapEndpoint)
 
 			stateStore, err := node.InitStateStore(logger, dataDir)
 			if err != nil {
@@ -54,50 +54,50 @@ func (c *command) initDeployCmd() error {
 			if err != nil {
 				return err
 			}
-			signer := signerConfig.signer
+			//signer := signerConfig.signer
 
 			err = node.CheckOverlayWithStore(signerConfig.address, stateStore)
 			if err != nil {
 				return err
 			}
 
-			ctx := cmd.Context()
+			//ctx := cmd.Context()
 
-			swapBackend, overlayEthAddress, chainID, transactionService, err := node.InitChain(
-				ctx,
-				logger,
-				stateStore,
-				swapEndpoint,
-				signer,
-			)
-			if err != nil {
-				return err
-			}
-			defer swapBackend.Close()
+			//swapBackend, overlayEthAddress, chainID, transactionService, err := node.InitChain(
+			//	ctx,
+			//	logger,
+			//	stateStore,
+			//	swapEndpoint,
+			//	signer,
+			//)
+			//if err != nil {
+			//	return err
+			//}
+			//defer swapBackend.Close()
+			//
+			//chequebookFactory, err := node.InitChequebookFactory(
+			//	logger,
+			//	swapBackend,
+			//	chainID,
+			//	transactionService,
+			//	factoryAddress,
+			//)
+			//if err != nil {
+			//	return err
+			//}
 
-			chequebookFactory, err := node.InitChequebookFactory(
-				logger,
-				swapBackend,
-				chainID,
-				transactionService,
-				factoryAddress,
-			)
-			if err != nil {
-				return err
-			}
-
-			_, err = node.InitChequebookService(
-				ctx,
-				logger,
-				stateStore,
-				signer,
-				chainID,
-				swapBackend,
-				overlayEthAddress,
-				transactionService,
-				chequebookFactory,
-				swapInitialDeposit,
-			)
+			//_, err = node.InitChequebookService(
+			//	ctx,
+			//	logger,
+			//	stateStore,
+			//	signer,
+			//	chainID,
+			//	swapBackend,
+			//	overlayEthAddress,
+			//	transactionService,
+			//	chequebookFactory,
+			//	swapInitialDeposit,
+			//)
 
 			return err
 		},
