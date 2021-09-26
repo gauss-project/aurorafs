@@ -947,6 +947,30 @@ func (k *Kad) Disconnected(peer p2p.Peer) {
 	k.notifyPeerSig()
 }
 
+// DisconnectForce only debug calls
+func (k *Kad) DisconnectForce(addr boson.Address, reason string) error {
+	k.logger.Debugf("kademlia: disconnected peer force %s", addr)
+
+	err := k.p2p.Disconnect(addr, reason)
+	if err != nil {
+		return err
+	}
+	err = k.addressBook.Remove(addr)
+	if err != nil {
+		return err
+	}
+	k.connectedPeers.Remove(addr)
+	k.knownPeers.Remove(addr)
+
+	k.metrics.TotalInboundDisconnections.Inc()
+	k.collector.Record(addr, im.PeerLogOut(time.Now()))
+
+	k.depthMu.Lock()
+	k.depth = recalcDepth(k.connectedPeers, k.radius)
+	k.depthMu.Unlock()
+	return nil
+}
+
 func (k *Kad) notifyPeerSig() {
 	k.peerSigMtx.Lock()
 	defer k.peerSigMtx.Unlock()
