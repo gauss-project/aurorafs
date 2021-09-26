@@ -54,7 +54,7 @@ func (s *Service) peerDisconnectHandler(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	if err := s.p2p.Disconnect(auroraAddr, "user requested disconnect"); err != nil {
+	if err := s.topologyDriver.DisconnectForce(auroraAddr, "user requested disconnect"); err != nil {
 		s.logger.Debugf("debug api: peer disconnect %s: %v", addr, err)
 		if errors.Is(err, p2p.ErrPeerNotFound) {
 			jsonhttp.BadRequest(w, "peer not found")

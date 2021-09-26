@@ -40,20 +40,20 @@ const (
 	optionNameTracingServiceName        = "tracing-service-name"
 	optionNameVerbosity                 = "verbosity"
 	optionNameGlobalPinningEnabled      = "global-pinning-enable"
-	optionNamePaymentThreshold          = "payment-threshold"
-	optionNamePaymentTolerance          = "payment-tolerance"
-	optionNamePaymentEarly              = "payment-early"
+	//optionNamePaymentThreshold          = "payment-threshold"
+	//optionNamePaymentTolerance          = "payment-tolerance"
+	//optionNamePaymentEarly              = "payment-early"
 	optionNameResolverEndpoints         = "resolver-options"
 	optionNameBootnodeMode              = "bootnode-mode"
 	optionNameFullNode                  = "full-node"
 	optionNameGatewayMode               = "gateway-mode"
-	optionNameClefSignerEnable          = "clef-signer-enable"
-	optionNameClefSignerEndpoint        = "clef-signer-endpoint"
-	optionNameClefSignerEthereumAddress = "clef-signer-ethereum-address"
-	optionNameSwapEndpoint              = "swap-endpoint"
-	optionNameSwapFactoryAddress        = "swap-factory-address"
-	optionNameSwapInitialDeposit        = "swap-initial-deposit"
-	optionNameSwapEnable                = "swap-enable"
+	//optionNameClefSignerEnable          = "clef-signer-enable"
+	//optionNameClefSignerEndpoint        = "clef-signer-endpoint"
+	//optionNameClefSignerEthereumAddress = "clef-signer-ethereum-address"
+	//optionNameSwapEndpoint              = "swap-endpoint"
+	//optionNameSwapFactoryAddress        = "swap-factory-address"
+	//optionNameSwapInitialDeposit        = "swap-initial-deposit"
+	//optionNameSwapEnable                = "swap-enable"
 	optionNameBinMaxPeers               = "bin-max-peers"
 	optionNameLightMaxPeers             = "light-max-peers"
 )
@@ -210,19 +210,19 @@ func (c *command) setAllFlags(cmd *cobra.Command) {
 	cmd.Flags().String(optionNameVerbosity, "info", "log verbosity level 0=silent, 1=error, 2=warn, 3=info, 4=debug, 5=trace")
 	cmd.Flags().String(optionWelcomeMessage, "", "send a welcome message string during handshakes")
 	cmd.Flags().Bool(optionNameGlobalPinningEnabled, false, "enable global pinning")
-	cmd.Flags().String(optionNamePaymentThreshold, "10000000000000", "threshold in BZZ where you expect to get paid from your peers")
-	cmd.Flags().String(optionNamePaymentTolerance, "50000000000000", "excess debt above payment threshold in BZZ where you disconnect from your peer")
-	cmd.Flags().String(optionNamePaymentEarly, "1000000000000", "amount in BZZ below the peers payment threshold when we initiate settlement")
+	//cmd.Flags().String(optionNamePaymentThreshold, "10000000000000", "threshold in BZZ where you expect to get paid from your peers")
+	//cmd.Flags().String(optionNamePaymentTolerance, "50000000000000", "excess debt above payment threshold in BZZ where you disconnect from your peer")
+	//cmd.Flags().String(optionNamePaymentEarly, "1000000000000", "amount in BZZ below the peers payment threshold when we initiate settlement")
 	cmd.Flags().StringSlice(optionNameResolverEndpoints, []string{}, "ENS compatible API endpoint for a TLD and with contract address, can be repeated, format [tld:][contract-addr@]url")
 	cmd.Flags().Bool(optionNameGatewayMode, false, "disable a set of sensitive features in the api")
 	cmd.Flags().Bool(optionNameBootnodeMode, false, "cause the node to always accept incoming connections")
-	cmd.Flags().Bool(optionNameClefSignerEnable, false, "enable clef signer")
-	cmd.Flags().String(optionNameClefSignerEndpoint, "", "clef signer endpoint")
-	cmd.Flags().String(optionNameClefSignerEthereumAddress, "", "ethereum address to use from clef signer")
-	cmd.Flags().String(optionNameSwapEndpoint, "http://localhost:8545", "swap ethereum blockchain endpoint")
-	cmd.Flags().String(optionNameSwapFactoryAddress, "", "swap factory address")
-	cmd.Flags().String(optionNameSwapInitialDeposit, "100000000000000000", "initial deposit if deploying a new chequebook")
-	cmd.Flags().Bool(optionNameSwapEnable, true, "enable swap")
+	//cmd.Flags().Bool(optionNameClefSignerEnable, false, "enable clef signer")
+	//cmd.Flags().String(optionNameClefSignerEndpoint, "", "clef signer endpoint")
+	//cmd.Flags().String(optionNameClefSignerEthereumAddress, "", "ethereum address to use from clef signer")
+	//cmd.Flags().String(optionNameSwapEndpoint, "http://localhost:8545", "swap ethereum blockchain endpoint")
+	//cmd.Flags().String(optionNameSwapFactoryAddress, "", "swap factory address")
+	//cmd.Flags().String(optionNameSwapInitialDeposit, "100000000000000000", "initial deposit if deploying a new chequebook")
+	//cmd.Flags().Bool(optionNameSwapEnable, true, "enable swap")
 	cmd.Flags().Bool(optionNameFullNode, true, "full node")
 	cmd.Flags().Int(optionNameLightMaxPeers, 100, "connected light node max limit")
 	cmd.Flags().Int(optionNameBinMaxPeers, 20, "kademlia every k bucket connected peers max limit")
