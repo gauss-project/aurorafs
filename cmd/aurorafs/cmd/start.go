@@ -128,7 +128,7 @@ func (c *command) initStartCmd() (err error) {
 				WelcomeMessage:        c.config.GetString(optionWelcomeMessage),
 				Bootnodes:             c.config.GetStringSlice(optionNameBootnodes),
 				FullNode:              fullNode,
-				OracleEndpoint:        c.config.GetString(optionNameOracleAPIAddr),
+				OracleEndpoint:        c.config.GetString(optionNameOracleEndpoint),
 				OracleContractAddress: c.config.GetString(optionNameOracleContractAddr),
 				CORSAllowedOrigins:    c.config.GetStringSlice(optionCORSAllowedOrigins),
 				Standalone:            c.config.GetBool(optionNameStandalone),

@@ -43,10 +43,12 @@ func InitChain(
 		logger.Infof("could not connect to backend at %v. In a swap-enabled network a working blockchain node (for goerli network in production) is required. Check your node or specify another node using --swap-endpoint.", endpoint)
 		return nil, nil, fmt.Errorf("get chain id: %w", err)
 	}
-
+	if contractAddress == "" {
+		return nil, nil, fmt.Errorf("oracle contract address is empty")
+	}
 	oracleServer, err := oracle.NewServer(logger, backend, contractAddress)
 	if err != nil {
-		return nil, nil, fmt.Errorf("new transaction service: %w", err)
+		return nil, nil, fmt.Errorf("new oracle service: %w", err)
 	}
 	return backend, oracleServer, nil
 }
