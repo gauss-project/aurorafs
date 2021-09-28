@@ -44,7 +44,7 @@ const (
 	//optionNamePaymentThreshold          = "payment-threshold"
 	//optionNamePaymentTolerance          = "payment-tolerance"
 	//optionNamePaymentEarly              = "payment-early"
-	optionNameResolverEndpoints = "resolver-options"
+	//optionNameResolverEndpoints = "resolver-options"
 	optionNameBootnodeMode      = "bootnode-mode"
 	optionNameFullNode          = "full-node"
 	optionNameGatewayMode       = "gateway-mode"
@@ -215,7 +215,7 @@ func (c *command) setAllFlags(cmd *cobra.Command) {
 	//cmd.Flags().String(optionNamePaymentThreshold, "10000000000000", "threshold in BZZ where you expect to get paid from your peers")
 	//cmd.Flags().String(optionNamePaymentTolerance, "50000000000000", "excess debt above payment threshold in BZZ where you disconnect from your peer")
 	//cmd.Flags().String(optionNamePaymentEarly, "1000000000000", "amount in BZZ below the peers payment threshold when we initiate settlement")
-	cmd.Flags().StringSlice(optionNameResolverEndpoints, []string{}, "ENS compatible API endpoint for a TLD and with contract address, can be repeated, format [tld:][contract-addr@]url")
+	//cmd.Flags().StringSlice(optionNameResolverEndpoints, []string{}, "ENS compatible API endpoint for a TLD and with contract address, can be repeated, format [tld:][contract-addr@]url")
 	cmd.Flags().Bool(optionNameGatewayMode, false, "disable a set of sensitive features in the api")
 	cmd.Flags().Bool(optionNameBootnodeMode, false, "cause the node to always accept incoming connections")
 	//cmd.Flags().Bool(optionNameClefSignerEnable, false, "enable clef signer")

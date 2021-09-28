@@ -78,13 +78,13 @@ func (c *command) initStartCmd() (err error) {
 			// If the resolver is specified, resolve all connection strings
 			// and fail on any errors.
 			var resolverCfgs []multiresolver.ConnectionConfig
-			resolverEndpoints := c.config.GetStringSlice(optionNameResolverEndpoints)
-			if len(resolverEndpoints) > 0 {
-				resolverCfgs, err = multiresolver.ParseConnectionStrings(resolverEndpoints)
-				if err != nil {
-					return err
-				}
-			}
+			//resolverEndpoints := c.config.GetStringSlice(optionNameResolverEndpoints)
+			//if len(resolverEndpoints) > 0 {
+			//	resolverCfgs, err = multiresolver.ParseConnectionStrings(resolverEndpoints)
+			//	if err != nil {
+			//		return err
+			//	}
+			//}
 
 			aufsASCII := `Welcome to aurora file system`
 
