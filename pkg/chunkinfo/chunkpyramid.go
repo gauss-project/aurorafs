@@ -16,7 +16,6 @@ type chunkPyramid struct {
 
 type pyramidCidCount struct {
 	sort   int
-	count  *int
 	number int
 }
 
@@ -64,12 +63,11 @@ func (ci *ChunkInfo) updateChunkPyramid(rootCid boson.Address, pyramids [][][]by
 	ci.cp.Lock()
 	defer ci.cp.Unlock()
 	py := make(map[string]pyramidCidCount)
-	var i, max, hashMax int
+	var i, hashMax int
 	for _, p := range pyramids {
 		for _, x := range p {
 			if v, ok := py[boson.NewAddress(x).String()]; !ok {
 				py[boson.NewAddress(x).String()] = pyramidCidCount{
-					count:  &max,
 					sort:   i,
 					number: 1,
 				}
@@ -78,14 +76,15 @@ func (ci *ChunkInfo) updateChunkPyramid(rootCid boson.Address, pyramids [][][]by
 				v.number = v.number + 1
 				py[boson.NewAddress(x).String()] = v
 			}
-			max++
 		}
 	}
 
 	for _, hash := range hashs {
+		if _, ok := py[boson.NewAddress(hash).String()]; ok {
+			continue
+		}
 		py[boson.NewAddress(hash).String()] = pyramidCidCount{
-			count: &hashMax,
-			sort:  -1,
+			sort:   -1,
 			number: 1,
 		}
 		hashMax++
@@ -191,28 +190,40 @@ func (cp *chunkPyramid) getCidStore(rootCid, cid boson.Address) int {
 	return cp.pyramid[rootCid.String()][cid.String()].sort
 }
 
+func (cp *chunkPyramid) updateCidSort(rootCid, cid boson.Address, sort int) {
+	cp.Lock()
+	defer cp.Unlock()
+	v, ok := cp.pyramid[rootCid.String()][cid.String()]
+	if !ok {
+		return
+	}
+	v.sort = sort
+	cp.pyramid[rootCid.String()][cid.String()] = v
+}
+
 func (cp *chunkPyramid) getRootChunk(rootCid string) int {
 	cp.RLock()
 	defer cp.RUnlock()
 
+	sort := 0
 	for _, v := range cp.pyramid[rootCid] {
 		if v.sort >= 0 {
-			return *v.count
+			sort++
 		}
 	}
-	return 0
+	return sort
 }
 
 func (cp *chunkPyramid) getRootHash(rootCID string) int {
 	cp.RLock()
 	defer cp.RUnlock()
-
+	count := 0
 	for _, v := range cp.pyramid[rootCID] {
 		if v.sort < 0 {
-			return *v.count
+			count++
 		}
 	}
-	return 0
+	return count
 }
 func (cp *chunkPyramid) delRootCid(rootCID boson.Address) bool {
 	cp.Lock()

@@ -86,6 +86,10 @@ func (ci *ChunkInfo) updateNeighborChunkInfo(rootCid, cid boson.Address, overlay
 		ci.ct.presence[rc][over] = vb
 	}
 	v := ci.cp.getCidStore(rootCid, cid)
+	if v < 0 {
+		ci.cp.updateCidSort(rootCid, cid, 0)
+		v = 0
+	}
 	vb.Set(v)
 	// db
 	return ci.storer.Put(generateKey(keyPrefix, rootCid, overlay), &bitVector{B: vb.Bytes(), Len: vb.Len()})
