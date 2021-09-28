@@ -108,7 +108,7 @@ func (c *command) initStartCmd() (err error) {
 			}
 			if fullNode {
 				logger.Info("start node mode full.")
-			}else {
+			} else {
 				logger.Info("start node mode light.")
 			}
 
@@ -122,20 +122,21 @@ func (c *command) initStartCmd() (err error) {
 				APIAddr:                  c.config.GetString(optionNameAPIAddr),
 				DebugAPIAddr:             debugAPIAddr,
 				//Addr:                     c.config.GetString(optionNameP2PAddr),
-				NATAddr:            c.config.GetString(optionNameNATAddr),
-				EnableWS:           c.config.GetBool(optionNameP2PWSEnable),
-				EnableQUIC:         c.config.GetBool(optionNameP2PQUICEnable),
-				WelcomeMessage:     c.config.GetString(optionWelcomeMessage),
-				Bootnodes:          c.config.GetStringSlice(optionNameBootnodes),
-				FullNode:           fullNode,
-				OracleEndpoint:     c.config.GetString(optionNameOracleAPIAddr),
-				CORSAllowedOrigins: c.config.GetStringSlice(optionCORSAllowedOrigins),
-				Standalone:         c.config.GetBool(optionNameStandalone),
-				IsDev:              c.config.GetBool(optionNameDevMode),
-				TracingEnabled:     c.config.GetBool(optionNameTracingEnabled),
-				TracingEndpoint:    c.config.GetString(optionNameTracingEndpoint),
-				TracingServiceName: c.config.GetString(optionNameTracingServiceName),
-				Logger:             logger,
+				NATAddr:               c.config.GetString(optionNameNATAddr),
+				EnableWS:              c.config.GetBool(optionNameP2PWSEnable),
+				EnableQUIC:            c.config.GetBool(optionNameP2PQUICEnable),
+				WelcomeMessage:        c.config.GetString(optionWelcomeMessage),
+				Bootnodes:             c.config.GetStringSlice(optionNameBootnodes),
+				FullNode:              fullNode,
+				OracleEndpoint:        c.config.GetString(optionNameOracleEndpoint),
+				OracleContractAddress: c.config.GetString(optionNameOracleContractAddr),
+				CORSAllowedOrigins:    c.config.GetStringSlice(optionCORSAllowedOrigins),
+				Standalone:            c.config.GetBool(optionNameStandalone),
+				IsDev:                 c.config.GetBool(optionNameDevMode),
+				TracingEnabled:        c.config.GetBool(optionNameTracingEnabled),
+				TracingEndpoint:       c.config.GetString(optionNameTracingEndpoint),
+				TracingServiceName:    c.config.GetString(optionNameTracingServiceName),
+				Logger:                logger,
 				//GlobalPinningEnabled:     c.config.GetBool(optionNameGlobalPinningEnabled),
 				//PaymentThreshold:         c.config.GetString(optionNamePaymentThreshold),
 				//PaymentTolerance:         c.config.GetString(optionNamePaymentTolerance),
@@ -349,23 +350,23 @@ func (c *command) configureSigner(cmd *cobra.Command, logger logging.Logger) (co
 	//	logger.Infof("using boson network address through clef: %s", address)
 	//} else {
 	//	logger.Warning("clef is not enabled; portability and security of your keys is sub optimal")
-		PrivateKey, created, err := keystore.Key("boson", password)
-		if err != nil {
-			return nil, fmt.Errorf("boson key: %w", err)
-		}
-		signer = crypto.NewDefaultSigner(PrivateKey)
-		publicKey = &PrivateKey.PublicKey
+	PrivateKey, created, err := keystore.Key("boson", password)
+	if err != nil {
+		return nil, fmt.Errorf("boson key: %w", err)
+	}
+	signer = crypto.NewDefaultSigner(PrivateKey)
+	publicKey = &PrivateKey.PublicKey
 
-		address, err = crypto.NewOverlayAddress(*publicKey, c.config.GetUint64(optionNameNetworkID))
-		if err != nil {
-			return nil, err
-		}
+	address, err = crypto.NewOverlayAddress(*publicKey, c.config.GetUint64(optionNameNetworkID))
+	if err != nil {
+		return nil, err
+	}
 
-		if created {
-			logger.Infof("new boson network address created: %s", address)
-		} else {
-			logger.Infof("using existing boson network address: %s", address)
-		}
+	if created {
+		logger.Infof("new boson network address created: %s", address)
+	} else {
+		logger.Infof("using existing boson network address: %s", address)
+	}
 	//}
 
 	logger.Infof("boson public key %x", crypto.EncodeSecp256k1PublicKey(publicKey))

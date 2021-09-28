@@ -2,10 +2,7 @@ package chunkinfo
 
 import (
 	"context"
-	"encoding/json"
-	"fmt"
-	"io"
-	"net/http"
+	"github.com/gauss-project/aurorafs/pkg/settlement/swap/oracle"
 	"strings"
 	"sync"
 	"time"
@@ -64,29 +61,29 @@ type ChunkInfo struct {
 	cp           *chunkPyramid
 	cpd          *pendingFinderInfo
 	singleflight singleflight.Group
-	oracleUrl    string
+	oracleChain  oracle.Resolver
 }
 
 // New
-func New(addr boson.Address, streamer p2p.Streamer, logger logging.Logger, traversal traversal.Service, storer storage.StateStorer, route routetab.RouteTab, oracleUrl string) *ChunkInfo {
+func New(addr boson.Address, streamer p2p.Streamer, logger logging.Logger, traversal traversal.Service, storer storage.StateStorer, route routetab.RouteTab, oracleChain oracle.Resolver) *ChunkInfo {
 	queues := make(map[string]*queue)
 	t := time.NewTimer(Time * time.Second)
 	return &ChunkInfo{
-		addr:      addr,
-		storer:    storer,
-		route:     route,
-		metrics:   newMetrics(),
-		ct:        newChunkInfoTabNeighbor(),
-		cd:        newChunkInfoDiscover(),
-		cp:        newChunkPyramid(),
-		cpd:       newPendingFinderInfo(),
-		queues:    queues,
-		t:         t,
-		tt:        newTimeoutTrigger(),
-		streamer:  streamer,
-		logger:    logger,
-		traversal: traversal,
-		oracleUrl: oracleUrl,
+		addr:        addr,
+		storer:      storer,
+		route:       route,
+		metrics:     newMetrics(),
+		ct:          newChunkInfoTabNeighbor(),
+		cd:          newChunkInfoDiscover(),
+		cp:          newChunkPyramid(),
+		cpd:         newPendingFinderInfo(),
+		queues:      queues,
+		t:           t,
+		tt:          newTimeoutTrigger(),
+		streamer:    streamer,
+		logger:      logger,
+		traversal:   traversal,
+		oracleChain: oracleChain,
 	}
 }
 
@@ -123,36 +120,9 @@ func (ci *ChunkInfo) Init(ctx context.Context, authInfo []byte, rootCid boson.Ad
 		return true
 	}
 
-	r, err := http.Get(fmt.Sprintf("http://%s/api/v1.0/rcid/%s", ci.oracleUrl, rootCid.String()))
-	if err != nil {
+	overlays := ci.oracleChain.GetNodesFromCid(rootCid.Bytes())
+	if len(overlays) <= 0 {
 		return false
-	}
-	defer r.Body.Close()
-	data, err := io.ReadAll(r.Body)
-	if err != nil {
-		return false
-	}
-	var resp Response
-	if err := json.Unmarshal(data, &resp); err != nil {
-		return false
-	}
-	if r.StatusCode != http.StatusOK {
-		ci.logger.Errorf("expected %d response, got %d", http.StatusOK, r.StatusCode)
-		return false
-	}
-	if resp.StatusCode != 400 {
-		ci.logger.Errorf("expected %d response, got %d", 400, resp.StatusCode)
-		return false
-	}
-	addrs := resp.Body.Addresses
-	count := len(addrs)
-	if count <= 0 {
-		return false
-	}
-	overlays := make([]boson.Address, 0, count)
-	for _, addr := range addrs {
-		a, _ := boson.ParseHexAddress(addr)
-		overlays = append(overlays, a)
 	}
 	return ci.FindChunkInfo(context.Background(), authInfo, rootCid, overlays)
 }
