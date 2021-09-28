@@ -428,17 +428,17 @@ func NewAurora(addr string, bosonAddress boson.Address, publicKey ecdsa.PublicKe
 	storer.Config(chunkInfo)
 	retrieve.Config(chunkInfo)
 
-	multiResolver := multiresolver.NewMultiResolver(
-		multiresolver.WithConnectionConfigs(o.ResolverConnectionCfgs),
-		multiresolver.WithLogger(o.Logger),
-	)
-	b.resolverCloser = multiResolver
+	//multiResolver := multiresolver.NewMultiResolver(
+	//	multiresolver.WithConnectionConfigs(o.ResolverConnectionCfgs),
+	//	multiresolver.WithLogger(o.Logger),
+	//)
+	//b.resolverCloser = multiResolver
 
 	var apiService api.Service
 	if o.APIAddr != "" {
 		// API server
 
-		apiService = api.New(ns, multiResolver, bosonAddress, chunkInfo, traversalService, logger, tracer, api.Options{
+		apiService = api.New(ns, nil, bosonAddress, chunkInfo, traversalService, logger, tracer, api.Options{
 			CORSAllowedOrigins: o.CORSAllowedOrigins,
 			GatewayMode:        o.GatewayMode,
 			WsPingPeriod:       60 * time.Second,
