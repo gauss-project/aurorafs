@@ -19,6 +19,7 @@ import (
 	"github.com/gauss-project/aurorafs/pkg/p2p/protobuf"
 	"github.com/gauss-project/aurorafs/pkg/p2p/streamtest"
 	rmock "github.com/gauss-project/aurorafs/pkg/routetab/mock"
+	omock "github.com/gauss-project/aurorafs/pkg/settlement/swap/oracle/mock"
 	smock "github.com/gauss-project/aurorafs/pkg/statestore/mock"
 	"github.com/gauss-project/aurorafs/pkg/storage"
 	"github.com/gauss-project/aurorafs/pkg/storage/mock"
@@ -26,7 +27,6 @@ import (
 	"golang.org/x/sync/errgroup"
 	"io"
 	"io/ioutil"
-	"net/http"
 	"strings"
 	"testing"
 	"time"
@@ -58,9 +58,6 @@ func TestInit(t *testing.T) {
 	)
 
 	server := mockChunkInfo(s, recorder, serverAddress)
-	if _, err := http.Post(fmt.Sprintf("http://%s/api/v1.0/rcid", server.oracleUrl), "application/json", addBody()); err != nil {
-		t.Fatal("oracle link error")
-	}
 
 	if server.Init(context.Background(), nil, rootCid) {
 		t.Fatalf(" want false")
@@ -220,8 +217,8 @@ func TestHandlerChunkInfoResp(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if vf.String() != "0000000000100000" {
-		t.Fatalf("got %v records, want %v", vf.String(), "0000000001000000")
+	if vf.String() != "10000000" {
+		t.Fatalf("got %v records, want %v", vf.String(), "100000000")
 	}
 
 	respRecords, err := aRecorder.Records(aAddress, "chunkinfo", "1.0.0", "chunkinforesp")
@@ -448,8 +445,9 @@ func mockUploadFile(t *testing.T) (boson.Address, traversal.Service) {
 func mockChunkInfo(traversal traversal.Service, r *streamtest.Recorder, overlay boson.Address) *ChunkInfo {
 	logger := logging.New(ioutil.Discard, 0)
 	ret := smock.NewStateStore()
-	rmock := rmock.NewMockRouteTable()
-	server := New(overlay, r, logger, traversal, ret, &rmock, "127.0.0.1:8000")
+	route := rmock.NewMockRouteTable()
+	oracle := omock.NewServer()
+	server := New(overlay, r, logger, traversal, ret, &route, oracle)
 	server.InitChunkInfo()
 	return server
 }
@@ -494,7 +492,7 @@ func uploadFile(t *testing.T, ctx context.Context, store storage.Storer, file []
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Logf("metadata hash=%s\n", mr)
+	//t.Logf("metadata hash=%s\n", mr)
 
 	entries := entry.New(fr, mr)
 	entryBytes, err := entries.MarshalBinary()
@@ -507,7 +505,7 @@ func uploadFile(t *testing.T, ctx context.Context, store storage.Storer, file []
 	if err != nil {
 		t.Fatal(reference)
 	}
-	t.Logf("reference hash=%s\n", reference)
+	//t.Logf("reference hash=%s\n", reference)
 
 	return reference, filename
 }

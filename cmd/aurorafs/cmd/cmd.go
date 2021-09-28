@@ -13,40 +13,41 @@ import (
 )
 
 const (
-	optionNameDataDir                   = "data-dir"
-	optionNameDBCapacity                = "db-capacity"
-	optionNameDBOpenFilesLimit          = "db-open-files-limit"
-	optionNameDBBlockCacheCapacity      = "db-block-cache-capacity"
-	optionNameDBWriteBufferSize         = "db-write-buffer-size"
-	optionNameDBDisableSeeksCompaction  = "db-disable-seeks-compaction"
-	optionNamePassword                  = "password"
-	optionNamePasswordFile              = "password-file"
-	optionNameAPIAddr                   = "api-addr"
-	optionNameP2PAddr                   = "p2p-addr"
-	optionNameNATAddr                   = "nat-addr"
-	optionNameP2PWSEnable               = "p2p-ws-enable"
-	optionNameP2PQUICEnable             = "p2p-quic-enable"
-	optionNameDebugAPIEnable            = "debug-api-enable"
-	optionNameDebugAPIAddr              = "debug-api-addr"
-	optionNameBootnodes                 = "bootnode"
-	optionNameOracleAPIAddr             = "oracle-api-addr"
-	optionNameNetworkID                 = "network-id"
-	optionWelcomeMessage                = "welcome-message"
-	optionCORSAllowedOrigins            = "cors-allowed-origins"
-	optionNameStandalone                = "standalone"
-	optionNameDevMode                   = "dev-mode"
-	optionNameTracingEnabled            = "tracing-enable"
-	optionNameTracingEndpoint           = "tracing-endpoint"
-	optionNameTracingServiceName        = "tracing-service-name"
-	optionNameVerbosity                 = "verbosity"
-	optionNameGlobalPinningEnabled      = "global-pinning-enable"
+	optionNameDataDir                  = "data-dir"
+	optionNameDBCapacity               = "db-capacity"
+	optionNameDBOpenFilesLimit         = "db-open-files-limit"
+	optionNameDBBlockCacheCapacity     = "db-block-cache-capacity"
+	optionNameDBWriteBufferSize        = "db-write-buffer-size"
+	optionNameDBDisableSeeksCompaction = "db-disable-seeks-compaction"
+	optionNamePassword                 = "password"
+	optionNamePasswordFile             = "password-file"
+	optionNameAPIAddr                  = "api-addr"
+	optionNameP2PAddr                  = "p2p-addr"
+	optionNameNATAddr                  = "nat-addr"
+	optionNameP2PWSEnable              = "p2p-ws-enable"
+	optionNameP2PQUICEnable            = "p2p-quic-enable"
+	optionNameDebugAPIEnable           = "debug-api-enable"
+	optionNameDebugAPIAddr             = "debug-api-addr"
+	optionNameBootnodes                = "bootnode"
+	optionNameOracleAPIAddr            = "oracle-api-addr"
+	optionNameOracleContractAddr       = "oracle-contract-addr"
+	optionNameNetworkID                = "network-id"
+	optionWelcomeMessage               = "welcome-message"
+	optionCORSAllowedOrigins           = "cors-allowed-origins"
+	optionNameStandalone               = "standalone"
+	optionNameDevMode                  = "dev-mode"
+	optionNameTracingEnabled           = "tracing-enable"
+	optionNameTracingEndpoint          = "tracing-endpoint"
+	optionNameTracingServiceName       = "tracing-service-name"
+	optionNameVerbosity                = "verbosity"
+	optionNameGlobalPinningEnabled     = "global-pinning-enable"
 	//optionNamePaymentThreshold          = "payment-threshold"
 	//optionNamePaymentTolerance          = "payment-tolerance"
 	//optionNamePaymentEarly              = "payment-early"
-	optionNameResolverEndpoints         = "resolver-options"
-	optionNameBootnodeMode              = "bootnode-mode"
-	optionNameFullNode                  = "full-node"
-	optionNameGatewayMode               = "gateway-mode"
+	optionNameResolverEndpoints = "resolver-options"
+	optionNameBootnodeMode      = "bootnode-mode"
+	optionNameFullNode          = "full-node"
+	optionNameGatewayMode       = "gateway-mode"
 	//optionNameClefSignerEnable          = "clef-signer-enable"
 	//optionNameClefSignerEndpoint        = "clef-signer-endpoint"
 	//optionNameClefSignerEthereumAddress = "clef-signer-ethereum-address"
@@ -54,8 +55,8 @@ const (
 	//optionNameSwapFactoryAddress        = "swap-factory-address"
 	//optionNameSwapInitialDeposit        = "swap-initial-deposit"
 	//optionNameSwapEnable                = "swap-enable"
-	optionNameBinMaxPeers               = "bin-max-peers"
-	optionNameLightMaxPeers             = "light-max-peers"
+	optionNameBinMaxPeers   = "bin-max-peers"
+	optionNameLightMaxPeers = "light-max-peers"
 )
 
 func init() {
@@ -197,10 +198,11 @@ func (c *command) setAllFlags(cmd *cobra.Command) {
 	cmd.Flags().Bool(optionNameP2PWSEnable, false, "enable P2P WebSocket transport")
 	cmd.Flags().Bool(optionNameP2PQUICEnable, false, "enable P2P QUIC transport")
 	cmd.Flags().StringSlice(optionNameBootnodes, []string{}, "initial nodes to connect to")
-	cmd.Flags().String(optionNameOracleAPIAddr, "", "link to oracle api service")
+	cmd.Flags().String(optionNameOracleAPIAddr, "https://data-seed-prebsc-1-s1.binance.org:8545/", "link to oracle api service")
+	cmd.Flags().String(optionNameOracleContractAddr, "0x941d06f88ff13f78aecb8b6906159fe9f205eddc", "link to oracle contract")
 	cmd.Flags().Bool(optionNameDebugAPIEnable, false, "enable debug HTTP API")
 	cmd.Flags().String(optionNameDebugAPIAddr, ":1635", "debug HTTP API listen address")
-	cmd.Flags().Uint64(optionNameNetworkID, 1, "ID of the Aurora network")
+	cmd.Flags().Uint64(optionNameNetworkID, 10, "ID of the Aurora network")
 	cmd.Flags().StringSlice(optionCORSAllowedOrigins, []string{}, "origins with CORS headers enabled")
 	cmd.Flags().Bool(optionNameStandalone, false, "whether we want the node to start with no listen addresses for p2p")
 	cmd.Flags().Bool(optionNameDevMode, false, "run dev mode")

@@ -364,52 +364,6 @@ paths:
           $ref: "AuroraCommon.yaml#/components/responses/404"
         default:
           description: Default response
-# post  /soc/{owner}/{id}
-  "/soc/{owner}/{id}":
-    post:
-      summary: Upload single owner chunk
-      tags:
-        - Soc
-      parameters:
-        - in: path
-          name: owner
-          schema:
-            $ref: "AuroraCommon.yaml#/components/schemas/LinkAddress"
-          required: true
-          description: Owner
-        - in: path
-          name: id
-          schema:
-            $ref: "AuroraCommon.yaml#/components/schemas/HexString"
-          required: true
-          description: Id
-        - in: query
-          name: sig
-          schema:
-            $ref: "AuroraCommon.yaml#/components/schemas/HexString"
-          required: true
-          description: Signature
-        - $ref: "AuroraCommon.yaml#/components/parameters/AuroraPinParameter"
-      responses:
-        "201":
-          description: Created
-          content:
-            application/json:
-              schema:
-                $ref: "AuroraCommon.yaml#/components/schemas/AuroraReference"
-        "400":
-          $ref: "AuroraCommon.yaml#/components/responses/400"
-        "401":
-          $ref: "AuroraCommon.yaml#/components/responses/401"
-        "402":
-          $ref: "AuroraCommon.yaml#/components/responses/402"
-        "403":
-          $ref: "AuroraCommon.yaml#/components/responses/GatewayForbidden"
-        "500":
-          $ref: "AuroraCommon.yaml#/components/responses/500"
-        default:
-          description: Default response
-# get,delete /pin/files/{address}
   "/pin/files/{address}":
     post:
       summary: "Pin the root hash with the given reference"
