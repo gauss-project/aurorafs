@@ -10,6 +10,7 @@ import (
 	"github.com/gauss-project/aurorafs/pkg/chunkinfo"
 	"github.com/gauss-project/aurorafs/pkg/hive2"
 	"github.com/gauss-project/aurorafs/pkg/routetab"
+	"github.com/gauss-project/aurorafs/pkg/settlement/swap/oracle"
 	"github.com/gauss-project/aurorafs/pkg/shed"
 	"github.com/gauss-project/aurorafs/pkg/topology/kademlia"
 	"github.com/gauss-project/aurorafs/pkg/topology/lightnode"
@@ -69,19 +70,20 @@ type Options struct {
 	APIAddr                  string
 	DebugAPIAddr             string
 	//Addr                     string
-	NATAddr            string
-	EnableWS           bool
-	EnableQUIC         bool
-	WelcomeMessage     string
-	Bootnodes          []string
-	OracleEndpoint     string
-	CORSAllowedOrigins []string
-	Logger             logging.Logger
-	Standalone         bool
-	IsDev              bool
-	TracingEnabled     bool
-	TracingEndpoint    string
-	TracingServiceName string
+	NATAddr               string
+	EnableWS              bool
+	EnableQUIC            bool
+	WelcomeMessage        string
+	Bootnodes             []string
+	OracleEndpoint        string
+	OracleContractAddress string
+	CORSAllowedOrigins    []string
+	Logger                logging.Logger
+	Standalone            bool
+	IsDev                 bool
+	TracingEnabled        bool
+	TracingEndpoint       string
+	TracingServiceName    string
 	//GlobalPinningEnabled     bool
 	//PaymentThreshold         string
 	//PaymentTolerance         string
@@ -168,7 +170,16 @@ func NewAurora(addr string, bosonAddress boson.Address, publicKey ecdsa.PublicKe
 		return nil, err
 	}
 
-	//var swapBackend *ethclient.Client
+	var oracleChain *oracle.ChainOracle
+	_, oracleChain, err = InitChain(
+		p2pCtx,
+		logger,
+		o.OracleEndpoint,
+		o.OracleContractAddress,
+	)
+	if err != nil {
+		return nil, err
+	}
 	//var overlayEthAddress common.Address
 	//var chainID int64
 	//var transactionService transaction.Service
@@ -178,16 +189,7 @@ func NewAurora(addr string, bosonAddress boson.Address, publicKey ecdsa.PublicKe
 	//var cashoutService chequebook.CashoutService
 
 	//if o.SwapEnable {
-	//	swapBackend, overlayEthAddress, chainID, transactionService, err = InitChain(
-	//		p2pCtx,
-	//		logger,
-	//		stateStore,
-	//		o.SwapEndpoint,
-	//		signer,
-	//	)
-	//	if err != nil {
-	//		return nil, err
-	//	}
+
 	//	b.ethClientCloser = swapBackend.Close
 	//
 	//	chequebookFactory, err = InitChequebookFactory(
@@ -416,7 +418,7 @@ func NewAurora(addr string, bosonAddress boson.Address, publicKey ecdsa.PublicKe
 
 	traversalService := traversal.NewService(ns)
 
-	chunkInfo := chunkinfo.New(bosonAddress, p2ps, logger, traversalService, stateStore, route, o.OracleEndpoint)
+	chunkInfo := chunkinfo.New(bosonAddress, p2ps, logger, traversalService, stateStore, route, oracleChain)
 	if err := chunkInfo.InitChunkInfo(); err != nil {
 		return nil, fmt.Errorf("chunk info init: %w", err)
 	}

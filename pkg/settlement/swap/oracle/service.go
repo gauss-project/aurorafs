@@ -2,9 +2,9 @@ package oracle
 
 import (
 	"github.com/gauss-project/aurorafs/pkg/boson"
-	"github.com/ipfs/go-cid"
 	"math/big"
 )
+
 type ChainResult struct {
 	success bool
 	TxHash  []byte
@@ -16,7 +16,7 @@ type Price interface {
 	// Price Get common price from chain
 	Price() uint64
 	// SetPrice set price for this peer
-	SetPrice( value uint64, signature []byte,resCh chan ChainResult)
+	SetPrice(value uint64, signature []byte, resCh chan ChainResult)
 }
 
 type Resolver interface {
@@ -30,17 +30,17 @@ type Resolver interface {
 	GetSourceNodes(aufsUri string) []boson.Address
 
 	// OnStoreMatched Notification when new data req matched
-	OnStoreMatched(cid cid.Cid,dataLen uint64, salt uint64,address boson.Address)
+	OnStoreMatched(cid boson.Address, dataLen uint64, salt uint64, address boson.Address)
 
 	// DataStoreFinished when data retrieved and saved, use this function to report onchain
-	DataStoreFinished(cid cid.Cid,dataLen uint64, salt uint64,proof []byte,resCh chan ChainResult)
+	DataStoreFinished(cid boson.Address, dataLen uint64, salt uint64, proof []byte, resCh chan ChainResult)
 }
 
 type AuthInfo interface {
 	// CheckAutoInfo Check validate of an auth_info from chain
 	CheckAutoInfo([]byte) bool
 	// ReportInvalidAuthInfo Report invalid auth_info to chain
-	ReportInvalidAuthInfo([]byte,chan ChainResult)
+	ReportInvalidAuthInfo([]byte, chan ChainResult)
 }
 
 type Balance interface {
@@ -54,5 +54,5 @@ type ChequeBook interface {
 	// GetReceivedAmount Get data traffic amount from target to this peer
 	GetReceivedAmount(peer boson.Address) *big.Int
 	// ReportSignedAmount voucher is singed by counter-part peer, signature including my addr
-	ReportSignedAmount(voucher []byte, signature []byte ,resCh chan ChainResult)
+	ReportSignedAmount(voucher []byte, signature []byte, resCh chan ChainResult)
 }

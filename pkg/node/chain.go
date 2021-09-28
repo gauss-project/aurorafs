@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/gauss-project/aurorafs/pkg/settlement/swap/oracle"
 	"math/big"
 	"time"
 
@@ -28,43 +29,28 @@ const (
 func InitChain(
 	ctx context.Context,
 	logger logging.Logger,
-	stateStore storage.StateStorer,
 	endpoint string,
-	signer crypto.Signer,
-) (*ethclient.Client, common.Address, int64, transaction.Service, error) {
+	contractAddress string,
+) (*ethclient.Client, *oracle.ChainOracle, error) {
+
 	backend, err := ethclient.Dial(endpoint)
 	if err != nil {
-		return nil, common.Address{}, 0, nil, fmt.Errorf("dial eth client: %w", err)
+		return nil, nil, fmt.Errorf("dial eth client: %w", err)
 	}
 
-	chainID, err := backend.ChainID(ctx)
+	_, err = backend.ChainID(ctx)
 	if err != nil {
 		logger.Infof("could not connect to backend at %v. In a swap-enabled network a working blockchain node (for goerli network in production) is required. Check your node or specify another node using --swap-endpoint.", endpoint)
-		return nil, common.Address{}, 0, nil, fmt.Errorf("get chain id: %w", err)
+		return nil, nil, fmt.Errorf("get chain id: %w", err)
 	}
-
-	transactionService, err := transaction.NewService(logger, backend, signer, stateStore, chainID)
+	if contractAddress == "" {
+		return nil, nil, fmt.Errorf("oracle contract address is empty")
+	}
+	oracleServer, err := oracle.NewServer(logger, backend, contractAddress)
 	if err != nil {
-		return nil, common.Address{}, 0, nil, fmt.Errorf("new transaction service: %w", err)
+		return nil, nil, fmt.Errorf("new oracle service: %w", err)
 	}
-	overlayEthAddress, err := signer.EthereumAddress()
-	if err != nil {
-		return nil, common.Address{}, 0, nil, fmt.Errorf("eth address: %w", err)
-	}
-
-	// Sync the with the given Ethereum backend:
-	isSynced, err := transaction.IsSynced(ctx, backend, maxDelay)
-	if err != nil {
-		return nil, common.Address{}, 0, nil, fmt.Errorf("is synced: %w", err)
-	}
-	if !isSynced {
-		logger.Infof("waiting to sync with the Ethereum backend")
-		err := transaction.WaitSynced(ctx, backend, maxDelay)
-		if err != nil {
-			return nil, common.Address{}, 0, nil, fmt.Errorf("waiting backend sync: %w", err)
-		}
-	}
-	return backend, overlayEthAddress, chainID.Int64(), transactionService, nil
+	return backend, oracleServer, nil
 }
 
 // InitChequebookFactory will initialize the chequebook factory with the given
