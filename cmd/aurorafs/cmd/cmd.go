@@ -200,7 +200,7 @@ func (c *command) setAllFlags(cmd *cobra.Command) {
 	cmd.Flags().StringSlice(optionNameBootnodes, []string{}, "initial nodes to connect to")
 	cmd.Flags().String(optionNameOracleEndpoint, "", "link to oracle endpoint")
 	cmd.Flags().String(optionNameOracleContractAddr, "", "link to oracle contract")
-	cmd.Flags().Bool(optionNameDebugAPIEnable, false, "enable debug HTTP API")
+	cmd.Flags().Bool(optionNameDebugAPIEnable, true, "enable debug HTTP API")
 	cmd.Flags().String(optionNameDebugAPIAddr, ":1635", "debug HTTP API listen address")
 	cmd.Flags().Uint64(optionNameNetworkID, 9, "ID of the Aurora network")
 	cmd.Flags().StringSlice(optionCORSAllowedOrigins, []string{}, "origins with CORS headers enabled")
