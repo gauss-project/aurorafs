@@ -1,9 +1,8 @@
 openapi: 3.0.3
 info:
-  version: 0.5.3
+  version: 1.0.0
   title: Common Data Types
   description: |
-    \*****bzzz*****
 
 externalDocs:
   description: Browse the documentation @ the aurorafs Docs
