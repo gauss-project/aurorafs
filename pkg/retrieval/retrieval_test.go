@@ -6,16 +6,15 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"github.com/gauss-project/aurorafs/pkg/chunkinfo/mock"
+	rmock "github.com/gauss-project/aurorafs/pkg/routetab/mock"
 	"sync"
 
 	"io/ioutil"
 	"testing"
 	"time"
 
-	"github.com/gauss-project/aurorafs/pkg/aurora"
 	"github.com/gauss-project/aurorafs/pkg/logging"
-	"github.com/gauss-project/aurorafs/pkg/routetab"
-
 	// "github.com/gauss-project/aurorafs/pkg/cac"
 	// "github.com/gauss-project/aurorafs/pkg/soc"
 
@@ -63,9 +62,9 @@ func TestDelivery(t *testing.T) {
 	}
 
 	// create the server that will handle the request and will serve the response
-	mockRouteTable := NewMockRouteTable()
+	mockRouteTable := rmock.NewMockRouteTable()
 	server := retrieval.New(serverAddr, nil, &mockRouteTable, mockStorer, true, logger, nil)
-	serverMockChunkInfo := NewMockChunkInfo()
+	serverMockChunkInfo := mock.New(mockRouteTable)
 	server.Config(serverMockChunkInfo)
 
 	recorder := streamtest.New(
@@ -85,7 +84,7 @@ func TestDelivery(t *testing.T) {
 	// 	return nil
 	// }}
 
-	mockChunkInfo := NewMockChunkInfo()
+	mockChunkInfo := mock.New(mockRouteTable)
 	mockChunkInfo.OnChunkTransferred(chunk.Address(), rootAddr, serverAddr)
 
 	client := retrieval.New(clientAddr, recorder, &mockRouteTable, clientMockStorer, true, logger, nil)
@@ -168,7 +167,7 @@ func TestRetrievalChunk(t *testing.T) {
 	// logger.NewEntry().Logger.SetFormatter(&logFormater)
 	logger := logging.New(ioutil.Discard, 0)
 	var (
-		mockRouteTable = NewMockRouteTable()
+		mockRouteTable = rmock.NewMockRouteTable()
 	)
 
 	t.Run("downstream", func(t *testing.T) {
@@ -190,7 +189,7 @@ func TestRetrievalChunk(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		serverMockChunkInfo := NewMockChunkInfo()
+		serverMockChunkInfo := mock.New(rmock.MockRouteTable{})
 		server := retrieval.New(serverAddress, nil, &mockRouteTable, serverStorer, true, logger, nil)
 		server.Config(serverMockChunkInfo)
 
@@ -200,7 +199,7 @@ func TestRetrievalChunk(t *testing.T) {
 		)
 
 		clientStorer := storemock.NewStorer()
-		clientMockChunkInfo := NewMockChunkInfo()
+		clientMockChunkInfo := mock.New(rmock.MockRouteTable{})
 		clientMockChunkInfo.OnChunkTransferred(chunk.Address(), rootAddr, serverAddress)
 		client := retrieval.New(clientAddress, recorder, &mockRouteTable, clientStorer, true, logger, nil)
 		client.Config(clientMockChunkInfo)
@@ -250,7 +249,7 @@ func TestRetrievalChunk(t *testing.T) {
 		clientStorer := storemock.NewStorer()
 		client := retrieval.New(clientAddress, c2fRecorder, &mockRouteTable, clientStorer, true, logger, nil)
 
-		clientChunkInfo := NewMockChunkInfo()
+		clientChunkInfo := mock.New(rmock.MockRouteTable{})
 		clientChunkInfo.OnChunkTransferred(chunk.Address(), rootAddr, serverAddress)
 		client.Config(clientChunkInfo)
 
@@ -301,7 +300,7 @@ func TestNeighborRetrieval(t *testing.T) {
 		if _, err := serverStorer.Put(context.Background(), storage.ModePutUpload, chunk); err != nil {
 			t.Fatal(err)
 		}
-		server := retrieval.New(serverAddress, nil, &mockRouteTable{}, serverStorer, true, logger, nil)
+		server := retrieval.New(serverAddress, nil, &rmock.MockRouteTable{}, serverStorer, true, logger, nil)
 		neighbor2serverRecorder := streamtest.New(
 			streamtest.WithProtocols(
 				server.Protocol(),
@@ -313,10 +312,11 @@ func TestNeighborRetrieval(t *testing.T) {
 
 		// init neighbor
 		neighborStorer := storemock.NewStorer()
+		clientStorer := storemock.NewStorer()
 		// if _, err := relayStorer.Put(context.Background(), storage.ModePutUpload, chunk); err != nil{
 		// 	t.Fatal(err)
 		// }
-		neighborServer := retrieval.New(neighborServerAddress, neighbor2serverRecorder, &mockRouteTable{}, neighborStorer, true, logger, nil)
+		neighborServer := retrieval.New(neighborServerAddress, neighbor2serverRecorder, &rmock.MockRouteTable{}, neighborStorer, true, logger, nil)
 		client2neighborRecorder := streamtest.New(
 			streamtest.WithProtocols(
 				neighborServer.Protocol(),
@@ -327,15 +327,15 @@ func TestNeighborRetrieval(t *testing.T) {
 		)
 
 		// init client
-		clientRouteTable := mockRouteTable{
-			rejectAddrList: []boson.Address{serverAddress},
-			neighborMap: map[string][]boson.Address{
+		clientRouteTable := rmock.MockRouteTable{
+			RejectAddrList: []boson.Address{serverAddress},
+			NeighborMap: map[string][]boson.Address{
 				serverAddress.String(): {neighborServerAddress},
 			},
 		}
-		client := retrieval.New(clientAddress, client2neighborRecorder, &clientRouteTable, nil, true, logger, nil)
+		client := retrieval.New(clientAddress, client2neighborRecorder, &clientRouteTable, clientStorer, true, logger, nil)
 
-		clientChunkInfo := NewMockChunkInfo()
+		clientChunkInfo := mock.New(clientRouteTable)
 		clientChunkInfo.OnChunkTransferred(chunkAddr, rootAddr, serverAddress)
 		client.Config(clientChunkInfo)
 
@@ -394,7 +394,7 @@ func TestRetrievePreemptiveRetry(t *testing.T) {
 
 	serverStorer1 := storemock.NewStorer()
 	serverStorer2 := storemock.NewStorer()
-
+	clientStorer := storemock.NewStorer()
 	// we put some other chunk on server 1
 	// _, err := serverStorer1.Put(context.Background(), storage.ModePutUpload, chunk)
 	_, err := serverStorer1.Put(context.Background(), storage.ModePutUpload, someOtherChunk)
@@ -407,19 +407,19 @@ func TestRetrievePreemptiveRetry(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	defaultMockRouteTable := NewMockRouteTable()
+	defaultMockRouteTable := rmock.NewMockRouteTable()
 
-	server1RouteTable := mockRouteTable{
-		rejectAddrList: []boson.Address{serverAddress2},
-		neighborMap:    map[string][]boson.Address{},
+	server1RouteTable := rmock.MockRouteTable{
+		RejectAddrList: []boson.Address{serverAddress2},
+		NeighborMap:    map[string][]boson.Address{},
 	}
 
 	server1 := retrieval.New(serverAddress1, nil, &server1RouteTable, serverStorer1, true, logger, nil)
-	server1ChunkInfo := NewMockChunkInfo()
+	server1ChunkInfo := mock.New(defaultMockRouteTable)
 	server1.Config(server1ChunkInfo)
 
 	server2 := retrieval.New(serverAddress2, nil, &defaultMockRouteTable, serverStorer2, true, logger, nil)
-	server2ChunkInfo := NewMockChunkInfo()
+	server2ChunkInfo := mock.New(defaultMockRouteTable)
 	server2.Config(server2ChunkInfo)
 
 	t.Run("peer does not have chunk", func(t *testing.T) {
@@ -448,8 +448,8 @@ func TestRetrievePreemptiveRetry(t *testing.T) {
 			),
 		)
 
-		client := retrieval.New(clientAddress, recorder, &defaultMockRouteTable, nil, true, logger, nil)
-		clientChunkInfo := NewMockChunkInfo()
+		client := retrieval.New(clientAddress, recorder, &defaultMockRouteTable, clientStorer, true, logger, nil)
+		clientChunkInfo := mock.New(defaultMockRouteTable)
 
 		clientChunkInfo.OnChunkTransferred(chunk.Address(), chunkRootAddr, serverAddress2)
 		client.Config(clientChunkInfo)
@@ -491,10 +491,10 @@ func TestRetrievePreemptiveRetry(t *testing.T) {
 		)
 
 		// client := retrieval.New(clientAddress, nil, recorder, peerSuggesterFn(peers...), logger, accountingmock.NewAccounting(), pricerMock, nil, false, noopStampValidator)
-		mockRouteTable := NewMockRouteTable()
-		client := retrieval.New(clientAddress, recorder, &mockRouteTable, nil, true, logger, nil)
+		mockRouteTable := rmock.NewMockRouteTable()
+		client := retrieval.New(clientAddress, recorder, &mockRouteTable, clientStorer, true, logger, nil)
 
-		clientChunkInfo := NewMockChunkInfo()
+		clientChunkInfo := mock.New(mockRouteTable)
 		clientChunkInfo.OnChunkTransferred(chunk.Address(), chunkRootAddr, serverAddress1)
 		clientChunkInfo.OnChunkTransferred(chunk.Address(), chunkRootAddr, serverAddress2)
 		client.Config(clientChunkInfo)
@@ -510,45 +510,9 @@ func TestRetrievePreemptiveRetry(t *testing.T) {
 	})
 }
 
-type mockRouteTable struct {
-	rejectAddrList []boson.Address
-	neighborMap    map[string][]boson.Address
-}
-
 // func (r *mockRouteTable)appendRejectAddress(addr boson.Address){
 // 	r.rejectAddrList = append(r.rejectAddrList, addr)
 // }
-
-func NewMockRouteTable() mockRouteTable {
-	return mockRouteTable{}
-}
-
-func (r *mockRouteTable) GetRoute(ctx context.Context, target boson.Address) (dest *aurora.Address, routes []routetab.RouteItem, err error) {
-	return
-}
-
-func (r *mockRouteTable) FindRoute(ctx context.Context, target boson.Address) (dest *aurora.Address, route []routetab.RouteItem, err error) {
-	return
-}
-
-func (r *mockRouteTable) Connect(ctx context.Context, target boson.Address) (err error) {
-	for _, node := range r.rejectAddrList {
-		if target.Equal(node) {
-			return fmt.Errorf("reject")
-		}
-	}
-	return
-}
-
-func (r *mockRouteTable) GetTargetNeighbor(ctx context.Context, target boson.Address, limit int) ([]boson.Address, error) {
-	// nodeList := make([]boson.Address, 0)
-	// return nodeList, nil
-	return r.neighborMap[target.String()], nil
-}
-
-func (r *mockRouteTable) IsNeighbor(dest boson.Address) (has bool) {
-	return
-}
 
 type mockPeerSuggester struct {
 	eachPeerRevFunc func(f topology.EachPeerFunc) error
@@ -560,58 +524,6 @@ func (s mockPeerSuggester) EachPeer(topology.EachPeerFunc) error {
 
 func (s mockPeerSuggester) EachPeerRev(f topology.EachPeerFunc) error {
 	return s.eachPeerRevFunc(f)
-}
-
-type mockChunkInfo struct {
-	chunkMap map[string][][]byte
-}
-
-func NewMockChunkInfo() *mockChunkInfo {
-	return &mockChunkInfo{
-		chunkMap: make(map[string][][]byte),
-	}
-}
-
-func (c *mockChunkInfo) DelFile(rootCid boson.Address) bool {
-	return false
-}
-func (c *mockChunkInfo) GetFileList(overlay boson.Address) (fileListInfo map[string]*aurora.FileInfo, rootList []boson.Address) {
-	return
-}
-func (c *mockChunkInfo) FindChunkInfo(ctx context.Context, authInfo []byte, rootCid boson.Address, overlays []boson.Address) bool {
-	return false
-}
-
-func (c *mockChunkInfo) GetChunkInfo(rootCid boson.Address, cid boson.Address) [][]byte {
-	mapKey := fmt.Sprintf("%v,%v", rootCid.String(), cid.String())
-	return c.chunkMap[mapKey]
-}
-
-func (c *mockChunkInfo) CancelFindChunkInfo(rootCid boson.Address) {}
-
-func (c *mockChunkInfo) OnChunkTransferred(cid boson.Address, rootCid boson.Address, overlays boson.Address) error {
-	mapKey := fmt.Sprintf("%v,%v", rootCid.String(), cid.String())
-	if _, exist := c.chunkMap[mapKey]; !exist {
-		c.chunkMap[mapKey] = make([][]byte, 0)
-	}
-	c.chunkMap[mapKey] = append(c.chunkMap[mapKey], overlays.Bytes())
-	return nil
-}
-
-func (c *mockChunkInfo) Init(ctx context.Context, authInfo []byte, rootCid boson.Address) bool {
-	return false
-}
-
-func (c *mockChunkInfo) GetChunkPyramid(rootCid boson.Address) []*boson.Address {
-	return []*boson.Address{}
-}
-
-func (c *mockChunkInfo) IsDiscover(rootCid boson.Address) bool {
-	return false
-}
-
-func (c *mockChunkInfo) GetChunkInfoOverlays(rootCid boson.Address) map[string]aurora.BitVectorApi {
-	return nil
 }
 
 // hasher is a helper function to hash a given data based on the given span.

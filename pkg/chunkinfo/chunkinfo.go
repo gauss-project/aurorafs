@@ -3,6 +3,7 @@ package chunkinfo
 import (
 	"context"
 	"fmt"
+	"github.com/gauss-project/aurorafs/pkg/retrieval/aco"
 	"github.com/gauss-project/aurorafs/pkg/settlement/swap/oracle"
 	"resenje.org/singleflight"
 	"strings"
@@ -21,7 +22,7 @@ import (
 type Interface interface {
 	FindChunkInfo(ctx context.Context, authInfo []byte, rootCid boson.Address, overlays []boson.Address) bool
 
-	GetChunkInfo(rootCid boson.Address, cid boson.Address) [][]byte
+	GetChunkInfo(rootCid boson.Address, cid boson.Address) []aco.Route
 
 	GetChunkInfoDiscoverOverlays(rootCid boson.Address) []aurora.ChunkInfoOverlay
 
@@ -200,7 +201,7 @@ func (ci *ChunkInfo) findChunkInfo(ctx context.Context, authInfo []byte, rootCid
 }
 
 // GetChunkInfo
-func (ci *ChunkInfo) GetChunkInfo(rootCid boson.Address, cid boson.Address) [][]byte {
+func (ci *ChunkInfo) GetChunkInfo(rootCid boson.Address, cid boson.Address) []aco.Route {
 	return ci.getChunkInfo(rootCid, cid)
 }
 

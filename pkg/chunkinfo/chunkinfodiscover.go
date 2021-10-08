@@ -6,6 +6,8 @@ import (
 	"github.com/gauss-project/aurorafs/pkg/bitvector"
 	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/chunkinfo/pb"
+	"github.com/gauss-project/aurorafs/pkg/retrieval/aco"
+	"math/rand"
 	"strings"
 	"sync"
 )
@@ -60,16 +62,38 @@ func (cd *chunkInfoDiscover) isExists(rootCid boson.Address) bool {
 }
 
 // getChunkInfo
-func (ci *ChunkInfo) getChunkInfo(rootCid, cid boson.Address) [][]byte {
+func (ci *ChunkInfo) getChunkInfo(rootCid, cid boson.Address) []aco.Route {
 	ci.cd.RLock()
 	defer ci.cd.RUnlock()
-	res := make([][]byte, 0)
+	res := make([]aco.Route, 0)
 	for overlay, bv := range ci.cd.presence[rootCid.String()] {
 		over := boson.MustParseHexAddress(overlay)
 		s := ci.cp.getCidStore(rootCid, cid)
 		if bv.Get(s) {
-			res = append(res, over.Bytes())
+			route := aco.NewRoute(over, over)
+			res = append(res, route)
 		}
+	}
+	randOverlays := ci.getRandomChunkInfo(res)
+	if randOverlays != nil && len(randOverlays) > 0 {
+		res = append(res, randOverlays...)
+	}
+	return res
+}
+
+func (ci *ChunkInfo) getRandomChunkInfo(routes []aco.Route) []aco.Route {
+
+	res := make([]aco.Route, 0)
+	r := rand.Intn(len(routes))
+	route := routes[r]
+	overlays, errs := ci.route.GetTargetNeighbor(context.Background(), route.TargetNode, totalRouteCount)
+	if errs != nil {
+		ci.logger.Errorf("[chunk info discover] get peers: %w", errs)
+		return res
+	}
+	for _, overlay := range overlays {
+		v := aco.NewRoute(overlay, route.TargetNode)
+		res = append(res, v)
 	}
 	return res
 }
@@ -102,7 +126,7 @@ func (ci *ChunkInfo) delDiscoverPresence(rootCid boson.Address) bool {
 	defer ci.cd.Unlock()
 
 	if v, ok := ci.cd.presence[rootCid.String()]; ok {
-		for k, _ := range v {
+		for k := range v {
 			err := ci.storer.Delete(generateKey(discoverKeyPrefix, rootCid, boson.MustParseHexAddress(k)))
 			if err != nil {
 				return false

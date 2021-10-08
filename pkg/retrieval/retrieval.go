@@ -389,43 +389,12 @@ func (s *Service) getRetrievalRouteList(ctx context.Context, rootAddr, chunkAddr
 		return nil
 	}
 
-	nodeList := make([]boson.Address, len(chunkResult))
-	for i, v := range chunkResult {
-		newNode := boson.NewAddress(v)
-		nodeList[i] = newNode
-	}
-
-	directRouteList := make([]aco.Route, len(nodeList))
-	for i, node := range nodeList {
-		newRoute := aco.NewRoute(node, node)
-		directRouteList[i] = newRoute
-	}
-	directRouteAcoIndexList := s.acoServer.GetRouteAcoIndex(directRouteList, totalRouteCount)
+	directRouteAcoIndexList := s.acoServer.GetRouteAcoIndex(chunkResult, totalRouteCount)
 
 	routList := make([]aco.Route, 0)
 	for _, acoIndex := range directRouteAcoIndexList {
-		curRoute := directRouteList[acoIndex]
+		curRoute := chunkResult[acoIndex]
 		routList = append(routList, curRoute)
-	}
-
-	// append neighbor nodes to retrieve route list
-	if len(directRouteAcoIndexList) > 0 {
-		acoIndex0 := directRouteAcoIndexList[0]
-		targetNode := directRouteList[acoIndex0].TargetNode
-		if neighborNodeList, err := s.routeTab.GetTargetNeighbor(ctx, targetNode, totalBackupRouteCount); err == nil {
-			backupRouteList := make([]aco.Route, len(neighborNodeList))
-			for i, node := range neighborNodeList {
-				linkNode := node
-				newRoute := aco.NewRoute(linkNode, targetNode)
-				backupRouteList[i] = newRoute
-			}
-			backupAcoIndexList := s.acoServer.GetRouteAcoIndex(backupRouteList, totalBackupRouteCount)
-
-			for _, acoIndex := range backupAcoIndexList {
-				newRoute := backupRouteList[acoIndex]
-				routList = append(routList, newRoute)
-			}
-		}
 	}
 
 	return routList
