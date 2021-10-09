@@ -47,11 +47,10 @@ type AcoServer struct {
 	mutex         sync.Mutex
 }
 
-func NewAcoServer() AcoServer {
-	aco := AcoServer{
+func NewAcoServer() *AcoServer {
+	aco := &AcoServer{
 		routeMetric:   make(map[string]*routeMetric),
 		toZeroElapsed: 20 * 60, // 1200s
-		mutex:         sync.Mutex{},
 	}
 	aco.cleanTrigger()
 	return aco

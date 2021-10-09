@@ -72,7 +72,7 @@ func New(addr boson.Address, streamer p2p.Streamer, routeTable routetab.RouteTab
 		logger:     logger,
 		metrics:    newMetrics(),
 		tracer:     tracer,
-		acoServer:  &acoServer,
+		acoServer:  acoServer,
 		routeTab:   routeTable,
 		isFullNode: isFullNode,
 	}
