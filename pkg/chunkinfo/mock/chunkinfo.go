@@ -154,6 +154,10 @@ func (ci *ChunkInfo) DelFile(rootCid boson.Address) bool {
 	return true
 }
 
+func (ci *ChunkInfo) DelDiscover(rootCid boson.Address) {
+
+}
+
 func (ci *ChunkInfo) DelPyramid(rootCid boson.Address) bool {
 	return ci.cp.delRootCid(rootCid)
 }

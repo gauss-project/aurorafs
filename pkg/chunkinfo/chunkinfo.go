@@ -42,6 +42,8 @@ type Interface interface {
 
 	DelFile(rootCid boson.Address) bool
 
+	DelDiscover(rootCid boson.Address)
+
 	DelPyramid(rootCid boson.Address) bool
 }
 
@@ -267,6 +269,7 @@ func (ci *ChunkInfo) GetFileList(overlay boson.Address) (fileListInfo map[string
 
 func (ci *ChunkInfo) DelFile(rootCid boson.Address) bool {
 	ci.queuesLk.Lock()
+	ci.CancelFindChunkInfo(rootCid)
 	delete(ci.queues, rootCid.String())
 	ci.queuesLk.Unlock()
 
@@ -274,6 +277,14 @@ func (ci *ChunkInfo) DelFile(rootCid boson.Address) bool {
 		return false
 	}
 	return ci.delPresence(rootCid)
+}
+
+func (ci *ChunkInfo) DelDiscover(rootCid boson.Address) {
+	ci.queuesLk.Lock()
+	ci.CancelFindChunkInfo(rootCid)
+	delete(ci.queues, rootCid.String())
+	ci.queuesLk.Unlock()
+	ci.delDiscoverPresence(rootCid)
 }
 
 func (ci *ChunkInfo) DelPyramid(rootCid boson.Address) bool {

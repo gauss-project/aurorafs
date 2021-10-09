@@ -246,7 +246,7 @@ func (s *server) fileDownloadHandler(w http.ResponseWriter, r *http.Request) {
 		jsonhttp.NotFound(w, nil)
 		return
 	}
-
+	defer s.chunkInfo.DelDiscover(address)
 	r = r.WithContext(sctx.SetRootCID(r.Context(), address))
 	if !s.chunkInfo.Init(r.Context(), nil, address) {
 		logger.Debugf("file download: chunkInfo init %s: %v", nameOrHex, err)
