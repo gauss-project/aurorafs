@@ -108,6 +108,11 @@ func (m *simpleManifest) Store(ctx context.Context, storeSizeFn ...StoreSizeFunc
 	return m.reference, nil
 }
 
+func (m *simpleManifest) IterateNodes(ctx context.Context, path []byte, level int, fn NodeIterFunc) error {
+	return nil
+}
+
+
 func (m *simpleManifest) IterateAddresses(ctx context.Context, fn boson.AddressIterFunc) error {
 	if boson.ZeroAddress.Equal(m.reference) {
 		return ErrMissingReference

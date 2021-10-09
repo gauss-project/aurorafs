@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/gorilla/mux"
 	"net/http"
 	"path"
 	"strings"
@@ -19,13 +18,13 @@ import (
 	"github.com/gauss-project/aurorafs/pkg/jsonhttp"
 	"github.com/gauss-project/aurorafs/pkg/manifest"
 	"github.com/gauss-project/aurorafs/pkg/sctx"
-	"github.com/gauss-project/aurorafs/pkg/storage"
 	"github.com/gauss-project/aurorafs/pkg/tracing"
+	"github.com/gorilla/mux"
 )
 
 func (s *server) dirDownloadHandler(w http.ResponseWriter, r *http.Request) {
 	logger := tracing.NewLoggerWithTraceID(r.Context(), s.logger)
-	ls := loadsave.New(s.storer, storage.ModePutRequest, false)
+	ls := loadsave.NewReadonly(s.storer)
 	feedDereferenced := false
 
 	nameOrHex := mux.Vars(r)["address"]

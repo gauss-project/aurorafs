@@ -307,12 +307,16 @@ func (s *Service) retrieveChunk(ctx context.Context, route aco.Route, rootAddr, 
 	}
 
 	if s.isFullNode && s.chunkinfo != nil {
-		s.chunkinfo.OnChunkTransferred(chunkAddr, rootAddr, s.addr)
+		s.logger.Tracef("retrieval: chunk %s is received", chunkAddr)
+		err := s.chunkinfo.OnChunkTransferred(chunkAddr, rootAddr, s.addr)
+		if err != nil {
+			return nil, fmt.Errorf("retrieval: report chunk transfer: %w", err)
+		}
 	}
 
 	_, err = s.storer.Put(ctx, storage.ModePutRequest, chunk)
 	if err != nil {
-		return nil, fmt.Errorf("retrieve cache put :%w", err)
+		return nil, fmt.Errorf("retrieval: storage put cache:%w", err)
 	}
 
 	return chunk, nil
@@ -368,7 +372,11 @@ func (s *Service) handler(ctx context.Context, p p2p.Peer, stream p2p.Stream) (e
 	}
 
 	if s.chunkinfo != nil && p.FullNode {
-		s.chunkinfo.OnChunkTransferred(chunkAddr, rootAddr, p.Address)
+		s.logger.Tracef("retrieval: chunk %s transfer to node %s", chunkAddr, p.Address)
+		err := s.chunkinfo.OnChunkTransferred(chunkAddr, rootAddr, p.Address)
+		if err != nil {
+			return fmt.Errorf("retrieval: report chunk transfer: %w", err)
+		}
 	}
 
 	if forward {

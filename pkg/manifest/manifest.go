@@ -30,6 +30,26 @@ var (
 // the Store function.
 type StoreSizeFunc func(int64) error
 
+// NodeIterFunc is a callback on each level.
+type NodeIterFunc func(nodeType int, path, prefix, hash []byte) error
+
+type NodeType int
+
+const (
+	File NodeType = iota
+	Directory
+)
+
+func (t NodeType) String() string {
+	switch t {
+	case File:
+		return "file"
+	case Directory:
+		return "directory"
+	}
+	return "unknown"
+}
+
 // Interface for operations with manifest.
 type Interface interface {
 	// Type returns manifest implementation type information
@@ -44,6 +64,8 @@ type Interface interface {
 	HasPrefix(context.Context, string) (bool, error)
 	// Store stores the manifest, returning the resulting address.
 	Store(context.Context, ...StoreSizeFunc) (boson.Address, error)
+	// IterateNodes
+	IterateNodes(context.Context, []byte, int, NodeIterFunc) error
 	// IterateAddresses is used to iterate over chunks addresses for
 	// the manifest.
 	IterateAddresses(context.Context, boson.AddressIterFunc) error

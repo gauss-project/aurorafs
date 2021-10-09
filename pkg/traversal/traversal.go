@@ -347,7 +347,7 @@ func (s *traversalService) checkIsManifestWithCustomStore(
 	m, err = manifest.NewManifestReference(
 		metadata.MimeType,
 		e.Reference(),
-		loadsave.New(storer, storage.ModePutRequest, false),
+		loadsave.NewReadonly(storer),
 	)
 	if err != nil {
 		if err == manifest.ErrInvalidManifestType {

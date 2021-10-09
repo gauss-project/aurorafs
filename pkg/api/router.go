@@ -81,6 +81,20 @@ func (s *server) setupRouting() {
 		),
 	})
 
+	handle(router, "/manifest/{address}", jsonhttp.MethodHandler{
+		"GET": web.ChainHandlers(
+			s.newTracingHandler("manifest-ls"),
+			web.FinalHandlerFunc(s.manifestListHandler),
+		),
+	})
+
+	handle(router, "/manifest/{address}/{path:.*}", jsonhttp.MethodHandler{
+		"GET": web.ChainHandlers(
+			s.newTracingHandler("manifest-view"),
+			web.FinalHandlerFunc(s.manifestViewHandler),
+		),
+	})
+
 	handle(router, "/bytes", jsonhttp.MethodHandler{
 		"POST": web.ChainHandlers(
 			s.newTracingHandler("bytes-upload"),

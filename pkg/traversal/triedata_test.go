@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/gauss-project/aurorafs/pkg/file/pipeline"
 	"math"
 	"path"
 	"sort"
@@ -72,7 +73,9 @@ func uploadDirs(t *testing.T, ctx context.Context, store storage.Storer, manifes
 		dirManifest manifest.Interface
 		err         error
 	)
-	ls := loadsave.New(store, storage.ModePutRequest, encrypted)
+	ls := loadsave.New(store, func() pipeline.Interface {
+		return builder.NewPipelineBuilder(ctx, store, storage.ModePutUpload, false)
+	})
 	switch manifestType {
 	case manifest.ManifestSimpleContentType:
 		dirManifest, err = manifest.NewSimpleManifest(ls)
