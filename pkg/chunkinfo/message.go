@@ -345,7 +345,7 @@ func (ci *ChunkInfo) onFindChunkPyramid(ctx context.Context, authInfo []byte, ro
 		ci.logger.Errorf("chunk pyramid: check pyramid error")
 		return err
 	}
-	ci.updateChunkPyramid(rootCid, v, hashs)
+	ci.updateChunkPyramid(rootCid, v, pyramid)
 	ci.ct.initNeighborChunkInfo(rootCid)
 	return nil
 }
