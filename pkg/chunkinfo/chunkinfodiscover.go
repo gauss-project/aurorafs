@@ -83,12 +83,15 @@ func (ci *ChunkInfo) getChunkInfo(rootCid, cid boson.Address) []aco.Route {
 
 func (ci *ChunkInfo) getRandomChunkInfo(routes []aco.Route) []aco.Route {
 
+	if len(routes) <= 0 {
+		return nil
+	}
 	res := make([]aco.Route, 0)
 	r := rand.Intn(len(routes))
 	route := routes[r]
 	overlays, errs := ci.route.GetTargetNeighbor(context.Background(), route.TargetNode, totalRouteCount)
 	if errs != nil {
-		ci.logger.Errorf("[chunk info discover] get peers: %w", errs)
+		ci.logger.Warningf("[chunk info discover] get peers: %w", errs)
 		return res
 	}
 	for _, overlay := range overlays {
