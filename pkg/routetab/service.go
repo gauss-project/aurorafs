@@ -154,14 +154,14 @@ func (s *Service) onRouteReq(ctx context.Context, p p2p.Peer, stream p2p.Stream)
 
 	s.metrics.FindRouteReqReceivedCount.Inc()
 	// passive route save
-	go func(path [][]byte) {
-		for i, target := range path {
-			now := pathToRouteItem(path[i:])
-			if len(now) > 0 {
-				_ = s.routeTable.Set(boson.NewAddress(target), now)
-			}
-		}
-	}(req.Path)
+	//go func(path [][]byte) {
+	//	for i, target := range path {
+	//		now := pathToRouteItem(path[i:])
+	//		if len(now) > 0 {
+	//			_ = s.routeTable.Set(boson.NewAddress(target), now)
+	//		}
+	//	}
+	//}(req.Path)
 
 	target := boson.NewAddress(req.Dest)
 
