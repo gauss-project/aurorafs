@@ -9,17 +9,26 @@ import (
 	"github.com/gauss-project/aurorafs/pkg/retrieval/aco"
 	"strings"
 	"sync"
+	"time"
 )
 
 var discoverKeyPrefix = "discover-"
+
+const (
+	cleanTime = 1 * time.Hour
+	maxTime   = 24 * 60 * 60
+)
 
 // chunkInfoDiscover
 type chunkInfoDiscover struct {
 	sync.RWMutex
 	// rootcid:overlays:bitvector
-	presence map[string]map[string]*bitvector.BitVector
-	// rootcid:nodes
-	overlays map[string][]boson.Address
+	presence map[string]map[string]*discoverBitVector
+}
+
+type discoverBitVector struct {
+	bit  *bitvector.BitVector
+	time int64
 }
 
 func (ci *ChunkInfo) initChunkInfoDiscover() error {
@@ -49,7 +58,9 @@ func (ci *ChunkInfo) initChunkInfoDiscover() error {
 }
 
 func newChunkInfoDiscover() *chunkInfoDiscover {
-	return &chunkInfoDiscover{overlays: make(map[string][]boson.Address), presence: make(map[string]map[string]*bitvector.BitVector)}
+	cd := &chunkInfoDiscover{presence: make(map[string]map[string]*discoverBitVector)}
+	cd.cleanTrigger()
+	return cd
 }
 
 // isExists
@@ -68,7 +79,7 @@ func (ci *ChunkInfo) getChunkInfo(rootCid, cid boson.Address) []aco.Route {
 	for overlay, bv := range ci.cd.presence[rootCid.String()] {
 		over := boson.MustParseHexAddress(overlay)
 		s := ci.cp.getCidStore(rootCid, cid)
-		if bv.Get(s) {
+		if bv.bit.Get(s) {
 			route := aco.NewRoute(over, over)
 			res = append(res, route)
 		}
@@ -101,8 +112,8 @@ func (ci *ChunkInfo) getChunkInfoOverlays(rootCid boson.Address) []aurora.ChunkI
 	ci.cd.RLock()
 	defer ci.cd.RUnlock()
 	res := make([]aurora.ChunkInfoOverlay, 0)
-	for overlay, bit := range ci.cd.presence[rootCid.String()] {
-		bv := aurora.BitVectorApi{Len: bit.Len(), B: bit.Bytes()}
+	for overlay, bv := range ci.cd.presence[rootCid.String()] {
+		bv := aurora.BitVectorApi{Len: bv.bit.Len(), B: bv.bit.Bytes()}
 		cio := aurora.ChunkInfoOverlay{Overlay: overlay, Bit: bv}
 		res = append(res, cio)
 	}
@@ -113,11 +124,14 @@ func (cd *chunkInfoDiscover) putChunkInfoDiscover(rootCid, overlay boson.Address
 	cd.Lock()
 	defer cd.Unlock()
 	rc := rootCid.String()
-	cd.overlays[rc] = append(cd.overlays[rc], overlay)
 	if _, ok := cd.presence[rc]; !ok {
-		cd.presence[rc] = make(map[string]*bitvector.BitVector)
+		cd.presence[rc] = make(map[string]*discoverBitVector)
 	}
-	cd.presence[rc][overlay.String()] = &vector
+	db := &discoverBitVector{
+		bit:  &vector,
+		time: time.Now().Unix(),
+	}
+	cd.presence[rc][overlay.String()] = db
 }
 
 func (ci *ChunkInfo) delDiscoverPresence(rootCid boson.Address) bool {
@@ -134,7 +148,6 @@ func (ci *ChunkInfo) delDiscoverPresence(rootCid boson.Address) bool {
 	}
 
 	delete(ci.cd.presence, rootCid.String())
-	delete(ci.cd.overlays, rootCid.String())
 	return true
 }
 
@@ -144,12 +157,8 @@ func (ci *ChunkInfo) updateChunkInfo(rootCid, overlay boson.Address, bv []byte) 
 	defer ci.cd.Unlock()
 
 	rc := rootCid.String()
-	over := overlay.String()
 	if _, ok := ci.cd.presence[rc]; !ok {
-		ci.cd.presence[rc] = make(map[string]*bitvector.BitVector)
-	}
-	if _, ok := ci.cd.presence[rootCid.String()][over]; !ok {
-		ci.cd.overlays[rc] = append(ci.cd.overlays[rc], overlay)
+		ci.cd.presence[rc] = make(map[string]*discoverBitVector)
 	}
 	vb, ok := ci.cd.presence[rc][overlay.String()]
 	if !ok {
@@ -157,15 +166,19 @@ func (ci *ChunkInfo) updateChunkInfo(rootCid, overlay boson.Address, bv []byte) 
 		if v == 0 {
 			return
 		}
-		vb, _ = bitvector.NewFromBytes(bv, v)
+		bit, _ := bitvector.NewFromBytes(bv, v)
+		vb = &discoverBitVector{
+			bit:  bit,
+			time: time.Now().Unix(),
+		}
 		ci.cd.presence[rc][overlay.String()] = vb
 	} else {
-		if err := vb.SetBytes(bv); err != nil {
+		if err := vb.bit.SetBytes(bv); err != nil {
 			ci.logger.Errorf("chunk discover: set bit vector error")
 		}
 	}
 	// db
-	if err := ci.storer.Put(generateKey(discoverKeyPrefix, rootCid, overlay), &bitVector{B: vb.Bytes(), Len: vb.Len()}); err != nil {
+	if err := ci.storer.Put(generateKey(discoverKeyPrefix, rootCid, overlay), &bitVector{B: vb.bit.Bytes(), Len: vb.bit.Len()}); err != nil {
 		ci.logger.Errorf("chunk discover: put store error")
 	}
 }
@@ -179,4 +192,23 @@ func (cd *chunkInfoDiscover) createChunkInfoReq(rootCid, target, req boson.Addre
 // doFindChunkInfo
 func (ci *ChunkInfo) doFindChunkInfo(ctx context.Context, authInfo []byte, rootCid boson.Address) {
 	ci.queueProcess(ctx, rootCid)
+}
+
+func (cd *chunkInfoDiscover) cleanTrigger() {
+	t := time.NewTicker(cleanTime)
+	go func() {
+		for {
+			<-t.C
+			now := time.Now().Unix()
+			cd.Lock()
+			for _, v := range cd.presence {
+				for k, db := range v {
+					if db.time+maxTime < now {
+						delete(v, k)
+					}
+				}
+			}
+			cd.Unlock()
+		}
+	}()
 }
