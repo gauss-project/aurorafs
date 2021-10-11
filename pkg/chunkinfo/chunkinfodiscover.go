@@ -7,7 +7,6 @@ import (
 	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/chunkinfo/pb"
 	"github.com/gauss-project/aurorafs/pkg/retrieval/aco"
-	"math/rand"
 	"strings"
 	"sync"
 )
@@ -74,10 +73,7 @@ func (ci *ChunkInfo) getChunkInfo(rootCid, cid boson.Address) []aco.Route {
 			res = append(res, route)
 		}
 	}
-	randOverlays := ci.getRandomChunkInfo(res)
-	if randOverlays != nil && len(randOverlays) > 0 {
-		res = append(res, randOverlays...)
-	}
+	res = ci.getRandomChunkInfo(res)
 	return res
 }
 
@@ -87,16 +83,16 @@ func (ci *ChunkInfo) getRandomChunkInfo(routes []aco.Route) []aco.Route {
 		return nil
 	}
 	res := make([]aco.Route, 0)
-	r := rand.Intn(len(routes))
-	route := routes[r]
-	overlays, errs := ci.route.GetTargetNeighbor(context.Background(), route.TargetNode, totalRouteCount)
-	if errs != nil {
-		ci.logger.Warningf("[chunk info discover] get peers: %w", errs)
-		return res
-	}
-	for _, overlay := range overlays {
-		v := aco.NewRoute(overlay, route.TargetNode)
-		res = append(res, v)
+	for _, route := range routes {
+		overlays, errs := ci.route.GetTargetNeighbor(context.Background(), route.TargetNode, totalRouteCount)
+		if errs != nil {
+			res = append(res, route)
+			continue
+		}
+		for _, overlay := range overlays {
+			v := aco.NewRoute(overlay, route.TargetNode)
+			res = append(res, v)
+		}
 	}
 	return res
 }
