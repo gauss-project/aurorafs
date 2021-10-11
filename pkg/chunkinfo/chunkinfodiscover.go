@@ -58,9 +58,7 @@ func (ci *ChunkInfo) initChunkInfoDiscover() error {
 }
 
 func newChunkInfoDiscover() *chunkInfoDiscover {
-	cd := &chunkInfoDiscover{presence: make(map[string]map[string]*discoverBitVector)}
-	cd.cleanTrigger()
-	return cd
+	return &chunkInfoDiscover{presence: make(map[string]map[string]*discoverBitVector)}
 }
 
 // isExists
@@ -194,21 +192,29 @@ func (ci *ChunkInfo) doFindChunkInfo(ctx context.Context, authInfo []byte, rootC
 	ci.queueProcess(ctx, rootCid)
 }
 
-func (cd *chunkInfoDiscover) cleanTrigger() {
+func (ci *ChunkInfo) cleanDiscoverTrigger() {
 	t := time.NewTicker(cleanTime)
 	go func() {
 		for {
 			<-t.C
 			now := time.Now().Unix()
-			cd.Lock()
-			for _, v := range cd.presence {
-				for k, db := range v {
+			ci.cd.Lock()
+			for rootCid, discover := range ci.cd.presence {
+				for overlay, db := range discover {
 					if db.time+maxTime < now {
-						delete(v, k)
+						delete(discover, overlay)
+						if err := ci.storer.Delete(generateKey(discoverKeyPrefix, boson.MustParseHexAddress(rootCid), boson.MustParseHexAddress(overlay))); err != nil {
+							continue
+						}
+						ci.queuesLk.Lock()
+						if q, ok := ci.queues[rootCid]; ok {
+							q.popNode(Pulled, boson.MustParseHexAddress(overlay).Bytes())
+						}
+						ci.queuesLk.Unlock()
 					}
 				}
 			}
-			cd.Unlock()
+			ci.cd.Unlock()
 		}
 	}()
 }

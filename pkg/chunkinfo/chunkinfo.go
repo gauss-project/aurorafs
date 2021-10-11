@@ -93,6 +93,7 @@ func New(addr boson.Address, streamer p2p.Streamer, logger logging.Logger, trave
 		oracleChain: oracleChain,
 	}
 	chunkinfo.triggerTimeOut()
+	chunkinfo.cleanDiscoverTrigger()
 	return chunkinfo
 }
 
