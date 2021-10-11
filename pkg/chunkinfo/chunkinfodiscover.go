@@ -96,7 +96,7 @@ func (ci *ChunkInfo) getRandomChunkInfo(routes []aco.Route) []aco.Route {
 	res := make([]aco.Route, 0)
 	for _, route := range routes {
 		overlays, errs := ci.route.GetTargetNeighbor(context.Background(), route.TargetNode, totalRouteCount)
-		if errs != nil {
+		if errs != nil || overlays == nil {
 			res = append(res, route)
 			continue
 		}
