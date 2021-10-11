@@ -126,20 +126,20 @@ func (s *AcoServer) onDownloadTaskFinish(route Route, startMs int64, endMs int64
 	} else {
 		recordStartMs, recordEndMs := s.routeMetric[routeKey].downloadDetail.StartMs, s.routeMetric[routeKey].downloadDetail.EndMs
 
-		if endMs < recordStartMs {
+		if retEndMs < recordStartMs {
 			return
-		} else if recordEndMs < startMs {
+		} else if recordEndMs < retStartMs {
 			s.routeMetric[routeKey].downloadDetail = &DownloadDetail{
-				StartMs: startMs,
-				EndMs:   endMs,
+				StartMs: retStartMs,
+				EndMs:   retEndMs,
 				Size:    size,
 			}
 		} else {
-			if startMs < recordStartMs {
-				s.routeMetric[routeKey].downloadDetail.StartMs = startMs
+			if retStartMs < recordStartMs {
+				s.routeMetric[routeKey].downloadDetail.StartMs = retStartMs
 			}
-			if endMs > recordEndMs {
-				s.routeMetric[routeKey].downloadDetail.EndMs = endMs
+			if retEndMs > recordEndMs {
+				s.routeMetric[routeKey].downloadDetail.EndMs = retEndMs
 			}
 			s.routeMetric[routeKey].downloadDetail.Size += size
 		}
