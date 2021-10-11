@@ -125,24 +125,24 @@ func (s *Service) RetrieveChunk(ctx context.Context, rootAddr, chunkAddr boson.A
 
 				// create a new context without cancelation but
 				// set the tracing span to the new context from the context of the first caller
-				ctx := tracing.WithContext(topCtx, tracing.FromContext(topCtx))
+				ctx1 := tracing.WithContext(topCtx, tracing.FromContext(topCtx))
 
 				// get the tracing span
-				span, _, ctx := s.tracer.StartSpanFromContext(ctx, "retrieve-chunk", s.logger,
+				span, _, ctx1 := s.tracer.StartSpanFromContext(ctx1, "retrieve-chunk", s.logger,
 					opentracing.Tag{Key: "rootAddr,chunkAddr", Value: rootAddr.String() + "," + chunkAddr.String()})
 				defer span.Finish()
 
 				go func() {
-					ctx, cancel := context.WithTimeout(ctx, retrieveChunkTimeout)
+					ctx1, cancel := context.WithTimeout(ctx1, retrieveChunkTimeout)
 					defer cancel()
 
-					chunk, err := s.retrieveChunk(ctx, retrievalRoute, rootAddr, chunkAddr)
+					chunk, err := s.retrieveChunk(ctx1, retrievalRoute, rootAddr, chunkAddr)
 					select {
 					case resultC <- retrievalResult{
 						chunk: chunk,
 						err:   err,
 					}:
-					case <-ctx.Done():
+					case <-ctx1.Done():
 					}
 				}()
 
@@ -197,26 +197,26 @@ func (s *Service) RetrieveChunkFromNode(ctx context.Context, targetNode boson.Ad
 
 			// create a new context without cancelation but
 			// set the tracing span to the new context from the context of the first caller
-			ctx := tracing.WithContext(context.Background(), tracing.FromContext(topCtx))
+			ctx1 := tracing.WithContext(context.Background(), tracing.FromContext(topCtx))
 
 			// get the tracing span
-			span, _, ctx := s.tracer.StartSpanFromContext(ctx, "retrieve-chunk", s.logger,
+			span, _, ctx := s.tracer.StartSpanFromContext(ctx1, "retrieve-chunk", s.logger,
 				opentracing.Tag{Key: "rootAddr,chunkAddr", Value: rootAddr.String() + "," + chunkAddr.String()})
 			defer span.Finish()
 
 			s.metrics.PeerRequestCounter.Inc()
 			go func() {
 				// cancel the goroutine just with the timeout
-				ctx, cancel := context.WithTimeout(ctx, retrieveChunkTimeout)
+				ctx1, cancel := context.WithTimeout(ctx1, retrieveChunkTimeout)
 				defer cancel()
 
-				chunk, err := s.retrieveChunk(ctx, retrievalRoute, rootAddr, chunkAddr)
+				chunk, err := s.retrieveChunk(ctx1, retrievalRoute, rootAddr, chunkAddr)
 				select {
 				case resultC <- retrievalResult{
 					chunk: chunk,
 					err:   err,
 				}:
-				case <-ctx.Done():
+				case <-ctx1.Done():
 				}
 			}()
 
