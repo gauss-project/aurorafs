@@ -20,7 +20,7 @@ import (
 
 const (
 	protocolName         = "router"
-	protocolVersion      = "1.0.0"
+	protocolVersion      = "2.0.0"
 	streamOnRouteReq     = "onRouteReq"
 	streamOnRouteResp    = "onRouteResp"
 	streamOnFindUnderlay = "onFindUnderlay"
