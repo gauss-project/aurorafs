@@ -169,6 +169,9 @@ func (ci *ChunkInfo) queueProcess(ctx context.Context, rootCid boson.Address) {
 func (ci *ChunkInfo) updateQueue(ctx context.Context, authInfo []byte, rootCid, overlay boson.Address, overlays [][]byte) {
 	ci.queuesLk.Lock()
 	q := ci.getQueue(rootCid.String())
+	if q == nil {
+		return
+	}
 	for _, n := range overlays {
 		if q.len(UnPull) >= PullerMax {
 			break
