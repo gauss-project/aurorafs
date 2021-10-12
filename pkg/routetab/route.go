@@ -587,53 +587,58 @@ func (s *Service) findUnderlay(ctx context.Context, target boson.Address) (addr 
 	}
 
 	for _, path := range paths {
-		stream, err := s.config.Stream.NewStream(ctx, path.Item[1], nil, protocolName, protocolVersion, streamOnFindUnderlay)
-		if err != nil {
-			// delete invalid path
-			s.routeTable.Delete(path)
-			continue
+		addr, err = s.readStream(ctx, target, path)
+		if err == nil {
+			return
 		}
-		path.UsedTime = time.Now()
-
-		doneFunc := func() {
-			if err != nil {
-				_ = stream.Reset()
-			} else {
-				go stream.FullClose()
-			}
-		}
-		w, r := protobuf.NewWriterAndReader(stream)
-		req := pb.UnderlayReq{
-			Dest: target.Bytes(),
-			Sign: path.Sign,
-		}
-		if err = w.WriteMsgWithContext(ctx, &req); err != nil {
-			s.logger.Errorf("find underlay dest %s req err %s", target.String(), err.Error())
-			doneFunc()
-			continue
-		}
-		s.logger.Tracef("find underlay dest %s req to %s", target.String(), path.Item[1].String())
-
-		resp := &pb.UnderlayResp{}
-		if err = r.ReadMsgWithContext(ctx, resp); err != nil {
-			s.logger.Errorf("find underlay dest %s read msg: %s", target.String(), err.Error())
-			doneFunc()
-			continue
-		}
-		s.logger.Tracef("find underlay dest %s receive: from %s", target.String(), path.Item[1].String())
-
-		addr, err = aurora.ParseAddress(resp.Underlay, resp.Dest, resp.Signature, s.config.NetworkID)
-		if err != nil {
-			s.logger.Errorf("find underlay dest %s parse err %s", target.String(), err.Error())
-			doneFunc()
-			continue
-		}
-		err = s.config.AddressBook.Put(addr.Overlay, *addr)
-		if err != nil {
-			doneFunc()
-			continue
-		}
-		break
 	}
 	return
+}
+
+func (s *Service) readStream(ctx context.Context, target boson.Address, path *Path) (*aurora.Address, error) {
+	stream, err := s.config.Stream.NewStream(ctx, path.Item[1], nil, protocolName, protocolVersion, streamOnFindUnderlay)
+	if err != nil {
+		// delete invalid path
+		s.routeTable.Delete(path)
+		return nil, err
+	}
+	path.UsedTime = time.Now()
+
+	defer func() {
+		if err != nil {
+			_ = stream.Reset()
+		} else {
+			go stream.FullClose()
+		}
+	}()
+
+	w, r := protobuf.NewWriterAndReader(stream)
+	req := pb.UnderlayReq{
+		Dest: target.Bytes(),
+		Sign: path.Sign,
+	}
+	if err = w.WriteMsgWithContext(ctx, &req); err != nil {
+		s.logger.Errorf("find underlay dest %s req err %s", target.String(), err.Error())
+		return nil, err
+	}
+	s.logger.Tracef("find underlay dest %s req to %s", target.String(), path.Item[1].String())
+
+	resp := &pb.UnderlayResp{}
+	if err = r.ReadMsgWithContext(ctx, resp); err != nil {
+		s.logger.Errorf("find underlay dest %s read msg: %s", target.String(), err.Error())
+		return nil, err
+	}
+	s.logger.Tracef("find underlay dest %s receive: from %s", target.String(), path.Item[1].String())
+
+	var addr *aurora.Address
+	addr, err = aurora.ParseAddress(resp.Underlay, resp.Dest, resp.Signature, s.config.NetworkID)
+	if err != nil {
+		s.logger.Errorf("find underlay dest %s parse err %s", target.String(), err.Error())
+		return nil, err
+	}
+	err = s.config.AddressBook.Put(addr.Overlay, *addr)
+	if err != nil {
+		return nil, err
+	}
+	return addr, nil
 }
