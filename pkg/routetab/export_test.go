@@ -1,45 +1,20 @@
 package routetab
 
 import (
-	"context"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/gauss-project/aurorafs/pkg/aurora"
-	"github.com/gauss-project/aurorafs/pkg/boson"
-	"github.com/gauss-project/aurorafs/pkg/p2p"
-	"github.com/gauss-project/aurorafs/pkg/routetab/pb"
+	"github.com/gauss-project/aurorafs/pkg/p2p/streamtest"
 )
 
 var (
-	ProtocolName        = protocolName
-	ProtocolVersion     = protocolVersion
-	StreamFindRouteReq  = streamOnRouteReq
-	StreamFindRouteResp = streamOnRouteResp
-
-	CheckExpired      = checkExpired
-	MergeRouteList    = mergeRouteList
-	NewMetrics        = newMetrics
 	NewPendCallResTab = newPendCallResTab
 	NewRouteTable     = newRouteTable
-	PathToRouteItem   = pathToRouteItem
-	UpdateRouteItem   = updateRouteItem
 )
 
-func (s *Service) DoReq(ctx context.Context, src boson.Address, peer p2p.Peer, dest boson.Address, req *pb.FindRouteReq, ch chan struct{}) {
-	s.doRouteReq(ctx, src, peer.Address, dest, req, ch)
+func (t *Table) TableClean() {
+	t.items = make(map[common.Hash]Route)
+	t.signed = make(map[common.Hash]*Path)
 }
 
-func (s *Service) DoResp(ctx context.Context, peer p2p.Peer, target *aurora.Address, routes []RouteItem) {
-	s.doRouteResp(ctx, peer.Address, target, routes)
-}
-
-func (s *Service) RouteTab() *routeTable {
-	return s.routeTable
-}
-
-func (s *Service) GetNeighbor(target boson.Address, alpha int32) []boson.Address {
-	return s.getNeighbor(target, alpha)
-}
-
-func (pend *pendCallResTab) GetItems() map[common.Hash]pendingCallResArray {
-	return pend.items
+func (s *Service) SetStreamer(recorder *streamtest.Recorder) {
+	s.config.Stream = recorder
 }
