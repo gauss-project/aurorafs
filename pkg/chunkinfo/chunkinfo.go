@@ -2,7 +2,10 @@ package chunkinfo
 
 import (
 	"context"
+	"fmt"
+	"github.com/gauss-project/aurorafs/pkg/retrieval/aco"
 	"github.com/gauss-project/aurorafs/pkg/settlement/swap/oracle"
+	"resenje.org/singleflight"
 	"strings"
 	"sync"
 	"time"
@@ -13,14 +16,13 @@ import (
 	"github.com/gauss-project/aurorafs/pkg/p2p"
 	"github.com/gauss-project/aurorafs/pkg/routetab"
 	"github.com/gauss-project/aurorafs/pkg/storage"
-	traversal "github.com/gauss-project/aurorafs/pkg/traversal"
-	"golang.org/x/sync/singleflight"
+	"github.com/gauss-project/aurorafs/pkg/traversal"
 )
 
 type Interface interface {
 	FindChunkInfo(ctx context.Context, authInfo []byte, rootCid boson.Address, overlays []boson.Address) bool
 
-	GetChunkInfo(rootCid boson.Address, cid boson.Address) [][]byte
+	GetChunkInfo(rootCid boson.Address, cid boson.Address) []aco.Route
 
 	GetChunkInfoDiscoverOverlays(rootCid boson.Address) []aurora.ChunkInfoOverlay
 
@@ -40,6 +42,8 @@ type Interface interface {
 
 	DelFile(rootCid boson.Address) bool
 
+	DelDiscover(rootCid boson.Address)
+
 	DelPyramid(rootCid boson.Address) bool
 }
 
@@ -52,10 +56,12 @@ type ChunkInfo struct {
 	streamer     p2p.Streamer
 	logger       logging.Logger
 	metrics      metrics
-	t            *time.Timer
+	t            *time.Ticker
 	tt           *timeoutTrigger
 	queuesLk     sync.RWMutex
 	queues       map[string]*queue
+	syncLk       sync.RWMutex
+	syncMsg      map[string]chan bool
 	ct           *chunkInfoTabNeighbor
 	cd           *chunkInfoDiscover
 	cp           *chunkPyramid
@@ -67,8 +73,9 @@ type ChunkInfo struct {
 // New
 func New(addr boson.Address, streamer p2p.Streamer, logger logging.Logger, traversal traversal.Service, storer storage.StateStorer, route routetab.RouteTab, oracleChain oracle.Resolver) *ChunkInfo {
 	queues := make(map[string]*queue)
-	t := time.NewTimer(Time * time.Second)
-	return &ChunkInfo{
+	syncMsg := make(map[string]chan bool)
+
+	chunkinfo := &ChunkInfo{
 		addr:        addr,
 		storer:      storer,
 		route:       route,
@@ -78,13 +85,16 @@ func New(addr boson.Address, streamer p2p.Streamer, logger logging.Logger, trave
 		cp:          newChunkPyramid(),
 		cpd:         newPendingFinderInfo(),
 		queues:      queues,
-		t:           t,
+		syncMsg:     syncMsg,
 		tt:          newTimeoutTrigger(),
 		streamer:    streamer,
 		logger:      logger,
 		traversal:   traversal,
 		oracleChain: oracleChain,
 	}
+	chunkinfo.triggerTimeOut()
+	chunkinfo.cleanDiscoverTrigger()
+	return chunkinfo
 }
 
 const chunkInfoRetryIntervalDuration = 1 * time.Second
@@ -116,15 +126,20 @@ func (ci *ChunkInfo) InitChunkInfo() error {
 }
 
 func (ci *ChunkInfo) Init(ctx context.Context, authInfo []byte, rootCid boson.Address) bool {
-	if ci.ct.isExists(rootCid) {
-		return true
-	}
 
-	overlays := ci.oracleChain.GetNodesFromCid(rootCid.Bytes())
-	if len(overlays) <= 0 {
-		return false
-	}
-	return ci.FindChunkInfo(context.Background(), authInfo, rootCid, overlays)
+	key := fmt.Sprintf("%s%s", rootCid, "chunkinfo")
+	v, _, _ := ci.singleflight.Do(ctx, key, func(ctx context.Context) (interface{}, error) {
+		if ci.ct.isExists(rootCid) {
+			return true, nil
+		}
+
+		overlays := ci.oracleChain.GetNodesFromCid(rootCid.Bytes())
+		if len(overlays) <= 0 {
+			return false, nil
+		}
+		return ci.FindChunkInfo(context.Background(), authInfo, rootCid, overlays), nil
+	})
+	return v.(bool)
 }
 
 // FindChunkInfo
@@ -136,18 +151,16 @@ func (ci *ChunkInfo) FindChunkInfo(ctx context.Context, authInfo []byte, rootCid
 	var (
 		peerAttempt  int
 		peersResults int
-		errorC            = make(chan error, count)
-		first        bool = true
+		errorC       = make(chan error, count)
+		msgChan      = make(chan bool, 1)
 	)
 	for {
 		if ci.cp.isExists(rootCid) {
-			if ci.cd.isExists(rootCid) {
-				return true
-			}
-			if first {
-				ci.findChunkInfo(ctx, authInfo, rootCid, overlays)
-				first = false
-			}
+			ticker.Stop()
+			ci.syncLk.Lock()
+			ci.syncMsg[rootCid.String()] = msgChan
+			ci.syncLk.Unlock()
+			ci.findChunkInfo(ctx, authInfo, rootCid, overlays)
 		} else if peerAttempt < count {
 			if err := ci.doFindChunkPyramid(ctx, nil, rootCid, overlays[peerAttempt]); err != nil {
 				errorC <- err
@@ -161,7 +174,13 @@ func (ci *ChunkInfo) FindChunkInfo(ctx context.Context, authInfo []byte, rootCid
 			peersResults++
 		case <-ctx.Done():
 			return false
+		case msg := <-msgChan:
+			ci.syncLk.Lock()
+			delete(ci.syncMsg, rootCid.String())
+			ci.syncLk.Unlock()
+			return msg
 		}
+
 		if peersResults >= count {
 			return false
 		}
@@ -169,7 +188,7 @@ func (ci *ChunkInfo) FindChunkInfo(ctx context.Context, authInfo []byte, rootCid
 }
 
 func (ci *ChunkInfo) findChunkInfo(ctx context.Context, authInfo []byte, rootCid boson.Address, overlays []boson.Address) {
-	go ci.triggerTimeOut()
+
 	ci.cpd.updatePendingFinder(rootCid)
 	if ci.getQueue(rootCid.String()) == nil {
 		ci.newQueue(rootCid.String())
@@ -185,7 +204,7 @@ func (ci *ChunkInfo) findChunkInfo(ctx context.Context, authInfo []byte, rootCid
 }
 
 // GetChunkInfo
-func (ci *ChunkInfo) GetChunkInfo(rootCid boson.Address, cid boson.Address) [][]byte {
+func (ci *ChunkInfo) GetChunkInfo(rootCid boson.Address, cid boson.Address) []aco.Route {
 	return ci.getChunkInfo(rootCid, cid)
 }
 
@@ -251,6 +270,7 @@ func (ci *ChunkInfo) GetFileList(overlay boson.Address) (fileListInfo map[string
 
 func (ci *ChunkInfo) DelFile(rootCid boson.Address) bool {
 	ci.queuesLk.Lock()
+	ci.CancelFindChunkInfo(rootCid)
 	delete(ci.queues, rootCid.String())
 	ci.queuesLk.Unlock()
 
@@ -258,6 +278,14 @@ func (ci *ChunkInfo) DelFile(rootCid boson.Address) bool {
 		return false
 	}
 	return ci.delPresence(rootCid)
+}
+
+func (ci *ChunkInfo) DelDiscover(rootCid boson.Address) {
+	ci.queuesLk.Lock()
+	ci.CancelFindChunkInfo(rootCid)
+	delete(ci.queues, rootCid.String())
+	ci.queuesLk.Unlock()
+	ci.delDiscoverPresence(rootCid)
 }
 
 func (ci *ChunkInfo) DelPyramid(rootCid boson.Address) bool {

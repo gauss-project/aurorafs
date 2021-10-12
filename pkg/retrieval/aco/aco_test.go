@@ -1,12 +1,12 @@
 package aco
 
 import (
-	"fmt"
-	"sync"
-	"time"
 	"context"
-	"testing"
+	"fmt"
 	"math/rand"
+	"sync"
+	"testing"
+	"time"
 
 	"github.com/gauss-project/aurorafs/pkg/boson"
 	// "github.com/gauss-project/aurorafs/pkg/retrieval/aco"
@@ -90,9 +90,9 @@ func TestRouteScore(t *testing.T) {
 		}
 
 		// time passed, default score, default passtime: 15*60s
-		startMs := (time.Now().Unix() - 30*60)*1000
+		startMs := (time.Now().Unix() - 30*60) * 1000
 		endMs := startMs + 5*60*1000
-		size := defaultScore * ((endMs - startMs)/1000)
+		size := defaultScore * ((endMs - startMs) / 1000)
 		downloadDetail := DownloadDetail{startMs, endMs, size}
 		server.OnDownloadFinish(route1, &downloadDetail)
 		// server.OnDownloadTaskFinish(route1, startTs, endTs, int64(size))
@@ -105,19 +105,19 @@ func TestRouteScore(t *testing.T) {
 
 		// time not pass, default passtime: 15*60
 		route2 := Route{
-			LinkNode: addr1,
+			LinkNode:   addr1,
 			TargetNode: addr1,
 		}
-		endMs = (time.Now().Unix() - server.toZeroElapsed/2)*1000
+		endMs = (time.Now().Unix() - server.toZeroElapsed/2) * 1000
 		startMs = endMs - 5*60*1000
-		size = defaultRate * 2 * ((endMs - startMs)/1000)
+		size = defaultRate * 2 * ((endMs - startMs) / 1000)
 		downloadDetail = DownloadDetail{startMs, endMs, size}
 		server.OnDownloadFinish(route2, &downloadDetail)
 		scoreList = server.getSelectRouteListScore([]Route{route2})
 		curScore := scoreList[0]
 
-		timeFromEnd := (time.Now().Unix()*1000 - endMs)/1000
-		initRate := size / ((endMs - startMs)/1000)
+		timeFromEnd := (time.Now().Unix()*1000 - endMs) / 1000
+		initRate := size / ((endMs - startMs) / 1000)
 		wantScore := int64(float64(initRate-defaultRate)*(1.0-float64(timeFromEnd)/float64(server.toZeroElapsed))) + defaultRate
 
 		// server.OnDownloadTaskFinish(route1, startMs, endMs, int64(size))
@@ -194,9 +194,9 @@ func TestRouteScore(t *testing.T) {
 			TargetNode: addr2,
 		}
 
-		endMs := time.Now().UnixNano() /1e6
+		endMs := time.Now().UnixNano() / 1e6
 		startMs := endMs - 5*60*1000
-		size := defaultRate * 2 * ((endMs - startMs)/1000)
+		size := defaultRate * 2 * ((endMs - startMs) / 1000)
 
 		overlapStartMs1, overlapStartMs2 := startMs, startMs
 		overlapEndMs1, overlapEndMs2 := endMs, endMs
@@ -215,12 +215,12 @@ func TestRouteScore(t *testing.T) {
 			LinkNode:   addr2,
 			TargetNode: addr1,
 		}
-		endMs1 := (time.Now().Unix() - 10*60)*1000
+		endMs1 := (time.Now().Unix() - 10*60) * 1000
 		startMs1 := endMs1 - 5*60*1000
-		endMs2 := time.Now().Unix()*1000
+		endMs2 := time.Now().Unix() * 1000
 		startMs2 := endMs2 - 5*60*1000
-		size1 := defaultRate * 3 * ((endMs1 - startMs1)/1000)
-		size2 := defaultRate * 2 * ((endMs2 - startMs2)/1000)
+		size1 := defaultRate * 3 * ((endMs1 - startMs1) / 1000)
+		size2 := defaultRate * 2 * ((endMs2 - startMs2) / 1000)
 		server.OnDownloadFinish(route2, &DownloadDetail{startMs1, endMs1, size1})
 		server.OnDownloadFinish(route2, &DownloadDetail{startMs2, endMs2, size2})
 
@@ -248,15 +248,14 @@ func TestRouteScore(t *testing.T) {
 
 		taskCount := 20
 
-
 		mockRate := defaultRate * 2
 		lastScore := defaultRate
 		for i := 0; i < taskCount; i++ {
-			curMs := time.Now().UnixNano()/1e6
+			curMs := time.Now().UnixNano() / 1e6
 
 			endMs := curMs - int64(taskCount-1-i)*60*1000
 			startMs := endMs - 30*1000
-			size := mockRate * ((endMs - startMs)/1000)
+			size := mockRate * ((endMs - startMs) / 1000)
 			server.OnDownloadFinish(route1, &DownloadDetail{startMs, endMs, size})
 			scoreList := server.getSelectRouteListScore([]Route{route1})
 			curScore := scoreList[0]
@@ -276,7 +275,7 @@ func TestRouteScore(t *testing.T) {
 	})
 }
 
-func TestAcoSortAlgrithm(t *testing.T){
+func TestAcoSortAlgrithm(t *testing.T) {
 	backupList := []int{10, 10, 10, 10, 10, 10, 10, 10}
 	// var selectIndex int
 
@@ -288,13 +287,13 @@ func TestAcoSortAlgrithm(t *testing.T){
 	// count := 0
 	rand.Seed(time.Now().Unix())
 	staticCount := 30000
-	for i:=0;i<staticCount;i++{
-		randNum := rand.Intn(100)+1
+	for i := 0; i < staticCount; i++ {
+		randNum := rand.Intn(100) + 1
 		curSum := 0
 		var acoIndex int
-		for k,v := range backupList{
+		for k, v := range backupList {
 			nextSum := curSum + v
-			if curSum < randNum && randNum <= nextSum{
+			if curSum < randNum && randNum <= nextSum {
 				acoIndex = k
 				break
 			}
@@ -318,7 +317,7 @@ func TestAcoEffectiveness(t *testing.T) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	metricRecord := make(map[int][]int64)
-	go recordAcoMetricSnap(ctx, mockNet.getAllRouteList(), &acoServer, metricRecord)
+	go recordAcoMetricSnap(ctx, mockNet.getAllRouteList(), acoServer, metricRecord)
 	// go recordClientDownloadRate(ctx, &mockClient)
 
 	bandwidthStatic := mockNet.getBandwidthStatic()
@@ -346,13 +345,13 @@ func TestAcoEffectiveness(t *testing.T) {
 					targetRoute := routeListForChunk[routeIndex]
 					routeBandwidth := mockNet.queryRouteBandwidth(targetRoute)
 
-					startMs := time.Now().UnixNano()/1e6
+					startMs := time.Now().UnixNano() / 1e6
 					acoServer.OnDownloadStart(targetRoute)
 					// t.Logf("try <<-- cid: %03d from : %03d\n", chunkId, routeIndex)
 					downloadResult := mockClient.TryDownloadChunk(targetRoute, chunkId, routeBandwidth)
 					acoServer.onDownloadEnd(targetRoute)
 					if downloadResult {
-						endMs := time.Now().UnixNano()/1e6
+						endMs := time.Now().UnixNano() / 1e6
 
 						downloadDetail := DownloadDetail{startMs, endMs, chunkSize}
 						acoServer.OnDownloadFinish(targetRoute, &downloadDetail)
@@ -416,18 +415,17 @@ func recordAcoMetricSnap(ctx context.Context, routeList []Route, acoServer *AcoS
 
 	for {
 		fmt.Print("&")
-		i+=1
+		i += 1
 
 		scoreList := acoServer.getSelectRouteListScore(routeList)
-		for k,v := range scoreList{
+		for k, v := range scoreList {
 			routeIndex := k
 			curRouteScore := v
 			metricRecordMap[routeIndex] = append(metricRecordMap[routeIndex], curRouteScore)
 		}
 
-
 		time.Sleep(100 * time.Millisecond)
-		if i>step{
+		if i > step {
 			i = 0
 			routeScoreStatic := generateRouteMtricReport(metricRecordMap)
 			fmt.Printf("\n%v\n", routeScoreStatic)
@@ -506,7 +504,7 @@ func NewMockNet(routeCount int, chunkCount int) mockNet {
 
 func (n *mockNet) queryRouteBandwidth(route Route) int64 {
 	routeIndex := -1
-	for i := 0; i< n.routeCount; i++{
+	for i := 0; i < n.routeCount; i++ {
 		if n.routeList[i].LinkNode.Equal(route.LinkNode) && n.routeList[i].TargetNode.Equal(route.TargetNode) {
 			routeIndex = i
 			break

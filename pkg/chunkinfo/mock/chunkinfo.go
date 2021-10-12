@@ -2,9 +2,16 @@ package mock
 
 import (
 	"context"
+	"fmt"
 	"github.com/gauss-project/aurorafs/pkg/aurora"
 	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/chunkinfo"
+	"github.com/gauss-project/aurorafs/pkg/retrieval/aco"
+	"github.com/gauss-project/aurorafs/pkg/routetab/mock"
+)
+
+var (
+	chunkMap map[string][]aco.Route
 )
 
 type chunkPyramid struct {
@@ -33,11 +40,14 @@ func newPendingFinderInfo() *pendingFinderInfo {
 type ChunkInfo struct {
 	cp    *chunkPyramid
 	cpd   *pendingFinderInfo
+	route mock.MockRouteTable
 	queue map[string]chunkinfo.Pull
 }
 
-func New() *ChunkInfo {
+func New(route mock.MockRouteTable) *ChunkInfo {
+	chunkMap = make(map[string][]aco.Route, 0)
 	return &ChunkInfo{
+		route: route,
 		cp:    newChunkPyramid(),
 		cpd:   newPendingFinderInfo(),
 		queue: make(map[string]chunkinfo.Pull),
@@ -48,8 +58,15 @@ func (ci *ChunkInfo) FindChunkInfo(_ context.Context, authInfo []byte, rootCid b
 	panic("not implemented")
 }
 
-func (ci *ChunkInfo) GetChunkInfo(rootCid boson.Address, cid boson.Address) [][]byte {
-	panic("not implemented")
+func (ci *ChunkInfo) GetChunkInfo(rootCid boson.Address, cid boson.Address) []aco.Route {
+	mapKey := fmt.Sprintf("%v,%v", rootCid.String(), cid.String())
+	for k, v := range ci.route.NeighborMap {
+		for _, n := range v {
+			route := aco.NewRoute(n, boson.MustParseHexAddress(k))
+			chunkMap[mapKey] = append(chunkMap[mapKey], route)
+		}
+	}
+	return chunkMap[mapKey]
 }
 
 func (ci *ChunkInfo) GetChunkInfoDiscoverOverlays(rootCid boson.Address) []aurora.ChunkInfoOverlay {
@@ -71,7 +88,13 @@ func (ci *ChunkInfo) CancelFindChunkInfo(rootCid boson.Address) {
 }
 
 func (ci *ChunkInfo) OnChunkTransferred(cid boson.Address, rootCid boson.Address, overlays boson.Address) error {
-	panic("not implemented")
+	mapKey := fmt.Sprintf("%v,%v", rootCid.String(), cid.String())
+	if _, exist := chunkMap[mapKey]; !exist {
+		chunkMap[mapKey] = make([]aco.Route, 0)
+	}
+	route := aco.NewRoute(overlays, overlays)
+	chunkMap[mapKey] = append(chunkMap[mapKey], route)
+	return nil
 }
 
 func (ci *ChunkInfo) Init(ctx context.Context, authInfo []byte, rootCid boson.Address) bool {
@@ -84,7 +107,7 @@ func (ci *ChunkInfo) GetChunkPyramid(rootCid boson.Address) []*chunkinfo.Pyramid
 	for overlay, cnt := range v {
 		over := boson.MustParseHexAddress(overlay)
 		cids = append(cids, &chunkinfo.PyramidCidNum{
-			Cid: over,
+			Cid:    over,
 			Number: cnt,
 		})
 	}
@@ -129,6 +152,10 @@ func (ci *ChunkInfo) ChangeDiscoverStatus(rootCid boson.Address, s chunkinfo.Pul
 
 func (ci *ChunkInfo) DelFile(rootCid boson.Address) bool {
 	return true
+}
+
+func (ci *ChunkInfo) DelDiscover(rootCid boson.Address) {
+
 }
 
 func (ci *ChunkInfo) DelPyramid(rootCid boson.Address) bool {
