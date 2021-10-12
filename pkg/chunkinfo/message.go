@@ -345,7 +345,7 @@ func (ci *ChunkInfo) onFindChunkPyramid(ctx context.Context, authInfo []byte, ro
 		ci.logger.Errorf("chunk pyramid: check pyramid error")
 		return err
 	}
-	ci.updateChunkPyramid(rootCid, v, hashs)
+	ci.updateChunkPyramid(rootCid, v, pyramid)
 	ci.ct.initNeighborChunkInfo(rootCid)
 	return nil
 }
@@ -361,5 +361,10 @@ func (ci *ChunkInfo) onFindChunkInfo(ctx context.Context, authInfo []byte, rootC
 		overlays = append(overlays, boson.MustParseHexAddress(over).Bytes())
 		ci.updateChunkInfo(rootCid, boson.MustParseHexAddress(over), bv)
 	}
+	ci.syncLk.Lock()
+	if msgChan, ok := ci.syncMsg[rootCid.String()]; ok {
+		msgChan <- true
+	}
+	ci.syncLk.Unlock()
 	ci.updateQueue(ctx, authInfo, rootCid, overlay, overlays)
 }
