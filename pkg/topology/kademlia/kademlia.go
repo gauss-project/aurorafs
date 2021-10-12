@@ -160,6 +160,7 @@ func New(
 		wg:                sync.WaitGroup{},
 		metrics:           newMetrics(),
 		pruneFunc:         o.PruneFunc,
+		radius:            boson.MaxPO,
 	}
 
 	if k.pruneFunc == nil {
@@ -658,12 +659,12 @@ func (k *Kad) connectBootNodes(ctx context.Context) {
 // initiate connections to other peers in the bin.
 func binSaturated(oversaturationAmount int) binSaturationFunc {
 	return func(bin uint8, peers, connected *pslice.PSlice) (bool, bool) {
-		//potentialDepth := recalcDepth(peers, boson.MaxPO)
+		potentialDepth := recalcDepth(peers, boson.MaxPO)
 
 		// short circuit for bins which are >= depth
-		//if bin >= potentialDepth {
-		//	return false, false
-		//}
+		if bin >= potentialDepth {
+			return false, false
+		}
 
 		// lets assume for now that the minimum number of peers in a bin
 		// would be 2, under which we would always want to connect to new peers
