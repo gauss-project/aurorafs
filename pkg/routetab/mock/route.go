@@ -3,7 +3,6 @@ package mock
 import (
 	"context"
 	"fmt"
-	"github.com/gauss-project/aurorafs/pkg/aurora"
 	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/routetab"
 )
@@ -17,11 +16,11 @@ func NewMockRouteTable() MockRouteTable {
 	return MockRouteTable{}
 }
 
-func (r *MockRouteTable) GetRoute(ctx context.Context, target boson.Address) (dest *aurora.Address, routes []routetab.RouteItem, err error) {
-	return nil, []routetab.RouteItem{}, nil
+func (r *MockRouteTable) GetRoute(ctx context.Context, target boson.Address) (routes []*routetab.Path, err error) {
+	return []*routetab.Path{}, nil
 }
-func (r *MockRouteTable) FindRoute(ctx context.Context, target boson.Address) (dest *aurora.Address, route []routetab.RouteItem, err error) {
-	return nil, []routetab.RouteItem{}, nil
+func (r *MockRouteTable) FindRoute(ctx context.Context, target boson.Address) (route []*routetab.Path, err error) {
+	return []*routetab.Path{}, nil
 }
 func (r *MockRouteTable) Connect(ctx context.Context, target boson.Address) error {
 	for _, node := range r.RejectAddrList {
