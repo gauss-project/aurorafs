@@ -6,28 +6,29 @@ package routetab;
 
 option go_package = "pb";
 
-// define FindRouteReq message struct here
-message FindRouteReq {
-    bytes Dest = 1;
-    repeated bytes Path = 2;
-    int32 Alpha = 3;
-}
-// define FindRouteResp message struct here
-message FindRouteResp {
+message UnderlayResp {
     bytes Dest = 1;
     bytes Underlay = 2;
     bytes Signature = 3;
-    repeated RouteItem RouteItems = 4;
 }
 
-message RouteItem {
-    int64 CreateTime = 1;
-    uint32 TTL = 2;
-    bytes Neighbor = 3;
-    repeated RouteItem NextHop = 4;
+message UnderlayReq {
+    bytes Dest = 1;
+    bytes Sign = 2;
 }
 
-message SendData {
-    string Handler = 1;
-    bytes Data = 2;
+message RouteResp {
+    bytes Dest = 1;
+    repeated Path Paths = 2;
+}
+
+message RouteReq {
+    bytes Dest = 1;
+    int32 Alpha = 2;
+    Path Path = 3;
+}
+
+message Path {
+    bytes Sign = 1;
+    repeated bytes Item = 2;
 }

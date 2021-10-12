@@ -110,15 +110,17 @@ func New(
 	o Options,
 ) (*Kad, error) {
 	if o.SaturationFunc == nil {
-		if o.BinMaxPeers > 5 {
-			if o.BinMaxPeers%5 != 0 {
-				overSaturationPeers = o.BinMaxPeers - o.BinMaxPeers%5 + 5
-			} else {
-				overSaturationPeers = o.BinMaxPeers
-			}
-			saturationPeers = overSaturationPeers / 10
-			quickSaturationPeers = overSaturationPeers / 5
+		if o.BinMaxPeers < 5 {
+			overSaturationPeers = 5
 		}
+		if o.BinMaxPeers%5 == 0 {
+			overSaturationPeers = o.BinMaxPeers
+		} else {
+			overSaturationPeers = o.BinMaxPeers - o.BinMaxPeers%5 + 5
+		}
+		saturationPeers = overSaturationPeers / 5 * 2
+		quickSaturationPeers = overSaturationPeers / 5
+
 		os := overSaturationPeers
 		if o.BootnodeMode {
 			os = bootNodeOverSaturationPeers
@@ -158,6 +160,7 @@ func New(
 		wg:                sync.WaitGroup{},
 		metrics:           newMetrics(),
 		pruneFunc:         o.PruneFunc,
+		radius:            boson.MaxPO,
 	}
 
 	if k.pruneFunc == nil {
@@ -656,12 +659,12 @@ func (k *Kad) connectBootNodes(ctx context.Context) {
 // initiate connections to other peers in the bin.
 func binSaturated(oversaturationAmount int) binSaturationFunc {
 	return func(bin uint8, peers, connected *pslice.PSlice) (bool, bool) {
-		//potentialDepth := recalcDepth(peers, boson.MaxPO)
+		potentialDepth := recalcDepth(peers, boson.MaxPO)
 
 		// short circuit for bins which are >= depth
-		//if bin >= potentialDepth {
-		//	return false, false
-		//}
+		if bin >= potentialDepth {
+			return false, false
+		}
 
 		// lets assume for now that the minimum number of peers in a bin
 		// would be 2, under which we would always want to connect to new peers
@@ -1042,23 +1045,12 @@ func closestPeerFunc(closest *boson.Address, addr boson.Address, spf sanctionedP
 	}
 }
 
-func isIn(a boson.Address, addresses []p2p.Peer) bool {
-	for _, v := range addresses {
-		if v.Address.Equal(a) {
-			return true
-		}
-	}
-	return false
-}
-
 // ClosestPeer returns the closest peer to a given address.
 func (k *Kad) ClosestPeer(addr boson.Address, includeSelf bool, skipPeers ...boson.Address) (boson.Address, error) {
 	if k.connectedPeers.Length() == 0 {
 		return boson.Address{}, topology.ErrNotFound
 	}
 
-	peers := k.p2p.Peers()
-	var peersToDisconnect []boson.Address
 	closest := boson.ZeroAddress
 
 	if includeSelf {
@@ -1075,20 +1067,10 @@ func (k *Kad) ClosestPeer(addr boson.Address, includeSelf bool, skipPeers ...bos
 
 		if closest.IsZero() {
 			closest = peer
-		}
-
-		// kludge: hotfix for topology peer inconsistencies bug
-		if !isIn(peer, peers) {
-			a := boson.NewAddress(peer.Bytes())
-			peersToDisconnect = append(peersToDisconnect, a)
 			return false, false, nil
 		}
 
-		closer, err := peer.Closer(addr, closest)
-		if err != nil {
-			return false, false, err
-		}
-		if closer {
+		if closer, _ := peer.Closer(addr, closest); closer {
 			closest = peer
 		}
 		return false, false, nil
@@ -1099,10 +1081,6 @@ func (k *Kad) ClosestPeer(addr boson.Address, includeSelf bool, skipPeers ...bos
 
 	if closest.IsZero() { // no peers
 		return boson.Address{}, topology.ErrNotFound // only for light nodes
-	}
-
-	for _, v := range peersToDisconnect {
-		k.Disconnected(p2p.Peer{Address: v})
 	}
 
 	// check if self
@@ -1178,8 +1156,16 @@ func (k *Kad) EachKnownPeerRev(f topology.EachPeerFunc) error {
 	return k.knownPeers.EachBinRev(f)
 }
 
-func (k *Kad) KnownPeer() *pslice.PSlice {
+func (k *Kad) KnownPeers() *pslice.PSlice {
 	return k.knownPeers
+}
+
+func (k *Kad) ConnectedPeers() *pslice.PSlice {
+	return k.connectedPeers
+}
+
+func (k *Kad) RandomSubset(array []boson.Address, count int) ([]boson.Address, error) {
+	return randomSubset(array, count)
 }
 
 // SubscribePeersChange returns the channel that signals when the connected peers
