@@ -1,14 +1,11 @@
 package routetab
 
 import (
-	"context"
 	"sync"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/gauss-project/aurorafs/pkg/aurora"
 	"github.com/gauss-project/aurorafs/pkg/boson"
-	"github.com/gauss-project/aurorafs/pkg/logging"
 )
 
 var (
@@ -16,28 +13,22 @@ var (
 	pendingInterval = time.Millisecond * 500
 )
 
-type pendCallResItem struct {
-	src        boson.Address
-	createTime time.Time
-	resCh      chan struct{}
+type PendCallResItem struct {
+	Src        boson.Address
+	CreateTime time.Time
+	ResCh      chan struct{}
 }
 
-type pendingCallResArray []pendCallResItem
+type PendingCallResArray []*PendCallResItem
 type pendCallResTab struct {
-	items   map[common.Hash]pendingCallResArray
-	mu      sync.Mutex
-	logger  logging.Logger
-	addr    boson.Address
-	metrics metrics
+	items map[common.Hash]PendingCallResArray
+	mu    sync.Mutex
 }
 
-func newPendCallResTab(addr boson.Address, logger logging.Logger, met metrics) *pendCallResTab {
+func newPendCallResTab() *pendCallResTab {
 	return &pendCallResTab{
-		items:   make(map[common.Hash]pendingCallResArray),
-		mu:      sync.Mutex{},
-		logger:  logger,
-		addr:    addr,
-		metrics: met,
+		items: make(map[common.Hash]PendingCallResArray),
+		mu:    sync.Mutex{},
 	}
 }
 
@@ -53,10 +44,10 @@ func (pend *pendCallResTab) Delete(target boson.Address) {
 func (pend *pendCallResTab) Add(target, src boson.Address, resCh chan struct{}) (has bool) {
 	mKey := common.BytesToHash(target.Bytes())
 
-	pending := pendCallResItem{
-		src:        src,
-		createTime: time.Now(),
-		resCh:      resCh,
+	pending := &PendCallResItem{
+		Src:        src,
+		CreateTime: time.Now(),
+		ResCh:      resCh,
 	}
 
 	pend.mu.Lock()
@@ -64,57 +55,52 @@ func (pend *pendCallResTab) Add(target, src boson.Address, resCh chan struct{}) 
 
 	res, ok := pend.items[mKey]
 	if ok {
-		now := pendingCallResArray{}
-		for _, v := range res {
-			if v.src.Equal(src) {
-				continue
-			}
-			now = append(now, v)
-		}
-		pend.items[mKey] = append(now, pending)
 		has = true
+		for _, v := range res {
+			if v.Src.Equal(src) {
+				v.CreateTime = time.Now()
+				return
+			}
+		}
+		res = append(res, pending)
+		pend.items[mKey] = res
 	} else {
-		pend.items[mKey] = pendingCallResArray{pending}
+		pend.items[mKey] = PendingCallResArray{pending}
 	}
 	return
 }
 
-func (pend *pendCallResTab) Forward(ctx context.Context, s *Service, target *aurora.Address, routes []RouteItem) error {
-	mKey := common.BytesToHash(target.Overlay.Bytes())
+func (pend *pendCallResTab) Get(target boson.Address) PendingCallResArray {
+	mKey := common.BytesToHash(target.Bytes())
 
 	pend.mu.Lock()
 	defer pend.mu.Unlock()
 
-	res := pend.items[mKey]
-	for _, v := range res {
-		if !v.src.Equal(pend.addr) {
-			// forward
-			s.doRouteResp(ctx, v.src, target, routes)
-		} else if v.resCh != nil {
-			// sync return
-			v.resCh <- struct{}{}
-		}
+	res, ok := pend.items[mKey]
+	if ok {
+		delete(pend.items, mKey)
+		return res
 	}
-	delete(pend.items, mKey)
 	return nil
 }
 
 func (pend *pendCallResTab) Gc(expire time.Duration) {
 	for mKey, item := range pend.items {
 		pend.mu.Lock()
-		var now pendingCallResArray
-		for i := len(item) - 1; i >= 0; i-- {
-			if time.Since(item[i].createTime).Milliseconds() > expire.Milliseconds() {
-				if i == len(item)-1 {
-					delete(pend.items, mKey)
-				} else {
-					now = item[i:]
+		var now PendingCallResArray
+		var update bool
+		for k, v := range item {
+			if time.Since(v.CreateTime).Milliseconds() < expire.Milliseconds() {
+				now = item[k:]
+				if len(now) > 0 {
+					pend.items[mKey] = now
+					update = true
 				}
 				break
 			}
 		}
-		if len(now) > 0 {
-			pend.items[mKey] = now
+		if !update {
+			delete(pend.items, mKey)
 		}
 		pend.mu.Unlock()
 	}

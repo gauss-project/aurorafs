@@ -83,6 +83,10 @@ func (d *mock) Connected(ctx context.Context, peer p2p.Peer, _ bool) error {
 	return nil
 }
 
+func (d *mock) DisconnectForce(addr boson.Address, reason string) error {
+	panic("implement me")
+}
+
 func (d *mock) Disconnected(peer p2p.Peer) {
 	d.mtx.Lock()
 	defer d.mtx.Unlock()
