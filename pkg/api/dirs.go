@@ -8,7 +8,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/gauss-project/aurorafs/pkg/file/joiner"
 	"io"
 	"mime"
 	"net/http"
@@ -20,6 +19,7 @@ import (
 	"github.com/gauss-project/aurorafs/pkg/chunkinfo"
 	"github.com/gauss-project/aurorafs/pkg/collection/entry"
 	"github.com/gauss-project/aurorafs/pkg/file"
+	"github.com/gauss-project/aurorafs/pkg/file/joiner"
 	"github.com/gauss-project/aurorafs/pkg/file/loadsave"
 	"github.com/gauss-project/aurorafs/pkg/jsonhttp"
 	"github.com/gauss-project/aurorafs/pkg/logging"
@@ -417,9 +417,9 @@ func (s *server) serveManifestMetadata(w http.ResponseWriter, r *http.Request, e
 	}
 
 	jsonhttp.OK(w, &FsType{
-		Size: binary.LittleEndian.Uint64(refChunk.Data()[:boson.SpanSize]),
+		Size:      binary.LittleEndian.Uint64(refChunk.Data()[:boson.SpanSize]),
 		Extension: ext,
-		MimeType: metadata.MimeType,
+		MimeType:  metadata.MimeType,
 	})
 }
 

@@ -4,9 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/ethersphere/manifest/mantaray"
+
 	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/file"
+	"github.com/gauss-project/manifest/mantaray"
 )
 
 const (
