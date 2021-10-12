@@ -82,10 +82,11 @@ func (s *server) setupRouting() {
 	})
 
 	handle(router, "/manifest/{address}", jsonhttp.MethodHandler{
-		"GET": web.ChainHandlers(
-			s.newTracingHandler("manifest-ls"),
-			web.FinalHandlerFunc(s.manifestListHandler),
-		),
+		"GET": http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			u := r.URL
+			u.Path += "/"
+			http.Redirect(w, r, u.String(), http.StatusPermanentRedirect)
+		}),
 	})
 
 	handle(router, "/manifest/{address}/{path:.*}", jsonhttp.MethodHandler{

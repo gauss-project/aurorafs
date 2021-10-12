@@ -12,7 +12,6 @@ import (
 	"io"
 	"mime"
 	"net/http"
-	"path"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -359,144 +358,6 @@ func (s *server) dirDeleteHandler(w http.ResponseWriter, r *http.Request) {
 	jsonhttp.OK(w, nil)
 }
 
-func (s *server) manifestListHandler(w http.ResponseWriter, r *http.Request) {
-	logger := tracing.NewLoggerWithTraceID(r.Context(), s.logger)
-	ls := loadsave.NewReadonly(s.storer)
-
-	nameOrHex := mux.Vars(r)["address"]
-
-	address, err := s.resolveNameOrAddress(nameOrHex)
-	if err != nil {
-		logger.Debugf("manifest list: parse address %s: %v", nameOrHex, err)
-		logger.Error("manifest list: parse address")
-		jsonhttp.NotFound(w, nil)
-		return
-	}
-
-	// read manifest entry
-	j, _, err := joiner.New(r.Context(), s.storer, address)
-	if err != nil {
-		logger.Debugf("manifest list: joiner manifest entry %s: %v", address, err)
-		logger.Errorf("manifest list: joiner %s", address)
-		jsonhttp.NotFound(w, nil)
-		return
-	}
-
-	buf := bytes.NewBuffer(nil)
-	_, err = file.JoinReadAll(r.Context(), j, buf)
-	if err != nil {
-		logger.Debugf("manifest list: read entry %s: %v", address, err)
-		logger.Errorf("manifest list: read entry %s", address)
-		jsonhttp.NotFound(w, nil)
-		return
-	}
-
-	e := &entry.Entry{}
-	err = e.UnmarshalBinary(buf.Bytes())
-	if err != nil {
-		logger.Debugf("manifest list: unmarshal entry %s: %v", address, err)
-		logger.Errorf("manifest list: unmarshal entry %s", address)
-		jsonhttp.NotFound(w, nil)
-		return
-	}
-
-	// read metadata
-	j, _, err = joiner.New(r.Context(), s.storer, e.Metadata())
-	if err != nil {
-		logger.Debugf("manifest list: joiner metadata %s: %v", address, err)
-		logger.Errorf("manifest list: joiner %s", address)
-		jsonhttp.NotFound(w, nil)
-		return
-	}
-
-	// read metadata
-	buf = bytes.NewBuffer(nil)
-	_, err = file.JoinReadAll(r.Context(), j, buf)
-	if err != nil {
-		logger.Debugf("manifest list: read metadata %s: %v", address, err)
-		logger.Errorf("manifest list: read metadata %s", address)
-		jsonhttp.NotFound(w, nil)
-		return
-	}
-
-	metadata := &entry.Metadata{}
-	err = json.Unmarshal(buf.Bytes(), metadata)
-	if err != nil {
-		logger.Debugf("manifest list: unmarshal metadata %s: %v", address, err)
-		logger.Errorf("manifest list: unmarshal metadata %s", address)
-		jsonhttp.NotFound(w, nil)
-		return
-	}
-
-	// first, treat it as manifest to load
-	m, err := manifest.NewManifestReference(
-		metadata.MimeType,
-		e.Reference(),
-		ls,
-	)
-	if err != nil {
-		logger.Debugf("manifest list: load manifest %s: %v", address, err)
-		logger.Error("manifest list: load manifest")
-		jsonhttp.NotFound(w, nil)
-		return
-	}
-
-	type FsNode struct {
-		Type  string             `json:"type"`
-		Hash  string             `json:"hash,omitempty"`
-		Nodes map[string]*FsNode `json:"sub,omitempty"`
-	}
-
-	rootNode := &FsNode{
-		Type: manifest.Directory.String(),
-	}
-
-	findNode := func(n *FsNode, path []byte) *FsNode {
-		i := 0
-		p := n
-		for j := 0; j < len(path); j++ {
-			if path[j] == '/' {
-				if p.Nodes == nil {
-					p.Nodes = make(map[string]*FsNode)
-				}
-				dir := path[i:j]
-				sub, ok := p.Nodes[string(dir)]
-				if !ok {
-					p.Nodes[string(dir)] = &FsNode{
-						Type: manifest.Directory.String(),
-					}
-					sub = p.Nodes[string(dir)]
-				}
-				p = sub
-				i = j + 1
-			}
-		}
-		return p
-	}
-
-	fn := func(nodeType int, path, prefix, hash []byte) error {
-		node := findNode(rootNode, path)
-		if nodeType == int(manifest.File) {
-			if node.Nodes == nil {
-				node.Nodes = make(map[string]*FsNode)
-			}
-			node.Nodes[string(prefix)] = &FsNode{
-				Type: manifest.File.String(),
-				Hash: boson.NewAddress(hash).String(),
-			}
-		}
-
-		return nil
-	}
-
-	if err := m.IterateNodes(r.Context(), []byte{}, -1, fn); err != nil {
-		jsonhttp.InternalServerError(w, err)
-		return
-	}
-
-	jsonhttp.OK(w, rootNode)
-}
-
 func (s *server) serveManifestMetadata(w http.ResponseWriter, r *http.Request, e *entry.Entry) {
 	var (
 		logger = tracing.NewLoggerWithTraceID(r.Context(), s.logger)
@@ -568,9 +429,6 @@ func (s *server) manifestViewHandler(w http.ResponseWriter, r *http.Request) {
 
 	nameOrHex := mux.Vars(r)["address"]
 	pathVar := mux.Vars(r)["path"]
-	if strings.HasSuffix(pathVar, "/") {
-		pathVar = strings.TrimRight(pathVar, "/")
-	}
 
 	address, err := s.resolveNameOrAddress(nameOrHex)
 	if err != nil {
@@ -651,36 +509,76 @@ func (s *server) manifestViewHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		var reference boson.Address
+		if pathVar == "" || strings.HasSuffix(pathVar, "/") {
+			type FsNode struct {
+				Type  string             `json:"type"`
+				Hash  string             `json:"hash,omitempty"`
+				Nodes map[string]*FsNode `json:"sub,omitempty"`
+			}
 
-		if pathVar == "" {
-			logger.Tracef("manifest view: handle empty path %s", address)
+			rootNode := &FsNode{
+				Type: manifest.Directory.String(),
+			}
 
-			indexDocumentSuffixKey, ok := manifestMetadataLoad(r.Context(), m, manifestRootPath, manifestWebsiteIndexDocumentSuffixKey)
-			if !ok {
-				jsonhttp.NotFound(w, nil)
+			findNode := func(n *FsNode, path []byte) *FsNode {
+				i := 0
+				p := n
+				for j := 0; j < len(path); j++ {
+					if path[j] == '/' {
+						if p.Nodes == nil {
+							p.Nodes = make(map[string]*FsNode)
+						}
+						dir := path[i:j]
+						sub, ok := p.Nodes[string(dir)]
+						if !ok {
+							p.Nodes[string(dir)] = &FsNode{
+								Type: manifest.Directory.String(),
+							}
+							sub = p.Nodes[string(dir)]
+						}
+						p = sub
+						i = j + 1
+					}
+				}
+				return p
+			}
+
+			fn := func(nodeType int, path, prefix, hash []byte) error {
+				fmt.Printf("path %s prefix %s\n", path, prefix)
+				node := findNode(rootNode, path)
+				if nodeType == int(manifest.File) {
+					if node.Nodes == nil {
+						node.Nodes = make(map[string]*FsNode)
+					}
+					node.Nodes[string(prefix)] = &FsNode{
+						Type: manifest.File.String(),
+						Hash: boson.NewAddress(hash).String(),
+					}
+				}
+
+				return nil
+			}
+
+			pathVar = strings.TrimSuffix(pathVar, "/")
+
+			if err := m.IterateNodes(r.Context(), []byte(pathVar), 1, fn); err != nil {
+				jsonhttp.InternalServerError(w, err)
 				return
 			}
 
-			pathWithIndex := path.Join(pathVar, indexDocumentSuffixKey)
-			indexDocumentManifestEntry, err := m.Lookup(r.Context(), pathWithIndex)
-			if err == nil {
-				// index document exists
-				logger.Debugf("manifest view: serving path: %s", pathWithIndex)
-
-				reference = indexDocumentManifestEntry.Reference()
-			}
-		} else {
-			me, err := m.Lookup(r.Context(), pathVar)
-			if err != nil {
-				logger.Debugf("manifest view: invalid path %s/%s: %v", address, pathVar, err)
-				logger.Error("manifest view: invalid path")
-				jsonhttp.NotFound(w, nil)
-				return
-			}
-
-			reference = me.Reference()
+			jsonhttp.OK(w, rootNode)
+			return
 		}
+
+		me, err := m.Lookup(r.Context(), pathVar)
+		if err != nil {
+			logger.Debugf("manifest view: invalid path %s/%s: %v", address, pathVar, err)
+			logger.Error("manifest view: invalid path")
+			jsonhttp.NotFound(w, nil)
+			return
+		}
+
+		reference := me.Reference()
 
 		// read file entry
 		j, _, err := joiner.New(r.Context(), s.storer, reference)
