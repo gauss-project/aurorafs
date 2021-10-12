@@ -110,7 +110,14 @@ func New(
 	o Options,
 ) (*Kad, error) {
 	if o.SaturationFunc == nil {
-		overSaturationPeers = o.BinMaxPeers - o.BinMaxPeers%5 + 5
+		if o.BinMaxPeers < 5 {
+			overSaturationPeers = 5
+		}
+		if o.BinMaxPeers%5 == 0 {
+			overSaturationPeers = o.BinMaxPeers
+		} else {
+			overSaturationPeers = o.BinMaxPeers - o.BinMaxPeers%5 + 5
+		}
 		saturationPeers = overSaturationPeers / 5 * 2
 		quickSaturationPeers = overSaturationPeers / 5
 
