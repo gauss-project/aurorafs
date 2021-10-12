@@ -18,6 +18,7 @@ require (
 	github.com/gorilla/mux v1.8.0
 	github.com/gorilla/websocket v1.4.2
 	github.com/kardianos/service v1.2.0
+	github.com/kilic/bls12-381 v0.1.0
 	github.com/koron/go-ssdp v0.0.2 // indirect
 	github.com/libp2p/go-libp2p v0.14.4
 	github.com/libp2p/go-libp2p-autonat v0.4.2
