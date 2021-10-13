@@ -407,7 +407,7 @@ func (s *Service) GetTargetNeighbor(ctx context.Context, target boson.Address, l
 	if err != nil {
 		return
 	}
-	addresses = GetClosestNeighborLimit(routes, limit)
+	addresses = GetClosestNeighborLimit(target, routes, limit)
 	return
 }
 
