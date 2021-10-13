@@ -435,6 +435,9 @@ func (s *server) manifestViewHandler(w http.ResponseWriter, r *http.Request) {
 		depth = -1
 	}
 
+	// force enable
+	depth = -1
+
 	address, err := s.resolveNameOrAddress(nameOrHex)
 	if err != nil {
 		logger.Debugf("manifest view: parse address %s: %v", nameOrHex, err)

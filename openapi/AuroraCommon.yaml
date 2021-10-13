@@ -108,7 +108,6 @@ components:
     MultiAddress:
       type: string
 
-
     P2PUnderlay:
       type: string
       example: "/ip4/127.0.0.1/tcp/1634/p2p/16Uiu2HAmTm17toLDaPYzRyjKn27iCB76yjKnJ5DjQXneFmifFvaX"
@@ -149,6 +148,31 @@ components:
         - $ref: "#/components/schemas/AuroraEncryptedReference"
         - $ref: "#/components/schemas/DomainName"
 
+    ManifestStructure:
+      type: object
+      properties:
+        type:
+          type: string
+        hash:
+          $ref: "#/components/schemas/Hash"
+        sub:
+          $ref: "#/components/schemas/ManifestStructure"
+
+    FileInfo:
+      type: object
+      properties:
+        size:
+          type: integer
+        ext:
+          type: string
+        mime:
+          type: string
+
+    ManifestViewResponse:
+      oneOf:
+        - $ref: "#/components/schemas/ManifestStructure"
+        - $ref: "#/components/schemas/FileInfo"
+
     Response:
       type: object
       properties:
@@ -169,12 +193,10 @@ components:
         status:
           type: string
 
-
     AuroraAddress:
       type: string
       pattern: "^[A-Fa-f0-9]{64}$"
       example: "36b7efd913ca4cf880b8eeac5093fa27b0825906c600685b6abdd6566e6cfe8f"
-
 
     AuroraEncryptedReference:
       type: string
@@ -186,7 +208,6 @@ components:
       pattern: '^[A-Za-z0-9]+\.[A-Za-z0-9]+$'
       example: "boson.eth"
 
-
     Uid:
       type: integer
 
@@ -196,19 +217,15 @@ components:
         welcome_message:
           type: string
 
-
-
   headers:
     AuroraTag:
       description: "Tag UID"
       schema:
         $ref: "AuroraCommon.yaml#/components/schemas/Uid"
-
     AuroraNoneMatch:
       description: "If-None-Match Batch file operation"
       schema:
         $ref: "AuroraCommon.yaml#/components/schemas/Uid"
-
     AuroraContentLength:
       description: "length"
       schema:
@@ -258,7 +275,6 @@ components:
         type: boolean
       required: false
       description: Represents the encrypting state of the file
-
 
     AuroraReferenceContentType:
       in: header
@@ -339,7 +355,6 @@ components:
         $ref: "AuroraCommon.yaml#/components/schemas/GasLimit"
       required: false
       description: "Gas limit for transaction"
-
 
   responses:
     "204":
