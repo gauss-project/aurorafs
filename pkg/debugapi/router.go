@@ -46,11 +46,6 @@ func (s *Service) newBasicRouter() *mux.Router {
 
 	router.Handle("/debug/vars", expvar.Handler())
 
-	router.Handle("/health", web.ChainHandlers(
-		httpaccess.SetAccessLogLevelHandler(0), // suppress access log messages
-		web.FinalHandlerFunc(statusHandler),
-	))
-
 	router.Handle("/addresses", jsonhttp.MethodHandler{
 		"GET": http.HandlerFunc(s.addressesHandler),
 	})
@@ -64,10 +59,9 @@ func (s *Service) newBasicRouter() *mux.Router {
 func (s *Service) newRouter() *mux.Router {
 	router := s.newBasicRouter()
 
-	router.Handle("/readiness", web.ChainHandlers(
-		httpaccess.SetAccessLogLevelHandler(0), // suppress access log messages
-		web.FinalHandlerFunc(statusHandler),
-	))
+	router.Handle("/readiness", jsonhttp.MethodHandler{
+		"GET": http.HandlerFunc(s.statusHandler),
+	})
 
 	router.Handle("/pingpong/{peer-id}", jsonhttp.MethodHandler{
 		"POST": http.HandlerFunc(s.pingpongHandler),
@@ -108,6 +102,15 @@ func (s *Service) newRouter() *mux.Router {
 	router.Handle("/chunk/server/{rootCid}", jsonhttp.MethodHandler{
 		"GET": http.HandlerFunc(s.chunkInfoServerHandler),
 	})
+
+	router.Handle("/chunk/server/{rootCid}", jsonhttp.MethodHandler{
+		"GET": http.HandlerFunc(s.chunkInfoServerHandler),
+	})
+
+	router.Handle("/health", jsonhttp.MethodHandler{
+		"GET": http.HandlerFunc(s.statusHandler),
+	})
+
 	//router.Handle("/balances", jsonhttp.MethodHandler{
 	//	"GET": http.HandlerFunc(s.compensatedBalancesHandler),
 	//})
