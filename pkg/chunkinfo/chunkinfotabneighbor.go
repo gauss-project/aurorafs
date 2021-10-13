@@ -102,12 +102,16 @@ func (cn *chunkInfoTabNeighbor) initNeighborChunkInfo(rootCid boson.Address) {
 	cn.overlays[rootCid.String()] = v
 }
 
-func (cn *chunkInfoTabNeighbor) isExists(rootCid boson.Address) bool {
+func (cn *chunkInfoTabNeighbor) isExists(rootCid, overlay boson.Address) bool {
 	cn.RLock()
 	defer cn.RUnlock()
 	rc := rootCid.String()
-	_, b := cn.overlays[rc]
-	return b
+	if v, b := cn.presence[rc]; b {
+		if v[overlay.String()].Equals() {
+			return true
+		}
+	}
+	return false
 }
 
 // getNeighborChunkInfo

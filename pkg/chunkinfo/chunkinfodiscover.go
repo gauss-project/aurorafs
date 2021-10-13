@@ -198,12 +198,15 @@ func (ci *ChunkInfo) cleanDiscoverTrigger() {
 		for {
 			<-t.C
 			now := time.Now().Unix()
-			ci.cd.Lock()
 			for rootCid, discover := range ci.cd.presence {
+				rc := boson.MustParseHexAddress(rootCid)
+				if ci.ct.isExists(rc, ci.addr) {
+					ci.DelDiscover(rc)
+				}
 				for overlay, db := range discover {
 					if db.time+maxTime < now {
 						delete(discover, overlay)
-						if err := ci.storer.Delete(generateKey(discoverKeyPrefix, boson.MustParseHexAddress(rootCid), boson.MustParseHexAddress(overlay))); err != nil {
+						if err := ci.storer.Delete(generateKey(discoverKeyPrefix, rc, boson.MustParseHexAddress(overlay))); err != nil {
 							continue
 						}
 						ci.queuesLk.Lock()
@@ -214,7 +217,6 @@ func (ci *ChunkInfo) cleanDiscoverTrigger() {
 					}
 				}
 			}
-			ci.cd.Unlock()
 		}
 	}()
 }

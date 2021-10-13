@@ -44,7 +44,6 @@ func (s *server) dirDownloadHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	defer s.chunkInfo.DelDiscover(address)
 	r = r.WithContext(sctx.SetRootCID(r.Context(), address))
 	if !s.chunkInfo.Init(r.Context(), nil, address) {
 		logger.Debugf("aurora download: chunkInfo init %s: %v", nameOrHex, err)
