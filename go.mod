@@ -8,8 +8,8 @@ require (
 	github.com/ethereum/go-ethereum v1.10.8
 	github.com/ethersphere/bmt v0.1.4
 	github.com/ethersphere/langos v1.0.0
-	github.com/ethersphere/manifest v0.3.6
 	github.com/ethersphere/sw3-bindings/v3 v3.0.3
+	github.com/gauss-project/manifest v0.3.7
 	github.com/gogf/gf v1.16.6
 	github.com/gogo/protobuf v1.3.2
 	github.com/google/go-cmp v0.5.6
@@ -17,7 +17,6 @@ require (
 	github.com/gorilla/handlers v1.4.2
 	github.com/gorilla/mux v1.8.0
 	github.com/gorilla/websocket v1.4.2
-	github.com/ipfs/go-cid v0.0.7
 	github.com/kardianos/service v1.2.0
 	github.com/koron/go-ssdp v0.0.2 // indirect
 	github.com/libp2p/go-libp2p v0.14.4
