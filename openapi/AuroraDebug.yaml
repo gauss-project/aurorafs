@@ -34,7 +34,22 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "AuroraCommon.yaml#/components/schemas/Status"
+                $ref: "AuroraCommon.yaml#/components/schemas/HealthStatus"
+        default:
+          description: Default response
+
+  "/health":
+    get:
+      summary: Get health of node
+      tags:
+        - Status
+      responses:
+        "200":
+          description: Health State of node
+          content:
+            application/json:
+              schema:
+                $ref: "AuroraCommon.yaml#/components/schemas/HealthStatus"
         default:
           description: Default response
 
@@ -237,20 +252,7 @@ paths:
         default:
           description: Default response
 
-  "/health":
-    get:
-      summary: Get health of node
-      tags:
-        - Status
-      responses:
-        "200":
-          description: Health State of node
-          content:
-            application/json:
-              schema:
-                $ref: "AuroraCommon.yaml#/components/schemas/Status"
-        default:
-          description: Default response
+
 
 
   "/metrics":

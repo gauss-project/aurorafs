@@ -10,7 +10,7 @@ security:
 
 externalDocs:
   description: Browse the documentation @ the aurorafs Docs
-  url: "https://docs.boson.eth"
+  url: ""
 
 servers:
   - url: "http://{apiRoot}:{port}/v1"
