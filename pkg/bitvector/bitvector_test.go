@@ -16,7 +16,9 @@
 
 package bitvector
 
-import "testing"
+import (
+	"testing"
+)
 
 // TestBitvectorNew checks that enforcements of argument length works in the constructors
 func TestBitvectorNew(t *testing.T) {
@@ -143,4 +145,21 @@ func TestBitVectorSetBytes(t *testing.T) {
 	if bv.String() != expectReset {
 		t.Fatalf("bitvector reset bytes fail: got %s, expect %s", bv.String(), expectReset)
 	}
+}
+
+func TestBitVectorEquals(t *testing.T) {
+	b := []byte{0xff, 0x1f}
+	bv, err := NewFromBytes(b, 14)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bv.Equals() {
+		t.Fatalf("bitvector equals bytes fail")
+	}
+
+	bv.Unset(1)
+	if bv.Equals() {
+		t.Fatalf("bitvector equals bytes fail")
+	}
+
 }
