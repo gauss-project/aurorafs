@@ -315,6 +315,17 @@ func TestService_GetTargetNeighbor(t *testing.T) {
 	if !neighbor[0].Equal(nodes[3].overlay) {
 		t.Fatalf("expect neighbor eq node 3")
 	}
+
+	neighbor, err = nodes[0].GetTargetNeighbor(ctx, nodes[3].overlay, 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(neighbor) != 1 {
+		t.Fatalf("expect find neighbot len 1,got %d", len(neighbor))
+	}
+	if !neighbor[0].Equal(nodes[2].overlay) {
+		t.Fatalf("expect neighbor eq node 2")
+	}
 }
 
 func createTopology(t *testing.T, total int) []*Node {

@@ -33,10 +33,17 @@ func inAddress(src boson.Address, array []boson.Address) bool {
 	return false
 }
 
-func GetClosestNeighborLimit(routes []*Path, limit int) (out []boson.Address) {
+func GetClosestNeighborLimit(target boson.Address, routes []*Path, limit int) (out []boson.Address) {
 	has := make(map[string]bool)
-	for _, v := range routes {
-		has[v.Item[len(v.Item)-2].String()] = true
+	for _, path := range routes {
+		for k, v := range path.Item {
+			if v.Equal(target) {
+				if k-1 > 0 {
+					has[path.Item[k-1].String()] = true
+					break
+				}
+			}
+		}
 		if len(has) >= limit {
 			break
 		}
