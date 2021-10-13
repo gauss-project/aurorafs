@@ -200,9 +200,9 @@ components:
           type: string
         version:
           type: string
-        fullnode:
+        fullNode:
           type: boolean
-        bootnodemode:
+        bootNodeMode:
           type: boolean
 
     AuroraAddress:
