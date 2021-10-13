@@ -1,7 +1,7 @@
 package aufs
 
 var (
-	version = "1.0.4" // manually set semantic version number
+	version = "1.0.7" // manually set semantic version number
 	commit  string    // automatically set git commit hash
 
 	Version = func() string {

@@ -1,6 +1,7 @@
 package api_test
 
 import (
+	"context"
 	"errors"
 	"io"
 	"io/ioutil"
@@ -13,6 +14,8 @@ import (
 	"github.com/gauss-project/aurorafs/pkg/api"
 	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/chunkinfo"
+	"github.com/gauss-project/aurorafs/pkg/file/pipeline"
+	"github.com/gauss-project/aurorafs/pkg/file/pipeline/builder"
 	"github.com/gauss-project/aurorafs/pkg/logging"
 	"github.com/gauss-project/aurorafs/pkg/resolver"
 	resolverMock "github.com/gauss-project/aurorafs/pkg/resolver/mock"
@@ -108,6 +111,12 @@ func request(t *testing.T, client *http.Client, method, resource string, body io
 		t.Fatalf("got response status %s, want %v %s", resp.Status, responseCode, http.StatusText(responseCode))
 	}
 	return resp
+}
+
+func pipelineFactory(s storage.Putter, mode storage.ModePut, encrypt bool) func() pipeline.Interface {
+	return func() pipeline.Interface {
+		return builder.NewPipelineBuilder(context.Background(), s, mode, encrypt)
+	}
 }
 
 func TestParseName(t *testing.T) {

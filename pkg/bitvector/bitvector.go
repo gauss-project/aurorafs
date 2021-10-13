@@ -126,6 +126,26 @@ func (bv *BitVector) String() (s string) {
 	return s
 }
 
+func (bv *BitVector) Equals() bool {
+	l := len(bv.b)
+
+	len := bv.len % 8
+	for i := 0; i < l; i++ {
+		if len != 0 && i == l-1 {
+			for ; len >= 8; len-- {
+				if bv.b[i]&(0x01<<uint(len%8)) == 0 {
+					return false
+				}
+			}
+		} else {
+			if bv.b[i] != 0xff {
+				return false
+			}
+		}
+	}
+	return true
+}
+
 // Bytes retrieves the underlying bytes of the bitvector
 func (bv *BitVector) Bytes() []byte {
 	return bv.b
