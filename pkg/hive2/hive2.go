@@ -166,7 +166,7 @@ func (s *Service) DoFindNode(ctx context.Context, target, peer boson.Address, po
 	s.metrics.DoFindNode.Inc()
 	stream, err := s.streamer.NewStream(ctx, peer, nil, protocolName, protocolVersion, streamFindNode)
 	if err != nil {
-		s.logger.Errorf("hive2: DoFindNode NewStream %s, err=%s", peer.String(), err)
+		s.logger.Debugf("hive2: DoFindNode NewStream %s, err=%s", peer.String(), err)
 		return
 	}
 

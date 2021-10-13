@@ -193,6 +193,18 @@ components:
         status:
           type: string
 
+    HealthStatus:
+      type: object
+      properties:
+        status:
+          type: string
+        version:
+          type: string
+        fullnode:
+          type: boolean
+        bootnodemode:
+          type: boolean
+
     AuroraAddress:
       type: string
       pattern: "^[A-Fa-f0-9]{64}$"

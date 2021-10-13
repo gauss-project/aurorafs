@@ -54,14 +54,29 @@ func (tt *timeoutTrigger) getTimeOutRootCidAndNode() (boson.Address, boson.Addre
 
 // triggerTimeOut
 func (ci *ChunkInfo) triggerTimeOut() {
-	timeTrigger := ci.t
-	select {
-	case <-timeTrigger.C:
-		rootCid, overlay := ci.tt.getTimeOutRootCidAndNode()
-		if !rootCid.Equal(boson.ZeroAddress) {
-			q := ci.getQueue(rootCid.String())
-			q.popNode(Pulling, overlay.Bytes())
-			q.push(UnPull, overlay.Bytes())
+
+	t := time.NewTicker(Time * time.Second)
+	go func() {
+		for {
+			<-t.C
+			rootCid, overlay := ci.tt.getTimeOutRootCidAndNode()
+			if !rootCid.Equal(boson.ZeroAddress) {
+				ci.queuesLk.Lock()
+				q := ci.getQueue(rootCid.String())
+				ci.queuesLk.Unlock()
+				if q != nil {
+					ci.syncLk.Lock()
+					if msgChan, ok := ci.syncMsg[rootCid.String()]; ok {
+						msgChan <- false
+					}
+					ci.syncLk.Unlock()
+					q.popNode(Pulling, overlay.Bytes())
+					q.push(UnPull, overlay.Bytes())
+				} else {
+					ci.tt.removeTimeOutTrigger(rootCid, overlay)
+				}
+
+			}
 		}
-	}
+	}()
 }

@@ -72,7 +72,7 @@ func New(addr boson.Address, streamer p2p.Streamer, routeTable routetab.RouteTab
 		logger:     logger,
 		metrics:    newMetrics(),
 		tracer:     tracer,
-		acoServer:  &acoServer,
+		acoServer:  acoServer,
 		routeTab:   routeTable,
 		isFullNode: isFullNode,
 	}
@@ -125,24 +125,24 @@ func (s *Service) RetrieveChunk(ctx context.Context, rootAddr, chunkAddr boson.A
 
 				// create a new context without cancelation but
 				// set the tracing span to the new context from the context of the first caller
-				ctx := tracing.WithContext(topCtx, tracing.FromContext(topCtx))
+				ctx1 := tracing.WithContext(topCtx, tracing.FromContext(topCtx))
 
 				// get the tracing span
-				span, _, ctx := s.tracer.StartSpanFromContext(ctx, "retrieve-chunk", s.logger,
+				span, _, ctx1 := s.tracer.StartSpanFromContext(ctx1, "retrieve-chunk", s.logger,
 					opentracing.Tag{Key: "rootAddr,chunkAddr", Value: rootAddr.String() + "," + chunkAddr.String()})
 				defer span.Finish()
 
 				go func() {
-					ctx, cancel := context.WithTimeout(ctx, retrieveChunkTimeout)
+					ctx1, cancel := context.WithTimeout(ctx1, retrieveChunkTimeout)
 					defer cancel()
 
-					chunk, err := s.retrieveChunk(ctx, retrievalRoute, rootAddr, chunkAddr)
+					chunk, err := s.retrieveChunk(ctx1, retrievalRoute, rootAddr, chunkAddr)
 					select {
 					case resultC <- retrievalResult{
 						chunk: chunk,
 						err:   err,
 					}:
-					case <-ctx.Done():
+					case <-ctx1.Done():
 					}
 				}()
 
@@ -197,26 +197,26 @@ func (s *Service) RetrieveChunkFromNode(ctx context.Context, targetNode boson.Ad
 
 			// create a new context without cancelation but
 			// set the tracing span to the new context from the context of the first caller
-			ctx := tracing.WithContext(context.Background(), tracing.FromContext(topCtx))
+			ctx1 := tracing.WithContext(context.Background(), tracing.FromContext(topCtx))
 
 			// get the tracing span
-			span, _, ctx := s.tracer.StartSpanFromContext(ctx, "retrieve-chunk", s.logger,
+			span, _, ctx := s.tracer.StartSpanFromContext(ctx1, "retrieve-chunk", s.logger,
 				opentracing.Tag{Key: "rootAddr,chunkAddr", Value: rootAddr.String() + "," + chunkAddr.String()})
 			defer span.Finish()
 
 			s.metrics.PeerRequestCounter.Inc()
 			go func() {
 				// cancel the goroutine just with the timeout
-				ctx, cancel := context.WithTimeout(ctx, retrieveChunkTimeout)
+				ctx1, cancel := context.WithTimeout(ctx1, retrieveChunkTimeout)
 				defer cancel()
 
-				chunk, err := s.retrieveChunk(ctx, retrievalRoute, rootAddr, chunkAddr)
+				chunk, err := s.retrieveChunk(ctx1, retrievalRoute, rootAddr, chunkAddr)
 				select {
 				case resultC <- retrievalResult{
 					chunk: chunk,
 					err:   err,
 				}:
-				case <-ctx.Done():
+				case <-ctx1.Done():
 				}
 			}()
 
@@ -397,43 +397,12 @@ func (s *Service) getRetrievalRouteList(ctx context.Context, rootAddr, chunkAddr
 		return nil
 	}
 
-	nodeList := make([]boson.Address, len(chunkResult))
-	for i, v := range chunkResult {
-		newNode := boson.NewAddress(v)
-		nodeList[i] = newNode
-	}
-
-	directRouteList := make([]aco.Route, len(nodeList))
-	for i, node := range nodeList {
-		newRoute := aco.NewRoute(node, node)
-		directRouteList[i] = newRoute
-	}
-	directRouteAcoIndexList := s.acoServer.GetRouteAcoIndex(directRouteList, totalRouteCount)
+	directRouteAcoIndexList := s.acoServer.GetRouteAcoIndex(chunkResult, totalRouteCount)
 
 	routList := make([]aco.Route, 0)
 	for _, acoIndex := range directRouteAcoIndexList {
-		curRoute := directRouteList[acoIndex]
+		curRoute := chunkResult[acoIndex]
 		routList = append(routList, curRoute)
-	}
-
-	// append neighbor nodes to retrieve route list
-	if len(directRouteAcoIndexList) > 0 {
-		acoIndex0 := directRouteAcoIndexList[0]
-		targetNode := directRouteList[acoIndex0].TargetNode
-		if neighborNodeList, err := s.routeTab.GetTargetNeighbor(ctx, targetNode, totalBackupRouteCount); err == nil {
-			backupRouteList := make([]aco.Route, len(neighborNodeList))
-			for i, node := range neighborNodeList {
-				linkNode := node
-				newRoute := aco.NewRoute(linkNode, targetNode)
-				backupRouteList[i] = newRoute
-			}
-			backupAcoIndexList := s.acoServer.GetRouteAcoIndex(backupRouteList, totalBackupRouteCount)
-
-			for _, acoIndex := range backupAcoIndexList {
-				newRoute := backupRouteList[acoIndex]
-				routList = append(routList, newRoute)
-			}
-		}
 	}
 
 	return routList
