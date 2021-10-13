@@ -133,7 +133,16 @@ func NewAurora(addr string, bosonAddress boson.Address, publicKey ecdsa.PublicKe
 			return nil, fmt.Errorf("eth address: %w", err)
 		}
 		// set up basic debug api endpoints for debugging and /health endpoint
-		debugAPIService = debugapi.New(bosonAddress, publicKey, pssPrivateKey.PublicKey, overlayEthAddress, logger, tracer, o.CORSAllowedOrigins)
+		debugAPIService = debugapi.New(bosonAddress, publicKey, pssPrivateKey.PublicKey, overlayEthAddress, logger, tracer, o.CORSAllowedOrigins, debugapi.Options{
+			PrivateKey:     libp2pPrivateKey,
+			NATAddr:        o.NATAddr,
+			EnableWS:       o.EnableWS,
+			EnableQUIC:     o.EnableQUIC,
+			FullNode:       o.FullNode,
+			BootNodeMode:   o.BootnodeMode,
+			WelcomeMessage: o.WelcomeMessage,
+			LightNodeLimit: o.LightNodeMaxPeers,
+		})
 
 		debugAPIListener, err := net.Listen("tcp", o.DebugAPIAddr)
 		if err != nil {

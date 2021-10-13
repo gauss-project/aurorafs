@@ -45,15 +45,28 @@ type Service struct {
 	corsAllowedOrigins []string
 	metricsRegistry    *prometheus.Registry
 	// handler is changed in the Configure method
-	handler   http.Handler
-	handlerMu sync.RWMutex
+	handler     http.Handler
+	handlerMu   sync.RWMutex
+	nodeOptions Options
+}
+
+type Options struct {
+	PrivateKey     *ecdsa.PrivateKey
+	NATAddr        string
+	EnableWS       bool
+	EnableQUIC     bool
+	FullNode       bool
+	BootNodeMode   bool
+	LightNodeLimit int
+	WelcomeMessage string
+	Transaction    []byte
 }
 
 // New creates a new Debug API Service with only basic routers enabled in order
 // to expose /addresses, /health endpoints, Go metrics and pprof. It is useful to expose
 // these endpoints before all dependencies are configured and injected to have
 // access to basic debugging tools and /health endpoint.
-func New(overlay boson.Address, publicKey, pssPublicKey ecdsa.PublicKey, ethereumAddress common.Address, logger logging.Logger, tracer *tracing.Tracer, corsAllowedOrigins []string) *Service {
+func New(overlay boson.Address, publicKey, pssPublicKey ecdsa.PublicKey, ethereumAddress common.Address, logger logging.Logger, tracer *tracing.Tracer, corsAllowedOrigins []string, o Options) *Service {
 	s := new(Service)
 	s.overlay = overlay
 	s.publicKey = publicKey
@@ -63,7 +76,7 @@ func New(overlay boson.Address, publicKey, pssPublicKey ecdsa.PublicKey, ethereu
 	s.tracer = tracer
 	s.corsAllowedOrigins = corsAllowedOrigins
 	s.metricsRegistry = newMetricsRegistry()
-
+	s.nodeOptions = o
 	s.setRouter(s.newBasicRouter())
 
 	return s
