@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"github.com/gauss-project/aurorafs/pkg/chunkinfo"
+	"github.com/gauss-project/aurorafs/pkg/file/pipeline"
 	"io"
 	"math"
 	"net/http"
@@ -254,6 +255,13 @@ func requestPipelineFn(s storage.Storer, r *http.Request) pipelineFunc {
 	return func(ctx context.Context, r io.Reader, l int64) (boson.Address, error) {
 		pipe := builder.NewPipelineBuilder(ctx, s, mode, encrypt)
 		return builder.FeedPipeline(ctx, pipe, r, l)
+	}
+}
+
+func requestPipelineFactory(ctx context.Context, s storage.Putter, r *http.Request) func() pipeline.Interface {
+	mode, encrypt := requestModePut(r), requestEncrypt(r)
+	return func() pipeline.Interface {
+		return builder.NewPipelineBuilder(ctx, s, mode, encrypt)
 	}
 }
 

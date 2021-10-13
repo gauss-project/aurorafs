@@ -8,8 +8,8 @@ require (
 	github.com/ethereum/go-ethereum v1.10.8
 	github.com/ethersphere/bmt v0.1.4
 	github.com/ethersphere/langos v1.0.0
-	github.com/ethersphere/manifest v0.3.6
 	github.com/ethersphere/sw3-bindings/v3 v3.0.3
+	github.com/gauss-project/manifest v0.3.7
 	github.com/gogf/gf v1.16.6
 	github.com/gogo/protobuf v1.3.2
 	github.com/google/go-cmp v0.5.6

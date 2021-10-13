@@ -4,6 +4,7 @@ import (
 	"archive/tar"
 	"bytes"
 	"context"
+	"encoding/binary"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -18,6 +19,7 @@ import (
 	"github.com/gauss-project/aurorafs/pkg/chunkinfo"
 	"github.com/gauss-project/aurorafs/pkg/collection/entry"
 	"github.com/gauss-project/aurorafs/pkg/file"
+	"github.com/gauss-project/aurorafs/pkg/file/joiner"
 	"github.com/gauss-project/aurorafs/pkg/file/loadsave"
 	"github.com/gauss-project/aurorafs/pkg/jsonhttp"
 	"github.com/gauss-project/aurorafs/pkg/logging"
@@ -55,7 +57,8 @@ func (s *server) dirUploadHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	p := requestPipelineFn(s.storer, r)
 	encrypt := requestEncrypt(r)
-	l := loadsave.New(s.storer, requestModePut(r), encrypt)
+	factory := requestPipelineFactory(ctx, s.storer, r)
+	l := loadsave.New(s.storer, factory)
 	reference, err := storeDir(ctx, encrypt, r.Body, s.logger, p, l, r.Header.Get(BosonIndexDocumentHeader), r.Header.Get(BosonErrorDocumentHeader))
 	if err != nil {
 		logger.Debugf("dir upload: store dir err: %v", err)
@@ -353,4 +356,290 @@ func (s *server) dirDeleteHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	jsonhttp.OK(w, nil)
+}
+
+func (s *server) serveManifestMetadata(w http.ResponseWriter, r *http.Request, e *entry.Entry) {
+	var (
+		logger = tracing.NewLoggerWithTraceID(r.Context(), s.logger)
+		ctx    = r.Context()
+		buf    = bytes.NewBuffer(nil)
+	)
+
+	// read metadata
+	j, _, err := joiner.New(ctx, s.storer, e.Metadata())
+	if err != nil {
+		logger.Debugf("manifest view: joiner %s: %v", e.Metadata(), err)
+		logger.Errorf("manifest view: joiner %s", e.Metadata())
+		jsonhttp.NotFound(w, nil)
+		return
+	}
+
+	buf = bytes.NewBuffer(nil)
+	_, err = file.JoinReadAll(ctx, j, buf)
+	if err != nil {
+		logger.Debugf("manifest view: read metadata %s: %v", e.Metadata(), err)
+		logger.Errorf("manifest view: read metadata %s", e.Metadata())
+		jsonhttp.NotFound(w, nil)
+		return
+	}
+
+	metadata := &entry.Metadata{}
+	err = json.Unmarshal(buf.Bytes(), metadata)
+	if err != nil {
+		logger.Debugf("manifest view: unmarshal metadata %s: %v", e.Metadata(), err)
+		logger.Errorf("manifest view: unmarshal metadata %s", e.Metadata())
+		jsonhttp.NotFound(w, nil)
+		return
+	}
+
+	refChunk, err := s.storer.Get(ctx, storage.ModeGetRequest, e.Reference())
+	if err != nil {
+		jsonhttp.NotFound(w, nil)
+		return
+	}
+
+	if len(refChunk.Data()) < boson.SpanSize {
+		s.logger.Error("manifest view: chunk data too short")
+		jsonhttp.BadRequest(w, "short chunk data")
+		return
+	}
+
+	var ext string
+	lastDot := strings.LastIndexByte(metadata.Filename, '.')
+	if lastDot != -1 {
+		ext = metadata.Filename[lastDot:]
+	}
+
+	type FsType struct {
+		Size      uint64 `json:"size"`
+		Extension string `json:"ext"`
+		MimeType  string `json:"mime"`
+	}
+
+	jsonhttp.OK(w, &FsType{
+		Size:      binary.LittleEndian.Uint64(refChunk.Data()[:boson.SpanSize]),
+		Extension: ext,
+		MimeType:  metadata.MimeType,
+	})
+}
+
+func (s *server) manifestViewHandler(w http.ResponseWriter, r *http.Request) {
+	logger := tracing.NewLoggerWithTraceID(r.Context(), s.logger)
+	ls := loadsave.NewReadonly(s.storer)
+
+	nameOrHex := mux.Vars(r)["address"]
+	pathVar := mux.Vars(r)["path"]
+
+	depth := 1
+	if r.URL.Query().Get("recursive") != "" {
+		depth = -1
+	}
+
+	// force enable
+	depth = -1
+
+	address, err := s.resolveNameOrAddress(nameOrHex)
+	if err != nil {
+		logger.Debugf("manifest view: parse address %s: %v", nameOrHex, err)
+		logger.Error("manifest view: parse address")
+		jsonhttp.NotFound(w, nil)
+		return
+	}
+
+	// read manifest entry
+	j, _, err := joiner.New(r.Context(), s.storer, address)
+	if err != nil {
+		logger.Debugf("manifest view: joiner manifest entry %s: %v", address, err)
+		logger.Errorf("manifest view: joiner %s", address)
+		jsonhttp.NotFound(w, nil)
+		return
+	}
+
+	buf := bytes.NewBuffer(nil)
+	_, err = file.JoinReadAll(r.Context(), j, buf)
+	if err != nil {
+		logger.Debugf("manifest view: read entry %s: %v", address, err)
+		logger.Errorf("manifest view: read entry %s", address)
+		jsonhttp.NotFound(w, nil)
+		return
+	}
+
+	e := &entry.Entry{}
+	err = e.UnmarshalBinary(buf.Bytes())
+	if err != nil {
+		logger.Debugf("manifest view: unmarshal entry %s: %v", address, err)
+		logger.Errorf("manifest view: unmarshal entry %s", address)
+		jsonhttp.NotFound(w, nil)
+		return
+	}
+
+	// read metadata
+	j, _, err = joiner.New(r.Context(), s.storer, e.Metadata())
+	if err != nil {
+		logger.Debugf("manifest view: joiner metadata %s: %v", address, err)
+		logger.Errorf("manifest view: joiner %s", address)
+		jsonhttp.NotFound(w, nil)
+		return
+	}
+
+	// read metadata
+	buf = bytes.NewBuffer(nil)
+	_, err = file.JoinReadAll(r.Context(), j, buf)
+	if err != nil {
+		logger.Debugf("manifest view: read metadata %s: %v", address, err)
+		logger.Errorf("manifest view: read metadata %s", address)
+		jsonhttp.NotFound(w, nil)
+		return
+	}
+
+	metadata := &entry.Metadata{}
+	err = json.Unmarshal(buf.Bytes(), metadata)
+	if err != nil {
+		logger.Debugf("manifest view: unmarshal metadata %s: %v", address, err)
+		logger.Errorf("manifest view: unmarshal metadata %s", address)
+		jsonhttp.NotFound(w, nil)
+		return
+	}
+
+	var fe *entry.Entry
+
+	switch metadata.MimeType {
+	case manifest.ManifestSimpleContentType, manifest.ManifestMantarayContentType:
+		m, err := manifest.NewManifestReference(
+			metadata.MimeType,
+			e.Reference(),
+			ls,
+		)
+		if err != nil {
+			logger.Debugf("manifest view: load manifest %s: %v", address, err)
+			logger.Error("manifest view: load manifest")
+			jsonhttp.NotFound(w, nil)
+			return
+		}
+
+		if pathVar == "" || strings.HasSuffix(pathVar, "/") {
+			type FsNode struct {
+				Type  string             `json:"type"`
+				Hash  string             `json:"hash,omitempty"`
+				Nodes map[string]*FsNode `json:"sub,omitempty"`
+			}
+
+			rootNode := &FsNode{
+				Type: manifest.Directory.String(),
+			}
+
+			findNode := func(n *FsNode, path []byte) *FsNode {
+				i := 0
+				p := n
+				for j := 0; j < len(path); j++ {
+					if path[j] == '/' {
+						if p.Nodes == nil {
+							p.Nodes = make(map[string]*FsNode)
+						}
+						dir := path[i:j]
+						sub, ok := p.Nodes[string(dir)]
+						if !ok {
+							p.Nodes[string(dir)] = &FsNode{
+								Type: manifest.Directory.String(),
+							}
+							sub = p.Nodes[string(dir)]
+						}
+						p = sub
+						i = j + 1
+					}
+				}
+				return p
+			}
+
+			fn := func(nodeType int, path, prefix, hash []byte) error {
+				node := findNode(rootNode, path)
+				if nodeType == int(manifest.File) {
+					if node.Nodes == nil {
+						node.Nodes = make(map[string]*FsNode)
+					}
+					node.Nodes[string(prefix)] = &FsNode{
+						Type: manifest.File.String(),
+						Hash: boson.NewAddress(hash).String(),
+					}
+				}
+
+				return nil
+			}
+
+			pathVar = strings.TrimSuffix(pathVar, "/")
+
+			if err := m.IterateNodes(r.Context(), []byte(pathVar), depth, fn); err != nil {
+				jsonhttp.InternalServerError(w, err)
+				return
+			}
+
+			jsonhttp.OK(w, rootNode)
+			return
+		}
+
+		me, err := m.Lookup(r.Context(), pathVar)
+		if err != nil {
+			logger.Debugf("manifest view: invalid path %s/%s: %v", address, pathVar, err)
+			logger.Error("manifest view: invalid path")
+			jsonhttp.NotFound(w, nil)
+			return
+		}
+
+		reference := me.Reference()
+
+		// read file entry
+		j, _, err := joiner.New(r.Context(), s.storer, reference)
+		if err != nil {
+			logger.Debugf("manifest view: joiner read file entry %s: %v", address, err)
+			logger.Errorf("manifest view: joiner read file entry %s", address)
+			jsonhttp.NotFound(w, nil)
+			return
+		}
+
+		buf = bytes.NewBuffer(nil)
+		_, err = file.JoinReadAll(r.Context(), j, buf)
+		if err != nil {
+			logger.Debugf("manifest view: read file entry %s: %v", address, err)
+			logger.Errorf("manifest view: read file entry %s", address)
+			jsonhttp.NotFound(w, nil)
+			return
+		}
+		fe = &entry.Entry{}
+		err = fe.UnmarshalBinary(buf.Bytes())
+		if err != nil {
+			logger.Debugf("manifest view: unmarshal file entry %s: %v", address, err)
+			logger.Errorf("manifest view: unmarshal file entry %s", address)
+			jsonhttp.NotFound(w, nil)
+			return
+		}
+	default:
+		// read entry
+		j, _, err := joiner.New(r.Context(), s.storer, address)
+		if err != nil {
+			errors.Is(err, storage.ErrNotFound)
+			logger.Debugf("manifest view: joiner %s: %v", address, err)
+			logger.Errorf("manifest view: joiner %s", address)
+			jsonhttp.NotFound(w, nil)
+			return
+		}
+
+		buf := bytes.NewBuffer(nil)
+		_, err = file.JoinReadAll(r.Context(), j, buf)
+		if err != nil {
+			logger.Debugf("manifest view: read entry %s: %v", address, err)
+			logger.Errorf("manifest view: read entry %s", address)
+			jsonhttp.NotFound(w, nil)
+			return
+		}
+		fe = &entry.Entry{}
+		err = fe.UnmarshalBinary(buf.Bytes())
+		if err != nil {
+			logger.Debugf("manifest view: unmarshal entry %s: %v", address, err)
+			logger.Errorf("manifest view: unmarshal entry %s", address)
+			jsonhttp.NotFound(w, nil)
+			return
+		}
+	}
+
+	s.serveManifestMetadata(w, r, fe)
 }
