@@ -17,6 +17,7 @@ import (
 	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/collection/entry"
 	"github.com/gauss-project/aurorafs/pkg/file/loadsave"
+	"github.com/gauss-project/aurorafs/pkg/file/pipeline"
 	"github.com/gauss-project/aurorafs/pkg/file/pipeline/builder"
 	"github.com/gauss-project/aurorafs/pkg/manifest"
 	"github.com/gauss-project/aurorafs/pkg/storage"
@@ -451,7 +452,9 @@ func TestTraversalManifest(t *testing.T) {
 			ctx := context.Background()
 
 			var dirManifest manifest.Interface
-			ls := loadsave.New(mockStorer, storage.ModePutRequest, false)
+			ls := loadsave.New(mockStorer, func() pipeline.Interface {
+				return builder.NewPipelineBuilder(ctx, mockStorer, storage.ModePutUpload, false)
+			})
 			switch tc.manifestType {
 			case manifest.ManifestSimpleContentType:
 				dirManifest, err = manifest.NewSimpleManifest(ls)

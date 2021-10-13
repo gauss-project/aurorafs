@@ -5,9 +5,9 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/ethersphere/manifest/mantaray"
 	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/file"
+	"github.com/gauss-project/manifest/mantaray"
 )
 
 const (
@@ -121,6 +121,23 @@ func (m *mantarayManifest) Store(ctx context.Context, storeSizeFn ...StoreSizeFu
 	address := boson.NewAddress(m.trie.Reference())
 
 	return address, nil
+}
+
+func (m *mantarayManifest) IterateNodes(ctx context.Context, path []byte, level int, fn NodeIterFunc) error {
+	reference := boson.NewAddress(m.trie.Reference())
+
+	if boson.ZeroAddress.Equal(reference) {
+		return ErrMissingReference
+	}
+
+	uLevel := uint(level)
+
+	err := m.trie.WalkLevel(ctx, path, m.ls, uLevel, mantaray.WalkLevelFunc(fn))
+	if err != nil {
+		return fmt.Errorf("manifest walk level: %w", err)
+	}
+
+	return nil
 }
 
 func (m *mantarayManifest) IterateAddresses(ctx context.Context, fn boson.AddressIterFunc) error {

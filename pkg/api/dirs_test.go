@@ -20,7 +20,6 @@ import (
 	"github.com/gauss-project/aurorafs/pkg/jsonhttp/jsonhttptest"
 	"github.com/gauss-project/aurorafs/pkg/logging"
 	"github.com/gauss-project/aurorafs/pkg/manifest"
-	"github.com/gauss-project/aurorafs/pkg/storage"
 	"github.com/gauss-project/aurorafs/pkg/storage/mock"
 )
 
@@ -322,7 +321,7 @@ Disallow: /`),
 			verifyManifest, err := manifest.NewManifestReference(
 				manifest.DefaultManifestType,
 				e.Reference(),
-				loadsave.New(storer, storage.ModePutRequest, false),
+				loadsave.NewReadonly(storer),
 			)
 			if err != nil {
 				t.Fatal(err)
