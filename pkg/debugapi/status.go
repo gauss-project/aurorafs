@@ -10,8 +10,8 @@ import (
 type statusResponse struct {
 	Status       string `json:"status"`
 	Version      string `json:"version"`
-	FullNode     bool   `json:"fullnode"`
-	BootNodeMode bool   `json:"bootnodemode"`
+	FullNode     bool   `json:"fullNode"`
+	BootNodeMode bool   `json:"bootNodeMode"`
 }
 
 func (s *Service) statusHandler(w http.ResponseWriter, r *http.Request) {
