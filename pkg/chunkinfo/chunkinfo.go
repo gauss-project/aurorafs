@@ -129,10 +129,12 @@ func (ci *ChunkInfo) Init(ctx context.Context, authInfo []byte, rootCid boson.Ad
 
 	key := fmt.Sprintf("%s%s", rootCid, "chunkinfo")
 	v, _, _ := ci.singleflight.Do(ctx, key, func(ctx context.Context) (interface{}, error) {
-		if ci.ct.isExists(rootCid) {
+		if ci.ct.isExists(rootCid, ci.addr) {
 			return true, nil
 		}
-
+		if ci.cd.isExists(rootCid) {
+			return true, nil
+		}
 		overlays := ci.oracleChain.GetNodesFromCid(rootCid.Bytes())
 		if len(overlays) <= 0 {
 			return false, nil
