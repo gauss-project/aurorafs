@@ -430,6 +430,11 @@ func (s *server) manifestViewHandler(w http.ResponseWriter, r *http.Request) {
 	nameOrHex := mux.Vars(r)["address"]
 	pathVar := mux.Vars(r)["path"]
 
+	depth := 1
+	if r.URL.Query().Get("recursive") != "" {
+		depth = -1
+	}
+
 	address, err := s.resolveNameOrAddress(nameOrHex)
 	if err != nil {
 		logger.Debugf("manifest view: parse address %s: %v", nameOrHex, err)
@@ -544,7 +549,6 @@ func (s *server) manifestViewHandler(w http.ResponseWriter, r *http.Request) {
 			}
 
 			fn := func(nodeType int, path, prefix, hash []byte) error {
-				fmt.Printf("path %s prefix %s\n", path, prefix)
 				node := findNode(rootNode, path)
 				if nodeType == int(manifest.File) {
 					if node.Nodes == nil {
@@ -561,7 +565,7 @@ func (s *server) manifestViewHandler(w http.ResponseWriter, r *http.Request) {
 
 			pathVar = strings.TrimSuffix(pathVar, "/")
 
-			if err := m.IterateNodes(r.Context(), []byte(pathVar), 1, fn); err != nil {
+			if err := m.IterateNodes(r.Context(), []byte(pathVar), depth, fn); err != nil {
 				jsonhttp.InternalServerError(w, err)
 				return
 			}
