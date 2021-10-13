@@ -40,8 +40,11 @@ func GetClosestNeighborLimit(target boson.Address, routes []*Path, limit int) (o
 			if v.Equal(target) {
 				if k-1 > 0 {
 					has[path.Item[k-1].String()] = true
-					break
 				}
+				if k+1 < len(path.Item) {
+					has[path.Item[k+1].String()] = true
+				}
+				break
 			}
 		}
 		if len(has) >= limit {
