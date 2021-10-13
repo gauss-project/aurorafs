@@ -5,9 +5,9 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/ethersphere/manifest/simple"
 	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/file"
+	"github.com/gauss-project/manifest/simple"
 )
 
 const (
@@ -106,6 +106,10 @@ func (m *simpleManifest) Store(ctx context.Context, storeSizeFn ...StoreSizeFunc
 	}
 	m.reference = boson.NewAddress(ref)
 	return m.reference, nil
+}
+
+func (m *simpleManifest) IterateNodes(ctx context.Context, path []byte, level int, fn NodeIterFunc) error {
+	return nil
 }
 
 func (m *simpleManifest) IterateAddresses(ctx context.Context, fn boson.AddressIterFunc) error {

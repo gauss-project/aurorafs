@@ -31,8 +31,27 @@ servers:
         description: Service port provided in aurorafs node config
 
 paths:
-#  post /files
+# get,post /files
   "/files":
+    get:
+      summary: "git file list"
+      tags:
+        - File
+      responses:
+        "200":
+          description: List of tags
+          content:
+            application/json:
+              schema:
+                $ref: "AuroraCommon.yaml#/components/schemas/FileList"
+        "400":
+          $ref: "AuroraCommon.yaml#/components/responses/400"
+        "403":
+          $ref: "AuroraCommon.yaml#/components/responses/403"
+        "500":
+          $ref: "AuroraCommon.yaml#/components/responses/500"
+        default:
+          description: Default response
     post:
       summary: "Upload file"
       tags:
@@ -67,28 +86,7 @@ paths:
           $ref: "AuroraCommon.yaml#/components/responses/500"
         default:
           description: Default response
-#  get /filesList
-  "/filesList":
-    get:
-      summary: "git file list"
-      tags:
-        - File
-      responses:
-        "200":
-          description: List of tags
-          content:
-            application/json:
-              schema:
-                $ref: "AuroraCommon.yaml#/components/schemas/FileList"
-        "400":
-          $ref: "AuroraCommon.yaml#/components/responses/400"
-        "403":
-          $ref: "AuroraCommon.yaml#/components/responses/403"
-        "500":
-          $ref: "AuroraCommon.yaml#/components/responses/500"
-        default:
-          description: Default response
-#  get,delete /files/{address}
+# get,delete /files/{address}
   "/files/{addr}":
     get:
       summary: "Get referenced file"
@@ -153,7 +151,7 @@ paths:
           $ref: "AuroraCommon.yaml#/components/responses/500"
         default:
           description: Default response
-#  post /aurora
+# post /aurora
   "/aurora":
     post:
       summary: "Upload file group"
@@ -165,7 +163,6 @@ paths:
         - $ref: "AuroraCommon.yaml#/components/parameters/AuroraReferenceContentType"
         - $ref: "AuroraCommon.yaml#/components/parameters/AuroraIndexDocument"
         - $ref: "AuroraCommon.yaml#/components/parameters/AuroraErrorDocument"
-
       requestBody:
         content:
           application/octet-stream:
@@ -187,7 +184,7 @@ paths:
           $ref: "AuroraCommon.yaml#/components/responses/500"
         default:
           description: Default response
-#  delete /aurora/{address}
+# delete /aurora/{address}
   "/aurora/{address}":
     delete:
       summary: "Delete file group"
@@ -215,10 +212,10 @@ paths:
           $ref: "AuroraCommon.yaml#/components/responses/500"
         default:
           description: Default response
-#  delete /aurora/{address}/{path}
-  "/aurora/{address}/{path} ":
-    delete:
-      summary: "Delete file group"
+# get /aurora/{address}/{path}
+  "/aurora/{address}/{path}":
+    get:
+      summary: "Get file under path"
       tags:
         - File
       parameters:
@@ -249,7 +246,39 @@ paths:
           $ref: "AuroraCommon.yaml#/components/responses/500"
         default:
           description: Default response
-#  post /bytes
+# get /manifest/{address}/{path}
+  "/manifest/{address}/{path}":
+    get:
+      summary: "If path to a directory, show items under path. Show the content type."
+      tags:
+        - File
+      parameters:
+        - in: path
+          name: address
+          schema:
+            $ref: "AuroraCommon.yaml#/components/schemas/AuroraReference"
+          required: true
+          description: Aurora address of content
+        - in: path
+          name: path
+          schema:
+            $ref: "AuroraCommon.yaml#/components/schemas/AuroraReference"
+          required: true
+          description: An exist path in the collection. If the path point to a directory, path must end with slash.
+      responses:
+        "200":
+          description: Ok
+          content:
+            application/json:
+              schema:
+                $ref: "AuroraCommon.yaml#/components/schemas/ManifestViewResponse"
+        "404":
+          $ref: "AuroraCommon.yaml#/components/responses/404"
+        "500":
+          $ref: "AuroraCommon.yaml#/components/responses/500"
+        default:
+          description: Default response
+# post /bytes
   "/bytes":
     post:
       summary: "Upload data"
@@ -307,7 +336,7 @@ paths:
           $ref: "AuroraCommon.yaml#/components/responses/404"
         default:
           description: Default response
-#  post /chunks
+# post /chunks
   "/chunks":
     post:
       summary: "Upload Chunk"
@@ -337,7 +366,7 @@ paths:
           $ref: "AuroraCommon.yaml#/components/responses/500"
         default:
           description: Default response
-#  get  /chunks/{addr}
+# get /chunks/{addr}
   "/chunks/{reference}":
     get:
       summary: "Get referenced data"
