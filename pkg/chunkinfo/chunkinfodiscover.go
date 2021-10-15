@@ -2,6 +2,7 @@ package chunkinfo
 
 import (
 	"context"
+	"fmt"
 	"github.com/gauss-project/aurorafs/pkg/aurora"
 	"github.com/gauss-project/aurorafs/pkg/bitvector"
 	"github.com/gauss-project/aurorafs/pkg/boson"
@@ -174,6 +175,9 @@ func (ci *ChunkInfo) updateChunkInfo(rootCid, overlay boson.Address, bv []byte) 
 		if err := vb.bit.SetBytes(bv); err != nil {
 			ci.logger.Errorf("chunk discover: set bit vector error")
 		}
+	}
+	if vb.bit == nil {
+		fmt.Println("")
 	}
 	// db
 	if err := ci.storer.Put(generateKey(discoverKeyPrefix, rootCid, overlay), &bitVector{B: vb.bit.Bytes(), Len: vb.bit.Len()}); err != nil {

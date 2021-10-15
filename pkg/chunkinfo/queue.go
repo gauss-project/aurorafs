@@ -166,13 +166,18 @@ func (ci *ChunkInfo) queueProcess(ctx context.Context, rootCid boson.Address) {
 }
 
 // updateQueue
-func (ci *ChunkInfo) updateQueue(ctx context.Context, authInfo []byte, rootCid, overlay boson.Address, overlays [][]byte) {
+func (ci *ChunkInfo) updateQueue(ctx context.Context, authInfo []byte, rootCid, overlay boson.Address, chunkInfo map[string][]byte) {
 	ci.queuesLk.Lock()
 	q := ci.getQueue(rootCid.String())
+	if chunkInfo[overlay.String()] != nil {
+		ci.updateChunkInfo(rootCid, overlay, chunkInfo[overlay.String()])
+	}
+
 	if q == nil {
 		return
 	}
-	for _, n := range overlays {
+	for over := range chunkInfo {
+		n := boson.MustParseHexAddress(over).Bytes()
 		if q.len(UnPull) >= PullerMax {
 			break
 		}
