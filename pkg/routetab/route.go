@@ -354,8 +354,23 @@ func (s *Service) IsNeighbor(dest boson.Address) (has bool) {
 	return
 }
 
-func (s *Service) GetRoute(_ context.Context, dest boson.Address) (paths []*Path, err error) {
-	return s.routeTable.Get(dest)
+func (s *Service) GetRoute(_ context.Context, dest boson.Address) ([]*Path, error) {
+	paths, err := s.routeTable.Get(dest)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]*Path, 0)
+	for _, v := range paths {
+		if !s.IsNeighbor(v.Item[1]) {
+			s.routeTable.Delete(v)
+		} else {
+			out = append(out, v)
+		}
+	}
+	if len(out) > 0 {
+		return out, nil
+	}
+	return nil, ErrNotFound
 }
 
 func (s *Service) FindRoute(ctx context.Context, target boson.Address) (paths []*Path, err error) {
