@@ -498,7 +498,7 @@ func NewAurora(addr string, bosonAddress boson.Address, publicKey ecdsa.PublicKe
 		//}
 
 		// inject dependencies and configure full debug api http path routes
-		debugAPIService.Configure(p2ps, pingPong, kad, lightNodes, storer, chunkInfo)
+		debugAPIService.Configure(p2ps, pingPong, kad, lightNodes, storer, route, chunkInfo)
 	}
 
 	if err := kad.Start(p2pCtx); err != nil {

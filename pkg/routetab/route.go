@@ -41,6 +41,7 @@ var (
 type RouteTab interface {
 	GetRoute(ctx context.Context, dest boson.Address) (paths []*Path, err error)
 	FindRoute(ctx context.Context, dest boson.Address) (paths []*Path, err error)
+	DelRoute(ctx context.Context, dest boson.Address) (err error)
 	Connect(ctx context.Context, dest boson.Address) error
 	GetTargetNeighbor(ctx context.Context, dest boson.Address, limit int) (addresses []boson.Address, err error)
 	IsNeighbor(dest boson.Address) (has bool)
@@ -408,6 +409,17 @@ func (s *Service) FindRoute(ctx context.Context, target boson.Address) (paths []
 	s.logger.Errorf("route: FindRoute target=%s , neighbor notfound", target.String())
 	err = fmt.Errorf("neighbor notfound")
 	return
+}
+
+func (s *Service) DelRoute(ctx context.Context, target boson.Address) error {
+	route, err := s.routeTable.Get(target)
+	if err != nil {
+		return err
+	}
+	for _, v := range route {
+		s.routeTable.Delete(v)
+	}
+	return nil
 }
 
 func (s *Service) GetTargetNeighbor(ctx context.Context, target boson.Address, limit int) (addresses []boson.Address, err error) {

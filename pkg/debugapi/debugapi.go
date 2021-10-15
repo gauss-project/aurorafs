@@ -6,6 +6,7 @@ package debugapi
 import (
 	"crypto/ecdsa"
 	"github.com/gauss-project/aurorafs/pkg/chunkinfo"
+	"github.com/gauss-project/aurorafs/pkg/routetab"
 	"github.com/gauss-project/aurorafs/pkg/topology/lightnode"
 	"net/http"
 	"sync"
@@ -35,8 +36,8 @@ type Service struct {
 	logger          logging.Logger
 	tracer          *tracing.Tracer
 	lightNodes      *lightnode.Container
-
-	chunkInfo chunkinfo.Interface
+	routetab        routetab.RouteTab
+	chunkInfo       chunkinfo.Interface
 	//accounting         accounting.Interface
 	//settlement         settlement.Interface
 	//chequebookEnabled  bool
@@ -85,12 +86,13 @@ func New(overlay boson.Address, publicKey, pssPublicKey ecdsa.PublicKey, ethereu
 // Configure injects required dependencies and configuration parameters and
 // constructs HTTP routes that depend on them. It is intended and safe to call
 // this method only once.
-func (s *Service) Configure(p2p p2p.DebugService, pingpong pingpong.Interface, topologyDriver topology.Driver, lightNodes *lightnode.Container, storer storage.Storer, chunkinfo chunkinfo.Interface) {
+func (s *Service) Configure(p2p p2p.DebugService, pingpong pingpong.Interface, topologyDriver topology.Driver, lightNodes *lightnode.Container, storer storage.Storer, route routetab.RouteTab, chunkinfo chunkinfo.Interface) {
 	s.p2p = p2p
 	s.pingpong = pingpong
 	s.topologyDriver = topologyDriver
 	s.storer = storer
 	s.lightNodes = lightNodes
+	s.routetab = route
 	s.chunkInfo = chunkinfo
 	//s.accounting = accounting
 	//s.settlement = settlement
