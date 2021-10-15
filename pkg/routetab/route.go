@@ -435,6 +435,9 @@ func (s *Service) GetTargetNeighbor(ctx context.Context, target boson.Address, l
 		return
 	}
 	addresses = GetClosestNeighborLimit(target, routes, limit)
+	for _, v := range addresses {
+		s.logger.Debugf("get dest=%s neighbor %v", target, v.String())
+	}
 	return
 }
 
