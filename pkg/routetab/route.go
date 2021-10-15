@@ -356,22 +356,7 @@ func (s *Service) IsNeighbor(dest boson.Address) (has bool) {
 }
 
 func (s *Service) GetRoute(_ context.Context, dest boson.Address) ([]*Path, error) {
-	paths, err := s.routeTable.Get(dest)
-	if err != nil {
-		return nil, err
-	}
-	out := make([]*Path, 0)
-	for _, v := range paths {
-		if !s.IsNeighbor(v.Item[1]) {
-			s.routeTable.Delete(v)
-		} else {
-			out = append(out, v)
-		}
-	}
-	if len(out) > 0 {
-		return out, nil
-	}
-	return nil, ErrNotFound
+	return s.routeTable.Get(dest)
 }
 
 func (s *Service) FindRoute(ctx context.Context, target boson.Address) (paths []*Path, err error) {
@@ -434,9 +419,43 @@ func (s *Service) GetTargetNeighbor(ctx context.Context, target boson.Address, l
 	if err != nil {
 		return
 	}
-	addresses = GetClosestNeighborLimit(target, routes, limit)
+	addresses = s.getClosestNeighborLimit(target, routes, limit)
+	if len(addresses) == 0 {
+		routes, err = s.FindRoute(context.TODO(), target)
+		if err != nil {
+			return
+		}
+		addresses = s.getClosestNeighborLimit(target, routes, limit)
+	}
 	for _, v := range addresses {
 		s.logger.Debugf("get dest=%s neighbor %v", target, v.String())
+	}
+	return
+}
+
+func (s *Service) getClosestNeighborLimit(target boson.Address, routes []*Path, limit int) (out []boson.Address) {
+	has := make(map[string]bool)
+	for _, path := range routes {
+		if !s.IsNeighbor(path.Item[1]) {
+			continue
+		}
+		for k, v := range path.Item {
+			if v.Equal(target) {
+				if k-1 > 0 {
+					has[path.Item[k-1].String()] = true
+				}
+				if k+1 < len(path.Item) {
+					has[path.Item[k+1].String()] = true
+				}
+				break
+			}
+		}
+		if len(has) >= limit {
+			break
+		}
+	}
+	for hex := range has {
+		out = append(out, boson.MustParseHexAddress(hex))
 	}
 	return
 }
