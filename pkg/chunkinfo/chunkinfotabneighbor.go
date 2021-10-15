@@ -81,7 +81,6 @@ func (ci *ChunkInfo) updateNeighborChunkInfo(rootCid, cid boson.Address, overlay
 		v, _ := ci.getChunkSize(context.Background(), rootCid)
 		if v == 0 {
 			if !target.IsZero() && !target.Equal(ci.addr) {
-				ci.logger.Infof("cid %s --> rootCid%s  overlay:%s", cid, rootCid, target)
 				if err := ci.doFindChunkPyramid(context.Background(), nil, rootCid, target); err != nil {
 					return err
 				}
