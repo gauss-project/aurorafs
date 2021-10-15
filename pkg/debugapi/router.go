@@ -103,8 +103,8 @@ func (s *Service) newRouter() *mux.Router {
 		"GET": http.HandlerFunc(s.chunkInfoServerHandler),
 	})
 
-	router.Handle("/chunk/server/{rootCid}", jsonhttp.MethodHandler{
-		"GET": http.HandlerFunc(s.chunkInfoServerHandler),
+	router.Handle("/chunk/init/{rootCid}", jsonhttp.MethodHandler{
+		"GET": http.HandlerFunc(s.chunkInfoInitHandler),
 	})
 
 	router.Handle("/health", jsonhttp.MethodHandler{
