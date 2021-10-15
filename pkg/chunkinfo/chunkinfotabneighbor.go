@@ -63,9 +63,8 @@ func (cn *chunkInfoTabNeighbor) putChunkInfoTabNeighbor(rootCid, overlay boson.A
 }
 
 // updateNeighborChunkInfo
-func (ci *ChunkInfo) updateNeighborChunkInfo(rootCid, cid boson.Address, overlay boson.Address) error {
+func (ci *ChunkInfo) updateNeighborChunkInfo(rootCid, cid boson.Address, overlay, target boson.Address) error {
 	ci.ct.Lock()
-	defer ci.ct.Unlock()
 
 	rc := rootCid.String()
 	over := overlay.String()
@@ -75,22 +74,34 @@ func (ci *ChunkInfo) updateNeighborChunkInfo(rootCid, cid boson.Address, overlay
 	if _, ok := ci.ct.presence[rootCid.String()][over]; !ok {
 		ci.ct.overlays[rc] = append(ci.ct.overlays[rc], overlay)
 	}
-
 	vb, ok := ci.ct.presence[rc][over]
+	ci.ct.Unlock()
 	if !ok {
+	LOOP:
 		v, _ := ci.getChunkSize(context.Background(), rootCid)
 		if v == 0 {
+			if !target.IsZero() && !target.Equal(ci.addr) {
+				ci.logger.Infof("cid %s --> rootCid%s  overlay:%s", cid, rootCid, target)
+				if err := ci.doFindChunkPyramid(context.Background(), nil, rootCid, target); err != nil {
+					return err
+				}
+				goto LOOP
+			}
 			return nil
 		}
+		ci.ct.Lock()
 		vb, _ = bitvector.New(v)
 		ci.ct.presence[rc][over] = vb
+		ci.ct.Unlock()
 	}
+	ci.ct.Lock()
 	v := ci.cp.getCidStore(rootCid, cid)
 	if v < 0 {
 		ci.cp.updateCidSort(rootCid, cid, 0)
 		v = 0
 	}
 	vb.Set(v)
+	defer ci.ct.Unlock()
 	// db
 	return ci.storer.Put(generateKey(keyPrefix, rootCid, overlay), &bitVector{B: vb.Bytes(), Len: vb.Len()})
 }
@@ -148,9 +159,17 @@ func (cn *chunkInfoTabNeighbor) createChunkInfoResp(rootCid boson.Address, ctn m
 func (ci *ChunkInfo) delPresence(rootCid boson.Address) bool {
 	ci.ct.Lock()
 	defer ci.ct.Unlock()
-
-	err := ci.storer.Delete(generateKey(keyPrefix, rootCid, ci.addr))
-	if err != nil {
+	if err := ci.storer.Iterate(keyPrefix, func(k, v []byte) (bool, error) {
+		if !strings.HasPrefix(string(k), keyPrefix) {
+			return true, nil
+		}
+		key := string(k)
+		err := ci.storer.Delete(key)
+		if err != nil {
+			return true, nil
+		}
+		return false, nil
+	}); err != nil {
 		return false
 	}
 

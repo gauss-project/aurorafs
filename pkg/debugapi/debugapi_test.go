@@ -60,8 +60,8 @@ func newTestServer(t *testing.T, o testServerOptions) *testServer {
 	//chequebook := chequebookmock.NewChequebook(o.ChequebookOpts...)
 	//swapserv := swapmock.NewApiInterface(o.SwapOpts...)
 	ln := lightnode.NewContainer(o.Overlay)
-	s := debugapi.New(o.Overlay, o.PublicKey, o.PSSPublicKey, o.EthereumAddress, logging.New(ioutil.Discard, 0), nil, o.CORSAllowedOrigins)
-	s.Configure(o.P2P, o.Pingpong, topologyDriver, ln, o.Storer, nil)
+	s := debugapi.New(o.Overlay, o.PublicKey, o.PSSPublicKey, o.EthereumAddress, logging.New(ioutil.Discard, 0), nil, o.CORSAllowedOrigins, debugapi.Options{})
+	s.Configure(o.P2P, o.Pingpong, topologyDriver, ln, o.Storer, nil, nil)
 	ts := httptest.NewServer(s)
 	t.Cleanup(ts.Close)
 
@@ -127,7 +127,7 @@ func TestServer_Configure(t *testing.T) {
 	//chequebook := chequebookmock.NewChequebook(o.ChequebookOpts...)
 	//swapserv := swapmock.NewApiInterface(o.SwapOpts...)
 	ln := lightnode.NewContainer(o.Overlay)
-	s := debugapi.New(o.Overlay, o.PublicKey, o.PSSPublicKey, o.EthereumAddress, logging.New(ioutil.Discard, 0), nil, nil)
+	s := debugapi.New(o.Overlay, o.PublicKey, o.PSSPublicKey, o.EthereumAddress, logging.New(ioutil.Discard, 0), nil, nil, debugapi.Options{})
 	ts := httptest.NewServer(s)
 	t.Cleanup(ts.Close)
 
@@ -159,7 +159,7 @@ func TestServer_Configure(t *testing.T) {
 		}),
 	)
 
-	s.Configure(o.P2P, o.Pingpong, topologyDriver, ln, o.Storer, nil)
+	s.Configure(o.P2P, o.Pingpong, topologyDriver, ln, o.Storer, nil, nil)
 
 	testBasicRouter(t, client)
 	jsonhttptest.Request(t, client, http.MethodGet, "/readiness", http.StatusOK,

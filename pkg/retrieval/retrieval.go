@@ -154,9 +154,9 @@ func (s *Service) RetrieveChunk(ctx context.Context, rootAddr, chunkAddr boson.A
 						s.logger.Debugf("retrieval: failed to get chunk (%s,%s) from route %s: %v",
 							rootAddr, chunkAddr, retrievalRoute, result.err)
 					} else {
-						if s.isFullNode {
-							s.chunkinfo.OnChunkTransferred(chunkAddr, rootAddr, s.addr)
-						}
+						//if s.isFullNode {
+						//	s.chunkinfo.OnChunkTransferred(chunkAddr, rootAddr, s.addr, boson.ZeroAddress)
+						//}
 						return result.chunk, nil
 					}
 				case <-ctx.Done():
@@ -200,7 +200,7 @@ func (s *Service) RetrieveChunkFromNode(ctx context.Context, targetNode boson.Ad
 			ctx1 := tracing.WithContext(context.Background(), tracing.FromContext(topCtx))
 
 			// get the tracing span
-			span, _, ctx := s.tracer.StartSpanFromContext(ctx1, "retrieve-chunk", s.logger,
+			span, _, ctx1 := s.tracer.StartSpanFromContext(ctx1, "retrieve-chunk", s.logger,
 				opentracing.Tag{Key: "rootAddr,chunkAddr", Value: rootAddr.String() + "," + chunkAddr.String()})
 			defer span.Finish()
 
@@ -252,6 +252,7 @@ func (s *Service) retrieveChunk(ctx context.Context, route aco.Route, rootAddr, 
 	// 	return nil, nil, fmt.Errorf("not direct link, %v,%v(not same)", route.LinkNode.String(), route.TargetNode.String())
 	// }
 	if err := s.routeTab.Connect(ctx, route.LinkNode); err != nil {
+		s.logger.Errorf("connect failed, peer: %v  err: %s", route.LinkNode.String(), err)
 		return nil, fmt.Errorf("connect failed, peer: %v", route.LinkNode.String())
 	}
 	s.acoServer.OnDownloadStart(route)
@@ -308,7 +309,7 @@ func (s *Service) retrieveChunk(ctx context.Context, route aco.Route, rootAddr, 
 
 	if s.isFullNode && s.chunkinfo != nil {
 		s.logger.Tracef("retrieval: chunk %s is received", chunkAddr)
-		err := s.chunkinfo.OnChunkTransferred(chunkAddr, rootAddr, s.addr)
+		err := s.chunkinfo.OnChunkTransferred(chunkAddr, rootAddr, s.addr, route.LinkNode)
 		if err != nil {
 			return nil, fmt.Errorf("retrieval: report chunk transfer: %w", err)
 		}
@@ -373,7 +374,7 @@ func (s *Service) handler(ctx context.Context, p p2p.Peer, stream p2p.Stream) (e
 
 	if s.chunkinfo != nil && p.FullNode {
 		s.logger.Tracef("retrieval: chunk %s transfer to node %s", chunkAddr, p.Address)
-		err := s.chunkinfo.OnChunkTransferred(chunkAddr, rootAddr, p.Address)
+		err := s.chunkinfo.OnChunkTransferred(chunkAddr, rootAddr, p.Address, targetAddr)
 		if err != nil {
 			return fmt.Errorf("retrieval: report chunk transfer: %w", err)
 		}

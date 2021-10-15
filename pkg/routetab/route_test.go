@@ -51,32 +51,37 @@ type Node struct {
 }
 
 func p2pMock(ab addressbook.Interface, overlay boson.Address, signer crypto.Signer) p2p.Service {
-	p2ps := p2pmock.New(p2pmock.WithConnectFunc(func(ctx context.Context, underlay ma.Multiaddr) (*aurora.Address, error) {
-		if underlay.Equal(nonConnectableAddress) {
-			return nil, errors.New("non reachable node")
-		}
-		addresses, err := ab.Addresses()
-		if err != nil {
-			return nil, errors.New("could not fetch addressBook addresses")
-		}
-
-		for _, a := range addresses {
-			if a.Underlay.Equal(underlay) {
-				return &a, nil
+	p2ps := p2pmock.New(
+		p2pmock.WithConnectFunc(func(ctx context.Context, underlay ma.Multiaddr) (*aurora.Address, error) {
+			if underlay.Equal(nonConnectableAddress) {
+				return nil, errors.New("non reachable node")
 			}
-		}
+			addresses, err := ab.Addresses()
+			if err != nil {
+				return nil, errors.New("could not fetch addressBook addresses")
+			}
 
-		bzzAddr, err := aurora.NewAddress(signer, underlay, overlay, networkId)
-		if err != nil {
-			return nil, err
-		}
+			for _, a := range addresses {
+				if a.Underlay.Equal(underlay) {
+					return &a, nil
+				}
+			}
 
-		if err := ab.Put(overlay, *bzzAddr); err != nil {
-			return nil, err
-		}
+			bzzAddr, err := aurora.NewAddress(signer, underlay, overlay, networkId)
+			if err != nil {
+				return nil, err
+			}
 
-		return bzzAddr, nil
-	}))
+			if err := ab.Put(overlay, *bzzAddr); err != nil {
+				return nil, err
+			}
+
+			return bzzAddr, nil
+		}),
+		p2pmock.WithDisconnectFunc(func(boson.Address, string) error {
+			return nil
+		}),
+	)
 
 	return p2ps
 }
@@ -323,11 +328,19 @@ func TestService_GetTargetNeighbor(t *testing.T) {
 	if len(neighbor) != 2 {
 		t.Fatalf("expect find neighbor len 2,got %d", len(neighbor))
 	}
-	if !neighbor[0].Equal(nodes[2].overlay) {
-		t.Fatalf("expect neighbor eq node 2")
+	for _, v := range neighbor {
+		if !v.Equal(nodes[2].overlay) && !v.Equal(nodes[4].overlay) {
+			t.Fatalf("expect neighbor eq node 2 or 4")
+		}
 	}
-	if !neighbor[1].Equal(nodes[4].overlay) {
-		t.Fatalf("expect neighbor eq node 4")
+	// node0 offline
+	err = nodes[0].kad.DisconnectForce(nodes[1].overlay, "test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = nodes[0].GetTargetNeighbor(ctx, nodes[3].overlay, 2)
+	if err == nil {
+		t.Fatalf("expect err is neighbor notfoud")
 	}
 }
 

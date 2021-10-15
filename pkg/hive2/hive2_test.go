@@ -252,23 +252,17 @@ func TestLookupDistances(t *testing.T) {
 
 func checkChan(t *testing.T, ch chan boson.Address, list []boson.Address) (total int) {
 	t.Helper()
+	skip := make([]boson.Address, 0)
 	for {
-		select {
-		case addr := <-ch:
-			if addr.IsZero() {
-				return
-			}
-			has := false
-			for _, v := range list {
-				if v.Equal(addr) {
-					has = true
-				}
-			}
-			if !has {
-				t.Fatalf("received expected find %s, got nil", addr.String())
-			}
-			total++
+		addr := <-ch
+		if addr.IsZero() {
+			return
 		}
+		if !addr.MemberOf(list) || addr.MemberOf(skip) {
+			t.Fatalf("received expected find %s, got nil", addr.String())
+		}
+		skip = append(skip, addr)
+		total++
 	}
 }
 
@@ -325,24 +319,45 @@ func TestService_DoFindNode(t *testing.T) {
 			t.Fatalf("connected expected 3 got %d", s01.Connected)
 		}
 	})
+}
 
-	// connected max
-	p3List := b.connectMore(t, a.overlay, int(pos[1]), 20)
-	posReq := []int32{pos[1]}
-	res1, err := a.DoFindNode(ctx, a.overlay, b.overlay, posReq, 16)
+func TestService_DoFindNodeMax(t *testing.T) {
+	ctx := context.Background()
+
+	a := newTestNode(t, test.RandomAddress(), -1)
+	b := newTestNode(t, test.RandomAddress(), -1)
+
+	a.addOne(t, b.addr, true)
+	b.addOne(t, a.addr, true)
+
+	a.stream.SetProtocols(b.Protocol())
+	b.stream.SetProtocols(a.Protocol())
+
+	err := a.kad.Start(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
-	total := checkChan(t, res1, p3List)
-	if total != 16 {
-		t.Fatalf("exp received 16 peer, got %d", total)
-	}
-	time.Sleep(time.Millisecond * 100)
-	s03 := a.kad.Snapshot()
-	if s03.Connected != 19 {
-		t.Fatalf("connected expected 19 got %d", s03.Connected)
-	}
 
+	pos := hive2.LookupDistances(a.overlay, b.overlay)
+
+	// connected max
+	p3List := b.connectMore(t, a.overlay, int(pos[1]), 20)
+	t.Run("connected max", func(t *testing.T) {
+		posReq := []int32{pos[1]}
+		res1, err := a.DoFindNode(ctx, a.overlay, b.overlay, posReq, 16)
+		if err != nil {
+			t.Fatal(err)
+		}
+		total := checkChan(t, res1, p3List)
+		if total != 16 {
+			t.Fatalf("exp received 16 peer, got %d", total)
+		}
+		time.Sleep(time.Millisecond * 100)
+		s03 := a.kad.Snapshot()
+		if s03.Connected != 17 {
+			t.Fatalf("connected expected 17 got %d", s03.Connected)
+		}
+	})
 }
 
 func TestService_Lookup(t *testing.T) {

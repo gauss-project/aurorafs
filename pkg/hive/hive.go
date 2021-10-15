@@ -326,3 +326,7 @@ func (s *Service) Start() {
 func (s *Service) IsHive2() bool {
 	return false
 }
+
+func (s *Service) NotifyDiscoverWork(peers ...boson.Address)  {
+
+}

@@ -19,4 +19,6 @@ type Driver interface {
 
 	// IsHive2 hive2 protocol
 	IsHive2() bool
+
+	NotifyDiscoverWork(peers ...boson.Address)
 }
