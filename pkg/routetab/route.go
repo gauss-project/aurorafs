@@ -455,10 +455,12 @@ func (s *Service) Connect(ctx context.Context, target boson.Address) error {
 	}
 	_ = s.kad.EachPeer(findFun)
 	if isConnected {
+		s.logger.Debugf("route: connect target in neighbor")
 		return nil
 	}
 	_ = s.config.LightNodes.EachPeer(findFun)
 	if isConnected {
+		s.logger.Debugf("route: connect target(light) in neighbor")
 		return nil
 	}
 	return s.connect(ctx, target)
