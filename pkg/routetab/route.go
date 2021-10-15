@@ -331,7 +331,7 @@ func (s *Service) getNeighbor(target boson.Address, alpha int32, skip ...boson.A
 		now = skipPeers(list, skip)
 	} else {
 		_ = s.kad.EachNeighbor(func(address boson.Address, u uint8) (stop, jumpToNext bool, err error) {
-			if !inAddress(address, skip) {
+			if !address.MemberOf(skip) {
 				now = append(now, address)
 			}
 			return false, false, nil
