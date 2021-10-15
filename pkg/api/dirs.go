@@ -411,12 +411,14 @@ func (s *server) serveManifestMetadata(w http.ResponseWriter, r *http.Request, e
 	}
 
 	type FsType struct {
+		Name      string `json:"name"`
 		Size      uint64 `json:"size"`
 		Extension string `json:"ext"`
 		MimeType  string `json:"mime"`
 	}
 
 	jsonhttp.OK(w, &FsType{
+		Name:      metadata.Filename,
 		Size:      binary.LittleEndian.Uint64(refChunk.Data()[:boson.SpanSize]),
 		Extension: ext,
 		MimeType:  metadata.MimeType,
@@ -571,6 +573,19 @@ func (s *server) manifestViewHandler(w http.ResponseWriter, r *http.Request) {
 			if err := m.IterateNodes(r.Context(), []byte(pathVar), depth, fn); err != nil {
 				jsonhttp.InternalServerError(w, err)
 				return
+			}
+
+			if indexDocumentSuffixKey, ok := manifestMetadataLoad(r.Context(), m, manifestRootPath, manifestWebsiteIndexDocumentSuffixKey); ok {
+				_, err := m.Lookup(r.Context(), indexDocumentSuffixKey)
+				if err != nil {
+					logger.Debugf("manifest view: invalid index %s/%s: %v", address, indexDocumentSuffixKey, err)
+					logger.Error("manifest view: invalid index")
+				}
+
+				indexNode, ok := rootNode.Nodes[indexDocumentSuffixKey]
+				if ok && indexNode.Type == manifest.File.String() {
+					indexNode.Type = manifest.IndexItem.String()
+				}
 			}
 
 			jsonhttp.OK(w, rootNode)
