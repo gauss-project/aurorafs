@@ -38,6 +38,7 @@ type NodeType int
 const (
 	File NodeType = iota
 	Directory
+	IndexItem
 )
 
 func (t NodeType) String() string {
@@ -46,6 +47,8 @@ func (t NodeType) String() string {
 		return "file"
 	case Directory:
 		return "directory"
+	case IndexItem:
+		return "index"
 	}
 	return "unknown"
 }
@@ -64,7 +67,8 @@ type Interface interface {
 	HasPrefix(context.Context, string) (bool, error)
 	// Store stores the manifest, returning the resulting address.
 	Store(context.Context, ...StoreSizeFunc) (boson.Address, error)
-	// IterateNodes
+	// IterateNodes is used to iterate over directory or file for the
+	// manifest.
 	IterateNodes(context.Context, []byte, int, NodeIterFunc) error
 	// IterateAddresses is used to iterate over chunks addresses for
 	// the manifest.
