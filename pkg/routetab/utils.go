@@ -17,21 +17,13 @@ func inPath(b []byte, path [][]byte) bool {
 func skipPeers(src, skipPeers []boson.Address) []boson.Address {
 	now := make([]boson.Address, 0)
 	for _, v := range src {
-		if !inAddress(v, skipPeers) {
+		if !v.MemberOf(skipPeers) {
 			now = append(now, v)
 		}
 	}
 	return now
 }
 
-func inAddress(src boson.Address, array []boson.Address) bool {
-	for _, v := range array {
-		if v.Equal(src) {
-			return true
-		}
-	}
-	return false
-}
 
 func GetClosestNeighborLimit(target boson.Address, routes []*Path, limit int) (out []boson.Address) {
 	has := make(map[string]bool)

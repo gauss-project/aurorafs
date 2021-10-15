@@ -1,11 +1,11 @@
 openapi: 3.0.3
 info:
-  version: 1.0.0
+  version: 1.0.8
   title: Aurora Debug API
   description: "A list of the currently provided debug interfaces to interact with the aurorafs node"
 
 security:
-  - {}
+  - { }
 
 externalDocs:
   description: Browse the documentation @ the aurorafs Docs
@@ -72,6 +72,86 @@ paths:
             application/json:
               schema:
                 $ref: "AuroraCommon.yaml#/components/schemas/RttMs"
+        "400":
+          $ref: "AuroraCommon.yaml#/components/responses/400"
+        "404":
+          $ref: "AuroraCommon.yaml#/components/responses/404"
+        "500":
+          $ref: "AuroraCommon.yaml#/components/responses/500"
+        default:
+          description: Default response
+
+  "/route/{peer-id}":
+    get:
+      summary: Get route from node
+      tags:
+        - Routetab
+      parameters:
+        - in: path
+          name: peer-id
+          schema:
+            $ref: "AuroraCommon.yaml#/components/schemas/AuroraAddress"
+          required: true
+          description: Aurora address of peer
+      responses:
+        "200":
+          description: Returns route paths for given peer
+          content:
+            application/json:
+              schema:
+                $ref: "AuroraCommon.yaml#/components/schemas/RoutePaths"
+        "400":
+          $ref: "AuroraCommon.yaml#/components/responses/400"
+        "404":
+          $ref: "AuroraCommon.yaml#/components/responses/404"
+        "500":
+          $ref: "AuroraCommon.yaml#/components/responses/500"
+        default:
+          description: Default response
+    post:
+      summary: Doing findroute to node
+      tags:
+        - Routetab
+      parameters:
+        - in: path
+          name: peer-id
+          schema:
+            $ref: "AuroraCommon.yaml#/components/schemas/AuroraAddress"
+          required: true
+          description: Aurora address of peer
+      responses:
+        "200":
+          description: Returns route paths for given peer
+          content:
+            application/json:
+              schema:
+                $ref: "AuroraCommon.yaml#/components/schemas/RoutePaths"
+        "400":
+          $ref: "AuroraCommon.yaml#/components/responses/400"
+        "404":
+          $ref: "AuroraCommon.yaml#/components/responses/404"
+        "500":
+          $ref: "AuroraCommon.yaml#/components/responses/500"
+        default:
+          description: Default response
+    delete:
+      summary: Delete route to node
+      tags:
+        - Routetab
+      parameters:
+        - in: path
+          name: peer-id
+          schema:
+            $ref: "AuroraCommon.yaml#/components/schemas/AuroraAddress"
+          required: true
+          description: Aurora address of peer
+      responses:
+        "200":
+          description: delete route paths for given peer
+          content:
+            application/json:
+              schema:
+                $ref: "AuroraCommon.yaml#/components/schemas/Response"
         "400":
           $ref: "AuroraCommon.yaml#/components/responses/400"
         "404":
@@ -200,6 +280,84 @@ paths:
         default:
           description: Default response
 
+  "/chunk/discover/{address}":
+    get:
+      summary: Get chunk discovery nodes
+      tags:
+        - Chunk
+      parameters:
+        - in: path
+          name: address
+          schema:
+            $ref: "AuroraCommon.yaml#/components/schemas/AuroraAddress"
+          required: true
+          description: Aurora address of chunk
+      responses:
+        "200":
+          description: Chunk exists
+          content:
+            application/json:
+              schema:
+                $ref: "AuroraCommon.yaml#/components/schemas/ChunkResponse"
+        "400":
+          $ref: "AuroraCommon.yaml#/components/responses/400"
+        "404":
+          $ref: "AuroraCommon.yaml#/components/responses/404"
+        default:
+          description: Default response
+
+  "/chunk/server/{address}":
+    get:
+      summary: Get chunk server nodes
+      tags:
+        - Chunk
+      parameters:
+        - in: path
+          name: address
+          schema:
+            $ref: "AuroraCommon.yaml#/components/schemas/AuroraAddress"
+          required: true
+          description: Aurora address of chunk
+      responses:
+        "200":
+          description: Chunk exists
+          content:
+            application/json:
+              schema:
+                $ref: "AuroraCommon.yaml#/components/schemas/ChunkResponse"
+        "400":
+          $ref: "AuroraCommon.yaml#/components/responses/400"
+        "404":
+          $ref: "AuroraCommon.yaml#/components/responses/404"
+        default:
+          description: Default response
+
+
+  "/chunk/init/{address}":
+    get:
+      summary: Get chunk pyramid
+      tags:
+        - Chunk
+      parameters:
+        - in: path
+          name: address
+          schema:
+            $ref: "AuroraCommon.yaml#/components/schemas/AuroraAddress"
+          required: true
+          description: Aurora address of chunk
+      responses:
+        "200":
+          description: Chunk exists
+          content:
+            application/json:
+              schema:
+                $ref: "AuroraCommon.yaml#/components/schemas/ChunkInfoInitResponse"
+        "400":
+          $ref: "AuroraCommon.yaml#/components/responses/400"
+        "404":
+          $ref: "AuroraCommon.yaml#/components/responses/404"
+        default:
+          description: Default response
   "/topology":
     get:
       description: Get topology of known network

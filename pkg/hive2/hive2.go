@@ -44,6 +44,7 @@ type Service struct {
 	wg              sync.WaitGroup
 	peersChan       chan resultChan
 	sem             *semaphore.Weighted
+	findWorkC       chan []boson.Address
 }
 
 type resultChan struct {
@@ -66,6 +67,7 @@ func New(streamer p2p.StreamerPinger, addressBook addressbook.GetPutter, network
 		quit:        make(chan struct{}),
 		peersChan:   make(chan resultChan),
 		sem:         semaphore.NewWeighted(int64(boson.MaxPO)),
+		findWorkC:   make(chan []boson.Address, 1),
 	}
 	srv.startCheckPeersHandler()
 	return srv
@@ -131,8 +133,15 @@ func (s *Service) onFindNode(ctx context.Context, peer p2p.Peer, stream p2p.Stre
 	resp := &pb.Peers{}
 
 	target := boson.NewAddress(req.Target)
-	_ = s.config.Kad.EachPeer(func(address boson.Address, u uint8) (stop, jumpToNext bool, err error) {
-		if address.Equal(peer.Address) {
+	skip := []boson.Address{peer.Address}
+
+	var limit = 1
+	if req.Limit > 2 {
+		limit = int(req.Limit / 2)
+	}
+
+	addrFunc := func(address boson.Address, u uint8) (stop, jumpToNext bool, err error) {
+		if address.MemberOf(skip) {
 			return false, false, nil
 		}
 		po := boson.Proximity(target.Bytes(), address.Bytes())
@@ -144,13 +153,19 @@ func (s *Service) onFindNode(ctx context.Context, peer p2p.Peer, stream p2p.Stre
 					Signature: p.Signature,
 					Overlay:   p.Overlay.Bytes(),
 				})
-				if len(resp.Peers) >= int(req.Limit) {
+				skip = append(skip, p.Overlay)
+
+				if len(resp.Peers) >= limit {
 					return true, false, nil
 				}
 			}
 		}
 		return false, false, nil
-	})
+	}
+
+	_ = s.config.Kad.EachPeer(addrFunc)
+	limit = int(req.Limit)
+	_ = s.config.Kad.EachKnownPeer(addrFunc)
 
 	s.metrics.OnFindNodePeers.Add(float64(len(resp.Peers)))
 

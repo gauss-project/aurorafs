@@ -12,6 +12,7 @@ const (
 	lookupRequestLimit      = 3
 	lookupNeighborPeerLimit = 3
 	findNodePeerLimit       = 16
+	findWorkInterval        = time.Minute * 30
 )
 
 // discover is a forever loop that manages the find to new peers
@@ -19,62 +20,66 @@ func (s *Service) discover() {
 	defer s.wg.Done()
 	defer s.logger.Debugf("hive2: discover loop exited")
 
-	tick := time.NewTicker(time.Minute * 30)
-	tickFirst := time.NewTicker(time.Second * 30)
-	runWorkC := make(chan struct{}, 1)
+	tick := time.NewTicker(findWorkInterval)
 	for {
 		select {
 		case <-s.quit:
 			return
-		case <-tickFirst.C:
-			// wait for kademlia have A certain amount of saturation
-			// when boot maybe have many peer in address book
-			runWorkC <- struct{}{}
-			tickFirst.Stop()
 		case <-tick.C:
-			runWorkC <- struct{}{}
-		case <-runWorkC:
-			s.discoverWork()
+			s.NotifyDiscoverWork()
+		case peers := <-s.findWorkC:
+			s.discoverWork(peers...)
 		}
 	}
 }
 
-func (s *Service) discoverWork() {
+func (s *Service) discoverWork(peers ...boson.Address) {
 	start := time.Now()
 	s.logger.Debugf("hive2 discover start...")
 	defer s.logger.Debugf("hive2 discover took %s to finish", time.Since(start))
-	newLookup(s.config.Base, s).run()
+	newLookup(s.config.Base, s).run(peers...)
 	for i := 0; i < 3; i++ {
 		dest := test.RandomAddress()
-		newLookup(dest, s).run()
+		newLookup(dest, s).run(peers...)
+	}
+}
+
+// NotifyDiscoverWork notifies hive2 discover work.
+func (s *Service) NotifyDiscoverWork(peers ...boson.Address) {
+	if s.IsStart() {
+		select {
+		case s.findWorkC <- peers:
+		default:
+		}
 	}
 }
 
 type lookup struct {
-	h2       *Service
-	target   boson.Address
-	total    atomic.Int32
-	stop     chan bool
-	find     []boson.Address
-	asked    map[string]bool
+	h2     *Service
+	target boson.Address
+	total  atomic.Int32
+	stop   chan bool
+	find   []boson.Address
+	asked  map[string]bool
 }
 
 func newLookup(target boson.Address, s *Service) *lookup {
 	return &lookup{
-		target:   target,
-		h2:       s,
-		stop:     make(chan bool, 1),
-		asked:    make(map[string]bool),
+		target: target,
+		h2:     s,
+		stop:   make(chan bool, 1),
+		asked:  make(map[string]bool),
 	}
 }
 
-func (l *lookup) run() {
-	l.findNode()
+func (l *lookup) run(forward ...boson.Address) {
+	l.findNode(forward...)
 	for {
 		select {
 		case <-l.stop:
 			return
 		default:
+			<-time.After(time.Millisecond * 50)
 			if len(l.find) == 0 {
 				return
 			}
@@ -87,11 +92,17 @@ func (l *lookup) run() {
 	}
 }
 
-func (l *lookup) findNode() {
-	peers, err := l.h2.config.Kad.ClosestPeers(l.target, lookupNeighborPeerLimit)
-	if err != nil {
-		l.h2.logger.Warningf("ClosestPeers %s", err)
-		return
+func (l *lookup) findNode(forward ...boson.Address) {
+	var peers []boson.Address
+	if len(forward) > 0 {
+		peers = forward
+	} else {
+		var err error
+		peers, err = l.h2.config.Kad.ClosestPeers(l.target, lookupNeighborPeerLimit)
+		if err != nil {
+			l.h2.logger.Warningf("ClosestPeers %s", err)
+			return
+		}
 	}
 	for _, node := range peers {
 		l.query(node)
@@ -112,20 +123,19 @@ func (l *lookup) query(node boson.Address) {
 			return
 		}
 		for {
-			select {
-			case addr := <-ch:
-				if addr.IsZero() {
-					return
-				}
-				if l.asked[addr.String()] {
-					break
-				}
-				if l.total.Inc() >= findNodePeerLimit {
-					l.stop <- true
-					return
-				}
-				l.asked[addr.String()] = true
-				l.find = append(l.find, addr)
+			addr := <-ch
+			if addr.IsZero() {
+				return
+			}
+			if _, ok := l.asked[addr.String()]; ok {
+				continue
+			}
+			l.asked[addr.String()] = true
+			l.find = append(l.find, addr)
+
+			if l.total.Inc() >= findNodePeerLimit {
+				l.stop <- true
+				return
 			}
 		}
 	}
