@@ -15,6 +15,7 @@ import (
 	"github.com/gauss-project/aurorafs/pkg/storage"
 	"github.com/gauss-project/aurorafs/pkg/topology/kademlia"
 	"github.com/gauss-project/aurorafs/pkg/topology/lightnode"
+	"sync"
 	"time"
 )
 
@@ -117,7 +118,17 @@ func (s *Service) start(ctx context.Context) {
 		for {
 			select {
 			case <-ticker.C:
-				s.pendingCalls.Gc(PendingTimeout)
+				wg := sync.WaitGroup{}
+				wg.Add(2)
+				go func() {
+					defer wg.Done()
+					s.pendingCalls.GcReqLog(PendingTimeout)
+				}()
+				go func() {
+					defer wg.Done()
+					s.pendingCalls.GcResItems(PendingTimeout)
+				}()
+				wg.Wait()
 			case <-ctx.Done():
 				return
 			}
