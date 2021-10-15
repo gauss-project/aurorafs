@@ -1,6 +1,6 @@
 openapi: 3.0.3
 info:
-  version: 1.0.0
+  version: 1.0.8
   title: Common Data Types
   description: |
 
@@ -8,7 +8,7 @@ externalDocs:
   description: Browse the documentation @ the aurorafs Docs
   url: ""
 
-paths: {}
+paths: { }
 components:
   schemas:
     Address:
@@ -180,6 +180,40 @@ components:
           type: string
         code:
           type: integer
+    ChunkResponse:
+      type: array
+      items:
+        type: object
+        properties:
+          overlay:
+            $ref: "#/components/schemas/AuroraAddress"
+          bit:
+            type: string
+    ChunkInfoInitResponse:
+      type: object
+      properties:
+        msg:
+          type: boolean
+
+    RoutePaths:
+      type: object
+      properties:
+        paths:
+          type: array
+          items:
+            - $ref: "#/components/schemas/RoutePath"
+
+    RoutePath:
+      type: object
+      properties:
+        createTime:
+          type: integer
+        sign:
+          type: string
+        item:
+          type: array
+        usedTime:
+          $ref: "#/components/schemas/DateTime"
 
     RttMs:
       type: object

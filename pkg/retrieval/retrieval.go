@@ -154,9 +154,9 @@ func (s *Service) RetrieveChunk(ctx context.Context, rootAddr, chunkAddr boson.A
 						s.logger.Debugf("retrieval: failed to get chunk (%s,%s) from route %s: %v",
 							rootAddr, chunkAddr, retrievalRoute, result.err)
 					} else {
-						if s.isFullNode {
-							s.chunkinfo.OnChunkTransferred(chunkAddr, rootAddr, s.addr, boson.ZeroAddress)
-						}
+						//if s.isFullNode {
+						//	s.chunkinfo.OnChunkTransferred(chunkAddr, rootAddr, s.addr, boson.ZeroAddress)
+						//}
 						return result.chunk, nil
 					}
 				case <-ctx.Done():
@@ -200,7 +200,7 @@ func (s *Service) RetrieveChunkFromNode(ctx context.Context, targetNode boson.Ad
 			ctx1 := tracing.WithContext(context.Background(), tracing.FromContext(topCtx))
 
 			// get the tracing span
-			span, _, ctx := s.tracer.StartSpanFromContext(ctx1, "retrieve-chunk", s.logger,
+			span, _, ctx1 := s.tracer.StartSpanFromContext(ctx1, "retrieve-chunk", s.logger,
 				opentracing.Tag{Key: "rootAddr,chunkAddr", Value: rootAddr.String() + "," + chunkAddr.String()})
 			defer span.Finish()
 
@@ -252,6 +252,7 @@ func (s *Service) retrieveChunk(ctx context.Context, route aco.Route, rootAddr, 
 	// 	return nil, nil, fmt.Errorf("not direct link, %v,%v(not same)", route.LinkNode.String(), route.TargetNode.String())
 	// }
 	if err := s.routeTab.Connect(ctx, route.LinkNode); err != nil {
+		s.logger.Errorf("connect failed, peer: %v  err: %s", route.LinkNode.String(), err)
 		return nil, fmt.Errorf("connect failed, peer: %v", route.LinkNode.String())
 	}
 	s.acoServer.OnDownloadStart(route)

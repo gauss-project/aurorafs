@@ -89,6 +89,11 @@ func (s *Service) newRouter() *mux.Router {
 	router.Handle("/topology", jsonhttp.MethodHandler{
 		"GET": http.HandlerFunc(s.topologyHandler),
 	})
+	router.Handle("/route/{peer-id}", jsonhttp.MethodHandler{
+		"GET": http.HandlerFunc(s.getRouteHandel),
+		"POST": http.HandlerFunc(s.findRouteHandel),
+		"DELETE": http.HandlerFunc(s.delRouteHandel),
+	})
 	router.Handle("/welcome-message", jsonhttp.MethodHandler{
 		"GET": http.HandlerFunc(s.getWelcomeMessageHandler),
 		"POST": web.ChainHandlers(

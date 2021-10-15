@@ -600,6 +600,8 @@ func (k *Kad) Start(_ context.Context) error {
 		}
 		k.AddPeers(addresses...)
 		k.metrics.StartAddAddressBookOverlaysTime.Observe(float64(time.Since(start).Nanoseconds()))
+
+		k.discovery.NotifyDiscoverWork()
 	}()
 
 	// trigger the first manage loop immediately so that
@@ -644,6 +646,8 @@ func (k *Kad) connectBootNodes(ctx context.Context) {
 			if err := k.onConnected(ctx, bzzAddress.Overlay); err != nil {
 				return false, err
 			}
+			k.discovery.NotifyDiscoverWork(bzzAddress.Overlay)
+
 			k.logger.Tracef("connected to bootnode %s", addr)
 			connected++
 			// connect to max 3 bootnodes
