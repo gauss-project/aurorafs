@@ -356,15 +356,10 @@ func (ci *ChunkInfo) onFindChunkInfo(ctx context.Context, authInfo []byte, rootC
 	if chunkInfo == nil {
 		chunkInfo = make(map[string][]byte, 1)
 	}
-	overlays := make([][]byte, 0, len(chunkInfo))
-	for over, bv := range chunkInfo {
-		overlays = append(overlays, boson.MustParseHexAddress(over).Bytes())
-		ci.updateChunkInfo(rootCid, boson.MustParseHexAddress(over), bv)
-	}
 	ci.syncLk.Lock()
 	if msgChan, ok := ci.syncMsg[rootCid.String()]; ok {
 		msgChan <- true
 	}
 	ci.syncLk.Unlock()
-	ci.updateQueue(ctx, authInfo, rootCid, overlay, overlays)
+	ci.updateQueue(ctx, authInfo, rootCid, overlay, chunkInfo)
 }

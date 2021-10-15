@@ -63,7 +63,7 @@ func (cn *chunkInfoTabNeighbor) putChunkInfoTabNeighbor(rootCid, overlay boson.A
 }
 
 // updateNeighborChunkInfo
-func (ci *ChunkInfo) updateNeighborChunkInfo(rootCid, cid boson.Address, overlay boson.Address) error {
+func (ci *ChunkInfo) updateNeighborChunkInfo(rootCid, cid boson.Address, overlay, target boson.Address) error {
 	ci.ct.Lock()
 	defer ci.ct.Unlock()
 
@@ -78,8 +78,16 @@ func (ci *ChunkInfo) updateNeighborChunkInfo(rootCid, cid boson.Address, overlay
 
 	vb, ok := ci.ct.presence[rc][over]
 	if !ok {
+	LOOP:
 		v, _ := ci.getChunkSize(context.Background(), rootCid)
 		if v == 0 {
+			if !target.IsZero() && !target.Equal(ci.addr) {
+				ci.logger.Infof("cid %s --> rootCid%s  overlay:%s", cid, rootCid, target)
+				if err := ci.doFindChunkPyramid(context.Background(), nil, rootCid, target); err != nil {
+					return err
+				}
+				goto LOOP
+			}
 			return nil
 		}
 		vb, _ = bitvector.New(v)
