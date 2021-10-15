@@ -556,6 +556,7 @@ func (s *Service) onFindUnderlay(ctx context.Context, p p2p.Peer, stream p2p.Str
 			return err
 		}
 		s.logger.Tracef("find underlay dest %s send: to %s", target.String(), p.Address.String())
+		return nil
 	}
 	// get route
 	next := s.routeTable.GetNextHop(target, req.Sign)
