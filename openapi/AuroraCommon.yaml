@@ -199,19 +199,16 @@ components:
       type: object
       properties:
         paths:
-          $ref: "#/components/schemas/RoutePath"
-
-    RoutePath:
-      type: object
-      properties:
-        createTime:
-          type: integer
-        sign:
-          type: string
-        item:
           type: array
-        usedTime:
-          $ref: "#/components/schemas/DateTime"
+          properties:
+            createTime:
+              type: integer
+            sign:
+              type: string
+            item:
+              type: array
+            usedTime:
+              $ref: "#/components/schemas/DateTime"
 
     RttMs:
       type: object

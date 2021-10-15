@@ -83,9 +83,9 @@ paths:
 
   "/route/{peer-id}":
     get:
-      summary: get route from node
+      summary: Get route from node
       tags:
-        - Connectivity
+        - Routetab
       parameters:
         - in: path
           name: peer-id
@@ -109,9 +109,9 @@ paths:
         default:
           description: Default response
     post:
-      summary: doing findroute to node
+      summary: Doing findroute to node
       tags:
-        - Connectivity
+        - Routetab
       parameters:
         - in: path
           name: peer-id
@@ -135,9 +135,9 @@ paths:
         default:
           description: Default response
     delete:
-      summary: delete route to node
+      summary: Delete route to node
       tags:
-        - Connectivity
+        - Routetab
       parameters:
         - in: path
           name: peer-id
