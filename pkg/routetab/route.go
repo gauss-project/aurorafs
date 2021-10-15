@@ -41,6 +41,7 @@ var (
 type RouteTab interface {
 	GetRoute(ctx context.Context, dest boson.Address) (paths []*Path, err error)
 	FindRoute(ctx context.Context, dest boson.Address) (paths []*Path, err error)
+	DelRoute(ctx context.Context, dest boson.Address) (err error)
 	Connect(ctx context.Context, dest boson.Address) error
 	GetTargetNeighbor(ctx context.Context, dest boson.Address, limit int) (addresses []boson.Address, err error)
 	IsNeighbor(dest boson.Address) (has bool)
@@ -330,7 +331,7 @@ func (s *Service) getNeighbor(target boson.Address, alpha int32, skip ...boson.A
 		now = skipPeers(list, skip)
 	} else {
 		_ = s.kad.EachNeighbor(func(address boson.Address, u uint8) (stop, jumpToNext bool, err error) {
-			if !inAddress(address, skip) {
+			if !address.MemberOf(skip) {
 				now = append(now, address)
 			}
 			return false, false, nil
@@ -354,8 +355,23 @@ func (s *Service) IsNeighbor(dest boson.Address) (has bool) {
 	return
 }
 
-func (s *Service) GetRoute(_ context.Context, dest boson.Address) (paths []*Path, err error) {
-	return s.routeTable.Get(dest)
+func (s *Service) GetRoute(_ context.Context, dest boson.Address) ([]*Path, error) {
+	paths, err := s.routeTable.Get(dest)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]*Path, 0)
+	for _, v := range paths {
+		if !s.IsNeighbor(v.Item[1]) {
+			s.routeTable.Delete(v)
+		} else {
+			out = append(out, v)
+		}
+	}
+	if len(out) > 0 {
+		return out, nil
+	}
+	return nil, ErrNotFound
 }
 
 func (s *Service) FindRoute(ctx context.Context, target boson.Address) (paths []*Path, err error) {
@@ -395,6 +411,17 @@ func (s *Service) FindRoute(ctx context.Context, target boson.Address) (paths []
 	return
 }
 
+func (s *Service) DelRoute(ctx context.Context, target boson.Address) error {
+	route, err := s.routeTable.Get(target)
+	if err != nil {
+		return err
+	}
+	for _, v := range route {
+		s.routeTable.Delete(v)
+	}
+	return nil
+}
+
 func (s *Service) GetTargetNeighbor(ctx context.Context, target boson.Address, limit int) (addresses []boson.Address, err error) {
 	var routes []*Path
 	routes, err = s.GetRoute(ctx, target)
@@ -408,6 +435,9 @@ func (s *Service) GetTargetNeighbor(ctx context.Context, target boson.Address, l
 		return
 	}
 	addresses = GetClosestNeighborLimit(target, routes, limit)
+	for _, v := range addresses {
+		s.logger.Debugf("get dest=%s neighbor %v", target, v.String())
+	}
 	return
 }
 
@@ -425,10 +455,12 @@ func (s *Service) Connect(ctx context.Context, target boson.Address) error {
 	}
 	_ = s.kad.EachPeer(findFun)
 	if isConnected {
+		s.logger.Debugf("route: connect target in neighbor")
 		return nil
 	}
 	_ = s.config.LightNodes.EachPeer(findFun)
 	if isConnected {
+		s.logger.Debugf("route: connect target(light) in neighbor")
 		return nil
 	}
 	return s.connect(ctx, target)
@@ -529,6 +561,7 @@ func (s *Service) onFindUnderlay(ctx context.Context, p p2p.Peer, stream p2p.Str
 			return err
 		}
 		s.logger.Tracef("find underlay dest %s send: to %s", target.String(), p.Address.String())
+		return nil
 	}
 	// get route
 	next := s.routeTable.GetNextHop(target, req.Sign)

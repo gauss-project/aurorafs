@@ -67,3 +67,7 @@ func (d *Discovery) IsHive2() bool {
 func (d *Discovery) SetHive2(is bool) {
 	d.isHive2 = is
 }
+
+func (d *Discovery) NotifyDiscoverWork(peers ...boson.Address)  {
+
+}

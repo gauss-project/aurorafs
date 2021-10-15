@@ -33,10 +33,10 @@ type Index struct {
 }
 
 type Path struct {
-	CreateTime int64
-	Sign       []byte
-	Item       []boson.Address
-	UsedTime   time.Time
+	CreateTime int64           `json:"createTime"`
+	Sign       []byte          `json:"sign"`
+	Item       []boson.Address `json:"item"`
+	UsedTime   time.Time       `json:"usedTime"`
 }
 
 type Table struct {
