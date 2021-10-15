@@ -1,6 +1,6 @@
 openapi: 3.0.3
 info:
-  version: 1.0.0
+  version: 1.0.8
   title: Common Data Types
   description: |
 
@@ -180,6 +180,24 @@ components:
           type: string
         code:
           type: integer
+
+    RoutePaths:
+      type: object
+      properties:
+        paths:
+          $ref: "#/components/schemas/RoutePath"
+
+    RoutePath:
+      type: object
+      properties:
+        createTime:
+          type: integer
+        sign:
+          type: string
+        item:
+          type: array
+        usedTime:
+          $ref: "#/components/schemas/DateTime"
 
     RttMs:
       type: object

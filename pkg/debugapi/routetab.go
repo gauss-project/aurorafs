@@ -1,6 +1,7 @@
 package debugapi
 
 import (
+	"errors"
 	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/jsonhttp"
 	"github.com/gauss-project/aurorafs/pkg/routetab"
@@ -53,6 +54,10 @@ func (s *Service) getRouteHandel(w http.ResponseWriter, r *http.Request) {
 	}
 	route, err := s.routetab.GetRoute(ctx, address)
 	if err != nil {
+		if errors.Is(err, routetab.ErrNotFound) {
+			jsonhttp.NotFound(w, err)
+			return
+		}
 		logger.Debugf("route-api: getroute %s: %v", peerID, err)
 		jsonhttp.BadRequest(w, err)
 		return
@@ -79,6 +84,10 @@ func (s *Service) delRouteHandel(w http.ResponseWriter, r *http.Request) {
 	}
 	err = s.routetab.DelRoute(ctx, address)
 	if err != nil {
+		if errors.Is(err, routetab.ErrNotFound) {
+			jsonhttp.NotFound(w, err)
+			return
+		}
 		logger.Debugf("route-api: delroute %s: %v", peerID, err)
 		jsonhttp.BadRequest(w, err)
 		return
