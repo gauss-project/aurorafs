@@ -200,15 +200,20 @@ components:
       properties:
         paths:
           type: array
-          properties:
-            createTime:
-              type: integer
-            sign:
-              type: string
-            item:
-              type: array
-            usedTime:
-              $ref: "#/components/schemas/DateTime"
+          items:
+            - $ref: "#/components/schemas/RoutePath"
+
+    RoutePath:
+      type: object
+      properties:
+        createTime:
+          type: integer
+        sign:
+          type: string
+        item:
+          type: array
+        usedTime:
+          $ref: "#/components/schemas/DateTime"
 
     RttMs:
       type: object
