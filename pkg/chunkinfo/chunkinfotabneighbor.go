@@ -65,7 +65,6 @@ func (cn *chunkInfoTabNeighbor) putChunkInfoTabNeighbor(rootCid, overlay boson.A
 // updateNeighborChunkInfo
 func (ci *ChunkInfo) updateNeighborChunkInfo(rootCid, cid boson.Address, overlay, target boson.Address) error {
 	ci.ct.Lock()
-	defer ci.ct.Unlock()
 
 	rc := rootCid.String()
 	over := overlay.String()
@@ -75,8 +74,8 @@ func (ci *ChunkInfo) updateNeighborChunkInfo(rootCid, cid boson.Address, overlay
 	if _, ok := ci.ct.presence[rootCid.String()][over]; !ok {
 		ci.ct.overlays[rc] = append(ci.ct.overlays[rc], overlay)
 	}
-
 	vb, ok := ci.ct.presence[rc][over]
+	ci.ct.Unlock()
 	if !ok {
 	LOOP:
 		v, _ := ci.getChunkSize(context.Background(), rootCid)
@@ -90,15 +89,19 @@ func (ci *ChunkInfo) updateNeighborChunkInfo(rootCid, cid boson.Address, overlay
 			}
 			return nil
 		}
+		ci.ct.Lock()
 		vb, _ = bitvector.New(v)
 		ci.ct.presence[rc][over] = vb
+		ci.ct.Unlock()
 	}
+	ci.ct.Lock()
 	v := ci.cp.getCidStore(rootCid, cid)
 	if v < 0 {
 		ci.cp.updateCidSort(rootCid, cid, 0)
 		v = 0
 	}
 	vb.Set(v)
+	defer ci.ct.Unlock()
 	// db
 	return ci.storer.Put(generateKey(keyPrefix, rootCid, overlay), &bitVector{B: vb.Bytes(), Len: vb.Len()})
 }
