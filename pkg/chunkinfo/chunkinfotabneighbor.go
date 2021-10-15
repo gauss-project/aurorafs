@@ -156,9 +156,17 @@ func (cn *chunkInfoTabNeighbor) createChunkInfoResp(rootCid boson.Address, ctn m
 func (ci *ChunkInfo) delPresence(rootCid boson.Address) bool {
 	ci.ct.Lock()
 	defer ci.ct.Unlock()
-
-	err := ci.storer.Delete(generateKey(keyPrefix, rootCid, ci.addr))
-	if err != nil {
+	if err := ci.storer.Iterate(keyPrefix, func(k, v []byte) (bool, error) {
+		if !strings.HasPrefix(string(k), keyPrefix) {
+			return true, nil
+		}
+		key := string(k)
+		err := ci.storer.Delete(key)
+		if err != nil {
+			return true, nil
+		}
+		return false, nil
+	}); err != nil {
 		return false
 	}
 
