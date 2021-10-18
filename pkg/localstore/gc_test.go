@@ -30,6 +30,7 @@ import (
 
 	"github.com/gauss-project/aurorafs/pkg/boson"
 	chunkinfo "github.com/gauss-project/aurorafs/pkg/chunkinfo/mock"
+	routetab "github.com/gauss-project/aurorafs/pkg/routetab/mock"
 	"github.com/gauss-project/aurorafs/pkg/collection/entry"
 	"github.com/gauss-project/aurorafs/pkg/file/pipeline/builder"
 	"github.com/gauss-project/aurorafs/pkg/logging"
@@ -84,7 +85,7 @@ func testDBCollectGarbageWorker(t *testing.T) {
 	closed = db.close
 
 	// upload random file
-	ci := chunkinfo.New()
+	ci := chunkinfo.New(routetab.NewMockRouteTable())
 	db.Config(ci)
 	reference, chunks, addGc := addRandomFile(t, chunkCount, db, ci, false)
 
@@ -181,7 +182,7 @@ func TestPinGC(t *testing.T) {
 	closed = db.close
 
 	// upload random file
-	ci := chunkinfo.New()
+	ci := chunkinfo.New(routetab.NewMockRouteTable())
 	db.Config(ci)
 
 	_, chunksA, addGC1 := addRandomFile(t, int(dbCapacity)-4, db, ci, false)
@@ -287,7 +288,7 @@ func TestGCAfterPin(t *testing.T) {
 	})
 
 	// upload random chunks
-	ci := chunkinfo.New()
+	ci := chunkinfo.New(routetab.NewMockRouteTable())
 	db.Config(ci)
 	reference, chunks, addGc := addRandomFile(t, chunkCount, db, ci, false)
 
@@ -321,7 +322,7 @@ func TestDB_collectGarbageWorker_withRequests(t *testing.T) {
 		Capacity: 100,
 	})
 
-	ci := chunkinfo.New()
+	ci := chunkinfo.New(routetab.NewMockRouteTable())
 	db.Config(ci)
 
 	testHookCollectGarbageChan := make(chan uint64)
@@ -454,7 +455,7 @@ func TestDB_gcSize(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	ci := chunkinfo.New()
+	ci := chunkinfo.New(routetab.NewMockRouteTable())
 	db.Config(ci)
 
 	count := 100
@@ -550,7 +551,7 @@ func TestPinAfterMultiGC(t *testing.T) {
 		Capacity: 10,
 	})
 
-	ci := chunkinfo.New()
+	ci := chunkinfo.New(routetab.NewMockRouteTable())
 	db.Config(ci)
 
 	pinnedChunks := make([]boson.Address, 0)
@@ -638,7 +639,7 @@ func TestPinSyncAndAccessPutSetChunkMultipleTimes(t *testing.T) {
 	})
 	closed = db.close
 
-	ci := chunkinfo.New()
+	ci := chunkinfo.New(routetab.NewMockRouteTable())
 	db.Config(ci)
 
 	pinnedChunks := addRandomChunks(t, 5, db, true)
@@ -823,7 +824,7 @@ func TestGC_NoEvictDirty(t *testing.T) {
 		Capacity: 10,
 	})
 
-	ci := chunkinfo.New()
+	ci := chunkinfo.New(routetab.NewMockRouteTable())
 	db.Config(ci)
 
 	testHookCollectGarbageChan := make(chan uint64)
@@ -979,7 +980,7 @@ func TestPinAndUnpinChunk(t *testing.T) {
 	closed = db.close
 
 	// upload random file
-	ci := chunkinfo.New()
+	ci := chunkinfo.New(routetab.NewMockRouteTable())
 	db.Config(ci)
 	reference, chunks, addGc := addRandomFile(t, chunkCount, db, ci, false)
 

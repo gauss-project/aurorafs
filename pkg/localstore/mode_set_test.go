@@ -19,11 +19,12 @@ package localstore
 import (
 	"context"
 	"errors"
-	"github.com/gauss-project/aurorafs/pkg/storage"
 	"testing"
 
-	"github.com/syndtr/goleveldb/leveldb"
 	chunkinfo "github.com/gauss-project/aurorafs/pkg/chunkinfo/mock"
+	routetab "github.com/gauss-project/aurorafs/pkg/routetab/mock"
+	"github.com/gauss-project/aurorafs/pkg/storage"
+	"github.com/syndtr/goleveldb/leveldb"
 )
 
 // TestModeSetRemove validates ModeSetRemove index values on the provided DB.
@@ -32,7 +33,7 @@ func TestModeSetRemove(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			db := newTestDB(t, nil)
 
-			ci := chunkinfo.New()
+			ci := chunkinfo.New(routetab.NewMockRouteTable())
 			db.Config(ci)
 
 			chunks := generateTestRandomChunks(tc.count)

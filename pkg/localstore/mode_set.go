@@ -340,9 +340,8 @@ func (db *DB) setPin(batch *leveldb.Batch, item, rootItem shed.Item) (gcSizeChan
 						return 0, err
 					}
 				}
-
-				gcSizeChange--
 			}
+			gcSizeChange--
 		}
 	}
 

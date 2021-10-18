@@ -156,16 +156,22 @@ func (db *DB) collectGarbage() (collectedCount uint64, done bool, err error) {
 		return 0, false, err
 	}
 
+	currentCollectedCount := uint64(0)
+
 	// get rid of dirty entries
 	for _, item := range candidates {
-		if boson.NewAddress(item.Address).MemberOf(db.dirtyAddresses) {
-			collectedCount -= item.GCounter
+		addr := boson.NewAddress(item.Address)
+
+		if addr.MemberOf(db.dirtyAddresses) {
 			continue
 		}
 
-		if db.discover.IsDiscover(boson.NewAddress(item.Address)) {
-			collectedCount -= item.GCounter
-			continue
+		if db.discover.IsDiscover(addr) {
+			db.logger.Tracef("localstore: collect garbage: hash %s is discovering", addr)
+			if gcSize-currentCollectedCount <= target {
+				break
+			}
+			db.discover.DelDiscover(addr)
 		}
 
 		db.metrics.GCStoreTimeStamps.Set(float64(item.StoreTimestamp))
@@ -178,7 +184,7 @@ func (db *DB) collectGarbage() (collectedCount uint64, done bool, err error) {
 		}
 		del := db.discover.DelFile(boson.NewAddress(item.Address))
 		if !del {
-			return 0, false, fmt.Errorf("chunkinfo report delete %s failed", boson.NewAddress(item.Address))
+			return 0, false, fmt.Errorf("chunkinfo report delete %s failed", addr)
 		}
 		// delete from retrieve, gc
 		err = db.retrievalDataIndex.DeleteInBatch(batch, item)
@@ -193,13 +199,16 @@ func (db *DB) collectGarbage() (collectedCount uint64, done bool, err error) {
 		if err != nil {
 			return 0, false, err
 		}
+
+		currentCollectedCount += item.GCounter
+		db.logger.Tracef("localstore: collect garbage: hash %s will be clean at soon", addr)
 	}
-	if gcSize-collectedCount > target {
+	if gcSize-currentCollectedCount > target {
 		done = false
 	}
 
-	db.metrics.GCCommittedCounter.Add(float64(collectedCount))
-	db.gcSize.PutInBatch(batch, gcSize-collectedCount)
+	db.metrics.GCCommittedCounter.Add(float64(currentCollectedCount))
+	db.gcSize.PutInBatch(batch, gcSize-currentCollectedCount)
 
 	err = db.shed.WriteBatch(batch)
 	if err != nil {
@@ -207,7 +216,7 @@ func (db *DB) collectGarbage() (collectedCount uint64, done bool, err error) {
 		return 0, false, err
 	}
 
-	return collectedCount, done, nil
+	return currentCollectedCount, done, nil
 }
 
 // recycleGarbageWorker really remove chunks in db, triggered when
@@ -245,22 +254,32 @@ func (db *DB) recycleGarbageWorker() {
 
 		if len(candidates) > 0 {
 			for _, item := range candidates {
-				chunks := db.discover.GetChunkPyramid(boson.NewAddress(item.Address))
+				addr := boson.NewAddress(item.Address)
+				chunks := db.discover.GetChunkPyramid(addr)
 				for _, chunk := range chunks {
 					i := addressToItem(chunk.Cid)
 					pin, err := db.pinIndex.Has(i)
 					if err != nil {
 						db.metrics.ModeHasFailure.Inc()
 						db.logger.Errorf("localstore: recycle garbage: check pin failure: %v", err)
-						goto next
+						continue
 					}
 					if !pin {
-						err = db.retrievalDataIndex.DeleteInBatch(batch, i)
+						exist, err := db.retrievalDataIndex.Has(i)
 						if err != nil {
-							db.logger.Errorf("localstore: recycle garbage: delete chunk data: %v", err)
-							break
+							db.metrics.ModeHasFailure.Inc()
+							db.logger.Errorf("localstore: recycle garbage: check pin failure: %v", err)
+							continue
 						}
-						removeChunks++
+						if exist {
+							err = db.retrievalDataIndex.DeleteInBatch(batch, i)
+							if err != nil {
+								db.logger.Errorf("localstore: recycle garbage: delete chunk data: %v", err)
+								break
+							}
+							db.logger.Tracef("localstore: recycle garbage: chunk %s has deleted", chunk.Cid)
+							removeChunks++
+						}
 					}
 
 					// skip and write to db
@@ -274,8 +293,11 @@ func (db *DB) recycleGarbageWorker() {
 					err = db.gcQueueIndex.DeleteInBatch(batch, item)
 					if err != nil {
 						db.logger.Errorf("localstore: recycle garbage: gc queue delete: %v", err)
+						db.metrics.GCErrorCounter.Inc()
 						recycleCount--
-						goto next
+					} else {
+						db.logger.Tracef("localstore: recycle garbage: pyramid under hash %s has deleted", addr)
+						db.discover.DelPyramid(addr)
 					}
 				}
 
