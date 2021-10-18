@@ -225,6 +225,8 @@ func (ci *ChunkInfo) CancelFindChunkInfo(rootCid boson.Address) {
 
 // OnChunkTransferred
 func (ci *ChunkInfo) OnChunkTransferred(cid, rootCid boson.Address, overlay, target boson.Address) error {
+	ci.syncLk.Lock()
+	defer ci.syncLk.Unlock()
 	return ci.updateNeighborChunkInfo(rootCid, cid, overlay, target)
 }
 
