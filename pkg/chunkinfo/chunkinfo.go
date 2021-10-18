@@ -2,6 +2,7 @@ package chunkinfo
 
 import (
 	"context"
+	"fmt"
 	"github.com/gauss-project/aurorafs/pkg/retrieval/aco"
 	"github.com/gauss-project/aurorafs/pkg/settlement/swap/oracle"
 	"resenje.org/singleflight"
@@ -126,21 +127,21 @@ func (ci *ChunkInfo) InitChunkInfo() error {
 
 func (ci *ChunkInfo) Init(ctx context.Context, authInfo []byte, rootCid boson.Address) bool {
 
-	//key := fmt.Sprintf("%s%s", rootCid, "chunkinfo")
-	//v, _, _ := ci.singleflight.Do(ctx, key, func(ctx context.Context) (interface{}, error) {
-	if ci.ct.isExists(rootCid, ci.addr) {
-		return true
-	}
-	if ci.cd.isExists(rootCid) {
-		return true
-	}
-	overlays := ci.oracleChain.GetNodesFromCid(rootCid.Bytes())
-	if len(overlays) <= 0 {
-		return false
-	}
-	return ci.FindChunkInfo(context.Background(), authInfo, rootCid, overlays)
-	//})
-	//return v.(bool)
+	key := fmt.Sprintf("%s%s", rootCid, "chunkinfo")
+	v, _, _ := ci.singleflight.Do(ctx, key, func(ctx context.Context) (interface{}, error) {
+		if ci.ct.isExists(rootCid, ci.addr) {
+			return true, nil
+		}
+		if ci.cd.isExists(rootCid) {
+			return true, nil
+		}
+		overlays := ci.oracleChain.GetNodesFromCid(rootCid.Bytes())
+		if len(overlays) <= 0 {
+			return false, nil
+		}
+		return ci.FindChunkInfo(context.Background(), authInfo, rootCid, overlays), nil
+	})
+	return v.(bool)
 }
 
 // FindChunkInfo
@@ -224,6 +225,8 @@ func (ci *ChunkInfo) CancelFindChunkInfo(rootCid boson.Address) {
 
 // OnChunkTransferred
 func (ci *ChunkInfo) OnChunkTransferred(cid, rootCid boson.Address, overlay, target boson.Address) error {
+	ci.syncLk.Lock()
+	defer ci.syncLk.Unlock()
 	return ci.updateNeighborChunkInfo(rootCid, cid, overlay, target)
 }
 
