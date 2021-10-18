@@ -147,6 +147,7 @@ func (m *mantarayManifest) IterateAddresses(ctx context.Context, fn boson.Addres
 		return ErrMissingReference
 	}
 
+	emptyAddr := boson.NewAddress([]byte{31: 0})
 	walker := func(path []byte, node *mantaray.Node, err error) error {
 		if err != nil {
 			return err
@@ -162,10 +163,19 @@ func (m *mantarayManifest) IterateAddresses(ctx context.Context, fn boson.Addres
 				}
 			}
 
-			if node.IsValueType() && node.Entry() != nil {
+			if node.IsValueType() && len(node.Entry()) > 0 {
 				entry := boson.NewAddress(node.Entry())
-				err = fn(entry)
-				if err != nil {
+				// The following comparison to the emptyAddr is
+				// a dirty hack which prevents the walker to
+				// fail when it encounters an empty address
+				// (e.g.: during the unpin traversal operation
+				// for manifest). This workaround should be
+				// removed after the manifest serialization bug
+				// is fixed.
+				if entry.Equal(emptyAddr) {
+					return nil
+				}
+				if err = fn(entry); err != nil {
 					return err
 				}
 			}
