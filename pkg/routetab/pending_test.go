@@ -14,14 +14,39 @@ func TestPendCallResTab(t *testing.T) {
 	dest := test.RandomAddress()
 	src := test.RandomAddress()
 	src1 := test.RandomAddress()
-	p.Add(dest, src, nil)
-	p.Add(dest, src1, nil)
+	has := p.Add(dest, src, nil)
+	if has {
+		t.Fatalf("expect not has req log")
+	}
+	has = p.Add(dest, src1, nil)
+	if !has {
+		t.Fatalf("expect has req log")
+	}
+	checkReqLog := func() {
+		cnt := 0
+		p.ReqLogRange(func(key, value interface{}) bool {
+			cnt++
+			if dest.ByteString() != key.(string) {
+				t.Fatalf("expect relog equal dest")
+			}
+			return true
+		})
+		if cnt != 1 {
+			t.Fatalf("expect relog len 1,got %d", cnt)
+		}
+	}
+	checkReqLog()
+	has = p.Add(dest, src1, nil)
+	if !has {
+		t.Fatalf("expect has req log")
+	}
+	checkReqLog()
 
 	res := p.Get(dest)
-	if len(res) != 2 {
-		t.Fatalf("expect find res len 2,got %d", len(res))
+	if len(res) != 3 {
+		t.Fatalf("expect find res len 3,got %d", len(res))
 	}
-	exp := []boson.Address{src, src1}
+	exp := []boson.Address{src, src1, src1}
 	for k, v := range res {
 		if !v.Src.Equal(exp[k]) {
 			t.Fatalf("expect res[%d] src %s, got %s", k, exp[k].String(), v.Src.String())
@@ -29,9 +54,12 @@ func TestPendCallResTab(t *testing.T) {
 	}
 	time.Sleep(time.Millisecond * 100)
 	src2 := test.RandomAddress()
-	p.Add(dest, src2, nil)
-
-	p.Gc(time.Millisecond * 100)
+	has = p.Add(dest, src2, nil)
+	if has {
+		t.Fatalf("expect no has req log")
+	}
+	p.GcResItems(time.Millisecond * 100)
+	p.GcReqLog(time.Millisecond * 100)
 	res2 := p.Get(dest)
 	if len(res2) != 1 {
 		t.Fatalf("expect find res2 len 1,got %d", len(res2))
