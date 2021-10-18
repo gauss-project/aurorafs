@@ -15,6 +15,9 @@ import (
 	"github.com/gauss-project/aurorafs/pkg/storage"
 	"github.com/gauss-project/aurorafs/pkg/topology/kademlia"
 	"github.com/gauss-project/aurorafs/pkg/topology/lightnode"
+	"github.com/gogf/gf/os/gcache"
+	"resenje.org/singleflight"
+	"sync"
 	"time"
 )
 
@@ -56,6 +59,7 @@ type Service struct {
 	routeTable   *Table
 	kad          *kademlia.Kad
 	config       Config
+	singleflight singleflight.Group
 }
 
 type Config struct {
@@ -117,7 +121,17 @@ func (s *Service) start(ctx context.Context) {
 		for {
 			select {
 			case <-ticker.C:
-				s.pendingCalls.Gc(PendingTimeout)
+				wg := sync.WaitGroup{}
+				wg.Add(2)
+				go func() {
+					defer wg.Done()
+					s.pendingCalls.GcReqLog(PendingTimeout)
+				}()
+				go func() {
+					defer wg.Done()
+					s.pendingCalls.GcResItems(PendingTimeout)
+				}()
+				wg.Wait()
 			case <-ctx.Done():
 				return
 			}
@@ -356,22 +370,7 @@ func (s *Service) IsNeighbor(dest boson.Address) (has bool) {
 }
 
 func (s *Service) GetRoute(_ context.Context, dest boson.Address) ([]*Path, error) {
-	paths, err := s.routeTable.Get(dest)
-	if err != nil {
-		return nil, err
-	}
-	out := make([]*Path, 0)
-	for _, v := range paths {
-		if !s.IsNeighbor(v.Item[1]) {
-			s.routeTable.Delete(v)
-		} else {
-			out = append(out, v)
-		}
-	}
-	if len(out) > 0 {
-		return out, nil
-	}
-	return nil, ErrNotFound
+	return s.routeTable.Get(dest)
 }
 
 func (s *Service) FindRoute(ctx context.Context, target boson.Address) (paths []*Path, err error) {
@@ -423,20 +422,62 @@ func (s *Service) DelRoute(ctx context.Context, target boson.Address) error {
 }
 
 func (s *Service) GetTargetNeighbor(ctx context.Context, target boson.Address, limit int) (addresses []boson.Address, err error) {
-	var routes []*Path
-	routes, err = s.GetRoute(ctx, target)
-	if errors.Is(err, ErrNotFound) {
-		routes, err = s.FindRoute(ctx, target)
+	var list interface{}
+	key := "GetTargetNeighbor_" + target.String()
+	list, _, err = s.singleflight.Do(ctx, key, func(ctx context.Context) (interface{}, error) {
+		var routes []*Path
+		routes, err = s.getOrFindRoute(ctx, target)
 		if err != nil {
-			return
+			return nil, err
 		}
-	}
+		addresses = s.getClosestNeighborLimit(target, routes, limit)
+		if len(addresses) == 0 {
+			routes, err = s.FindRoute(context.TODO(), target)
+			if err != nil {
+				return nil, err
+			}
+			addresses = s.getClosestNeighborLimit(target, routes, limit)
+			if len(addresses) == 0 {
+				return nil, errors.New("neighbor not found")
+			}
+		}
+		return addresses, nil
+	})
 	if err != nil {
-		return
+		return nil, err
 	}
-	addresses = GetClosestNeighborLimit(target, routes, limit)
+	if list != nil {
+		addresses = list.([]boson.Address)
+	}
 	for _, v := range addresses {
 		s.logger.Debugf("get dest=%s neighbor %v", target, v.String())
+	}
+	return
+}
+
+func (s *Service) getClosestNeighborLimit(target boson.Address, routes []*Path, limit int) (out []boson.Address) {
+	has := make(map[string]bool)
+	for _, path := range routes {
+		if !s.IsNeighbor(path.Item[1]) {
+			continue
+		}
+		for k, v := range path.Item {
+			if v.Equal(target) {
+				if k-1 > 0 {
+					has[path.Item[k-1].String()] = true
+				}
+				if k+1 < len(path.Item) {
+					has[path.Item[k+1].String()] = true
+				}
+				break
+			}
+		}
+		if len(has) >= limit {
+			break
+		}
+	}
+	for hex := range has {
+		out = append(out, boson.MustParseHexAddress(hex))
 	}
 	return
 }
@@ -445,6 +486,25 @@ func (s *Service) Connect(ctx context.Context, target boson.Address) error {
 	if target.Equal(s.self) {
 		return errors.New("cannot connected to self")
 	}
+	key := "route_connect_" + target.String()
+	val, _ := gcache.GetVar(key)
+	if val.String() != "" {
+		return errors.New(val.String())
+	}
+	_, _, err := s.singleflight.Do(ctx, key, func(ctx context.Context) (interface{}, error) {
+		if !s.isConnected(ctx, target) {
+			err := s.connect(ctx, target)
+			return nil, err
+		}
+		return nil, nil
+	})
+	if err != nil {
+		_ = gcache.Set(key, err.Error(), time.Second*30)
+	}
+	return err
+}
+
+func (s *Service) isConnected(ctx context.Context, target boson.Address) bool {
 	var isConnected bool
 	findFun := func(address boson.Address, u uint8) (stop, jumpToNext bool, err error) {
 		if target.Equal(address) {
@@ -456,14 +516,14 @@ func (s *Service) Connect(ctx context.Context, target boson.Address) error {
 	_ = s.kad.EachPeer(findFun)
 	if isConnected {
 		s.logger.Debugf("route: connect target in neighbor")
-		return nil
+		return true
 	}
 	_ = s.config.LightNodes.EachPeer(findFun)
 	if isConnected {
 		s.logger.Debugf("route: connect target(light) in neighbor")
-		return nil
+		return true
 	}
-	return s.connect(ctx, target)
+	return false
 }
 
 func (s *Service) connect(ctx context.Context, peer boson.Address) (err error) {
@@ -483,10 +543,7 @@ func (s *Service) connect(ctx context.Context, peer boson.Address) (err error) {
 	if needFindUnderlay {
 		auroraAddr, err = s.findUnderlay(ctx, peer)
 		if err != nil {
-			auroraAddr, err = s.findUnderlay(ctx, peer)
-			if err != nil {
-				return err
-			}
+			return err
 		}
 	}
 
@@ -610,37 +667,53 @@ func (s *Service) onFindUnderlay(ctx context.Context, p p2p.Peer, stream p2p.Str
 	return err
 }
 
-func (s *Service) findUnderlay(ctx context.Context, target boson.Address) (addr *aurora.Address, err error) {
-	paths, err := s.GetRoute(ctx, target)
+func (s *Service) getOrFindRoute(ctx context.Context, target boson.Address) (paths []*Path, err error) {
+	paths, err = s.GetRoute(ctx, target)
 	if errors.Is(err, ErrNotFound) {
 		paths, err = s.FindRoute(ctx, target)
-		if err != nil {
-			return
-		}
-	}
-
-	for _, path := range paths {
-		addr, err = s.readStream(ctx, target, path)
-		if err == nil {
-			return
-		}
 	}
 	return
+}
+
+func (s *Service) findUnderlay(ctx context.Context, target boson.Address) (addr *aurora.Address, err error) {
+	var paths []*Path
+	paths, err = s.getOrFindRoute(ctx, target)
+	if err != nil {
+		return nil, err
+	}
+	addr, err = s.tryReadStream(ctx, target, paths)
+	if err != nil {
+		// All paths are blocked
+		paths, err = s.FindRoute(ctx, target)
+		if err != nil {
+			return nil, err
+		}
+		return s.tryReadStream(ctx, target, paths)
+	}
+	return
+}
+
+func (s *Service) tryReadStream(ctx context.Context, target boson.Address, paths []*Path) (*aurora.Address, error) {
+	for _, path := range paths {
+		addr, err := s.readStream(ctx, target, path)
+		if err == nil {
+			return addr, nil
+		}
+	}
+	return nil, errors.New("all paths are blocked")
 }
 
 func (s *Service) readStream(ctx context.Context, target boson.Address, path *Path) (*aurora.Address, error) {
 	stream, err := s.config.Stream.NewStream(ctx, path.Item[1], nil, protocolName, protocolVersion, streamOnFindUnderlay)
 	if err != nil {
-		// delete invalid path
-		s.routeTable.Delete(path)
 		return nil, err
 	}
-	path.UsedTime = time.Now()
 
 	defer func() {
 		if err != nil {
 			_ = stream.Reset()
 		} else {
+			path.UsedTime = time.Now()
 			go stream.FullClose()
 		}
 	}()
