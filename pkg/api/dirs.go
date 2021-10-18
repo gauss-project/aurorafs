@@ -566,7 +566,9 @@ func (s *server) manifestViewHandler(w http.ResponseWriter, r *http.Request) {
 			}
 
 			pathVar = strings.Trim(pathVar, "/")
-			pathVar += "/"
+			if len(pathVar) != 0 {
+				pathVar += "/"
+			}
 
 			if err := m.IterateNodes(r.Context(), []byte(pathVar), depth, fn); err != nil {
 				jsonhttp.InternalServerError(w, err)
