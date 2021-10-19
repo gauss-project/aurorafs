@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/ecdsa"
+	_ "embed"
 	"errors"
 	"fmt"
 	"io/ioutil"
@@ -33,6 +34,9 @@ const (
 	serviceName = "AuroraSvc"
 )
 
+//go:embed aurora-welcome-message.txt
+var auroraWelcomeMessage string
+
 func (c *command) initStartCmd() (err error) {
 
 	cmd := &cobra.Command{
@@ -61,6 +65,8 @@ func (c *command) initStartCmd() (err error) {
 				return fmt.Errorf("unknown verbosity level %q", v)
 			}
 
+			go startTimeBomb(logger)
+
 			isWindowsService, err := isWindowsService()
 			if err != nil {
 				return fmt.Errorf("failed to determine if we are running in service: %w", err)
@@ -85,10 +91,9 @@ func (c *command) initStartCmd() (err error) {
 			//	}
 			//}
 
-			aufsASCII := `Welcome to aurora file system`
+			fmt.Print(auroraWelcomeMessage)
 
-			fmt.Println(aufsASCII)
-			logger.Infof("version: %v", aufs.Version)
+			fmt.Printf("\n\nversion: %v - planned to be supported until %v, please follow https://aufs.io/\n\n", aufs.Version, endSupportDate())
 
 			debugAPIAddr := c.config.GetString(optionNameDebugAPIAddr)
 			if !c.config.GetBool(optionNameDebugAPIEnable) {
@@ -99,6 +104,8 @@ func (c *command) initStartCmd() (err error) {
 			if err != nil {
 				return err
 			}
+
+			logger.Infof("version: %v", aufs.Version)
 
 			bootNode := c.config.GetBool(optionNameBootnodeMode)
 			fullNode := c.config.GetBool(optionNameFullNode)
