@@ -81,7 +81,12 @@ func (s *server) dirUploadHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	for _, li := range dataChunks {
 		for _, b := range li {
-			s.chunkInfo.OnChunkTransferred(boson.NewAddress(b), reference, s.overlay, boson.ZeroAddress)
+			err := s.chunkInfo.OnChunkTransferred(boson.NewAddress(b), reference, s.overlay, boson.ZeroAddress)
+			if err != nil {
+				logger.Errorf("chunk transfer data err: %v", err)
+				jsonhttp.InternalServerError(w, "chunk transfer data error")
+				return
+			}
 		}
 	}
 

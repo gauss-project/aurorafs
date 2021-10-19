@@ -35,7 +35,7 @@ func TestPinAuroras(t *testing.T) {
 			recorder := streamtest.New(
 				streamtest.WithBaseAddr(serverAddress),
 			)
-			chuninfo := chunkinfo.New(serverAddress, recorder, logger, traversalService, mockStateStorer, &mockRouteTable, "127.0.0.1:8000")
+			chuninfo := chunkinfo.New(serverAddress, recorder, logger, traversalService, mockStateStorer, &mockRouteTable, nil)
 			return chuninfo
 		}
 		client, _, _ = newTestServer(t, testServerOptions{

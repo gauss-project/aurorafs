@@ -10,7 +10,6 @@ import (
 	"testing"
 
 	"github.com/gauss-project/aurorafs/pkg/aurora"
-	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/crypto"
 	"github.com/gauss-project/aurorafs/pkg/logging"
 	"github.com/gauss-project/aurorafs/pkg/p2p/libp2p/internal/handshake"
@@ -748,16 +747,3 @@ func (a *AdvertisableAddresserMock) Resolve(observedAddress ma.Multiaddr) (ma.Mu
 	return observedAddress, nil
 }
 
-type MockSenderMatcher struct {
-	v         bool
-	blockHash []byte
-}
-
-func (m MockSenderMatcher) Matches(context.Context, []byte, uint64, boson.Address) ([]byte, error) {
-
-	if m.v {
-		return m.blockHash, nil
-	}
-
-	return nil, errors.New("")
-}
