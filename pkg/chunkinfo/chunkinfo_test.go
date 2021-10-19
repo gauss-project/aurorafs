@@ -4,8 +4,6 @@ import (
 	"bufio"
 	"bytes"
 	"context"
-	"encoding/binary"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"github.com/gauss-project/aurorafs/pkg/bitvector"
@@ -25,9 +23,7 @@ import (
 	"github.com/gauss-project/aurorafs/pkg/storage/mock"
 	"github.com/gauss-project/aurorafs/pkg/traversal"
 	"golang.org/x/sync/errgroup"
-	"io"
 	"io/ioutil"
-	"strings"
 	"testing"
 	"time"
 )
@@ -35,17 +31,8 @@ import (
 const fileContentType = "text/plain; charset=utf-8"
 
 var (
-	debug      = false
 	simpleData = []byte("hello test world") // fixed, 16 bytes
 )
-
-func addBody() io.Reader {
-	return body(`{"rootcid": "6aa47f0d31e20784005cb2148b6fed85e538f829698ef552bb590be1bfa7e643", "address": "ca1e9f3938cc1425c6061b96ad9eb93e134dfe8734ad490164ef20af9d1cf59c"}`)
-}
-
-func body(in string) io.Reader {
-	return strings.NewReader(in)
-}
 
 func TestInit(t *testing.T) {
 
@@ -200,7 +187,7 @@ func TestHandlerChunkInfoResp(t *testing.T) {
 	//resp  b ->a
 	tree, _ := bOverlay.getChunkPyramid(ctx, rootCid)
 	pram, _ := bOverlay.traversal.CheckTrieData(ctx, rootCid, tree)
-	if err := bOverlay.OnChunkTransferred(boson.NewAddress(pram[0][0]), rootCid, bAddress); err != nil {
+	if err := bOverlay.OnChunkTransferred(boson.NewAddress(pram[0][0]), rootCid, bAddress, boson.ZeroAddress); err != nil {
 		t.Fatal(err)
 	}
 	req := bOverlay.cd.createChunkInfoReq(rootCid, bAddress, aAddress)
@@ -241,7 +228,7 @@ func TestHandlerChunkInfoResp(t *testing.T) {
 
 	fmt.Println(respMessages)
 	v := aOverlay.GetChunkInfo(rootCid, boson.NewAddress(pram[0][0]))
-	if v == nil || len(v) == 0 {
+	if len(v) == 0 {
 		t.Fatalf("bit vector error")
 	}
 }
@@ -263,7 +250,10 @@ func TestHandlerChunkInfoRespRelay(t *testing.T) {
 	cOverlay := mockChunkInfo(tra, bRecorder, cAddress)
 
 	resp := cOverlay.ct.createChunkInfoResp(rootCid, nil, cAddress.Bytes(), aAddress.Bytes())
-	cOverlay.sendData(context.Background(), bAddress, streamChunkInfoRespName, resp)
+	err := cOverlay.sendData(context.Background(), bAddress, streamChunkInfoRespName, resp)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	// c -> b
 	respCRecords, err := bRecorder.Records(bAddress, protocolName, protocolVersion, streamChunkInfoRespName)
@@ -319,7 +309,7 @@ func TestHandlerPyramid(t *testing.T) {
 	server := mockChunkInfo(s, targetRecorder, serverAddress)
 	tree, _ := server.getChunkPyramid(ctx, rootCid)
 	pram, _ := server.traversal.CheckTrieData(ctx, rootCid, tree)
-	if err := target.OnChunkTransferred(boson.NewAddress(pram[0][1]), rootCid, targetAddress); err != nil {
+	if err := target.OnChunkTransferred(boson.NewAddress(pram[0][1]), rootCid, targetAddress, boson.ZeroAddress); err != nil {
 		t.Fatal(err)
 	}
 	recorder := streamtest.New(
@@ -366,7 +356,7 @@ func TestHandlerPyramid(t *testing.T) {
 
 	cids := server.cp.getChunkCid(rootCid)
 	t.Log(cids)
-	if cids == nil || len(cids) == 0 {
+	if len(cids) == 0 {
 		t.Fatalf("chunk pyramid is nil")
 	}
 }
@@ -400,10 +390,15 @@ func TestQueueProcess(t *testing.T) {
 	// max pulling
 	for i := 0; i < PullMax; i++ {
 		overlay := test.RandomAddress()
+		m := make(map[string][]byte)
+		m[overlay.String()] = nil
 		if i == 0 {
-			aAddress.updateQueue(context.Background(), nil, rootCid, addr, [][]byte{overlay.Bytes()})
+			aAddress.updateQueue(context.Background(), nil, rootCid, addr, m)
 		} else {
-			aAddress.updateQueue(context.Background(), nil, rootCid, boson.NewAddress(*aAddress.getQueue(rc).pop(Pulling)), [][]byte{overlay.Bytes(), test.RandomAddress().Bytes(), test.RandomAddress().Bytes(), test.RandomAddress().Bytes(), test.RandomAddress().Bytes(), test.RandomAddress().Bytes(), test.RandomAddress().Bytes()})
+			for i := 0; i < 6; i++ {
+				m[test.RandomAddress().String()] = nil
+			}
+			aAddress.updateQueue(context.Background(), nil, rootCid, boson.NewAddress(*aAddress.getQueue(rc).pop(Pulling)), m)
 		}
 	}
 	if len(aAddress.getQueue(rc).getPull(Pulled)) != PullMax {
@@ -448,7 +443,10 @@ func mockChunkInfo(traversal traversal.Service, r *streamtest.Recorder, overlay 
 	route := rmock.NewMockRouteTable()
 	oracle := omock.NewServer()
 	server := New(overlay, r, logger, traversal, ret, &route, oracle)
-	server.InitChunkInfo()
+	err := server.InitChunkInfo()
+	if err != nil {
+		return nil
+	}
 	return server
 }
 
@@ -470,10 +468,6 @@ func uploadFile(t *testing.T, ctx context.Context, store storage.Storer, file []
 	fr, err := builder.FeedPipeline(ctx, pipe, bytes.NewReader(file), int64(len(file)))
 	if err != nil {
 		t.Fatal(err)
-	}
-
-	if debug {
-		verifyChunkHash(t, ctx, store, fr)
 	}
 
 	if filename == "" {
@@ -510,22 +504,4 @@ func uploadFile(t *testing.T, ctx context.Context, store storage.Storer, file []
 	return reference, filename
 }
 
-func verifyChunkHash(t *testing.T, ctx context.Context, store storage.Storer, rootHash boson.Address) {
-	val, err := store.Get(ctx, storage.ModeGetRequest, rootHash)
-	if err != nil {
-		t.Fatal(err)
-	}
 
-	chunkData := val.Data()
-	t.Logf("get val data size=%d\n", len(chunkData))
-	if len(chunkData) > 16 && len(chunkData) <= boson.ChunkSize+8 {
-		trySpan := chunkData[:8]
-		if size := binary.LittleEndian.Uint64(trySpan); size > uint64(len(chunkData[8:])) {
-			for i := uint64(8); i < uint64(len(chunkData)-8); i += 32 {
-				t.Logf("bmt root hash is %s\n", hex.EncodeToString(chunkData[i:i+32]))
-			}
-		} else {
-			t.Logf("bmt root hash is %s, span = %d\n", rootHash.String(), size)
-		}
-	}
-}

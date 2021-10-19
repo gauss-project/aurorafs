@@ -49,15 +49,15 @@ func (ci *ChunkInfo) initChunkPyramid(ctx context.Context, rootCid boson.Address
 	return nil
 }
 
-func (cp *chunkPyramid) checkPyramid(rootCid, cid boson.Address) bool {
-	cp.RLock()
-	defer cp.RUnlock()
-	if cp.pyramid[rootCid.String()] != nil {
-		_, ok := cp.pyramid[rootCid.String()][cid.String()]
-		return ok
-	}
-	return false
-}
+//func (cp *chunkPyramid) checkPyramid(rootCid, cid boson.Address) bool {
+//	cp.RLock()
+//	defer cp.RUnlock()
+//	if cp.pyramid[rootCid.String()] != nil {
+//		_, ok := cp.pyramid[rootCid.String()][cid.String()]
+//		return ok
+//	}
+//	return false
+//}
 
 // updateChunkPyramid
 func (ci *ChunkInfo) updateChunkPyramid(rootCid boson.Address, pyramids [][][]byte, trie map[string][]byte) {

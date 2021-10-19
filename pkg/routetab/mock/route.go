@@ -37,3 +37,7 @@ func (r *MockRouteTable) GetTargetNeighbor(ctx context.Context, target boson.Add
 func (r *MockRouteTable) IsNeighbor(dest boson.Address) (has bool) {
 	return false
 }
+
+func (r *MockRouteTable) DelRoute(ctx context.Context, dest boson.Address) (err error) {
+	return nil
+}

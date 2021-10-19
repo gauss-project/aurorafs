@@ -152,10 +152,4 @@ func serviceUnderlayAddress(t *testing.T, s *libp2p.Service) multiaddr.Multiaddr
 	return addrs[0]
 }
 
-type MockSenderMatcher struct {
-	BlockHash []byte
-}
 
-func (m MockSenderMatcher) Matches(context.Context, []byte, uint64, boson.Address) ([]byte, error) {
-	return m.BlockHash, nil
-}

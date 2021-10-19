@@ -6,9 +6,9 @@ import (
 )
 
 type ChainResult struct {
-	success bool
+	//success bool
 	TxHash  []byte
-	reason  string
+	//reason  string
 }
 type Price interface {
 	// PeerPrice Get price for specified node

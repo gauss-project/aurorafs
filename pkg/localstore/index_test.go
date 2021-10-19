@@ -17,12 +17,62 @@
 package localstore
 
 import (
+	"bytes"
 	"context"
+	"github.com/gauss-project/aurorafs/pkg/boson"
 	"math/rand"
 	"testing"
 
 	"github.com/gauss-project/aurorafs/pkg/storage"
 )
+
+// TestDB_pullIndex validates the ordering of keys in pull index.
+// Pull index key contains PO prefix which is calculated from
+// DB base key and chunk address. This is not an Item field
+// which are checked in Mode tests.
+// This test uploads chunks, sorts them in expected order and
+// validates that pull index iterator will iterate it the same
+// order.
+func TestDB_pullIndex(t *testing.T) {
+	db := newTestDB(t, nil)
+
+	chunkCount := 50
+
+	chunks := make([]testIndexChunk, chunkCount)
+
+	// upload random chunks
+	for i := 0; i < chunkCount; i++ {
+		ch := generateTestRandomChunk()
+
+		_, err := db.Put(context.Background(), storage.ModePutUpload, ch)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		chunks[i] = testIndexChunk{
+			Chunk: ch,
+			binID: uint64(i),
+		}
+	}
+
+	testItemsOrder(t, db.pullIndex, chunks, func(i, j int) (less bool) {
+		poi := boson.Proximity(db.baseKey, chunks[i].Address().Bytes())
+		poj := boson.Proximity(db.baseKey, chunks[j].Address().Bytes())
+		if poi < poj {
+			return true
+		}
+		if poi > poj {
+			return false
+		}
+		if chunks[i].binID < chunks[j].binID {
+			return true
+		}
+		if chunks[i].binID > chunks[j].binID {
+			return false
+		}
+		return bytes.Compare(chunks[i].Address().Bytes(), chunks[j].Address().Bytes()) == -1
+	})
+}
 
 // TestDB_gcIndex validates garbage collection index by uploading
 // a chunk with and performing operations using synced, access and

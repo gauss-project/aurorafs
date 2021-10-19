@@ -149,10 +149,10 @@ func (r *retrievalMock) RetrieveChunk(ctx context.Context, rootAddr, addr boson.
 	return boson.NewChunk(addr, chunkData), nil
 }
 
-type mockRecovery struct {
-	callbackC chan bool
-}
-
-func (r *mockRecovery) RetrieveChunk(ctx context.Context, addr boson.Address) (chunk boson.Chunk, err error) {
-	return nil, fmt.Errorf("chunk not found")
-}
+//type mockRecovery struct {
+//	callbackC chan bool
+//}
+//
+//func (r *mockRecovery) RetrieveChunk(ctx context.Context, addr boson.Address) (chunk boson.Chunk, err error) {
+//	return nil, fmt.Errorf("chunk not found")
+//}
