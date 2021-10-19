@@ -5,9 +5,9 @@ import (
 	"context"
 	"testing"
 
+	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/storage"
 	"github.com/gauss-project/aurorafs/pkg/storage/mock"
-	"github.com/gauss-project/aurorafs/pkg/boson"
 )
 
 func TestMockStorer(t *testing.T) {
@@ -43,7 +43,7 @@ func TestMockStorer(t *testing.T) {
 		t.Fatalf("expected value %s but got %s", valueFound, chunk.Data())
 	}
 
-	has, err := s.Has(ctx, keyFound)
+	has, err := s.Has(ctx, storage.ModeHasChunk, keyFound)
 	if err != nil {
 		t.Fatal(err)
 	}

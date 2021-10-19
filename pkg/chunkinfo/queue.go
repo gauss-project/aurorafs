@@ -50,12 +50,12 @@ func (q *queue) len(pull Pull) int {
 }
 
 // peek
-func (q *queue) peek(pull Pull) *[]byte {
-	q.RLock()
-	defer q.RLock()
-	qu := q.getPull(pull)
-	return qu[0]
-}
+//func (q *queue) peek(pull Pull) *[]byte {
+//	q.RLock()
+//	defer q.RLock()
+//	qu := q.getPull(pull)
+//	return qu[0]
+//}
 
 // pop
 func (q *queue) pop(pull Pull) *[]byte {
@@ -161,7 +161,12 @@ func (ci *ChunkInfo) queueProcess(ctx context.Context, rootCid boson.Address) {
 		overlay := boson.NewAddress(*unNode)
 		ci.tt.updateTimeOutTrigger(rootCid.Bytes(), *unNode)
 		ciReq := ci.cd.createChunkInfoReq(rootCid, overlay, ci.addr)
-		go ci.sendDatas(ctx, overlay, streamChunkInfoReqName, ciReq)
+		go func() {
+			err := ci.sendDatas(ctx, overlay, streamChunkInfoReqName, ciReq)
+			if err != nil {
+				ci.logger.Errorf("[chunk info] send error :%v", err)
+			}
+		}()
 	}
 }
 

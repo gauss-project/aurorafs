@@ -213,35 +213,6 @@ func (db *DB) putUpload(batch *leveldb.Batch, binIDs map[uint8]uint64, item shed
 	return false, nil
 }
 
-// putSync adds an Item to the batch by updating required indexes:
-//  - put to indexes: retrieve, pull, gc
-// The batch can be written to the database.
-// Provided batch and binID map are updated.
-func (db *DB) putSync(batch *leveldb.Batch, binIDs map[uint8]uint64, item shed.Item) (exists bool, gcSizeChange int64, err error) {
-	exists, err = db.retrievalDataIndex.Has(item)
-	if err != nil {
-		return false, 0, err
-	}
-	if exists {
-		return true, 0, nil
-	}
-
-	item.StoreTimestamp = now()
-	item.BinID, err = db.incBinID(binIDs, db.po(boson.NewAddress(item.Address)))
-	if err != nil {
-		return false, 0, err
-	}
-	err = db.retrievalDataIndex.PutInBatch(batch, item)
-	if err != nil {
-		return false, 0, err
-	}
-	gcSizeChange, err = db.setGC(batch, item)
-	if err != nil {
-		return false, 0, err
-	}
-
-	return false, gcSizeChange, nil
-}
 
 // preserveOrCache is a helper function used to add chunks to either a pinned reserve or gc cache
 // (the retrieval access index and the gc index)

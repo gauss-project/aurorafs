@@ -45,7 +45,7 @@ type ChunkInfo struct {
 }
 
 func New(route mock.MockRouteTable) *ChunkInfo {
-	chunkMap = make(map[string][]aco.Route, 0)
+	chunkMap = make(map[string][]aco.Route)
 	return &ChunkInfo{
 		route: route,
 		cp:    newChunkPyramid(),
@@ -78,13 +78,9 @@ func (ci *ChunkInfo) GetChunkInfoServerOverlays(rootCid boson.Address) []aurora.
 }
 
 func (ci *ChunkInfo) CancelFindChunkInfo(rootCid boson.Address) {
-	if _, ok := ci.cpd.finder[rootCid.String()]; ok {
-		delete(ci.cpd.finder, rootCid.String())
-	}
+	delete(ci.cpd.finder, rootCid.String())
 
-	if _, ok := ci.queue[rootCid.String()]; ok {
-		delete(ci.queue, rootCid.String())
-	}
+	delete(ci.queue, rootCid.String())
 }
 
 func (ci *ChunkInfo) OnChunkTransferred(cid boson.Address, rootCid boson.Address, overlays, target boson.Address) error {

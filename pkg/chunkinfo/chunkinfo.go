@@ -56,7 +56,6 @@ type ChunkInfo struct {
 	streamer     p2p.Streamer
 	logger       logging.Logger
 	metrics      metrics
-	t            *time.Ticker
 	tt           *timeoutTrigger
 	queuesLk     sync.RWMutex
 	queues       map[string]*queue

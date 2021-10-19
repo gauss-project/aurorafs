@@ -18,8 +18,8 @@ var (
 type (
 	HTTPRequestIDKey  struct{}
 	requestHostKey    struct{}
-	tagKey            struct{}
-	targetsContextKey struct{}
+	//tagKey            struct{}
+	//targetsContextKey struct{}
 	gasPriceKey       struct{}
 	gasLimitKey       struct{}
 	rootCIDKey        struct{}
