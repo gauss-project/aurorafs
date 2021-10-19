@@ -437,9 +437,6 @@ func (s *server) manifestViewHandler(w http.ResponseWriter, r *http.Request) {
 		depth = -1
 	}
 
-	// force enable
-	depth = -1
-
 	address, err := s.resolveNameOrAddress(nameOrHex)
 	if err != nil {
 		logger.Debugf("manifest view: parse address %s: %v", nameOrHex, err)
@@ -568,7 +565,10 @@ func (s *server) manifestViewHandler(w http.ResponseWriter, r *http.Request) {
 				return nil
 			}
 
-			pathVar = strings.TrimSuffix(pathVar, "/")
+			pathVar = strings.Trim(pathVar, "/")
+			if len(pathVar) != 0 {
+				pathVar += "/"
+			}
 
 			if err := m.IterateNodes(r.Context(), []byte(pathVar), depth, fn); err != nil {
 				jsonhttp.InternalServerError(w, err)
