@@ -1,4 +1,4 @@
-FROM debian:10.9-slim
+FROM debian:10.10-slim
 
 ENV DEBIAN_FRONTEND noninteractive
 
@@ -8,18 +8,18 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     useradd -r -g aurora --uid 999 --no-log-init -m aurora;
 
 # make sure mounted volumes have correct permissions
-RUN mkdir -p /home/aurorafs/.aurora && chown 999:999 /home/aurorafs/.aurora
+RUN mkdir -p /home/aurora/.aurora && chown 999:999 /home/aurora/.aurora
 
 FROM scratch
 
-COPY aurora-slim /usr/local/bin/aurorafs
+COPY aurora-slim /usr/local/bin/aurora
 COPY --from=0 /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs
 COPY --from=0 /etc/passwd /etc/passwd
 COPY --from=0 /home /home
 
 EXPOSE 1633 1634 1635
 USER aurora
-WORKDIR /home/aurorafs
-VOLUME /home/aurorafs/.aurora
+WORKDIR /home/aurora
+VOLUME /home/aurora/.aurora
 
 ENTRYPOINT ["aurora"]
