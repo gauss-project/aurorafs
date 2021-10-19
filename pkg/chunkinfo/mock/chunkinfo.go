@@ -87,7 +87,7 @@ func (ci *ChunkInfo) CancelFindChunkInfo(rootCid boson.Address) {
 	}
 }
 
-func (ci *ChunkInfo) OnChunkTransferred(cid boson.Address, rootCid boson.Address, overlays boson.Address) error {
+func (ci *ChunkInfo) OnChunkTransferred(cid boson.Address, rootCid boson.Address, overlays, target boson.Address) error {
 	mapKey := fmt.Sprintf("%v,%v", rootCid.String(), cid.String())
 	if _, exist := chunkMap[mapKey]; !exist {
 		chunkMap[mapKey] = make([]aco.Route, 0)

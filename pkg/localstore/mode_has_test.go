@@ -24,6 +24,7 @@ import (
 	"time"
 
 	chunkinfo "github.com/gauss-project/aurorafs/pkg/chunkinfo/mock"
+	routetab "github.com/gauss-project/aurorafs/pkg/routetab/mock"
 	"github.com/gauss-project/aurorafs/pkg/storage"
 )
 
@@ -31,7 +32,7 @@ import (
 // the stored chunk and false for one that is not stored.
 func TestHas(t *testing.T) {
 	db := newTestDB(t, nil)
-	ci := chunkinfo.New()
+	ci := chunkinfo.New(routetab.NewMockRouteTable())
 	db.Config(ci)
 
 	ch := generateTestRandomChunk()
@@ -67,7 +68,7 @@ func TestHasMulti(t *testing.T) {
 	for _, tc := range multiChunkTestCases {
 		t.Run(tc.name, func(t *testing.T) {
 			db := newTestDB(t, nil)
-			ci := chunkinfo.New()
+			ci := chunkinfo.New(routetab.NewMockRouteTable())
 			db.Config(ci)
 
 			chunks := generateTestRandomChunks(tc.count)
