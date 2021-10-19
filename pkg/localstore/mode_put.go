@@ -290,10 +290,10 @@ func (db *DB) setGC(batch *leveldb.Batch, item shed.Item) (gcSizeChange int64, e
 		}
 		gcItem = item
 		gcItem.GCounter = 1
-		gcSizeChange++
 	} else {
 		gcItem.GCounter++
 	}
+	gcSizeChange++
 	err = db.gcIndex.PutInBatch(batch, gcItem)
 	if err != nil {
 		return 0, err
