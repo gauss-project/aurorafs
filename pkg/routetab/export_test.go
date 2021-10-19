@@ -10,6 +10,10 @@ var (
 	NewRouteTable     = newRouteTable
 )
 
+func (pend *pendCallResTab) ReqLogRange(f func(key, value interface{}) bool) {
+	pend.reqLog.Range(f)
+}
+
 func (t *Table) TableClean() {
 	t.items = make(map[common.Hash]Route)
 	t.signed = make(map[common.Hash]*Path)
