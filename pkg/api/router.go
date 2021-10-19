@@ -171,16 +171,16 @@ func (s *server) setupRouting() {
 	)
 }
 
-func (s *server) gatewayModeForbidEndpointHandler(h http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if s.GatewayMode {
-			s.logger.Tracef("gateway mode: forbidden %s", r.URL.String())
-			jsonhttp.Forbidden(w, nil)
-			return
-		}
-		h.ServeHTTP(w, r)
-	})
-}
+//func (s *server) gatewayModeForbidEndpointHandler(h http.Handler) http.Handler {
+//	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+//		if s.GatewayMode {
+//			s.logger.Tracef("gateway mode: forbidden %s", r.URL.String())
+//			jsonhttp.Forbidden(w, nil)
+//			return
+//		}
+//		h.ServeHTTP(w, r)
+//	})
+//}
 
 func (s *server) gatewayModeForbidHeadersHandler(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

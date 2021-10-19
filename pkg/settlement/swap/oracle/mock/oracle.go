@@ -2,14 +2,13 @@ package mock
 
 import (
 	"github.com/gauss-project/aurorafs/pkg/boson"
-	"github.com/gauss-project/aurorafs/pkg/logging"
 	"github.com/gauss-project/aurorafs/pkg/settlement/swap/oracle"
 	"math/big"
 )
 
 type ChainOracle struct {
-	logger logging.Logger
-	oracle *oracle.Oracle
+	//logger logging.Logger
+	//oracle *oracle.Oracle
 }
 
 func NewServer() *ChainOracle {

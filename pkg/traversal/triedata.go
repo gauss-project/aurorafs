@@ -119,7 +119,10 @@ func (s *traversalService) getChunkBytes(
 	}
 
 	j.SetSaveIntChunks(trieData)
-	j.IterateChunkAddresses(func(addr boson.Address) error { return nil })
+	err = j.IterateChunkAddresses(func(addr boson.Address) error { return nil })
+	if err != nil {
+		return err
+	}
 
 	return nil
 }
@@ -399,9 +402,9 @@ func (s *traversalService) CheckTrieData(ctx context.Context, reference boson.Ad
 	if isManifest {
 		// process as manifest
 		err = m.IterateAddresses(ctx, func(manifestNodeAddr boson.Address) error {
-			addresses, err1 := s.getDataChunksFromManifest(ctx, p, manifestNodeAddr, chunkAddressFunc)
-			if err1 != nil {
-				return err1
+			addresses, err := s.getDataChunksFromManifest(ctx, p, manifestNodeAddr, chunkAddressFunc)
+			if err != nil {
+				return err
 			}
 
 			if addresses != nil {
@@ -416,17 +419,17 @@ func (s *traversalService) CheckTrieData(ctx context.Context, reference boson.Ad
 
 		metadataReference := e.Metadata()
 
-		err = s.processBytesWithCustomStore(ctx, p, metadataReference, chunkAddressFunc)
-
+		if err = s.processBytesWithCustomStore(ctx, p, metadataReference, chunkAddressFunc); err != nil {
+			return
+		}
 	} else {
-		addresses, er := s.getDataChunksAsEntry(ctx, p, reference, chunkAddressFunc, e)
-		if er != nil {
-			err = er
+		var addresses [][]byte
+		addresses, err = s.getDataChunksAsEntry(ctx, p, reference, chunkAddressFunc, e)
+		if err != nil {
 			return
 		}
 
 		dataChunks = append(dataChunks, addresses)
-
 	}
 
 	// here we can put those data into localstore.

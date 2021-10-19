@@ -226,7 +226,7 @@ func (db *DB) recycleGarbageWorker() {
 	var (
 		recycleCount uint64
 		removeChunks uint64
-		closed bool
+		closed       bool
 	)
 
 	defer close(db.recycleGarbageWorkerDone)

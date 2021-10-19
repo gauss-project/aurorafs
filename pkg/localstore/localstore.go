@@ -50,14 +50,14 @@ var (
 
 	// values needed to adjust subscription trigger
 	// buffer time.
-	flipFlopBufferDuration    = 150 * time.Millisecond
-	flipFlopWorstCaseDuration = 20 * time.Second
+	//flipFlopBufferDuration    = 150 * time.Millisecond
+	//flipFlopWorstCaseDuration = 20 * time.Second
 )
 
 // DB is the local store implementation and holds
 // database related objects.
 type DB struct {
-	shed *shed.DB
+	shed     *shed.DB
 	discover chunkinfo.Interface
 
 	// schema name of loaded data
@@ -67,12 +67,15 @@ type DB struct {
 	retrievalDataIndex   shed.Index
 	retrievalAccessIndex shed.Index
 
+	// pull syncing index
+	pullIndex shed.Index
+
 	// binIDs stores the latest chunk serial ID for every
 	// proximity order bin
 	binIDs shed.Uint64Vector
 
 	// garbage collection index
-	gcIndex shed.Index
+	gcIndex      shed.Index
 	gcQueueIndex shed.Index
 
 	// pin files Index
@@ -317,7 +320,7 @@ func New(path string, baseKey []byte, o *Options, logger logging.Logger) (db *DB
 	}
 	db.gcQueueIndex, err = db.shed.NewIndex("GCounter|Hash->nil", shed.IndexFuncs{
 		EncodeKey: func(fields shed.Item) (key []byte, err error) {
-			b := make([]byte, 8, 8 + len(fields.Address))
+			b := make([]byte, 8, 8+len(fields.Address))
 			binary.BigEndian.PutUint64(b[:8], fields.GCounter)
 			key = append(b, fields.Address...)
 			return key, nil
