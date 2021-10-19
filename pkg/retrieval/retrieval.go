@@ -58,9 +58,7 @@ type retrievalResult struct {
 const (
 	retrieveChunkTimeout          = 10 * time.Second
 	retrieveRetryIntervalDuration = 5 * time.Second
-	//maxPeers                      = 5
 	totalRouteCount               = 5
-	//totalBackupRouteCount         = 5
 )
 
 func New(addr boson.Address, streamer p2p.Streamer, routeTable routetab.RouteTab, storer storage.Storer, isFullNode bool, logger logging.Logger, tracer *tracing.Tracer) *Service {
