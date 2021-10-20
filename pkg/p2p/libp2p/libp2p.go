@@ -21,7 +21,6 @@ import (
 	"github.com/gauss-project/aurorafs/pkg/p2p/libp2p/internal/breaker"
 	"github.com/gauss-project/aurorafs/pkg/p2p/libp2p/internal/handshake"
 	"github.com/gauss-project/aurorafs/pkg/storage"
-	"github.com/gauss-project/aurorafs/pkg/topology"
 	"github.com/gauss-project/aurorafs/pkg/topology/lightnode"
 	"github.com/gauss-project/aurorafs/pkg/tracing"
 	"github.com/libp2p/go-libp2p"
@@ -49,8 +48,7 @@ var (
 )
 
 const (
-	defaultLightNodeLimit = 100
-	peerUserAgentTimeout  = time.Second
+	peerUserAgentTimeout = time.Second
 )
 
 type Service struct {
@@ -74,17 +72,9 @@ type Service struct {
 	tracer            *tracing.Tracer
 	ready             chan struct{}
 	halt              chan struct{}
-	lightNodes        lightnodes
+	lightNodes        lightnode.LightNodes
 	lightNodeLimit    int
 	protocolsmu       sync.RWMutex
-}
-
-type lightnodes interface {
-	Connected(context.Context, p2p.Peer)
-	Disconnected(p2p.Peer)
-	Count() int
-	RandomPeer(boson.Address) (boson.Address, error)
-	EachPeer(pf topology.EachPeerFunc) error
 }
 
 type Options struct {
@@ -224,7 +214,11 @@ func New(ctx context.Context, signer beecrypto.Signer, networkID uint64, overlay
 		advertisableAddresser = natAddrResolver
 	}
 
-	handshakeService, err := handshake.New(signer, advertisableAddresser, overlay, networkID, o.FullNode, o.WelcomeMessage, h.ID(), logger)
+	if o.LightNodeLimit <= 0 {
+		o.LightNodeLimit = lightnode.DefaultLightNodeLimit
+	}
+
+	handshakeService, err := handshake.New(signer, advertisableAddresser, overlay, networkID, o.FullNode, o.WelcomeMessage, h.ID(), logger, lightNodes, o.LightNodeLimit)
 	if err != nil {
 		return nil, fmt.Errorf("handshake service: %w", err)
 	}
@@ -260,14 +254,10 @@ func New(ctx context.Context, signer beecrypto.Signer, networkID uint64, overlay
 		ready:             make(chan struct{}),
 		halt:              make(chan struct{}),
 		lightNodes:        lightNodes,
+		lightNodeLimit:    o.LightNodeLimit,
 	}
 
 	peerRegistry.setDisconnecter(s)
-
-	s.lightNodeLimit = defaultLightNodeLimit
-	if o.LightNodeLimit > 0 {
-		s.lightNodeLimit = o.LightNodeLimit
-	}
 
 	// Construct protocols.
 	id := protocol.ID(p2p.NewAuroraStreamName(handshake.ProtocolName, handshake.ProtocolVersion, handshake.StreamName))
@@ -325,22 +315,6 @@ func (s *Service) handleIncoming(stream network.Stream) {
 		_ = handshakeStream.Reset()
 		_ = s.host.Network().ClosePeer(peerID)
 		return
-	}
-
-	if s.notifier != nil {
-		if !s.notifier.Pick(p2p.Peer{Address: overlay, FullNode: i.NodeMode.IsFull()}) {
-			s.logger.Warningf("stream handler: don't want incoming peer %s. disconnecting", overlay)
-			_ = handshakeStream.Reset()
-			_ = s.host.Network().ClosePeer(peerID)
-			return
-		}
-
-		if !i.NodeMode.IsFull() && s.lightNodes.Count() >= s.lightNodeLimit {
-			s.logger.Warningf("stream handler: light node upper limit %d, don't want incoming peer %s. disconnecting", s.lightNodeLimit, overlay)
-			_ = handshakeStream.Reset()
-			_ = s.host.Network().ClosePeer(peerID)
-			return
-		}
 	}
 
 	if exists := s.peers.addIfNotExists(stream.Conn(), overlay, i.NodeMode.IsFull()); exists {
@@ -450,6 +424,7 @@ func (s *Service) handleIncoming(stream network.Stream) {
 }
 
 func (s *Service) SetPickyNotifier(n p2p.PickyNotifier) {
+	s.handshakeService.SetPicker(n)
 	s.notifier = n
 }
 
@@ -463,6 +438,7 @@ func (s *Service) AddProtocol(p p2p.ProtocolSpec) (err error) {
 		}
 
 		s.host.SetStreamHandlerMatch(id, matcher, func(streamlibp2p network.Stream) {
+			start := time.Now()
 			peerID := streamlibp2p.Conn().RemotePeer()
 			overlay, found := s.peers.overlay(peerID)
 			if !found {
@@ -485,6 +461,7 @@ func (s *Service) AddProtocol(p p2p.ProtocolSpec) (err error) {
 				_ = stream.Reset()
 				return
 			}
+			s.metrics.HeadersExchangeDuration.Observe(time.Since(start).Seconds())
 
 			ctx, cancel := context.WithCancel(s.ctx)
 
