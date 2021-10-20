@@ -5,8 +5,11 @@ import (
 	random "crypto/rand"
 	"encoding/json"
 	"errors"
+	"golang.org/x/sync/errgroup"
 	"math/big"
+	"net"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/gauss-project/aurorafs/pkg/addressbook"
@@ -97,6 +100,8 @@ type Kad struct {
 	waitNext          *waitnext.WaitNext
 	metrics           metrics
 	pruneFunc         pruneFunc // pluggable prune function
+	bgBroadcastCtx    context.Context
+	bgBroadcastCancel context.CancelFunc
 }
 
 // New returns a new Kademlia.
@@ -172,6 +177,8 @@ func New(
 	if k.bitSuffixLength > 0 {
 		k.commonBinPrefixes = generateCommonBinPrefixes(k.base, k.bitSuffixLength)
 	}
+
+	k.bgBroadcastCtx, k.bgBroadcastCancel = context.WithCancel(context.Background())
 
 	return k, nil
 }
@@ -443,7 +450,7 @@ func (k *Kad) manage() {
 					k.metrics.InternalMetricsFlushTotalErrors.Inc()
 					k.logger.Debugf("kademlia: unable to flush metrics counters to the persistent store: %v", err)
 				} else {
-					k.metrics.InternalMetricsFlushTime.Observe(float64(time.Since(start).Nanoseconds()))
+					k.metrics.InternalMetricsFlushTime.Observe(time.Since(start).Seconds())
 					k.logger.Tracef("kademlia: took %s to flush", time.Since(start))
 				}
 			}
@@ -469,6 +476,15 @@ func (k *Kad) manage() {
 			}
 
 			if k.bootnode {
+				k.depthMu.Lock()
+				depth := k.depth
+				radius := k.radius
+				k.depthMu.Unlock()
+
+				k.metrics.CurrentDepth.Set(float64(depth))
+				k.metrics.CurrentRadius.Set(float64(radius))
+				k.metrics.CurrentlyKnownPeers.Set(float64(k.knownPeers.Length()))
+				k.metrics.CurrentlyConnectedPeers.Set(float64(k.connectedPeers.Length()))
 				continue
 			}
 
@@ -595,11 +611,11 @@ func (k *Kad) Start(_ context.Context) error {
 			return false, nil
 		})
 		if err != nil {
-			k.logger.Errorf("addressbook overlays: %w", err)
+			k.logger.Errorf("addressbook overlays: %v", err)
 			return
 		}
 		k.AddPeers(addresses...)
-		k.metrics.StartAddAddressBookOverlaysTime.Observe(float64(time.Since(start).Nanoseconds()))
+		k.metrics.StartAddAddressBookOverlaysTime.Observe(time.Since(start).Seconds())
 
 		k.discovery.NotifyDiscoverWork()
 	}()
@@ -648,8 +664,11 @@ func (k *Kad) connectBootNodes(ctx context.Context) {
 			}
 			k.discovery.NotifyDiscoverWork(bzzAddress.Overlay)
 
+			k.metrics.TotalOutboundConnections.Inc()
+			k.collector.Record(bzzAddress.Overlay, im.PeerLogIn(time.Now(), im.PeerConnectionDirectionOutbound))
 			k.logger.Tracef("connected to bootnode %s", addr)
 			connected++
+
 			// connect to max 3 bootnodes
 			return connected >= 3, nil
 		}); err != nil && !errors.Is(err, context.Canceled) {
@@ -786,7 +805,7 @@ func (k *Kad) connect(ctx context.Context, peer boson.Address, ma ma.Multiaddr) 
 		k.collector.Record(peer, im.IncSessionConnectionRetry())
 
 		ss := k.collector.Inspect(peer)
-		quickPrune := ss == nil || ss.HasAtMaxOneConnectionAttempt()
+		quickPrune := (ss == nil || ss.HasAtMaxOneConnectionAttempt()) && isNetworkError(err)
 		if (k.connectedPeers.Length() > 0 && quickPrune) || failedAttempts >= maxConnAttempts {
 			k.waitNext.Remove(peer)
 			k.knownPeers.Remove(peer)
@@ -811,7 +830,7 @@ func (k *Kad) connect(ctx context.Context, peer boson.Address, ma ma.Multiaddr) 
 // Announce a newly connected peer to our connected peers, but also
 // notify the peer about our already connected peers
 func (k *Kad) Announce(ctx context.Context, peer boson.Address, fullnode bool) error {
-	if !k.discovery.IsStart() {
+	if !k.discovery.IsStart() || k.discovery.IsHive2() {
 		return nil
 	}
 	var addrs []boson.Address
@@ -835,14 +854,26 @@ func (k *Kad) Announce(ctx context.Context, peer boson.Address, fullnode bool) e
 				// about lightnodes to others.
 				continue
 			}
+			// if kademlia is closing, dont enqueue anymore broadcast requests
+			select {
+			case <-k.bgBroadcastCtx.Done():
+				// we will not interfere with the announce operation by returning here
+				continue
+			default:
+			}
 			go func(connectedPeer boson.Address) {
-				if err := k.discovery.BroadcastPeers(ctx, connectedPeer, peer); err != nil {
+				// Create a new deadline ctx to prevent goroutine pile up
+				cCtx, cCancel := context.WithTimeout(k.bgBroadcastCtx, time.Minute)
+				defer cCancel()
+				k.logger.Debugf("-----------------to %s",connectedPeer)
+				if err := k.discovery.BroadcastPeers(cCtx, connectedPeer, peer); err != nil {
 					k.logger.Debugf("could not gossip peer %s to peer %s: %v", peer, connectedPeer, err)
 				}
 			}(connectedPeer)
 		}
 	}
 
+	k.logger.Debugf("addrs    len = %d",len(addrs))
 	if len(addrs) == 0 {
 		return nil
 	}
@@ -861,7 +892,7 @@ func (k *Kad) AnnounceTo(ctx context.Context, addressee, peer boson.Address, ful
 	if !fullnode {
 		return errAnnounceLightNode
 	}
-	if !k.discovery.IsStart() {
+	if !k.discovery.IsStart() || k.discovery.IsHive2() {
 		return nil
 	}
 	return k.discovery.BroadcastPeers(ctx, addressee, peer)
@@ -1364,22 +1395,38 @@ func (k *Kad) Close() error {
 	close(k.quit)
 	cc := make(chan struct{})
 
+	k.bgBroadcastCancel()
+
 	go func() {
 		k.wg.Wait()
 		close(cc)
 	}()
 
-	select {
-	case <-cc:
-	case <-time.After(peerConnectionAttemptTimeout):
-		k.logger.Warning("kademlia shutting down with announce goroutines")
-	}
+	eg := errgroup.Group{}
 
-	select {
-	case <-k.done:
-	case <-time.After(5 * time.Second):
-		k.logger.Warning("kademlia manage loop did not shut down properly")
-	}
+	errTimeout := errors.New("timeout")
+
+	eg.Go(func() error {
+		select {
+		case <-cc:
+		case <-time.After(peerConnectionAttemptTimeout):
+			k.logger.Warning("kademlia shutting down with announce goroutines")
+			return errTimeout
+		}
+		return nil
+	})
+
+	eg.Go(func() error {
+		select {
+		case <-k.done:
+		case <-time.After(time.Second * 5):
+			k.logger.Warning("kademlia manage loop did not shut down properly")
+			return errTimeout
+		}
+		return nil
+	})
+
+	err := eg.Wait()
 
 	k.logger.Info("kademlia persisting peer metrics")
 	start := time.Now()
@@ -1388,7 +1435,7 @@ func (k *Kad) Close() error {
 	}
 	k.logger.Debugf("kademlia: Finalize(...) took %v", time.Since(start))
 
-	return nil
+	return err
 }
 
 func randomSubset(addrs []boson.Address, count int) ([]boson.Address, error) {
@@ -1437,4 +1484,27 @@ func createMetricsSnapshotView(ss *im.Snapshot) *topology.MetricSnapshotView {
 		SessionConnectionDuration:  ss.SessionConnectionDuration.Truncate(time.Second).Seconds(),
 		SessionConnectionDirection: string(ss.SessionConnectionDirection),
 	}
+}
+
+// isNetworkError is checking various conditions that relate to network problems.
+func isNetworkError(err error) bool {
+	var netOpErr *net.OpError
+	if errors.As(err, &netOpErr) {
+		if netOpErr.Op == "dial" {
+			return true
+		}
+		if netOpErr.Op == "read" {
+			return true
+		}
+	}
+	if errors.Is(err, syscall.ECONNREFUSED) {
+		return true
+	}
+	if errors.Is(err, syscall.EPIPE) {
+		return true
+	}
+	if errors.Is(err, syscall.ETIMEDOUT) {
+		return true
+	}
+	return false
 }
