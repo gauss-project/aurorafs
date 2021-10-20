@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/gauss-project/aurorafs/pkg/bitvector"
+	"github.com/gauss-project/aurorafs/pkg/topology/lightnode"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -50,6 +51,9 @@ var (
 
 	// ErrWelcomeMessageLength is returned if the welcome message is longer than the maximum length
 	ErrWelcomeMessageLength = fmt.Errorf("handshake welcome message longer than maximum of %d characters", MaxWelcomeMessageLength)
+
+	// ErrPicker is returned if the picker (kademlia) rejects the peer
+	ErrPicker = fmt.Errorf("picker rejection")
 )
 
 // AdvertisableAddressResolver can Resolve a Multiaddress.
@@ -69,7 +73,11 @@ type Service struct {
 	receivedHandshakesMu  sync.Mutex
 	logger                logging.Logger
 	libp2pID              libp2ppeer.ID
+	metrics               metrics
 	network.Notifiee      // handshake service can be the receiver for network.Notify
+	picker                p2p.Picker
+	lightNodes            lightnode.LightNodes
+	lightNodeLimit        int
 }
 
 type Model struct {
@@ -104,7 +112,7 @@ func (i *Info) LightString() string {
 }
 
 // New creates a new handshake Service.
-func New(signer crypto.Signer, advertisableAddresser AdvertisableAddressResolver, overlay boson.Address, networkID uint64, fullNode bool, welcomeMessage string, ownPeerID libp2ppeer.ID, logger logging.Logger) (*Service, error) {
+func New(signer crypto.Signer, advertisableAddresser AdvertisableAddressResolver, overlay boson.Address, networkID uint64, fullNode bool, welcomeMessage string, ownPeerID libp2ppeer.ID, logger logging.Logger, lightNodes *lightnode.Container, lightLimit int) (*Service, error) {
 	if len(welcomeMessage) > MaxWelcomeMessageLength {
 		return nil, ErrWelcomeMessageLength
 	}
@@ -119,7 +127,10 @@ func New(signer crypto.Signer, advertisableAddresser AdvertisableAddressResolver
 		receivedHandshakes:    make(map[libp2ppeer.ID]struct{}),
 		logger:                logger,
 		libp2pID:              ownPeerID,
+		metrics:               newMetrics(),
 		Notifiee:              new(network.NoopNotifiee),
+		lightNodes:            lightNodes,
+		lightNodeLimit:        lightLimit,
 	}
 	svc.welcomeMessage.Store(welcomeMessage)
 
@@ -129,6 +140,10 @@ func New(signer crypto.Signer, advertisableAddresser AdvertisableAddressResolver
 		svc.nodeMode.Bv.Set(LightNode)
 	}
 	return svc, nil
+}
+
+func (s *Service) SetPicker(n p2p.Picker) {
+	s.picker = n
 }
 
 // Handshake initiates a handshake with a peer.
@@ -250,8 +265,10 @@ func (s *Service) Handle(ctx context.Context, stream p2p.Stream, remoteMultiaddr
 
 	var syn pb.Syn
 	if err := r.ReadMsgWithContext(ctx, &syn); err != nil {
+		s.metrics.SynRxFailed.Inc()
 		return nil, fmt.Errorf("read syn message: %w", err)
 	}
+	s.metrics.SynRx.Inc()
 
 	observedUnderlay, err := ma.NewMultiaddrBytes(syn.ObservedUnderlay)
 	if err != nil {
@@ -290,16 +307,34 @@ func (s *Service) Handle(ctx context.Context, stream p2p.Stream, remoteMultiaddr
 			WelcomeMessage: welcomeMessage,
 		},
 	}); err != nil {
+		s.metrics.SynAckTxFailed.Inc()
 		return nil, fmt.Errorf("write synack message: %w", err)
 	}
+	s.metrics.SynAckTx.Inc()
 
 	var ack pb.Ack
 	if err := r.ReadMsgWithContext(ctx, &ack); err != nil {
+		s.metrics.AckRxFailed.Inc()
 		return nil, fmt.Errorf("read ack message: %w", err)
 	}
+	s.metrics.AckRx.Inc()
 
 	if ack.NetworkID != s.networkID {
 		return nil, ErrNetworkIDIncompatible
+	}
+
+	overlay := boson.NewAddress(ack.Address.Overlay)
+	bv, _ := bitvector.NewFromBytes(ack.NodeMode, bitVictorNodeModeLen)
+	mode := Model{Bv: bv}
+
+	if s.picker != nil {
+		if !s.picker.Pick(p2p.Peer{Address: overlay, FullNode: mode.IsFull()}) {
+			return nil, ErrPicker
+		}
+
+		if !mode.IsFull() && s.lightNodes.Count() >= s.lightNodeLimit {
+			return nil, ErrPicker
+		}
 	}
 
 	remoteBzzAddress, err := s.parseCheckAck(&ack)
@@ -312,10 +347,9 @@ func (s *Service) Handle(ctx context.Context, stream p2p.Stream, remoteMultiaddr
 		s.logger.Infof("greeting \"%s\" from peer: %s", ack.WelcomeMessage, remoteBzzAddress.Overlay.String())
 	}
 
-	bv, _ := bitvector.NewFromBytes(ack.NodeMode, bitVictorNodeModeLen)
 	return &Info{
 		BzzAddress: remoteBzzAddress,
-		NodeMode:   Model{Bv: bv},
+		NodeMode:   mode,
 	}, nil
 }
 
