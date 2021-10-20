@@ -24,6 +24,7 @@ import (
 	"github.com/gauss-project/aurorafs/pkg/logging"
 	"github.com/gauss-project/aurorafs/pkg/p2p"
 	"github.com/gauss-project/aurorafs/pkg/p2p/protobuf"
+	lru "github.com/hashicorp/golang-lru"
 )
 
 const (
@@ -34,6 +35,9 @@ const (
 	maxBatchSize           = 30
 	pingTimeout            = time.Second * 5 // time to wait for ping to succeed
 	batchValidationTimeout = 5 * time.Minute // prevent lock contention on peer validation
+	cacheSize              = 100000
+	bitsPerByte            = 8
+	cachePrefix            = boson.MaxBins / bitsPerByte // enough bytes (32 bits) to uniquely identify a peer
 )
 
 var (
@@ -58,9 +62,16 @@ type Service struct {
 	wg              sync.WaitGroup
 	peersChan       chan pb.Peers
 	sem             *semaphore.Weighted
+	lru             *lru.Cache // cache for unreachable peers
+	bootnode        bool
 }
 
-func New(streamer p2p.StreamerPinger, addressbook addressbook.GetPutter, networkID uint64, logger logging.Logger) *Service {
+func New(streamer p2p.StreamerPinger, addressbook addressbook.GetPutter, networkID uint64, bootnode bool, logger logging.Logger) (*Service, error) {
+	lruCache, err := lru.New(cacheSize)
+	if err != nil {
+		return nil, err
+	}
+
 	svc := &Service{
 		streamer:    streamer,
 		logger:      logger,
@@ -72,9 +83,14 @@ func New(streamer p2p.StreamerPinger, addressbook addressbook.GetPutter, network
 		quit:        make(chan struct{}),
 		peersChan:   make(chan pb.Peers),
 		sem:         semaphore.NewWeighted(int64(31)),
+		lru:         lruCache,
+		bootnode:    bootnode,
 	}
-	svc.startCheckPeersHandler()
-	return svc
+	if !bootnode {
+		svc.startCheckPeersHandler()
+	}
+
+	return svc, nil
 }
 
 func (s *Service) Protocol() p2p.ProtocolSpec {
@@ -202,6 +218,10 @@ func (s *Service) peersHandler(ctx context.Context, peer p2p.Peer, stream p2p.St
 	// but we still want to handle not closed stream from the other side to avoid zombie stream
 	go stream.FullClose()
 
+	if s.bootnode {
+		return nil
+	}
+
 	select {
 	case s.peersChan <- peersReq:
 	case <-s.quit:
@@ -258,20 +278,41 @@ func (s *Service) checkAndAddPeers(ctx context.Context, peers pb.Peers) {
 	wg := sync.WaitGroup{}
 
 	for _, p := range peers.Peers {
+
+		overlay := boson.NewAddress(p.Overlay)
+		cacheOverlay := overlay.ByteString()[:cachePrefix]
+
+		// cached peer, skip
+		if _, ok := s.lru.Get(cacheOverlay); ok {
+			continue
+		}
+
+		// if peer exists already in the addressBook, skip
+		if _, err := s.addressBook.Get(overlay); err == nil {
+			_ = s.lru.Add(cacheOverlay, nil)
+			continue
+		}
+
 		err := s.sem.Acquire(ctx, 1)
 		if err != nil {
 			return
 		}
 
 		wg.Add(1)
-		go func(newPeer *pb.BzzAddress) {
+		go func(newPeer *pb.BzzAddress, cacheOverlay string) {
+
+			s.metrics.PeerConnectAttempts.Inc()
+
 			defer func() {
 				s.sem.Release(1)
+				// mark peer as seen
+				_ = s.lru.Add(cacheOverlay, nil)
 				wg.Done()
 			}()
 
 			multiUnderlay, err := ma.NewMultiaddrBytes(newPeer.Underlay)
 			if err != nil {
+				s.metrics.PeerUnderlayErr.Inc()
 				s.logger.Errorf("hive: multi address underlay err: %v", err)
 				return
 			}
@@ -279,12 +320,18 @@ func (s *Service) checkAndAddPeers(ctx context.Context, peers pb.Peers) {
 			ctx, cancel := context.WithTimeout(ctx, pingTimeout)
 			defer cancel()
 
+			start := time.Now()
+
 			// check if the underlay is usable by doing a raw ping using libp2p
 			if _, err = s.streamer.Ping(ctx, multiUnderlay); err != nil {
+				s.metrics.PingFailureTime.Observe(time.Since(start).Seconds())
 				s.metrics.UnreachablePeers.Inc()
 				s.logger.Debugf("hive: peer %s: underlay %s not reachable", hex.EncodeToString(newPeer.Overlay), multiUnderlay)
 				return
 			}
+			s.metrics.PingTime.Observe(time.Since(start).Seconds())
+
+			s.metrics.ReachablePeers.Inc()
 
 			bzzAddress := aurora.Address{
 				Overlay:   boson.NewAddress(newPeer.Overlay),
@@ -294,6 +341,7 @@ func (s *Service) checkAndAddPeers(ctx context.Context, peers pb.Peers) {
 
 			err = s.addressBook.Put(bzzAddress.Overlay, bzzAddress)
 			if err != nil {
+				s.metrics.StorePeerErr.Inc()
 				s.logger.Warningf("skipping peer in response %s: %v", newPeer.String(), err)
 				return
 			}
@@ -301,7 +349,7 @@ func (s *Service) checkAndAddPeers(ctx context.Context, peers pb.Peers) {
 			mtx.Lock()
 			peersToAdd = append(peersToAdd, bzzAddress.Overlay)
 			mtx.Unlock()
-		}(p)
+		}(p, cacheOverlay)
 	}
 
 	wg.Wait()
@@ -327,6 +375,6 @@ func (s *Service) IsHive2() bool {
 	return false
 }
 
-func (s *Service) NotifyDiscoverWork(peers ...boson.Address)  {
+func (s *Service) NotifyDiscoverWork(peers ...boson.Address) {
 
 }
