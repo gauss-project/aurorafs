@@ -317,7 +317,7 @@ func TestHandlerPyramid(t *testing.T) {
 		streamtest.WithBaseAddr(serverAddress),
 	)
 	client := mockChunkInfo(s, recorder, clientAddress)
-	err := client.doFindChunkPyramid(context.Background(), nil, rootCid, targetAddress)
+	_ = client.doFindChunkPyramid(context.Background(), nil, rootCid, targetAddress)
 
 	records, err := recorder.Records(targetAddress, protocolName, protocolVersion, streamPyramidName)
 	if err != nil {
