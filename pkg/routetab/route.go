@@ -351,6 +351,10 @@ func (s *Service) getNeighbor(target boson.Address, alpha int32, skip ...boson.A
 			return false, false, nil
 		})
 	}
+	if len(now) == 0 {
+		list := s.kad.ConnectedPeers().BinPeers(depth - 1)
+		now = skipPeers(list, skip)
+	}
 	forward, _ = s.kad.RandomSubset(now, int(alpha))
 	return
 }

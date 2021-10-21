@@ -251,7 +251,7 @@ func TestHandshake(t *testing.T) {
 		}
 
 		_, err = handshakeService.Handle(context.Background(), stream1, node2AddrInfo.Addrs[0], node2AddrInfo.ID)
-		expectedErr := handshake.ErrPicker
+		expectedErr := handshake.ErrPickerLight
 		if !errors.Is(err, expectedErr) {
 			t.Fatal("expected:", expectedErr, "got:", err)
 		}
