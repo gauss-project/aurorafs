@@ -54,6 +54,8 @@ var (
 
 	// ErrPicker is returned if the picker (kademlia) rejects the peer
 	ErrPicker = fmt.Errorf("picker rejection")
+
+	ErrPickerLight = fmt.Errorf("picker rejection light")
 )
 
 // AdvertisableAddressResolver can Resolve a Multiaddress.
@@ -328,12 +330,15 @@ func (s *Service) Handle(ctx context.Context, stream p2p.Stream, remoteMultiaddr
 	mode := Model{Bv: bv}
 
 	if s.picker != nil {
-		if !s.picker.Pick(p2p.Peer{Address: overlay, FullNode: mode.IsFull()}) {
-			return nil, ErrPicker
-		}
-
-		if !mode.IsFull() && s.lightNodes.Count() >= s.lightNodeLimit {
-			return nil, ErrPicker
+		if mode.IsFull() {
+			if !s.picker.Pick(p2p.Peer{Address: overlay, FullNode: mode.IsFull()}) {
+				return nil, ErrPicker
+			}
+		} else {
+			if s.lightNodes.Count() >= s.lightNodeLimit {
+				s.logger.Warningf("%s %s with limit %d", ErrPickerLight.Error(), overlay.String(), s.lightNodeLimit)
+				return nil, ErrPickerLight
+			}
 		}
 	}
 
