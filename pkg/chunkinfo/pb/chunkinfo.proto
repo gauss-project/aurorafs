@@ -16,13 +16,14 @@ message ChunkPyramidHashResp{
 }
 
 message ChunkPyramidChunkReq {
-  bytes Hash = 1;
-  bytes RootCid = 2;
-  bytes target = 3;
+  bytes RootCid = 1;
+  bytes target = 2;
 }
 
 message ChunkPyramidChunkResp{
   bytes Chunk = 1;
+  bytes Hash = 2;
+  bool Ok =3;
 }
 
 message ChunkInfoReq {

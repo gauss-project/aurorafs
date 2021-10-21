@@ -128,24 +128,12 @@ func (ci *ChunkInfo) getChunkSize(cxt context.Context, rootCid boson.Address) (i
 	return len(ci.cp.pyramid[rootCid.String()]), nil
 }
 
-func (ci *ChunkInfo) getChunkPyramidHash(cxt context.Context, rootCid boson.Address) ([][]byte, error) {
+func (ci *ChunkInfo) getChunkPyramidHash(cxt context.Context, rootCid boson.Address) (map[string][]byte, error) {
 	v, err := ci.getChunkPyramid(cxt, rootCid)
 	if err != nil {
 		return nil, err
 	}
-	resp := make([][]byte, 0)
-	for k := range v {
-		resp = append(resp, boson.MustParseHexAddress(k).Bytes())
-	}
-	return resp, nil
-}
-
-func (ci *ChunkInfo) getChunkPyramidChunk(cxt context.Context, rootCid boson.Address, hash []byte) ([]byte, error) {
-	v, err := ci.getChunkPyramid(cxt, rootCid)
-	if err != nil {
-		return nil, err
-	}
-	return v[boson.NewAddress(hash).String()], nil
+	return v, nil
 }
 
 // doFindChunkPyramid
@@ -157,11 +145,11 @@ func (ci *ChunkInfo) doFindChunkPyramid(ctx context.Context, authInfo []byte, ro
 		RootCid: rootCid.Bytes(),
 		Target:  overlay.Bytes(),
 	}
-	resp, target, err := ci.sendPyramids(ctx, overlay, streamPyramidHashName, req)
+	resp, err := ci.sendPyramids(ctx, overlay, streamPyramidName, req)
 	if err != nil {
 		return err
 	}
-	return ci.onChunkPyramidResp(ctx, nil, boson.NewAddress(req.RootCid), target, resp.(pb.ChunkPyramidHashResp))
+	return ci.onChunkPyramidResp(ctx, nil, boson.NewAddress(req.RootCid), resp.([]pb.ChunkPyramidChunkResp))
 }
 
 func (cp *chunkPyramid) getChunkCid(rootCid boson.Address) []*PyramidCidNum {
