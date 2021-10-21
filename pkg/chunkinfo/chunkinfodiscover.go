@@ -100,11 +100,32 @@ func (ci *ChunkInfo) getRandomChunkInfo(routes []aco.Route) []aco.Route {
 			continue
 		}
 		for _, overlay := range overlays {
+			if !ci.contains(routes, overlay) {
+				res = append(res, route)
+			}
 			v := aco.NewRoute(overlay, route.TargetNode)
 			res = append(res, v)
 		}
 	}
 	return res
+}
+
+func (ci *ChunkInfo) contains(r []aco.Route, target boson.Address) bool {
+	l := len(r) / 2
+	if l == 0 {
+		l++
+	}
+	for i := 0; i < l; i++ {
+		if r[i].TargetNode.Equal(target) && r[i].TargetNode.Equal(r[i].LinkNode) {
+			return true
+		}
+	}
+	for i := l; i < len(r); i++ {
+		if r[i].TargetNode.Equal(target) && r[i].TargetNode.Equal(r[i].LinkNode) {
+			return true
+		}
+	}
+	return false
 }
 
 func (ci *ChunkInfo) getChunkInfoOverlays(rootCid boson.Address) []aurora.ChunkInfoOverlay {

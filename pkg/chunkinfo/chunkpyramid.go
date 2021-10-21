@@ -141,7 +141,7 @@ func (ci *ChunkInfo) doFindChunkPyramid(ctx context.Context, authInfo []byte, ro
 	if ci.cp.isExists(rootCid) {
 		return nil
 	}
-	req := pb.ChunkPyramidHashReq{
+	req := pb.ChunkPyramidReq{
 		RootCid: rootCid.Bytes(),
 		Target:  overlay.Bytes(),
 	}
@@ -149,7 +149,7 @@ func (ci *ChunkInfo) doFindChunkPyramid(ctx context.Context, authInfo []byte, ro
 	if err != nil {
 		return err
 	}
-	return ci.onChunkPyramidResp(ctx, nil, boson.NewAddress(req.RootCid), resp.([]pb.ChunkPyramidChunkResp))
+	return ci.onChunkPyramidResp(ctx, nil, boson.NewAddress(req.RootCid), resp.([]pb.ChunkPyramidResp))
 }
 
 func (cp *chunkPyramid) getChunkCid(rootCid boson.Address) []*PyramidCidNum {
