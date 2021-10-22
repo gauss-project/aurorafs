@@ -79,7 +79,7 @@ func TestHandlerChunkInfoReq(t *testing.T) {
 	ctx := context.Background()
 	a.doFindChunkInfo(ctx, nil, rootCid)
 	time.Sleep(5 * time.Second)
-	reqRecords, err := recorder.Records(serverAddress, "chunkinfo", "1.0.0", "chunkinforeq")
+	reqRecords, err := recorder.Records(serverAddress, protocolName, protocolVersion, streamChunkInfoReqName)
 
 	if err != nil {
 		t.Fatal(err)
@@ -208,7 +208,7 @@ func TestHandlerChunkInfoResp(t *testing.T) {
 		t.Fatalf("got %v records, want %v", vf.String(), "100000000")
 	}
 
-	respRecords, err := aRecorder.Records(aAddress, "chunkinfo", "1.0.0", "chunkinforesp")
+	respRecords, err := aRecorder.Records(aAddress, protocolName, protocolVersion, streamChunkInfoRespName)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -317,12 +317,9 @@ func TestHandlerPyramid(t *testing.T) {
 		streamtest.WithBaseAddr(serverAddress),
 	)
 	client := mockChunkInfo(s, recorder, clientAddress)
-	err := client.doFindChunkPyramid(context.Background(), nil, rootCid, targetAddress)
-	if err != nil {
-		t.Fatal(err)
-	}
+	_ = client.doFindChunkPyramid(context.Background(), nil, rootCid, targetAddress)
 
-	records, err := recorder.Records(targetAddress, "chunkinfo", "1.0.0", "chunkpyramidhash")
+	records, err := recorder.Records(targetAddress, protocolName, protocolVersion, streamPyramidName)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -332,27 +329,12 @@ func TestHandlerPyramid(t *testing.T) {
 	record := records[0]
 	messages, err := protobuf.ReadMessages(
 		bytes.NewReader(record.In()),
-		func() protobuf.Message { return new(pb.ChunkPyramidHashReq) },
+		func() protobuf.Message { return new(pb.ChunkPyramidReq) },
 	)
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Log(messages)
-
-	recordsChunk, err := recorder.Records(targetAddress, "chunkinfo", "1.0.0", "chunkpyramidchunk")
-	if err != nil {
-		t.Fatal(err)
-	}
-	recordChunk := recordsChunk[0]
-	chunkMessage, err := protobuf.ReadMessages(
-		bytes.NewReader(recordChunk.Out()),
-		func() protobuf.Message { return new(pb.ChunkPyramidChunkResp) },
-	)
-
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Log(chunkMessage)
 
 	cids := server.cp.getChunkCid(rootCid)
 	t.Log(cids)
@@ -503,5 +485,3 @@ func uploadFile(t *testing.T, ctx context.Context, store storage.Storer, file []
 
 	return reference, filename
 }
-
-
