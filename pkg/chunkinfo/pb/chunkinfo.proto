@@ -6,23 +6,15 @@ package chunkinfo;
 
 option go_package = "pb";
 
-message ChunkPyramidHashReq {
+message ChunkPyramidReq {
   bytes RootCid = 1;
   bytes target = 2;
 }
 
-message ChunkPyramidHashResp{
-  repeated bytes Hash = 1;
-}
-
-message ChunkPyramidChunkReq {
-  bytes Hash = 1;
-  bytes RootCid = 2;
-  bytes target = 3;
-}
-
-message ChunkPyramidChunkResp{
+message ChunkPyramidResp{
   bytes Chunk = 1;
+  bytes Hash = 2;
+  bool Ok =3;
 }
 
 message ChunkInfoReq {
