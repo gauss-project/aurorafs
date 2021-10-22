@@ -44,8 +44,8 @@ const (
 // Recommended value is 8 or 16 times the io.Copy default buffer value which is 32kB, depending
 // on the file size. Use lookaheadBufferSize() to get the correct buffer size for the request.
 const (
-	smallFileBufferSize = 8 * 32 * 1024 * 8
-	largeFileBufferSize = 16 * 32 * 1024 * 8
+	smallFileBufferSize = 8 * 32 * 1024
+	largeFileBufferSize = 16 * 32 * 1024
 
 	largeBufferFilesizeThreshold = 10 * 1000000 // ten megs
 )
