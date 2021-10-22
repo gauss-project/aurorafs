@@ -111,20 +111,13 @@ func (ci *ChunkInfo) getRandomChunkInfo(routes []aco.Route) []aco.Route {
 }
 
 func (ci *ChunkInfo) contains(r []aco.Route, target boson.Address) bool {
-	l := len(r) / 2
-	if l == 0 {
-		l++
-	}
-	for i := 0; i < l; i++ {
-		if r[i].TargetNode.Equal(target) && r[i].TargetNode.Equal(r[i].LinkNode) {
+
+	for _, i := range r {
+		if i.TargetNode.Equal(target) && i.TargetNode.Equal(i.LinkNode) {
 			return true
 		}
 	}
-	for i := l; i < len(r); i++ {
-		if r[i].TargetNode.Equal(target) && r[i].TargetNode.Equal(r[i].LinkNode) {
-			return true
-		}
-	}
+
 	return false
 }
 
