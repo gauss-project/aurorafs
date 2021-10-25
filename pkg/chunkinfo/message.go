@@ -230,8 +230,6 @@ func (ci *ChunkInfo) handlerPyramid(ctx context.Context, p p2p.Peer, stream p2p.
 			resp := pb.ChunkPyramidResp{Hash: boson.MustParseHexAddress(hash).Bytes(), Chunk: chunk, Ok: false}
 			resps = append(resps, resp)
 		}
-		resp := pb.ChunkPyramidResp{Ok: true}
-		resps = append(resps, resp)
 	} else {
 		ci.logger.Tracef("[pyramid chunk] got target: %s ", req.Target)
 		chunkResp, err := ci.sendPyramid(ctx, target, streamPyramidName, req)
@@ -244,8 +242,10 @@ func (ci *ChunkInfo) handlerPyramid(ctx context.Context, p p2p.Peer, stream p2p.
 		}
 	}
 
+	resps = append(resps, pb.ChunkPyramidResp{Ok: true})
 	for _, resp := range resps {
 		if err := w.WriteMsgWithContext(ctx, &resp); err != nil {
+			ci.logger.Errorf("[pyramid hash] write hash message: %w", err)
 			return fmt.Errorf("[pyramid hash] write hash message: %w", err)
 		}
 	}
