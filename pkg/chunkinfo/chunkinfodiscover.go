@@ -2,7 +2,6 @@ package chunkinfo
 
 import (
 	"context"
-	"fmt"
 	"github.com/gauss-project/aurorafs/pkg/aurora"
 	"github.com/gauss-project/aurorafs/pkg/bitvector"
 	"github.com/gauss-project/aurorafs/pkg/boson"
@@ -90,35 +89,32 @@ func (ci *ChunkInfo) getChunkInfo(rootCid, cid boson.Address) []aco.Route {
 func (ci *ChunkInfo) getRandomChunkInfo(routes []aco.Route) []aco.Route {
 
 	if len(routes) <= 0 {
-		return nil
+		return routes
 	}
 	res := make([]aco.Route, 0)
 	for _, route := range routes {
 		overlays, errs := ci.route.GetTargetNeighbor(context.Background(), route.TargetNode, totalRouteCount)
 		if errs != nil || overlays == nil {
-			res = append(res, route)
 			continue
 		}
 		for _, overlay := range overlays {
-			if !ci.contains(routes, overlay) {
-				res = append(res, route)
-			}
 			v := aco.NewRoute(overlay, route.TargetNode)
 			res = append(res, v)
 		}
 	}
-	return res
-}
 
-func (ci *ChunkInfo) contains(r []aco.Route, target boson.Address) bool {
-
-	for _, i := range r {
-		if i.TargetNode.Equal(target) && i.TargetNode.Equal(i.LinkNode) {
-			return true
+	for _, overlay := range res {
+		for _, i := range routes {
+			if i.TargetNode.Equal(overlay.LinkNode) && i.TargetNode.Equal(i.LinkNode) {
+				continue
+			}
+			res = append(res, i)
 		}
 	}
-
-	return false
+	if len(res) == 0 {
+		return routes
+	}
+	return res
 }
 
 func (ci *ChunkInfo) getChunkInfoOverlays(rootCid boson.Address) []aurora.ChunkInfoOverlay {
@@ -189,9 +185,6 @@ func (ci *ChunkInfo) updateChunkInfo(rootCid, overlay boson.Address, bv []byte) 
 		if err := vb.bit.SetBytes(bv); err != nil {
 			ci.logger.Errorf("chunk discover: set bit vector error")
 		}
-	}
-	if vb.bit == nil {
-		fmt.Println("")
 	}
 	// db
 	if err := ci.storer.Put(generateKey(discoverKeyPrefix, rootCid, overlay), &bitVector{B: vb.bit.Bytes(), Len: vb.bit.Len()}); err != nil {

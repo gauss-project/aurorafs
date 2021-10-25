@@ -117,11 +117,12 @@ func (ci *ChunkInfo) getChunkSize(cxt context.Context, rootCid boson.Address) (i
 	if err != nil {
 		return 0, err
 	}
-	trie, err := ci.traversal.CheckTrieData(cxt, rootCid, v)
-	if err != nil {
-		return 0, err
-	}
+
 	if ci.cp.pyramid[rootCid.String()] == nil {
+		trie, err := ci.traversal.CheckTrieData(cxt, rootCid, v)
+		if err != nil {
+			return 0, err
+		}
 		ci.updateChunkPyramid(rootCid, trie, v)
 	}
 
