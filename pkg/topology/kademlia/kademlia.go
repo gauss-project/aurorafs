@@ -865,7 +865,7 @@ func (k *Kad) Announce(ctx context.Context, peer boson.Address, fullnode bool) e
 				// Create a new deadline ctx to prevent goroutine pile up
 				cCtx, cCancel := context.WithTimeout(k.bgBroadcastCtx, time.Minute)
 				defer cCancel()
-				k.logger.Debugf("-----------------to %s",connectedPeer)
+
 				if err := k.discovery.BroadcastPeers(cCtx, connectedPeer, peer); err != nil {
 					k.logger.Debugf("could not gossip peer %s to peer %s: %v", peer, connectedPeer, err)
 				}
@@ -873,7 +873,6 @@ func (k *Kad) Announce(ctx context.Context, peer boson.Address, fullnode bool) e
 		}
 	}
 
-	k.logger.Debugf("addrs    len = %d",len(addrs))
 	if len(addrs) == 0 {
 		return nil
 	}
