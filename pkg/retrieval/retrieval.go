@@ -305,12 +305,10 @@ func (s *Service) retrieveChunk(ctx context.Context, route aco.Route, rootAddr, 
 		}
 	}
 
-	if s.isFullNode && s.chunkinfo != nil {
-		s.logger.Tracef("retrieval: chunk %s is received", chunkAddr)
-		err := s.chunkinfo.OnChunkTransferred(chunkAddr, rootAddr, s.addr, route.LinkNode)
-		if err != nil {
-			return nil, fmt.Errorf("retrieval: report chunk transfer: %w", err)
-		}
+	s.logger.Tracef("retrieval: chunk %s is received", chunkAddr)
+	err = s.chunkinfo.OnChunkTransferred(chunkAddr, rootAddr, s.addr, route.LinkNode)
+	if err != nil {
+		return nil, fmt.Errorf("retrieval: report chunk transfer: %w", err)
 	}
 
 	_, err = s.storer.Put(ctx, storage.ModePutRequest, chunk)
