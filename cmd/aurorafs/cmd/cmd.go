@@ -79,7 +79,7 @@ type option func(*command)
 func newCommand(opts ...option) (c *command, err error) {
 	c = &command{
 		root: &cobra.Command{
-			Use:           "aurorafs",
+			Use:           "aurora",
 			Short:         "aurora file system node",
 			SilenceErrors: true,
 			SilenceUsage:  true,
@@ -111,9 +111,9 @@ func newCommand(opts ...option) (c *command, err error) {
 		return nil, err
 	}
 
-	if err := c.initDeployCmd(); err != nil {
-		return nil, err
-	}
+	//if err := c.initDeployCmd(); err != nil {
+	//	return nil, err
+	//}
 
 	c.initVersionCmd()
 	c.initDBCmd()
