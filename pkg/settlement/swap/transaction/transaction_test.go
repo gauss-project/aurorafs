@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"math/big"
 	"testing"
 
@@ -64,7 +64,7 @@ func signerMockForTransaction(signedTx *types.Transaction, sender common.Address
 }
 
 func TestTransactionSend(t *testing.T) {
-	logger := logging.New(ioutil.Discard, 0)
+	logger := logging.New(io.Discard, 0)
 	sender := common.HexToAddress("0xddff")
 	recipient := common.HexToAddress("0xabcd")
 	txData := common.Hex2Bytes("0xabcdee")
@@ -315,7 +315,7 @@ func TestTransactionSend(t *testing.T) {
 }
 
 func TestTransactionWaitForReceipt(t *testing.T) {
-	logger := logging.New(ioutil.Discard, 0)
+	logger := logging.New(io.Discard, 0)
 	txHash := common.HexToHash("0xabcdee")
 	chainID := big.NewInt(5)
 

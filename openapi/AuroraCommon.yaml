@@ -15,13 +15,27 @@ components:
       type: object
       properties:
         address:
-          $ref: "#/components/schemas/AuroraAddress"
+          $ref: "#/components/schemas/BosonAddress"
 
-    BzzTopology:
+    Addresses:
+      type: object
+      properties:
+        overlay:
+          $ref: "#/components/schemas/BosonAddress"
+        underlay:
+          type: array
+          items:
+            $ref: "#/components/schemas/P2PUnderlay"
+        public_key:
+          $ref: "#/components/schemas/PublicKey"
+        pss_public_key:
+          $ref: "#/components/schemas/PublicKey"
+
+    Topology:
       type: object
       properties:
         baseAddr:
-          $ref: "#/components/schemas/AuroraAddress"
+          $ref: "#/components/schemas/BosonAddress"
         population:
           type: integer
         connected:
@@ -64,7 +78,7 @@ components:
       type: object
       properties:
         hash:
-          $ref: "#/components/schemas/AuroraAddress"
+          $ref: "#/components/schemas/BosonAddress"
 
     BitVector:
       type: object
@@ -124,54 +138,41 @@ components:
       type: object
       properties:
         address:
-          $ref: "#/components/schemas/AuroraAddress"
+          $ref: "#/components/schemas/BosonAddress"
         pinCounter:
           type: integer
 
     ProblemDetails:
       type: string
 
-    Reference:
-      description: File RootCid
-      type: string
-      example: "4e071970bf456afc85c67889f4ce877ac31f2b317653c93e27d837b98dc3f2ac"
-
     ReferenceResponse:
       type: object
       properties:
         reference:
-          $ref: "#/components/schemas/Reference"
+          $ref: "#/components/schemas/BosonReference"
 
-    AuroraReference:
-      oneOf:
-        - $ref: "#/components/schemas/AuroraAddress"
-        - $ref: "#/components/schemas/AuroraEncryptedReference"
-        - $ref: "#/components/schemas/DomainName"
-
-    ManifestStructure:
+    ManifestViewResponse:
       type: object
       properties:
         type:
           type: string
         hash:
           $ref: "#/components/schemas/Hash"
-        sub:
-          $ref: "#/components/schemas/ManifestStructure"
-
-    FileInfo:
-      type: object
-      properties:
+#          nullable: true
+        name:
+          type: string
+          nullable: true
         size:
           type: integer
+          nullable: true
         ext:
           type: string
+          nullable: true
         mime:
           type: string
-
-    ManifestViewResponse:
-      oneOf:
-        - $ref: "#/components/schemas/ManifestStructure"
-        - $ref: "#/components/schemas/FileInfo"
+          nullable: true
+        sub:
+          $ref: "#/components/schemas/ManifestViewResponse"
 
     Response:
       type: object
@@ -180,15 +181,17 @@ components:
           type: string
         code:
           type: integer
+
     ChunkResponse:
       type: array
       items:
         type: object
         properties:
           overlay:
-            $ref: "#/components/schemas/AuroraAddress"
+            $ref: "#/components/schemas/BosonAddress"
           bit:
             type: string
+
     ChunkInfoInitResponse:
       type: object
       properties:
@@ -239,12 +242,17 @@ components:
         bootNodeMode:
           type: boolean
 
-    AuroraAddress:
+    BosonAddress:
       type: string
       pattern: "^[A-Fa-f0-9]{64}$"
       example: "36b7efd913ca4cf880b8eeac5093fa27b0825906c600685b6abdd6566e6cfe8f"
 
-    AuroraEncryptedReference:
+    PublicKey:
+      type: string
+      pattern: "^[A-Fa-f0-9]{66}$"
+      example: "02ab7473879005929d10ce7d4f626412dad9fe56b0a6622038931d26bd79abf0a4"
+
+    BosonEncryptedReference:
       type: string
       pattern: "^[A-Fa-f0-9]{128}$"
       example: "36b7efd913ca4cf880b8eeac5093fa27b0825906c600685b6abdd6566e6cfe8f2d2810619d29b5dbefd5d74abce25d58b81b251baddb9c3871cf0d6967deaae2"
@@ -253,6 +261,26 @@ components:
       type: string
       pattern: '^[A-Za-z0-9]+\.[A-Za-z0-9]+$'
       example: "boson.eth"
+
+    BosonOnlyReference:
+      oneOf:
+        - $ref: "#/components/schemas/BosonAddress"
+        - $ref: "#/components/schemas/BosonEncryptedReference"
+
+    BosonOnlyReferencesList:
+      type: object
+      properties:
+        addresses:
+          type: array
+          nullable: true
+          items:
+            $ref: "#/components/schemas/BosonOnlyReference"
+
+    BosonReference:
+      oneOf:
+        - $ref: "#/components/schemas/BosonAddress"
+        - $ref: "#/components/schemas/BosonEncryptedReference"
+        - $ref: "#/components/schemas/DomainName"
 
     Uid:
       type: integer
@@ -264,34 +292,15 @@ components:
           type: string
 
   headers:
-    AuroraTag:
-      description: "Tag UID"
+    AuroraFeedIndex:
+      description: "The index of the found update"
       schema:
-        $ref: "AuroraCommon.yaml#/components/schemas/Uid"
-    AuroraNoneMatch:
-      description: "If-None-Match Batch file operation"
+        $ref: "#/components/schemas/HexString"
+
+    AuroraFeedIndexNext:
+      description: "The index of the next possible update"
       schema:
-        $ref: "AuroraCommon.yaml#/components/schemas/Uid"
-    AuroraContentLength:
-      description: "length"
-      schema:
-        $ref: "AuroraCommon.yaml#/components/schemas/Uid"
-    AuroraDecompressedLength:
-      description: "length"
-      schema:
-        $ref: "AuroraCommon.yaml#/components/schemas/Uid"
-    AuroraAccessHeaders:
-      description: "headers"
-      schema:
-        $ref: "AuroraCommon.yaml#/components/schemas/Uid"
-    AuroraIndexDocument:
-      description: "Boson-Index-Document"
-      schema:
-        $ref: "AuroraCommon.yaml#/components/schemas/Uid"
-    AuroraErrorDocument:
-      description: "Boson-Error-Document"
-      schema:
-        $ref: "AuroraCommon.yaml#/components/schemas/Uid"
+        $ref: "#/components/schemas/HexString"
 
     ETag:
       description: |
@@ -304,80 +313,6 @@ components:
         type: string
 
   parameters:
-    AuroraPinParameter:
-      in: header
-      name: boson-pin
-      schema:
-        type: boolean
-      required: false
-      description: >
-        Represents if the uploaded data should be also locally pinned on the node.
-        Warning! Not available for nodes that run in Gateway mode!
-
-    AuroraEncryptParameter:
-      in: header
-      name: boson-encrypt
-      schema:
-        type: boolean
-      required: false
-      description: Represents the encrypting state of the file
-
-    AuroraReferenceContentType:
-      in: header
-      name: content-type
-      schema:
-        type: string
-      description: The specified content-type is preserved for download of the asset
-
-    AuroraNoneMatch:
-      in: header
-      name: if-none-match
-      schema:
-        type: string
-      description: This is to specify whether to upload files in batches
-
-    AuroraContentDisposition:
-      in: header
-      name: content-disposition
-      schema:
-        type: string
-      description: This is content-disposition
-
-    AuroraContentLength:
-      in: header
-      name: content-length
-      schema:
-        type: string
-      description: This is content-length
-
-    AuroraDecompressedLength:
-      in: header
-      name: decompressed-content-length
-      schema:
-        type: string
-      description: This is decompressed-content-length
-
-    AuroraAccessHeaders:
-      in: header
-      name: access-control-expose-headers
-      schema:
-        type: string
-      description: This is access-control-expose-headers
-
-    AuroraIndexDocument:
-      in: header
-      name: boson-index-document
-      schema:
-        type: string
-      description: This is boson-index-document
-
-    AuroraErrorDocument:
-      in: header
-      name: boson-error-document
-      schema:
-        type: string
-      description: This is boson-error-document
-
     AuroraRecoveryTargetsParameter:
       in: query
       name: targets
@@ -386,21 +321,54 @@ components:
       required: false
       description: Global pinning targets prefix
 
-    GasPriceParameter:
+    AuroraPinParameter:
       in: header
-      name: gas-price
+      name: aurora-pin
       schema:
-        $ref: "AuroraCommon.yaml#/components/schemas/GasPrice"
+        type: boolean
       required: false
-      description: "Gas price for transaction"
+      description: Represents the pinning state of the chunk
 
-    GasLimitParameter:
+    AuroraEncryptParameter:
       in: header
-      name: gas-limit
+      name: aurora-encrypt
       schema:
-        $ref: "AuroraCommon.yaml#/components/schemas/GasLimit"
+        type: boolean
       required: false
-      description: "Gas limit for transaction"
+      description: Represents the encrypting state of the file
+
+    ContentTypePreserved:
+      in: header
+      name: content-type
+      schema:
+        type: string
+      description: The specified content-type is preserved for download of the asset
+
+    AuroraIndexDocumentParameter:
+      in: header
+      name: aurora-index-document
+      schema:
+        type: string
+        example: index.html
+      required: false
+      description: Default file to be referenced on path, if exists under that path
+
+    AuroraErrorDocumentParameter:
+      in: header
+      name: aurora-error-document
+      schema:
+        type: string
+        example: error.html
+      required: false
+      description: Configure custom error document to be returned when a specified path can not be found in collection
+
+    AuroraCollectionParameter:
+      in: header
+      name: aurora-collection
+      schema:
+        type: boolean
+      required: false
+      description: Upload file/files as a collection
 
   responses:
     "204":

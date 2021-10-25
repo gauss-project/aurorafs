@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"math/big"
+	"strings"
 
 	"github.com/gauss-project/aurorafs/pkg/boson"
 )
@@ -19,7 +20,7 @@ type (
 	HTTPRequestIDKey  struct{}
 	requestHostKey    struct{}
 	//tagKey            struct{}
-	//targetsContextKey struct{}
+	targetsContextKey struct{}
 	gasPriceKey       struct{}
 	gasLimitKey       struct{}
 	rootCIDKey        struct{}
@@ -38,6 +39,34 @@ func GetHost(ctx context.Context) string {
 		return v
 	}
 	return ""
+}
+
+// SetTargets set the target string in the context to be used downstream in netstore
+func SetTargets(ctx context.Context, targets string) context.Context {
+	return context.WithValue(ctx, targetsContextKey{}, targets)
+}
+
+// GetTargets returns the specific target pinners for a corresponding chunk by
+// reading the prefix targets sent in the download API.
+func GetTargets(ctx context.Context) ([]boson.Address, error) {
+	targetString, ok := ctx.Value(targetsContextKey{}).(string)
+	if !ok {
+		return nil, ErrTargetPrefix
+	}
+
+	prefixes := strings.Split(targetString, ",")
+	var targets []boson.Address
+	for _, prefix := range prefixes {
+		target, err := boson.ParseHexAddress(prefix)
+		if err != nil {
+			continue
+		}
+		targets = append(targets, target)
+	}
+	if len(targets) <= 0 {
+		return nil, ErrTargetPrefix
+	}
+	return targets, nil
 }
 
 func SetGasLimit(ctx context.Context, limit uint64) context.Context {

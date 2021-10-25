@@ -2,7 +2,6 @@ package bmt
 
 import (
 	"errors"
-
 	"github.com/gauss-project/aurorafs/pkg/bmtpool"
 	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/file/pipeline"
@@ -31,18 +30,17 @@ func (w *bmtWriter) ChainWrite(p *pipeline.PipeWriteArgs) error {
 		return errInvalidData
 	}
 	hasher := bmtpool.Get()
-	err := hasher.SetSpanBytes(p.Data[:boson.SpanSize])
+	hasher.SetHeader(p.Data[:boson.SpanSize])
+	_, err := hasher.Write(p.Data[boson.SpanSize:])
 	if err != nil {
 		bmtpool.Put(hasher)
 		return err
 	}
-	_, err = hasher.Write(p.Data[boson.SpanSize:])
-	if err != nil {
-		bmtpool.Put(hasher)
-		return err
-	}
-	p.Ref = hasher.Sum(nil)
+	p.Ref, err = hasher.Hash(nil)
 	bmtpool.Put(hasher)
+	if err != nil {
+		return err
+	}
 
 	return w.next.ChainWrite(p)
 }

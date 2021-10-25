@@ -62,9 +62,9 @@ paths:
         - in: path
           name: peer-id
           schema:
-            $ref: "AuroraCommon.yaml#/components/schemas/AuroraAddress"
+            $ref: "AuroraCommon.yaml#/components/schemas/BosonAddress"
           required: true
-          description: Aurora address of peer
+          description: Boson address of peer
       responses:
         "200":
           description: Returns round trip time for given peer
@@ -90,9 +90,9 @@ paths:
         - in: path
           name: peer-id
           schema:
-            $ref: "AuroraCommon.yaml#/components/schemas/AuroraAddress"
+            $ref: "AuroraCommon.yaml#/components/schemas/BosonAddress"
           required: true
-          description: Aurora address of peer
+          description: Boson address of peer
       responses:
         "200":
           description: Returns route paths for given peer
@@ -116,9 +116,9 @@ paths:
         - in: path
           name: peer-id
           schema:
-            $ref: "AuroraCommon.yaml#/components/schemas/AuroraAddress"
+            $ref: "AuroraCommon.yaml#/components/schemas/BosonAddress"
           required: true
-          description: Aurora address of peer
+          description: Boson address of peer
       responses:
         "200":
           description: Returns route paths for given peer
@@ -142,9 +142,9 @@ paths:
         - in: path
           name: peer-id
           schema:
-            $ref: "AuroraCommon.yaml#/components/schemas/AuroraAddress"
+            $ref: "AuroraCommon.yaml#/components/schemas/BosonAddress"
           required: true
-          description: Aurora address of peer
+          description: Boson address of peer
       responses:
         "200":
           description: delete route paths for given peer
@@ -213,9 +213,9 @@ paths:
         - in: path
           name: address
           schema:
-            $ref: "AuroraCommon.yaml#/components/schemas/AuroraAddress"
+            $ref: "AuroraCommon.yaml#/components/schemas/BosonAddress"
           required: true
-          description: Aurora address of peer
+          description: Boson address of peer
       responses:
         "200":
           description: Disconnected peer
@@ -239,9 +239,9 @@ paths:
         - in: path
           name: address
           schema:
-            $ref: "AuroraCommon.yaml#/components/schemas/AuroraAddress"
+            $ref: "AuroraCommon.yaml#/components/schemas/BosonAddress"
           required: true
-          description: Aurora address of chunk
+          description: Boson address of chunk
       responses:
         "200":
           description: Chunk exists
@@ -263,9 +263,9 @@ paths:
         - in: path
           name: address
           schema:
-            $ref: "AuroraCommon.yaml#/components/schemas/AuroraAddress"
+            $ref: "AuroraCommon.yaml#/components/schemas/BosonAddress"
           required: true
-          description: Aurora address of chunk
+          description: Boson address of chunk
       responses:
         "200":
           description: Chunk exists
@@ -289,9 +289,9 @@ paths:
         - in: path
           name: address
           schema:
-            $ref: "AuroraCommon.yaml#/components/schemas/AuroraAddress"
+            $ref: "AuroraCommon.yaml#/components/schemas/BosonAddress"
           required: true
-          description: Aurora address of chunk
+          description: Boson address of chunk
       responses:
         "200":
           description: Chunk exists
@@ -315,9 +315,9 @@ paths:
         - in: path
           name: address
           schema:
-            $ref: "AuroraCommon.yaml#/components/schemas/AuroraAddress"
+            $ref: "AuroraCommon.yaml#/components/schemas/BosonAddress"
           required: true
-          description: Aurora address of chunk
+          description: Boson address of chunk
       responses:
         "200":
           description: Chunk exists
@@ -332,7 +332,6 @@ paths:
         default:
           description: Default response
 
-
   "/chunk/init/{address}":
     get:
       summary: Get chunk pyramid
@@ -342,9 +341,9 @@ paths:
         - in: path
           name: address
           schema:
-            $ref: "AuroraCommon.yaml#/components/schemas/AuroraAddress"
+            $ref: "AuroraCommon.yaml#/components/schemas/BosonAddress"
           required: true
-          description: Aurora address of chunk
+          description: Boson address of chunk
       responses:
         "200":
           description: Chunk exists
@@ -365,11 +364,11 @@ paths:
         - Connectivity
       responses:
         "200":
-          description: Aurora topology of the aurorafs node
+          description: Kademlia topology of the aurorafs node
           content:
             application/json:
               schema:
-                $ref: "AuroraCommon.yaml#/components/schemas/BzzTopology"
+                $ref: "AuroraCommon.yaml#/components/schemas/Topology"
 
   "/welcome-message":
     get:
@@ -409,9 +408,6 @@ paths:
           $ref: "AuroraCommon.yaml#/components/responses/500"
         default:
           description: Default response
-
-
-
 
   "/metrics":
     get:

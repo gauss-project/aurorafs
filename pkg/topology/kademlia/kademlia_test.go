@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"math/rand"
 	"reflect"
 	"sync"
@@ -871,7 +871,7 @@ func TestClosestPeer(t *testing.T) {
 	_ = waitPeers
 	t.Skip("disabled due to kademlia inconsistencies hotfix")
 
-	logger := logging.New(ioutil.Discard, 0)
+	logger := logging.New(io.Discard, 0)
 	base := boson.MustParseHexAddress("0000000000000000000000000000000000000000000000000000000000000000") // base is 0000
 	connectedPeers := []p2p.Peer{
 		{
@@ -1417,7 +1417,7 @@ func newTestKademliaWithAddrDiscovery(
 		signer = beeCrypto.NewDefaultSigner(pk)                      // signer
 		ab     = addressbook.New(mockstate.NewStateStore())          // address book
 		p2p    = p2pMock(ab, signer, connCounter, failedConnCounter) // p2p mock
-		logger = logging.New(ioutil.Discard, 0)                      // logger
+		logger = logging.New(io.Discard, 0)                      // logger
 	)
 	kad, err := kademlia.New(base, ab, disc, p2p, metricsDB, logger, kadOpts)
 	if err != nil {

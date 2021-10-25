@@ -18,7 +18,7 @@ package leveldb
 
 import (
 	"errors"
-	"io/ioutil"
+	"io"
 	"testing"
 
 	"github.com/gauss-project/aurorafs/pkg/logging"
@@ -48,7 +48,7 @@ func TestOneMigration(t *testing.T) {
 	}
 
 	dir := t.TempDir()
-	logger := logging.New(ioutil.Discard, 0)
+	logger := logging.New(io.Discard, 0)
 
 	// start the fresh statestore with the sanctuary schema name
 	db, err := NewStateStore(dir, logger)
@@ -131,7 +131,7 @@ func TestManyMigrations(t *testing.T) {
 	}
 
 	dir := t.TempDir()
-	logger := logging.New(ioutil.Discard, 0)
+	logger := logging.New(io.Discard, 0)
 
 	// start the fresh statestore with the sanctuary schema name
 	db, err := NewStateStore(dir, logger)
@@ -206,7 +206,7 @@ func TestMigrationErrorFrom(t *testing.T) {
 		}},
 	}
 	dir := t.TempDir()
-	logger := logging.New(ioutil.Discard, 0)
+	logger := logging.New(io.Discard, 0)
 
 	// start the fresh statestore with the sanctuary schema name
 	db, err := NewStateStore(dir, logger)
@@ -257,7 +257,7 @@ func TestMigrationErrorTo(t *testing.T) {
 		}},
 	}
 	dir := t.TempDir()
-	logger := logging.New(ioutil.Discard, 0)
+	logger := logging.New(io.Discard, 0)
 
 	// start the fresh statestore with the sanctuary schema name
 	db, err := NewStateStore(dir, logger)

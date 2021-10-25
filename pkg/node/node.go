@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"github.com/gauss-project/aurorafs/pkg/chunkinfo"
 	"github.com/gauss-project/aurorafs/pkg/hive2"
+	"github.com/gauss-project/aurorafs/pkg/pinning"
 	"github.com/gauss-project/aurorafs/pkg/routetab"
 	"github.com/gauss-project/aurorafs/pkg/settlement/swap/oracle"
 	"github.com/gauss-project/aurorafs/pkg/shed"
@@ -62,7 +63,7 @@ type Aurora struct {
 
 type Options struct {
 	DataDir                  string
-	DBCapacity               uint64
+	CacheCapacity            uint64
 	DBOpenFilesLimit         uint64
 	DBWriteBufferSize        uint64
 	DBBlockCacheCapacity     uint64
@@ -406,7 +407,7 @@ func NewAurora(addr string, bosonAddress boson.Address, publicKey ecdsa.PublicKe
 		path = filepath.Join(o.DataDir, "localstore")
 	}
 	lo := &localstore.Options{
-		Capacity:               o.DBCapacity,
+		Capacity:               o.CacheCapacity,
 		OpenFilesLimit:         o.DBOpenFilesLimit,
 		BlockCacheCapacity:     o.DBBlockCacheCapacity,
 		WriteBufferSize:        o.DBWriteBufferSize,
@@ -425,7 +426,9 @@ func NewAurora(addr string, bosonAddress boson.Address, publicKey ecdsa.PublicKe
 
 	ns := netstore.New(storer, retrieve, logger)
 
-	traversalService := traversal.NewService(ns)
+	traversalService := traversal.New(ns)
+
+	pinningService := pinning.NewService(storer, stateStore, traversalService)
 
 	chunkInfo := chunkinfo.New(bosonAddress, p2ps, logger, traversalService, stateStore, route, oracleChain)
 	if err := chunkInfo.InitChunkInfo(); err != nil {
@@ -446,8 +449,7 @@ func NewAurora(addr string, bosonAddress boson.Address, publicKey ecdsa.PublicKe
 	var apiService api.Service
 	if o.APIAddr != "" {
 		// API server
-
-		apiService = api.New(ns, nil, bosonAddress, chunkInfo, traversalService, logger, tracer, api.Options{
+		apiService = api.New(ns, nil, bosonAddress, chunkInfo, traversalService, pinningService, logger, tracer, api.Options{
 			CORSAllowedOrigins: o.CORSAllowedOrigins,
 			GatewayMode:        o.GatewayMode,
 			WsPingPeriod:       60 * time.Second,

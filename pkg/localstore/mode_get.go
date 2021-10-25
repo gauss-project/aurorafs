@@ -50,7 +50,7 @@ func (db *DB) Get(ctx context.Context, mode storage.ModeGet, addr boson.Address)
 		}
 		return nil, err
 	}
-	return boson.NewChunk(boson.NewAddress(out.Address), out.Data).WithPinCounter(out.PinCounter), nil
+	return boson.NewChunk(boson.NewAddress(out.Address), out.Data), nil
 }
 
 // get returns Item from the retrieval index

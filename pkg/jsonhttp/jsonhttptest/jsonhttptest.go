@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"mime/multipart"
 	"net/http"
 	"net/textproto"
@@ -50,7 +49,7 @@ func Request(t testing.TB, client *http.Client, method, url string, responseCode
 	}
 
 	if o.expectedResponse != nil {
-		got, err := ioutil.ReadAll(resp.Body)
+		got, err := io.ReadAll(resp.Body)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -65,7 +64,7 @@ func Request(t testing.TB, client *http.Client, method, url string, responseCode
 		if v := resp.Header.Get("Content-Type"); v != jsonhttp.DefaultContentTypeHeader {
 			t.Errorf("got content type %q, want %q", v, jsonhttp.DefaultContentTypeHeader)
 		}
-		got, err := ioutil.ReadAll(resp.Body)
+		got, err := io.ReadAll(resp.Body)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -89,14 +88,14 @@ func Request(t testing.TB, client *http.Client, method, url string, responseCode
 		return resp.Header
 	}
 	if o.responseBody != nil {
-		got, err := ioutil.ReadAll(resp.Body)
+		got, err := io.ReadAll(resp.Body)
 		if err != nil {
 			t.Fatal(err)
 		}
 		*o.responseBody = got
 	}
 	if o.noResponseBody {
-		got, err := ioutil.ReadAll(resp.Body)
+		got, err := io.ReadAll(resp.Body)
 		if err != nil {
 			t.Fatal(err)
 		}

@@ -3,18 +3,21 @@ package cmd
 import (
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
 
 	"github.com/gauss-project/aurorafs/pkg/boson"
+	"github.com/gauss-project/aurorafs/pkg/logging"
+	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
 
 const (
 	optionNameDataDir                  = "data-dir"
-	optionNameDBCapacity               = "db-capacity"
+	optionNameCacheCapacity            = "cache-capacity"
 	optionNameDBOpenFilesLimit         = "db-open-files-limit"
 	optionNameDBBlockCacheCapacity     = "db-block-cache-capacity"
 	optionNameDBWriteBufferSize        = "db-write-buffer-size"
@@ -113,6 +116,7 @@ func newCommand(opts ...option) (c *command, err error) {
 	}
 
 	c.initVersionCmd()
+	c.initDBCmd()
 
 	if err := c.initConfigurateOptionsCmd(); err != nil {
 		return nil, err
@@ -185,7 +189,7 @@ func (c *command) setHomeDir() (err error) {
 
 func (c *command) setAllFlags(cmd *cobra.Command) {
 	cmd.Flags().String(optionNameDataDir, filepath.Join(c.homeDir, ".aurorafs"), "data directory")
-	cmd.Flags().Uint64(optionNameDBCapacity, 5000000, fmt.Sprintf("db capacity in chunks, multiply by %d to get approximate capacity in bytes", boson.ChunkSize))
+	cmd.Flags().Uint64(optionNameCacheCapacity, 80000, fmt.Sprintf("cache capacity in chunks, multiply by %d to get approximate capacity in bytes", boson.ChunkSize))
 	cmd.Flags().Uint64(optionNameDBOpenFilesLimit, 200, "number of open files allowed by database")
 	cmd.Flags().Uint64(optionNameDBBlockCacheCapacity, 32*1024*1024, "size of block cache of the database in bytes")
 	cmd.Flags().Uint64(optionNameDBWriteBufferSize, 32*1024*1024, "size of the database write buffer in bytes")
@@ -228,4 +232,25 @@ func (c *command) setAllFlags(cmd *cobra.Command) {
 	cmd.Flags().Bool(optionNameFullNode, true, "full node")
 	cmd.Flags().Int(optionNameLightMaxPeers, 100, "connected light node max limit")
 	cmd.Flags().Int(optionNameBinMaxPeers, 20, "kademlia every k bucket connected peers max limit")
+}
+
+func newLogger(cmd *cobra.Command, verbosity string) (logging.Logger, error) {
+	var logger logging.Logger
+	switch verbosity {
+	case "0", "silent":
+		logger = logging.New(io.Discard, 0)
+	case "1", "error":
+		logger = logging.New(cmd.OutOrStdout(), logrus.ErrorLevel)
+	case "2", "warn":
+		logger = logging.New(cmd.OutOrStdout(), logrus.WarnLevel)
+	case "3", "info":
+		logger = logging.New(cmd.OutOrStdout(), logrus.InfoLevel)
+	case "4", "debug":
+		logger = logging.New(cmd.OutOrStdout(), logrus.DebugLevel)
+	case "5", "trace":
+		logger = logging.New(cmd.OutOrStdout(), logrus.TraceLevel)
+	default:
+		return nil, fmt.Errorf("unknown verbosity level %q", verbosity)
+	}
+	return logger, nil
 }

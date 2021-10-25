@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"encoding/hex"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"testing"
 
@@ -92,7 +92,7 @@ func TestSOC(t *testing.T) {
 		// try to fetch the same chunk
 		rsrc := fmt.Sprintf("/chunks/" + s.Address().String())
 		resp := request(t, client, http.MethodGet, rsrc, nil, http.StatusOK)
-		data, err := ioutil.ReadAll(resp.Body)
+		data, err := io.ReadAll(resp.Body)
 		if err != nil {
 			t.Fatal(err)
 		}

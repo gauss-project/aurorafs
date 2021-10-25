@@ -1,66 +1,54 @@
 version: "3"
 
 services:
-  clef-1:
-    image: ethersphere/clef:0.4.9
+  aurora-1:
+    image: gauss-project/aurora:beta
     restart: unless-stopped
     environment:
-      - CLEF_CHAINID
-    volumes:
-      - clef-1:/app/data
-    command: full
-
-  aufs-1:
-    image: ethersphere/aufs:beta
-    restart: unless-stopped
-    environment:
-      - aufs_API_ADDR
-      - aufs_BOOTNODE
-      - aufs_BOOTNODE_MODE
-      - aufs_CLEF_SIGNER_ENABLE
-      - aufs_CLEF_SIGNER_ENDPOINT=http://clef-1:8550
-      - aufs_CONFIG
-      - aufs_CORS_ALLOWED_ORIGINS
-      - aufs_DATA_DIR
-      - aufs_DB_CAPACITY
-      - aufs_DB_OPEN_FILES_LIMIT
-      - aufs_DB_BLOCK_CACHE_CAPACITY
-      - aufs_DB_WRITE_BUFFER_SIZE
-      - aufs_DB_DISABLE_SEEKS_COMPACTION
-      - aufs_DEBUG_API_ADDR
-      - aufs_DEBUG_API_ENABLE
-      - aufs_GATEWAY_MODE
-      - aufs_GLOBAL_PINNING_ENABLE
-      - aufs_NAT_ADDR
-      - aufs_NETWORK_ID
-      - aufs_P2P_ADDR
-      - aufs_P2P_QUIC_ENABLE
-      - aufs_P2P_WS_ENABLE
-      - aufs_PASSWORD
-      - aufs_PASSWORD_FILE
-      - aufs_PAYMENT_EARLY
-      - aufs_PAYMENT_THRESHOLD
-      - aufs_PAYMENT_TOLERANCE
-      - aufs_RESOLVER_OPTIONS
-      - aufs_STANDALONE
-      - aufs_SWAP_ENABLE
-      - aufs_SWAP_ENDPOINT
-      - aufs_SWAP_FACTORY_ADDRESS
-      - aufs_SWAP_INITIAL_DEPOSIT
-      - aufs_TRACING_ENABLE
-      - aufs_TRACING_ENDPOINT
-      - aufs_TRACING_SERVICE_NAME
-      - aufs_VERBOSITY
-      - aufs_WELCOME_MESSAGE
+      - AURORA_API_ADDR
+      - AURORA_BOOTNODE
+      - AURORA_BOOTNODE_MODE
+      - AURORA_CLEF_SIGNER_ENABLE
+      - AURORA_CLEF_SIGNER_ENDPOINT=http://clef-1:8550
+      - AURORA_CONFIG
+      - AURORA_CORS_ALLOWED_ORIGINS
+      - AURORA_DATA_DIR
+      - AURORA_CACHE_CAPACITY
+      - AURORA_DB_OPEN_FILES_LIMIT
+      - AURORA_DB_BLOCK_CACHE_CAPACITY
+      - AURORA_DB_WRITE_BUFFER_SIZE
+      - AURORA_DB_DISABLE_SEEKS_COMPACTION
+      - AURORA_DEBUG_API_ADDR
+      - AURORA_DEBUG_API_ENABLE
+      - AURORA_GATEWAY_MODE
+      - AURORA_GLOBAL_PINNING_ENABLE
+      - AURORA_NAT_ADDR
+      - AURORA_NETWORK_ID
+      - AURORA_P2P_ADDR
+      - AURORA_P2P_QUIC_ENABLE
+      - AURORA_P2P_WS_ENABLE
+      - AURORA_PASSWORD
+      - AURORA_PASSWORD_FILE
+      - AURORA_PAYMENT_EARLY
+      - AURORA_PAYMENT_THRESHOLD
+      - AURORA_PAYMENT_TOLERANCE
+      - AURORA_RESOLVER_OPTIONS
+      - AURORA_STANDALONE
+      - AURORA_SWAP_ENABLE
+      - AURORA_SWAP_ENDPOINT
+      - AURORA_SWAP_FACTORY_ADDRESS
+      - AURORA_SWAP_INITIAL_DEPOSIT
+      - AURORA_TRACING_ENABLE
+      - AURORA_TRACING_ENDPOINT
+      - AURORA_TRACING_SERVICE_NAME
+      - AURORA_VERBOSITY
+      - AURORA_WELCOME_MESSAGE
     ports:
-      - "${API_ADDR:-1633}${aufs_API_ADDR:-:1633}"
-      - "${P2P_ADDR:-1634}${aufs_P2P_ADDR:-:1634}"
-      - "${DEBUG_API_ADDR:-127.0.0.1:1635}${aufs_DEBUG_API_ADDR:-:1635}"
+      - "${API_ADDR:-1633}${AURORA_API_ADDR:-:1633}"
+      - "${P2P_ADDR:-1634}${AURORA_P2P_ADDR:-:1634}"
+      - "${DEBUG_API_ADDR:-127.0.0.1:1635}${AURORA_DEBUG_API_ADDR:-:1635}"
     volumes:
-      - aurorafs-1:/home/aurorafs/.aurorafs
+      - aurora-data:/home/aurora/.aurora
     command: start
-    depends_on:
-      - clef-1
 volumes:
-  clef-1:
-  aufs-1:
+  aurora-data:

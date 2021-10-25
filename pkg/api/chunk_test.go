@@ -2,7 +2,8 @@ package api_test
 
 import (
 	"bytes"
-	"io/ioutil"
+	"context"
+	"io"
 	"net/http"
 	"testing"
 
@@ -10,6 +11,7 @@ import (
 	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/jsonhttp"
 	"github.com/gauss-project/aurorafs/pkg/jsonhttp/jsonhttptest"
+	pinning "github.com/gauss-project/aurorafs/pkg/pinning/mock"
 	"github.com/gauss-project/aurorafs/pkg/storage"
 	"github.com/gauss-project/aurorafs/pkg/storage/mock"
 	testingc "github.com/gauss-project/aurorafs/pkg/storage/testing"
@@ -25,10 +27,11 @@ func TestChunkUploadDownload(t *testing.T) {
 		chunksResource  = func(a boson.Address) string { return "/chunks/" + a.String() }
 		resourceTargets = func(addr boson.Address) string { return "/chunks/" + addr.String() + "?targets=" + targets }
 		chunk           = testingc.GenerateTestRandomChunk()
-
-		mockStorer   = mock.NewStorer()
-		client, _, _ = newTestServer(t, testServerOptions{
-			Storer: mockStorer,
+		storerMock      = mock.NewStorer()
+		pinningMock     = pinning.NewServiceMock()
+		client, _, _    = newTestServer(t, testServerOptions{
+			Storer:  storerMock,
+			Pinning: pinningMock,
 		})
 	)
 
@@ -42,14 +45,14 @@ func TestChunkUploadDownload(t *testing.T) {
 	})
 
 	t.Run("ok", func(t *testing.T) {
-		jsonhttptest.Request(t, client, http.MethodPost, chunksEndpoint, http.StatusOK,
+		jsonhttptest.Request(t, client, http.MethodPost, chunksEndpoint, http.StatusCreated,
 			jsonhttptest.WithRequestBody(bytes.NewReader(chunk.Data())),
 			jsonhttptest.WithExpectedJSONResponse(api.ChunkAddressResponse{Reference: chunk.Address()}),
 		)
 
 		// try to fetch the same chunk
 		resp := request(t, client, http.MethodGet, chunksResource(chunk.Address()), nil, http.StatusOK)
-		data, err := ioutil.ReadAll(resp.Body)
+		data, err := io.ReadAll(resp.Body)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -60,38 +63,54 @@ func TestChunkUploadDownload(t *testing.T) {
 	})
 
 	t.Run("pin-invalid-value", func(t *testing.T) {
-		jsonhttptest.Request(t, client, http.MethodPost, chunksEndpoint, http.StatusOK,
+		jsonhttptest.Request(t, client, http.MethodPost, chunksEndpoint, http.StatusCreated,
 			jsonhttptest.WithRequestBody(bytes.NewReader(chunk.Data())),
 			jsonhttptest.WithExpectedJSONResponse(api.ChunkAddressResponse{Reference: chunk.Address()}),
+			jsonhttptest.WithRequestHeader(api.AuroraPinHeader, "invalid-pin"),
 		)
 
 		// Also check if the chunk is NOT pinned
-		if mockStorer.GetModeSet(chunk.Address()) == storage.ModeSetPin {
+		if storerMock.GetModeSet(chunk.Address()) == storage.ModeSetPin {
 			t.Fatal("chunk should not be pinned")
 		}
 	})
 	t.Run("pin-header-missing", func(t *testing.T) {
-		jsonhttptest.Request(t, client, http.MethodPost, chunksEndpoint, http.StatusOK,
+		jsonhttptest.Request(t, client, http.MethodPost, chunksEndpoint, http.StatusCreated,
 			jsonhttptest.WithRequestBody(bytes.NewReader(chunk.Data())),
 			jsonhttptest.WithExpectedJSONResponse(api.ChunkAddressResponse{Reference: chunk.Address()}),
 		)
 
 		// Also check if the chunk is NOT pinned
-		if mockStorer.GetModeSet(chunk.Address()) == storage.ModeSetPin {
+		if storerMock.GetModeSet(chunk.Address()) == storage.ModeSetPin {
 			t.Fatal("chunk should not be pinned")
 		}
 	})
 	t.Run("pin-ok", func(t *testing.T) {
-		jsonhttptest.Request(t, client, http.MethodPost, chunksEndpoint, http.StatusOK,
+		reference := chunk.Address()
+		jsonhttptest.Request(t, client, http.MethodPost, chunksEndpoint, http.StatusCreated,
 			jsonhttptest.WithRequestBody(bytes.NewReader(chunk.Data())),
-			jsonhttptest.WithExpectedJSONResponse(api.ChunkAddressResponse{Reference: chunk.Address()}),
+			jsonhttptest.WithExpectedJSONResponse(api.ChunkAddressResponse{Reference: reference}),
+			jsonhttptest.WithRequestHeader(api.AuroraPinHeader, "True"),
 		)
 
-		// Also check if the chunk is pinned
-		if mockStorer.GetModePut(chunk.Address()) != storage.ModePutUploadPin {
-			t.Fatal("chunk is not pinned")
+		has, err := storerMock.Has(context.Background(), storage.ModeHasChunk, reference)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !has {
+			t.Fatal("storer check root chunk reference: have none; want one")
 		}
 
+		refs, err := pinningMock.Pins()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if have, want := len(refs), 1; have != want {
+			t.Fatalf("root pin count mismatch: have %d; want %d", have, want)
+		}
+		if have, want := refs[0], reference; !have.Equal(want) {
+			t.Fatalf("root pin reference mismatch: have %q; want %q", have, want)
+		}
 	})
 	t.Run("retrieve-targets", func(t *testing.T) {
 		resp := request(t, client, http.MethodGet, resourceTargets(chunk.Address()), nil, http.StatusOK)

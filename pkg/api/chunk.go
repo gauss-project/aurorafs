@@ -4,16 +4,15 @@ import (
 	"bytes"
 	"errors"
 	"io"
-	"io/ioutil"
 	"net/http"
-
-	"github.com/gauss-project/aurorafs/pkg/cac"
-	"github.com/gauss-project/aurorafs/pkg/netstore"
+	"strings"
 
 	"github.com/gauss-project/aurorafs/pkg/boson"
+	"github.com/gauss-project/aurorafs/pkg/cac"
 	"github.com/gauss-project/aurorafs/pkg/jsonhttp"
+	"github.com/gauss-project/aurorafs/pkg/netstore"
+	"github.com/gauss-project/aurorafs/pkg/sctx"
 	"github.com/gauss-project/aurorafs/pkg/storage"
-
 	"github.com/gorilla/mux"
 )
 
@@ -27,7 +26,7 @@ func (s *server) chunkUploadHandler(w http.ResponseWriter, r *http.Request) {
 		err error
 	)
 
-	data, err := ioutil.ReadAll(r.Body)
+	data, err := io.ReadAll(r.Body)
 	if err != nil {
 		if jsonhttp.HandleBodyReadError(err, w) {
 			return
@@ -53,25 +52,31 @@ func (s *server) chunkUploadHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	seen, err := s.storer.Put(ctx, requestModePut(r), chunk)
+	_, err = s.storer.Put(ctx, requestModePut(r), chunk)
 	if err != nil {
 		s.logger.Debugf("chunk upload: chunk write error: %v, addr %s", err, chunk.Address())
 		s.logger.Error("chunk upload: chunk write error")
 		jsonhttp.BadRequest(w, "chunk write error")
 		return
-	} else if len(seen) > 0 && seen[0] {
-
-		s.logger.Debugf("chunk upload: increment tag", err)
-		s.logger.Error("chunk upload: increment tag")
-		jsonhttp.BadRequest(w, "increment tag")
-		return
 	}
 
-	jsonhttp.OK(w, chunkAddressResponse{Reference: chunk.Address()})
+	if strings.ToLower(r.Header.Get(AuroraPinHeader)) == "true" {
+		if err := s.pinning.CreatePin(ctx, chunk.Address(), false); err != nil {
+			s.logger.Debugf("chunk upload: creation of pin for %q failed: %v", chunk.Address(), err)
+			s.logger.Error("chunk upload: creation of pin failed")
+			jsonhttp.InternalServerError(w, nil)
+			return
+		}
+	}
+
+	jsonhttp.Created(w, chunkAddressResponse{Reference: chunk.Address()})
 }
 
 func (s *server) chunkGetHandler(w http.ResponseWriter, r *http.Request) {
 	targets := r.URL.Query().Get("targets")
+	if targets != "" {
+		r = r.WithContext(sctx.SetTargets(r.Context(), targets))
+	}
 
 	nameOrHex := mux.Vars(r)["addr"]
 	ctx := r.Context()

@@ -14,6 +14,10 @@ var (
 	chunkMap map[string][]aco.Route
 )
 
+func init() {
+	chunkMap = make(map[string][]aco.Route)
+}
+
 type chunkPyramid struct {
 	// rootCid:cid
 	pyramid map[string]map[string]int
@@ -94,7 +98,7 @@ func (ci *ChunkInfo) OnChunkTransferred(cid boson.Address, rootCid boson.Address
 }
 
 func (ci *ChunkInfo) Init(ctx context.Context, authInfo []byte, rootCid boson.Address) bool {
-	panic("not implemented")
+	return true
 }
 
 func (ci *ChunkInfo) GetChunkPyramid(rootCid boson.Address) []*chunkinfo.PyramidCidNum {
