@@ -33,6 +33,7 @@ import (
 // interface.
 func (db *DB) GetMulti(ctx context.Context, mode storage.ModeGet, addrs ...boson.Address) (chunks []boson.Chunk, err error) {
 	db.metrics.ModeGetMulti.Inc()
+	db.metrics.ModeGetMultiChunks.Add(float64(len(addrs)))
 	defer totalTimeMetric(db.metrics.TotalTimeGetMulti, time.Now())
 
 	defer func() {
@@ -50,7 +51,7 @@ func (db *DB) GetMulti(ctx context.Context, mode storage.ModeGet, addrs ...boson
 	}
 	chunks = make([]boson.Chunk, len(out))
 	for i, ch := range out {
-		chunks[i] = boson.NewChunk(boson.NewAddress(ch.Address), ch.Data).WithPinCounter(ch.PinCounter)
+		chunks[i] = boson.NewChunk(boson.NewAddress(ch.Address), ch.Data)
 	}
 	return chunks, nil
 }

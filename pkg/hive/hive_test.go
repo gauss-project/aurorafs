@@ -6,7 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/gauss-project/aurorafs/pkg/boson/test"
-	"io/ioutil"
+	"io"
 	"math/rand"
 	"runtime/debug"
 	"strconv"
@@ -29,7 +29,7 @@ import (
 
 func TestHandlerRateLimit(t *testing.T) {
 
-	logger := logging.New(ioutil.Discard, 0)
+	logger := logging.New(io.Discard, 0)
 	statestore := mock.NewStateStore()
 	addressbook := ab.New(statestore)
 	networkID := uint64(1)
@@ -98,7 +98,7 @@ func TestHandlerRateLimit(t *testing.T) {
 
 func TestBroadcastPeers(t *testing.T) {
 	rand.Seed(time.Now().UnixNano())
-	logger := logging.New(ioutil.Discard, 0)
+	logger := logging.New(io.Discard, 0)
 	statestore := mock.NewStateStore()
 	addressbook := ab.New(statestore)
 	networkID := uint64(1)

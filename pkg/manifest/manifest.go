@@ -13,6 +13,15 @@ import (
 
 const DefaultManifestType = ManifestMantarayContentType
 
+const (
+	RootPath                      = "/"
+	WebsiteIndexDocumentSuffixKey = "website-index-document"
+	WebsiteErrorDocumentPathKey   = "website-error-document"
+	EntryMetadataContentTypeKey   = "Content-Type"
+	EntryMetadataDirnameKey       = "Dirname"
+	EntryMetadataFilenameKey      = "Filename"
+)
+
 var (
 	// ErrNotFound is returned when an Entry is not found in the manifest.
 	ErrNotFound = errors.New("manifest: not found")
@@ -31,8 +40,9 @@ var (
 type StoreSizeFunc func(int64) error
 
 // NodeIterFunc is a callback on each level.
-type NodeIterFunc func(nodeType int, path, prefix, hash []byte) error
+type NodeIterFunc func(nodeType int, path, prefix, hash []byte, metadata map[string]string) error
 
+// NodeType represents a Node stored file or directory
 type NodeType int
 
 const (
@@ -89,6 +99,14 @@ func NewDefaultManifest(
 	encrypted bool,
 ) (Interface, error) {
 	return NewManifest(DefaultManifestType, ls, encrypted)
+}
+
+// NewDefaultManifestReference creates a new manifest with default type.
+func NewDefaultManifestReference(
+	reference boson.Address,
+	ls file.LoadSaver,
+) (Interface, error) {
+	return NewManifestReference(DefaultManifestType, reference, ls)
 }
 
 // NewManifest creates a new manifest.

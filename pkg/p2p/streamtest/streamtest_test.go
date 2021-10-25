@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"strings"
 	"testing"
 	"time"
@@ -496,7 +495,7 @@ func TestRecorder_withMiddlewares(t *testing.T) {
 		if err := rw.Flush(); err != nil {
 			return err
 		}
-		_, err = ioutil.ReadAll(rw)
+		_, err = io.ReadAll(rw)
 		return err
 	}
 
@@ -554,7 +553,7 @@ func TestRecorder_recordErr(t *testing.T) {
 			return err
 		}
 
-		_, err = ioutil.ReadAll(stream)
+		_, err = io.ReadAll(stream)
 		return err
 	}
 

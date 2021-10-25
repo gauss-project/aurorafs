@@ -5,8 +5,6 @@ package api
 import (
 	"context"
 	"errors"
-	"github.com/gauss-project/aurorafs/pkg/chunkinfo"
-	"github.com/gauss-project/aurorafs/pkg/file/pipeline"
 	"io"
 	"math"
 	"net/http"
@@ -16,26 +14,29 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/gauss-project/aurorafs/pkg/boson"
+	"github.com/gauss-project/aurorafs/pkg/chunkinfo"
+	"github.com/gauss-project/aurorafs/pkg/file/pipeline"
 	"github.com/gauss-project/aurorafs/pkg/file/pipeline/builder"
 	"github.com/gauss-project/aurorafs/pkg/logging"
 	m "github.com/gauss-project/aurorafs/pkg/metrics"
-
-	"github.com/gauss-project/aurorafs/pkg/boson"
+	"github.com/gauss-project/aurorafs/pkg/pinning"
 	"github.com/gauss-project/aurorafs/pkg/resolver"
 	"github.com/gauss-project/aurorafs/pkg/storage"
-
 	"github.com/gauss-project/aurorafs/pkg/tracing"
 	"github.com/gauss-project/aurorafs/pkg/traversal"
 )
 
 const (
-	BosonPinHeader           = "Boson-Pin"
-	BosonTagHeader           = "Boson-Tag"
-	BosonEncryptHeader       = "Boson-Encrypt"
-	BosonIndexDocumentHeader = "Boson-Index-Document"
-	BosonErrorDocumentHeader = "Boson-Error-Document"
-	BosonFeedIndexHeader     = "Boson-Feed-Index"
-	BosonFeedIndexNextHeader = "Boson-Feed-Index-Next"
+	AuroraPinHeader            = "Aurora-Pin"
+	AuroraTagHeader            = "Aurora-Tag"
+	AuroraEncryptHeader        = "Aurora-Encrypt"
+	AuroraIndexDocumentHeader  = "Aurora-Index-Document"
+	AuroraErrorDocumentHeader  = "Aurora-Error-Document"
+	AuroraFeedIndexHeader      = "Aurora-Feed-Index"
+	AuroraFeedIndexNextHeader  = "Aurora-Feed-Index-Next"
+	AuroraCollectionHeader     = "Aurora-Collection"
+	AuroraCollectionNameHeader = "Aurora-Collection-Name"
 )
 
 // The size of buffer used for prefetching content with Langos.
@@ -50,9 +51,19 @@ const (
 	largeBufferFilesizeThreshold = 10 * 1000000 // ten megs
 )
 
+const (
+	contentTypeHeader = "Content-Type"
+	multiPartFormData = "multipart/form-data"
+	contentTypeTar    = "application/x-tar"
+)
+
 var (
 	errInvalidNameOrAddress = errors.New("invalid name or aurora address")
 	errNoResolver           = errors.New("no resolver connected")
+	invalidRequest          = errors.New("could not validate request")
+	invalidContentType      = errors.New("invalid content-type")
+	directoryStoreError     = errors.New("could not store directory")
+	fileStoreError          = errors.New("could not store file")
 )
 
 // Service is the API service interface.
@@ -68,7 +79,8 @@ type server struct {
 
 	overlay   boson.Address
 	chunkInfo chunkinfo.Interface
-	traversal traversal.Service
+	traversal traversal.Traverser
+	pinning   pinning.Interface
 	logger    logging.Logger
 	tracer    *tracing.Tracer
 
@@ -88,25 +100,23 @@ type Options struct {
 
 const (
 	// TargetsRecoveryHeader defines the Header for Recovery targets in Global Pinning
-	TargetsRecoveryHeader = "boson-recovery-targets"
+	TargetsRecoveryHeader = "aurora-recovery-targets"
 )
 
 // New will create a and initialize a new API service.
-func New(storer storage.Storer, resolver resolver.Interface, addr boson.Address, chunkInfo chunkinfo.Interface, traversalService traversal.Service, logger logging.Logger, tracer *tracing.Tracer, o Options) Service {
+func New(storer storage.Storer, resolver resolver.Interface, addr boson.Address, chunkInfo chunkinfo.Interface, traversalService traversal.Traverser, pinning pinning.Interface, logger logging.Logger, tracer *tracing.Tracer, o Options) Service {
 	s := &server{
-
-		storer:   storer,
-		resolver: resolver,
-
+		storer:    storer,
+		resolver:  resolver,
 		overlay:   addr,
 		chunkInfo: chunkInfo,
 		traversal: traversalService,
-
-		Options: o,
-		logger:  logger,
-		tracer:  tracer,
-		metrics: newMetrics(),
-		quit:    make(chan struct{}),
+		pinning:   pinning,
+		Options:   o,
+		logger:    logger,
+		tracer:    tracer,
+		metrics:   newMetrics(),
+		quit:      make(chan struct{}),
 	}
 
 	s.setupRouting()
@@ -163,7 +173,7 @@ func (s *server) resolveNameOrAddress(str string) (boson.Address, error) {
 
 // requestModePut returns the desired storage.ModePut for this request based on the request headers.
 func requestModePut(r *http.Request) storage.ModePut {
-	if h := strings.ToLower(r.Header.Get(BosonPinHeader)); h == "true" {
+	if h := strings.ToLower(r.Header.Get(AuroraPinHeader)); h == "true" {
 		return storage.ModePutUploadPin
 	}
 
@@ -171,7 +181,7 @@ func requestModePut(r *http.Request) storage.ModePut {
 }
 
 func requestEncrypt(r *http.Request) bool {
-	return strings.ToLower(r.Header.Get(BosonEncryptHeader)) == "true"
+	return strings.ToLower(r.Header.Get(AuroraEncryptHeader)) == "true"
 }
 
 func (s *server) newTracingHandler(spanName string) func(h http.Handler) http.Handler {
@@ -248,13 +258,13 @@ func equalASCIIFold(s, t string) bool {
 	return s == t
 }
 
-type pipelineFunc func(context.Context, io.Reader, int64) (boson.Address, error)
+type pipelineFunc func(context.Context, io.Reader) (boson.Address, error)
 
 func requestPipelineFn(s storage.Storer, r *http.Request) pipelineFunc {
 	mode, encrypt := requestModePut(r), requestEncrypt(r)
-	return func(ctx context.Context, r io.Reader, l int64) (boson.Address, error) {
+	return func(ctx context.Context, r io.Reader) (boson.Address, error) {
 		pipe := builder.NewPipelineBuilder(ctx, s, mode, encrypt)
-		return builder.FeedPipeline(ctx, pipe, r, l)
+		return builder.FeedPipeline(ctx, pipe, r)
 	}
 }
 

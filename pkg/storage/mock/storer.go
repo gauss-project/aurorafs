@@ -2,7 +2,6 @@ package mock
 
 import (
 	"context"
-	"errors"
 	"sync"
 
 	"github.com/gauss-project/aurorafs/pkg/boson"
@@ -17,34 +16,11 @@ type MockStorer struct {
 	modeSet         map[string]storage.ModeSet
 	pinnedAddress   []boson.Address // Stores the pinned address
 	pinnedCounter   []uint64        // and its respective counter. These are stored as slices to preserve the order.
-	subpull         []storage.Descriptor
-	partialInterval bool
 	morePull        chan struct{}
 	mtx             sync.Mutex
 	quit            chan struct{}
 	baseAddress     []byte
 	bins            []uint64
-}
-
-func WithSubscribePullChunks(chs ...storage.Descriptor) Option {
-	return optionFunc(func(m *MockStorer) {
-		m.subpull = make([]storage.Descriptor, len(chs))
-		for i, v := range chs {
-			m.subpull[i] = v
-		}
-	})
-}
-
-func WithBaseAddress(a boson.Address) Option {
-	return optionFunc(func(m *MockStorer) {
-		m.baseAddress = a.Bytes()
-	})
-}
-
-func WithPartialInterval(v bool) Option {
-	return optionFunc(func(m *MockStorer) {
-		m.partialInterval = v
-	})
 }
 
 func NewStorer(opts ...Option) *MockStorer {
@@ -81,7 +57,7 @@ func (m *MockStorer) Put(ctx context.Context, mode storage.ModePut, chs ...boson
 
 	exist = make([]bool, len(chs))
 	for i, ch := range chs {
-		exist[i], err = m.has(ctx, ch.Address())
+		exist[i], err = m.has(ctx, storage.ModeHasChunk, ch.Address())
 		if err != nil {
 			return exist, err
 		}
@@ -124,15 +100,25 @@ func (m *MockStorer) GetMulti(ctx context.Context, mode storage.ModeGet, addrs .
 	panic("not implemented") // TODO: Implement
 }
 
-func (m *MockStorer) has(ctx context.Context, addr boson.Address) (yes bool, err error) {
-	_, has := m.store[addr.String()]
-	return has, nil
+func (m *MockStorer) has(ctx context.Context, hasMode storage.ModeHas, addr boson.Address) (yes bool, err error) {
+	switch hasMode {
+	case storage.ModeHasChunk:
+		_, yes = m.store[addr.String()]
+	case storage.ModeHasPin:
+		for _, pinAddr := range m.pinnedAddress {
+			if pinAddr.Equal(addr) {
+				yes = true
+				break
+			}
+		}
+	}
+	return
 }
 
 func (m *MockStorer) Has(ctx context.Context, hasMode storage.ModeHas, addr boson.Address) (yes bool, err error) {
 	m.mtx.Lock()
 	defer m.mtx.Unlock()
-	return m.has(ctx, addr)
+	return m.has(ctx, hasMode, addr)
 }
 
 func (m *MockStorer) HasMulti(ctx context.Context, hasMode storage.ModeHas, addrs ...boson.Address) (yes []bool, err error) {
@@ -147,7 +133,7 @@ func (m *MockStorer) Set(ctx context.Context, mode storage.ModeSet, addrs ...bos
 		switch mode {
 		case storage.ModeSetPin:
 			// check if chunk exists
-			has, err := m.has(ctx, addr)
+			has, err := m.has(ctx, storage.ModeHasChunk, addr)
 			if err != nil {
 				return err
 			}
@@ -210,112 +196,6 @@ func (m *MockStorer) GetModeSet(addr boson.Address) (mode storage.ModeSet) {
 	return mode
 }
 
-func (m *MockStorer) LastPullSubscriptionBinID(bin uint8) (id uint64, err error) {
-	return m.bins[bin], nil
-}
-
-func (m *MockStorer) SubscribePull(ctx context.Context, bin uint8, since, until uint64) (<-chan storage.Descriptor, <-chan struct{}, func()) {
-	c := make(chan storage.Descriptor)
-	done := make(chan struct{})
-	stop := func() {
-		close(done)
-	}
-	go func() {
-		defer close(c)
-		m.mtx.Lock()
-		for _, ch := range m.subpull {
-			select {
-			case c <- ch:
-			case <-done:
-				return
-			case <-ctx.Done():
-				return
-			case <-m.quit:
-				return
-			}
-		}
-		m.mtx.Unlock()
-
-		if m.partialInterval {
-			// block since we're at the top of the bin and waiting for new chunks
-			select {
-			case <-done:
-				return
-			case <-m.quit:
-				return
-			case <-ctx.Done():
-				return
-			case <-m.morePull:
-
-			}
-		}
-
-		m.mtx.Lock()
-		defer m.mtx.Unlock()
-
-		// iterate on what we have in the iterator
-		for _, ch := range m.subpull {
-			select {
-			case c <- ch:
-			case <-done:
-				return
-			case <-ctx.Done():
-				return
-			case <-m.quit:
-				return
-			}
-		}
-
-	}()
-	return c, m.quit, stop
-}
-
-func (m *MockStorer) MorePull(d ...storage.Descriptor) {
-	// clear out what we already have in subpull
-	m.mtx.Lock()
-	defer m.mtx.Unlock()
-
-	m.subpull = make([]storage.Descriptor, len(d))
-	for i, v := range d {
-		m.subpull[i] = v
-	}
-	close(m.morePull)
-}
-
-func (m *MockStorer) SubscribePush(ctx context.Context) (c <-chan boson.Chunk, stop func()) {
-	panic("not implemented") // TODO: Implement
-}
-
-func (m *MockStorer) PinnedChunks(ctx context.Context, offset, cursor int) (pinnedChunks []*storage.Pinner, err error) {
-	m.mtx.Lock()
-	defer m.mtx.Unlock()
-	if len(m.pinnedAddress) == 0 {
-		return pinnedChunks, nil
-	}
-	for i, addr := range m.pinnedAddress {
-		pi := &storage.Pinner{
-			Address:    boson.NewAddress(addr.Bytes()),
-			PinCounter: m.pinnedCounter[i],
-		}
-		pinnedChunks = append(pinnedChunks, pi)
-	}
-	if pinnedChunks == nil {
-		return pinnedChunks, errors.New("pin chunks: leveldb: not found")
-	}
-	return pinnedChunks, nil
-}
-
-func (m *MockStorer) PinCounter(address boson.Address) (uint64, error) {
-	m.mtx.Lock()
-	defer m.mtx.Unlock()
-	for i, addr := range m.pinnedAddress {
-		if addr.String() == address.String() {
-			return m.pinnedCounter[i], nil
-		}
-	}
-	return 0, storage.ErrNotFound
-}
-
 func (m *MockStorer) Close() error {
 	close(m.quit)
 	return nil
@@ -324,6 +204,7 @@ func (m *MockStorer) Close() error {
 type Option interface {
 	apply(*MockStorer)
 }
-type optionFunc func(*MockStorer)
 
-func (f optionFunc) apply(r *MockStorer) { f(r) }
+//type optionFunc func(*MockStorer)
+//
+//func (f optionFunc) apply(r *MockStorer) { f(r) }

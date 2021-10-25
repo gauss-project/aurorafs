@@ -28,6 +28,7 @@ type metrics struct {
 	ModeGet             prometheus.Counter
 	ModeGetFailure      prometheus.Counter
 	ModeGetMulti        prometheus.Counter
+	ModeGetMultiChunks  prometheus.Counter
 	ModeGetMultiFailure prometheus.Counter
 	ModePut             prometheus.Counter
 	ModePutFailure      prometheus.Counter
@@ -169,6 +170,12 @@ func newMetrics() metrics {
 			Name:      "mode_get_multi_count",
 			Help:      "Number of times MODE_MULTI_GET is invoked.",
 		}),
+		ModeGetMultiChunks: prometheus.NewCounter(prometheus.CounterOpts{
+			Namespace: m.Namespace,
+			Subsystem: subsystem,
+			Name:      "mode_get_multi_chunks_count",
+			Help:      "Number of chunks requested through MODE_MULTI_GET.",
+		}),
 		ModeGetMultiFailure: prometheus.NewCounter(prometheus.CounterOpts{
 			Namespace: m.Namespace,
 			Subsystem: subsystem,
@@ -251,6 +258,6 @@ func newMetrics() metrics {
 	}
 }
 
-func (s *DB) Metrics() []prometheus.Collector {
-	return m.PrometheusCollectorsFromFields(s.metrics)
+func (db *DB) Metrics() []prometheus.Collector {
+	return m.PrometheusCollectorsFromFields(db.metrics)
 }

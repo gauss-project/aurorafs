@@ -3,7 +3,7 @@ package pseudosettle_test
 import (
 	"bytes"
 	"context"
-	"io/ioutil"
+	"io"
 	"math/big"
 	"testing"
 	"time"
@@ -37,7 +37,7 @@ func (t *testObserver) NotifyPayment(peer boson.Address, amount *big.Int) error 
 }
 
 func TestPayment(t *testing.T) {
-	logger := logging.New(ioutil.Discard, 0)
+	logger := logging.New(io.Discard, 0)
 
 	storeRecipient := mock.NewStateStore()
 	defer storeRecipient.Close()

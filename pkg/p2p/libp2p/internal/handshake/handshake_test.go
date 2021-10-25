@@ -8,7 +8,7 @@ import (
 	"github.com/gauss-project/aurorafs/pkg/bitvector"
 	"github.com/gauss-project/aurorafs/pkg/p2p"
 	"github.com/gauss-project/aurorafs/pkg/topology/lightnode"
-	"io/ioutil"
+	"io"
 	"testing"
 
 	"github.com/gauss-project/aurorafs/pkg/aurora"
@@ -28,7 +28,7 @@ func TestHandshake(t *testing.T) {
 		testWelcomeMessage = "HelloWorld"
 	)
 
-	logger := logging.New(ioutil.Discard, 0)
+	logger := logging.New(io.Discard, 0)
 	networkID := uint64(3)
 
 	node1ma, err := ma.NewMultiaddr("/ip4/127.0.0.1/tcp/1634/p2p/16Uiu2HAkx8ULY8cTXhdVAcMmLcH9AsTKz6uBQ7DPLKRjMLgBVYkA")

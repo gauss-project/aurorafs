@@ -1,7 +1,6 @@
 package file_test
 
 import (
-	"io/ioutil"
 	"os"
 	"testing"
 
@@ -10,7 +9,7 @@ import (
 )
 
 func TestService(t *testing.T) {
-	dir, err := ioutil.TempDir("", "aurora-keystore-file-")
+	dir, err := os.MkdirTemp("", "aurora-keystore-file-")
 	if err != nil {
 		t.Fatal(err)
 	}

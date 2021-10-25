@@ -19,9 +19,8 @@ package localstore
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"errors"
-	"io/ioutil"
+	"io"
 	"math/rand"
 	"os"
 	"sync"
@@ -30,10 +29,11 @@ import (
 
 	"github.com/gauss-project/aurorafs/pkg/boson"
 	chunkinfo "github.com/gauss-project/aurorafs/pkg/chunkinfo/mock"
-	routetab "github.com/gauss-project/aurorafs/pkg/routetab/mock"
-	"github.com/gauss-project/aurorafs/pkg/collection/entry"
+	"github.com/gauss-project/aurorafs/pkg/file/loadsave"
+	"github.com/gauss-project/aurorafs/pkg/file/pipeline"
 	"github.com/gauss-project/aurorafs/pkg/file/pipeline/builder"
 	"github.com/gauss-project/aurorafs/pkg/logging"
+	"github.com/gauss-project/aurorafs/pkg/manifest"
 	"github.com/gauss-project/aurorafs/pkg/sctx"
 	"github.com/gauss-project/aurorafs/pkg/shed"
 	"github.com/gauss-project/aurorafs/pkg/storage"
@@ -85,8 +85,6 @@ func testDBCollectGarbageWorker(t *testing.T) {
 	closed = db.close
 
 	// upload random file
-	ci := chunkinfo.New(routetab.NewMockRouteTable())
-	db.Config(ci)
 	reference, chunks, addGc := addRandomFile(t, chunkCount, db, ci, false)
 
 	addGc(t)
@@ -158,7 +156,7 @@ func testDBCollectGarbageWorker(t *testing.T) {
 func TestPinGC(t *testing.T) {
 
 	chunkCount := 150
-	dbCapacity := uint64(100)
+	cacheCapacity := uint64(100)
 
 	var closed chan struct{}
 	testHookCollectGarbageChan := make(chan uint64)
@@ -177,15 +175,12 @@ func TestPinGC(t *testing.T) {
 	}))
 
 	db := newTestDB(t, &Options{
-		Capacity: dbCapacity,
+		Capacity: cacheCapacity,
 	})
 	closed = db.close
 
 	// upload random file
-	ci := chunkinfo.New(routetab.NewMockRouteTable())
-	db.Config(ci)
-
-	_, chunksA, addGC1 := addRandomFile(t, int(dbCapacity)-4, db, ci, false)
+	_, chunksA, addGC1 := addRandomFile(t, int(cacheCapacity)-5, db, ci, false)
 	addGC1(t)
 	pinReference, pinChunks, _ := addRandomFile(t, chunkCount, db, ci, true)
 	_, chunksB, addGC2 := addRandomFile(t, 5, db, ci, false)
@@ -288,8 +283,6 @@ func TestGCAfterPin(t *testing.T) {
 	})
 
 	// upload random chunks
-	ci := chunkinfo.New(routetab.NewMockRouteTable())
-	db.Config(ci)
 	reference, chunks, addGc := addRandomFile(t, chunkCount, db, ci, false)
 
 	ctx := sctx.SetRootCID(context.Background(), reference)
@@ -321,9 +314,6 @@ func TestDB_collectGarbageWorker_withRequests(t *testing.T) {
 	db := newTestDB(t, &Options{
 		Capacity: 100,
 	})
-
-	ci := chunkinfo.New(routetab.NewMockRouteTable())
-	db.Config(ci)
 
 	testHookCollectGarbageChan := make(chan uint64)
 	defer setTestHook(&testHookCollectGarbage, func(collectedCount uint64) {
@@ -440,7 +430,7 @@ func TestDB_collectGarbageWorker_withRequests(t *testing.T) {
 // TestDB_gcSize checks if gcSize has a correct value after
 // database is initialized with existing data.
 func TestDB_gcSize(t *testing.T) {
-	dir, err := ioutil.TempDir("", "localstore-stored-gc-size")
+	dir, err := os.MkdirTemp("", "localstore-stored-gc-size")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -449,15 +439,12 @@ func TestDB_gcSize(t *testing.T) {
 	if _, err := rand.Read(baseKey); err != nil {
 		t.Fatal(err)
 	}
-	logger := logging.New(ioutil.Discard, 0)
+	logger := logging.New(io.Discard, 0)
 	db, err := New(dir, baseKey, nil, logger)
 	if err != nil {
 		t.Fatal(err)
 	}
-
-	ci := chunkinfo.New(routetab.NewMockRouteTable())
 	db.Config(ci)
-
 	count := 100
 
 	for i := 0; i < count; i++ {
@@ -551,12 +538,9 @@ func TestPinAfterMultiGC(t *testing.T) {
 		Capacity: 10,
 	})
 
-	ci := chunkinfo.New(routetab.NewMockRouteTable())
-	db.Config(ci)
-
 	pinnedChunks := make([]boson.Address, 0)
 
-	// upload random chunks above db capacity to see if chunks are still pinned
+	// upload random chunks above cache capacity to see if chunks are still pinned
 	for i := 0; i < 20; i++ {
 		ch := generateTestRandomChunk()
 		ctx := sctx.SetRootCID(context.Background(), ch.Address())
@@ -638,9 +622,6 @@ func TestPinSyncAndAccessPutSetChunkMultipleTimes(t *testing.T) {
 		Capacity: 10,
 	})
 	closed = db.close
-
-	ci := chunkinfo.New(routetab.NewMockRouteTable())
-	db.Config(ci)
 
 	pinnedChunks := addRandomChunks(t, 5, db, true)
 	rand1Chunks := addRandomChunks(t, 15, db, false)
@@ -724,48 +705,54 @@ func addRandomChunks(t *testing.T, count int, db *DB, pin bool) []boson.Chunk {
 
 func addRandomFile(t *testing.T, count int, db *DB, ci *chunkinfo.ChunkInfo, pin bool) (reference boson.Address, chunkHashes []boson.Address, addGc func(*testing.T)) {
 	buf := new(bytes.Buffer)
+
 	mode := storage.ModePutRequest
 	if pin {
 		mode = storage.ModePutRequestPin
 	}
+
 	for i := 0; i < count; i++ {
 		ch := generateTestRandomChunk()
 		buf.Write(ch.Data()[boson.SpanSize:])
 	}
+
 	ctx := context.Background()
+
 	pipe := builder.NewPipelineBuilder(ctx, db, mode, false)
-	fr, err := builder.FeedPipeline(ctx, pipe, buf, int64(buf.Len()))
+	fr, err := builder.FeedPipeline(ctx, pipe, buf)
 	if err != nil {
 		t.Fatal(err)
 	}
-	meta := entry.NewMetadata(fr.String())
-	meta.MimeType = "text/plain; charset=utf-8"
-	metadata, err := json.Marshal(meta)
+
+	ls := loadsave.New(db, func() pipeline.Interface {
+		return builder.NewPipelineBuilder(ctx, db, mode, false)
+	})
+	m, err := manifest.NewDefaultManifest(ls, false)
 	if err != nil {
 		t.Fatal(err)
 	}
-	pipe = builder.NewPipelineBuilder(ctx, db, mode, false)
-	mr, err := builder.FeedPipeline(ctx, pipe, bytes.NewReader(metadata), int64(len(metadata)))
+
+	fileMtdt := map[string]string{
+		manifest.EntryMetadataFilenameKey:    fr.String(),
+		manifest.EntryMetadataContentTypeKey: "text/plain; charset=utf-8",
+	}
+	err = m.Add(ctx, fr.String(), manifest.NewEntry(fr, fileMtdt))
 	if err != nil {
 		t.Fatal(err)
 	}
-	entries := entry.New(fr, mr)
-	entryBytes, err := entries.MarshalBinary()
+	reference, err = m.Store(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
-	pipe = builder.NewPipelineBuilder(ctx, db, mode, false)
-	reference, err = builder.FeedPipeline(ctx, pipe, bytes.NewReader(entryBytes), int64(len(entryBytes)))
-	if err != nil {
-		t.Fatal(err)
-	}
+
 	item := addressToItem(reference)
 	data, err := db.retrievalDataIndex.Get(item)
 	if err != nil {
 		t.Fatal(err)
 	}
-	traverser := traversal.NewService(db)
-	err = traverser.TraverseFileAddresses(ctx, reference, func(address boson.Address) error {
+
+	traverser := traversal.New(db)
+	err = traverser.Traverse(ctx, reference, func(address boson.Address) error {
 		chunkHashes = append(chunkHashes, address)
 		return nil
 	})
@@ -823,9 +810,6 @@ func TestGC_NoEvictDirty(t *testing.T) {
 	db := newTestDB(t, &Options{
 		Capacity: 10,
 	})
-
-	ci := chunkinfo.New(routetab.NewMockRouteTable())
-	db.Config(ci)
 
 	testHookCollectGarbageChan := make(chan uint64)
 	t.Cleanup(setTestHook(&testHookCollectGarbage, func(collectedCount uint64) {
@@ -955,11 +939,15 @@ func setTestHookGCIteratorDone(h func()) (reset func()) {
 	return reset
 }
 
-//Empty some tests.
+// TestPinAndUnpinChunk checks that the garbage collection
+// does not clean pinned chunks.
 func TestPinAndUnpinChunk(t *testing.T) {
 	chunkCount := 5
 
-	var closed chan struct{}
+	var (
+		err    error
+		closed chan struct{}
+	)
 	testHookCollectGarbageChan := make(chan uint64)
 	testHookRecycleGarbageChan := make(chan uint64)
 	t.Cleanup(setTestHook(&testHookCollectGarbage, func(collectedCount uint64) {
@@ -980,8 +968,6 @@ func TestPinAndUnpinChunk(t *testing.T) {
 	closed = db.close
 
 	// upload random file
-	ci := chunkinfo.New(routetab.NewMockRouteTable())
-	db.Config(ci)
 	reference, chunks, addGc := addRandomFile(t, chunkCount, db, ci, false)
 
 	for i, chunk := range chunks {
@@ -991,8 +977,7 @@ func TestPinAndUnpinChunk(t *testing.T) {
 	rctx := sctx.SetRootCID(context.Background(), reference)
 	addGc(t)
 
-	var err error
-	//Pin lives to upload files for the first time.
+	// pin upload files for the first time.
 	for _, v := range chunks {
 		err = db.Set(rctx, storage.ModeSetPin, v)
 		if err != nil {
@@ -1022,7 +1007,7 @@ func TestPinAndUnpinChunk(t *testing.T) {
 	}
 	addGc1(t)
 
-	//Invoke gc
+	// trigger gc
 	db.triggerGarbageCollection()
 	select {
 	case <-testHookRecycleGarbageChan:
@@ -1037,7 +1022,7 @@ func TestPinAndUnpinChunk(t *testing.T) {
 		}
 	}
 
-	//Check whether the pin file exists.
+	// check whether the pin file exists.
 	for _, v := range chunks {
 		_, err := db.Get(rctx, storage.ModeGetRequest, v)
 		if err != nil {

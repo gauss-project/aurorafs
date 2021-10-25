@@ -51,7 +51,7 @@ type Interface interface {
 type ChunkInfo struct {
 	addr         boson.Address
 	storer       storage.StateStorer
-	traversal    traversal.Service
+	traversal    traversal.Traverser
 	route        routetab.RouteTab
 	streamer     p2p.Streamer
 	logger       logging.Logger
@@ -70,7 +70,7 @@ type ChunkInfo struct {
 }
 
 // New
-func New(addr boson.Address, streamer p2p.Streamer, logger logging.Logger, traversal traversal.Service, storer storage.StateStorer, route routetab.RouteTab, oracleChain oracle.Resolver) *ChunkInfo {
+func New(addr boson.Address, streamer p2p.Streamer, logger logging.Logger, traversal traversal.Traverser, storer storage.StateStorer, route routetab.RouteTab, oracleChain oracle.Resolver) *ChunkInfo {
 	queues := make(map[string]*queue)
 	syncMsg := make(map[string]chan bool)
 

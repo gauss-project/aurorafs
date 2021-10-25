@@ -3,7 +3,7 @@ package pricing_test
 import (
 	"bytes"
 	"context"
-	"io/ioutil"
+	"io"
 	"math/big"
 	"testing"
 
@@ -29,7 +29,7 @@ func (t *testObserver) NotifyPaymentThreshold(peer boson.Address, paymentThresho
 }
 
 func TestAnnouncePaymentThreshold(t *testing.T) {
-	logger := logging.New(ioutil.Discard, 0)
+	logger := logging.New(io.Discard, 0)
 	testThreshold := big.NewInt(100000)
 	observer := &testObserver{}
 

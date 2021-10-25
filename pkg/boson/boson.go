@@ -129,8 +129,6 @@ type AddressIterFunc func(address Address) error
 type Chunk interface {
 	Address() Address
 	Data() []byte
-	PinCounter() uint64
-	WithPinCounter(p uint64) Chunk
 	TagID() uint32
 	WithTagID(t uint32) Chunk
 	Equal(Chunk) bool
@@ -139,7 +137,6 @@ type Chunk interface {
 type chunk struct {
 	addr       Address
 	sdata      []byte
-	pinCounter uint64
 	tagID      uint32
 }
 
@@ -148,11 +145,6 @@ func NewChunk(addr Address, data []byte) Chunk {
 		addr:  addr,
 		sdata: data,
 	}
-}
-
-func (c *chunk) WithPinCounter(p uint64) Chunk {
-	c.pinCounter = p
-	return c
 }
 
 func (c *chunk) WithTagID(t uint32) Chunk {
@@ -166,10 +158,6 @@ func (c *chunk) Address() Address {
 
 func (c *chunk) Data() []byte {
 	return c.sdata
-}
-
-func (c *chunk) PinCounter() uint64 {
-	return c.pinCounter
 }
 
 func (c *chunk) TagID() uint32 {
