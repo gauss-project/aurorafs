@@ -4,15 +4,16 @@ import (
 	"bufio"
 	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
 	"github.com/gauss-project/aurorafs/pkg/bitvector"
 	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/boson/test"
 	"github.com/gauss-project/aurorafs/pkg/chunkinfo/pb"
-	"github.com/gauss-project/aurorafs/pkg/collection/entry"
+	"github.com/gauss-project/aurorafs/pkg/file/loadsave"
+	"github.com/gauss-project/aurorafs/pkg/file/pipeline"
 	"github.com/gauss-project/aurorafs/pkg/file/pipeline/builder"
 	"github.com/gauss-project/aurorafs/pkg/logging"
+	"github.com/gauss-project/aurorafs/pkg/manifest"
 	"github.com/gauss-project/aurorafs/pkg/p2p"
 	"github.com/gauss-project/aurorafs/pkg/p2p/protobuf"
 	"github.com/gauss-project/aurorafs/pkg/p2p/streamtest"
@@ -23,7 +24,7 @@ import (
 	"github.com/gauss-project/aurorafs/pkg/storage/mock"
 	"github.com/gauss-project/aurorafs/pkg/traversal"
 	"golang.org/x/sync/errgroup"
-	"io/ioutil"
+	"io"
 	"testing"
 	"time"
 )
@@ -186,7 +187,7 @@ func TestHandlerChunkInfoResp(t *testing.T) {
 
 	//resp  b ->a
 	tree, _ := bOverlay.getChunkPyramid(ctx, rootCid)
-	pram, _ := bOverlay.traversal.CheckTrieData(ctx, rootCid, tree)
+	pram, _ := bOverlay.traversal.GetChunkHashes(ctx, rootCid, tree)
 	if err := bOverlay.OnChunkTransferred(boson.NewAddress(pram[0][0]), rootCid, bAddress, boson.ZeroAddress); err != nil {
 		t.Fatal(err)
 	}
@@ -308,7 +309,7 @@ func TestHandlerPyramid(t *testing.T) {
 	)
 	server := mockChunkInfo(s, targetRecorder, serverAddress)
 	tree, _ := server.getChunkPyramid(ctx, rootCid)
-	pram, _ := server.traversal.CheckTrieData(ctx, rootCid, tree)
+	pram, _ := server.traversal.GetChunkHashes(ctx, rootCid, tree)
 	if err := target.OnChunkTransferred(boson.NewAddress(pram[0][1]), rootCid, targetAddress, boson.ZeroAddress); err != nil {
 		t.Fatal(err)
 	}
@@ -406,21 +407,21 @@ func newTestProtocol(h p2p.HandlerFunc, protocolName, protocolVersion, streamNam
 	}
 }
 
-func mockUploadFile(t *testing.T) (boson.Address, traversal.Service) {
+func mockUploadFile(t *testing.T) (boson.Address, traversal.Traverser) {
 	chunkCount := 10 + 1
 
 	ctx := context.Background()
-	largeBytesData := generateSampleData(boson.ChunkSize * chunkCount)
+	largeBytesData := generateSample(boson.ChunkSize * chunkCount)
 
 	mockStoreA := mock.NewStorer()
-	traversalService := traversal.NewService(mockStoreA)
+	traversalService := traversal.New(mockStoreA)
 
 	reference, _ := uploadFile(t, ctx, mockStoreA, largeBytesData, "", false)
 	return reference, traversalService
 }
 
-func mockChunkInfo(traversal traversal.Service, r *streamtest.Recorder, overlay boson.Address) *ChunkInfo {
-	logger := logging.New(ioutil.Discard, 0)
+func mockChunkInfo(traversal traversal.Traverser, r *streamtest.Recorder, overlay boson.Address) *ChunkInfo {
+	logger := logging.New(io.Discard, 0)
 	ret := smock.NewStateStore()
 	route := rmock.NewMockRouteTable()
 	oracle := omock.NewServer()
@@ -432,7 +433,7 @@ func mockChunkInfo(traversal traversal.Service, r *streamtest.Recorder, overlay 
 	return server
 }
 
-func generateSampleData(size int) (b []byte) {
+func generateSample(size int) (b []byte) {
 	for {
 		b = append(b, simpleData...)
 		if len(b) >= size {
@@ -447,7 +448,13 @@ func generateSampleData(size int) (b []byte) {
 
 func uploadFile(t *testing.T, ctx context.Context, store storage.Storer, file []byte, filename string, encrypted bool) (boson.Address, string) {
 	pipe := builder.NewPipelineBuilder(ctx, store, storage.ModePutUpload, encrypted)
-	fr, err := builder.FeedPipeline(ctx, pipe, bytes.NewReader(file), int64(len(file)))
+	fr, err := builder.FeedPipeline(ctx, pipe, bytes.NewReader(file))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ls := loadsave.New(store, pipelineFactory(store, storage.ModePutRequest, false))
+	fManifest, err := manifest.NewDefaultManifest(ls, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -456,32 +463,34 @@ func uploadFile(t *testing.T, ctx context.Context, store storage.Storer, file []
 		filename = fr.String()
 	}
 
-	m := entry.NewMetadata(filename)
-	m.MimeType = fileContentType
-	metadata, err := json.Marshal(m)
+	rootMtdt := map[string]string{
+		manifest.WebsiteIndexDocumentSuffixKey: filename,
+		manifest.EntryMetadataDirnameKey: filename,
+	}
+	err = fManifest.Add(ctx, "/", manifest.NewEntry(boson.ZeroAddress, rootMtdt))
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	pipe = builder.NewPipelineBuilder(ctx, store, storage.ModePutUpload, encrypted)
-	mr, err := builder.FeedPipeline(ctx, pipe, bytes.NewReader(metadata), int64(len(metadata)))
-	if err != nil {
-		t.Fatal(err)
+	fileMtdt := map[string]string{
+		manifest.EntryMetadataFilenameKey:    filename,
+		manifest.EntryMetadataContentTypeKey: fileContentType,
 	}
-	//t.Logf("metadata hash=%s\n", mr)
-
-	entries := entry.New(fr, mr)
-	entryBytes, err := entries.MarshalBinary()
+	err = fManifest.Add(ctx, filename, manifest.NewEntry(fr, fileMtdt))
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	pipe = builder.NewPipelineBuilder(ctx, store, storage.ModePutUpload, encrypted)
-	reference, err := builder.FeedPipeline(ctx, pipe, bytes.NewReader(entryBytes), int64(len(entryBytes)))
+	address, err := fManifest.Store(ctx)
 	if err != nil {
-		t.Fatal(reference)
+		t.Fatal(err)
 	}
-	//t.Logf("reference hash=%s\n", reference)
 
-	return reference, filename
+	return address, filename
+}
+
+func pipelineFactory(s storage.Putter, mode storage.ModePut, encrypt bool) func() pipeline.Interface {
+	return func() pipeline.Interface {
+		return builder.NewPipelineBuilder(context.Background(), s, mode, encrypt)
+	}
 }

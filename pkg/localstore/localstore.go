@@ -43,7 +43,7 @@ var (
 
 var (
 	// Default value for Capacity DB option.
-	defaultCapacity uint64 = 5000000
+	defaultCapacity uint64 = 80000
 	// Limit the number of goroutines created by Getters
 	// that call updateGC function. Value 0 sets no limit.
 	maxParallelUpdateGC = 1000
@@ -61,9 +61,6 @@ type DB struct {
 	// retrieval indexes
 	retrievalDataIndex   shed.Index
 	retrievalAccessIndex shed.Index
-
-	// pull syncing index
-	pullIndex shed.Index
 
 	// binIDs stores the latest chunk serial ID for every
 	// proximity order bin

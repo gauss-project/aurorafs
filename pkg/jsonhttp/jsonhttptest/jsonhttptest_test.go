@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"mime"
 	"mime/multipart"
 	"net/http"
@@ -100,7 +99,7 @@ func TestWithRequestBody(t *testing.T) {
 	var gotBody []byte
 	c, endpoint := newClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var err error
-		gotBody, err = ioutil.ReadAll(r.Body)
+		gotBody, err = io.ReadAll(r.Body)
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 		}
@@ -127,7 +126,7 @@ func TestWithJSONRequestBody(t *testing.T) {
 	}
 	var gotBody response
 	c, endpoint := newClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		v, err := ioutil.ReadAll(r.Body)
+		v, err := io.ReadAll(r.Body)
 		if err != nil {
 			jsonhttp.InternalServerError(w, err)
 			return
@@ -173,7 +172,7 @@ func TestWithMultipartRequest(t *testing.T) {
 			}
 			gotContentDisposition = p.Header.Get("Content-Disposition")
 			gotContentType = p.Header.Get("Content-Type")
-			gotBody, err = ioutil.ReadAll(p)
+			gotBody, err = io.ReadAll(p)
 			if err != nil {
 				jsonhttp.BadRequest(w, err)
 				return

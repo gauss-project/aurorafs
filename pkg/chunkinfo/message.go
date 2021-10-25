@@ -283,7 +283,7 @@ func (ci *ChunkInfo) onChunkPyramidResp(ctx context.Context, authInfo []byte, ro
 		pyramid[boson.NewAddress(resp.Hash).String()] = resp.Chunk
 	}
 
-	v, err := ci.traversal.CheckTrieData(ctx, rootCid, pyramid)
+	v, err := ci.traversal.GetChunkHashes(ctx, rootCid, pyramid)
 	if err != nil {
 		ci.logger.Errorf("chunk pyramid: check pyramid error")
 		return err

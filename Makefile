@@ -24,12 +24,6 @@ binary: dist FORCE
 	$(GO) version
 	$(GO) build -trimpath -ldflags "$(LDFLAGS)" -o dist/aurora ./cmd/aurorafs
 
-.PHONY: binaries
-binaries: binary
-	$(GO) build -trimpath -ldflags "$(LDFLAGS)" -o dist/aurora-file ./cmd/aurorafs-file
-	$(GO) build -trimpath -ldflags "$(LDFLAGS)" -o dist/aurora-join ./cmd/aurorafs-join
-	$(GO) build -trimpath -ldflags "$(LDFLAGS)" -o dist/aurora-split ./cmd/aurorafs-split
-
 dist:
 	mkdir $@
 

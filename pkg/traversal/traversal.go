@@ -7,386 +7,282 @@ package traversal
 import (
 	"bytes"
 	"context"
-	"encoding/json"
+	"encoding/binary"
 	"errors"
 	"fmt"
+	"github.com/gauss-project/aurorafs/pkg/file/pipeline"
+	"github.com/gauss-project/aurorafs/pkg/file/pipeline/bmt"
+	"github.com/gauss-project/aurorafs/pkg/sctx"
+	"sync"
+
 	"github.com/gauss-project/aurorafs/pkg/boson"
-	"github.com/gauss-project/aurorafs/pkg/collection/entry"
-	"github.com/gauss-project/aurorafs/pkg/file"
 	"github.com/gauss-project/aurorafs/pkg/file/joiner"
 	"github.com/gauss-project/aurorafs/pkg/file/loadsave"
 	"github.com/gauss-project/aurorafs/pkg/manifest"
 	"github.com/gauss-project/aurorafs/pkg/storage"
+	"github.com/gauss-project/manifest/mantaray"
 )
 
-var (
-	// ErrInvalidType is returned when the reference was not expected type.
-	ErrInvalidType = errors.New("traversal: invalid type")
-)
-
-// Service is the service to find dependent chunks for an address.
-type Service interface {
-	// TraverseAddresses iterates through each address related to the supplied
-	// one, if possible.
-	TraverseAddresses(context.Context, boson.Address, boson.AddressIterFunc) error
-
-	// TraverseBytesAddresses iterates through each address of a bytes.
-	TraverseBytesAddresses(context.Context, boson.Address, boson.AddressIterFunc) error
-	// TraverseFileAddresses iterates through each address of a file.
-	TraverseFileAddresses(context.Context, boson.Address, boson.AddressIterFunc) error
-	// TraverseManifestAddresses iterates through each address of a manifest,
-	// as well as each entry found in it.
-	TraverseManifestAddresses(context.Context, boson.Address, boson.AddressIterFunc) error
-
-	GetTrieData(context.Context, boson.Address) (map[string][]byte, error)
-
-	CheckTrieData(context.Context, boson.Address, map[string][]byte) ([][][]byte, error)
+// Traverser represents service which traverse through address dependent chunks.
+type Traverser interface {
+	// Traverse iterates through each address related to the supplied one, if possible.
+	Traverse(context.Context, boson.Address, boson.AddressIterFunc) error
+	// GetPyramid
+	GetPyramid(context.Context, boson.Address) (map[string][]byte, error)
+	// GetChunkHashes
+	GetChunkHashes(context.Context, boson.Address, map[string][]byte) ([][][]byte, error)
 }
 
-type traversalService struct {
-	storer storage.Storer
+type PutGetter interface {
+	storage.Putter
+	storage.Getter
 }
 
-func NewService(storer storage.Storer) Service {
-	return &traversalService{
-		storer: storer,
-	}
+// New constructs for a new Traverser.
+func New(store PutGetter) Traverser {
+	return &service{store: store}
 }
 
-func (s *traversalService) TraverseAddresses(
-	ctx context.Context,
-	reference boson.Address,
-	chunkAddressFunc boson.AddressIterFunc,
-) error {
+// service is implementation of Traverser using storage.Storer as its storage.
+type service struct {
+	store PutGetter
+}
 
-	isFile, e, metadata, err := s.checkIsFile(ctx, reference)
-	if err != nil {
-		return err
-	}
-
-	// reference address could be missrepresented as file when:
-	// - content size is 64 bytes (or 128 for encrypted reference)
-	// - second reference exists and is JSON (and not actually file metadata)
-
-	if isFile {
-
-		isManifest, m, err := s.checkIsManifest(ctx, reference, e, metadata)
-		if err != nil {
-			return err
+// traverseAndProcess
+func (s *service) traverseAndProcess(ctx context.Context, addr boson.Address, processFn boson.AddressIterFunc) error {
+	ls := loadsave.NewReadonly(s.store)
+	switch mf, err := manifest.NewDefaultManifestReference(addr, ls); {
+	case errors.Is(err, manifest.ErrInvalidManifestType):
+		break
+	case err != nil:
+		return fmt.Errorf("traversal: unable to create manifest reference for %q: %w", addr, err)
+	default:
+		err := mf.IterateAddresses(ctx, processFn)
+		if errors.Is(err, mantaray.ErrTooShort) || errors.Is(err, mantaray.ErrInvalidVersionHash) {
+			// Based on the returned errors we conclude that it might
+			// not be a manifest, so we try non-manifest processing.
+			break
 		}
+		if err != nil {
+			return fmt.Errorf("traversal: unable to process bytes for %q: %w", addr, err)
+		}
+		return nil
+	}
 
-		// reference address could be missrepresented as manifest when:
-		// - file content type is actually on of manifest type (manually set)
-		// - content was unmarshalled
-		//
-		// even though content could be unmarshaled in some case, iteration
-		// through addresses will not be possible
+	// Non-manifest processing.
+	if err := processFn(addr); err != nil {
+		return fmt.Errorf("traversal: unable to process bytes for %q: %w", addr, err)
+	}
+	return nil
+}
 
-		if isManifest {
-			// process as manifest
+// Traverse implements Traverser.Traverse method.
+func (s *service) Traverse(ctx context.Context, addr boson.Address, iterFn boson.AddressIterFunc) error {
+	processBytes := func(ref boson.Address) error {
+		j, _, err := joiner.New(ctx, s.store, ref)
+		if err != nil {
+			return fmt.Errorf("traversal: joiner error on %q: %w", ref, err)
+		}
+		err = j.IterateChunkAddresses(iterFn)
+		if err != nil {
+			return fmt.Errorf("traversal: iterate chunk address error for %q: %w", ref, err)
+		}
+		return nil
+	}
 
-			err = m.IterateAddresses(ctx, func(manifestNodeAddr boson.Address) error {
-				return s.traverseChunkAddressesFromManifest(ctx, manifestNodeAddr, chunkAddressFunc)
-			})
-			if err != nil {
-				return fmt.Errorf("traversal: iterate chunks: %s: %w", reference, err)
-			}
+	return s.traverseAndProcess(ctx, addr, processBytes)
+}
 
-			metadataReference := e.Metadata()
+// dataWithSpan returns chunk filled with span length
+func dataWithSpan(data []byte, size uint64) []byte {
+	spanData := make([]byte, len(data)+8)
+	if size == 0 {
+		size = uint64(len(data))
+	}
+	binary.LittleEndian.PutUint64(spanData[:8], size)
+	copy(spanData[8:], data)
+	return spanData
+}
 
-			err = s.processBytes(ctx, metadataReference, chunkAddressFunc)
-			if err != nil {
+// GetPyramid implements Traverser.GetPyramid method.
+func (s *service) GetPyramid(ctx context.Context, addr boson.Address) (pyramid map[string][]byte, err error) {
+	storePyramidHashes := func(ref boson.Address) error {
+		j, span, err := joiner.New(ctx, s.store, ref)
+		if err != nil {
+			return fmt.Errorf("traversal: joiner error on %q: %w", ref, err)
+		}
+		// for one chunk, it should save file chunk for known file size.
+		pyramid[ref.String()] = dataWithSpan(j.GetRootData(), uint64(span))
+		if span > boson.ChunkSize {
+			j.SetSaveIntChunks(pyramid)
+			if err := j.IterateChunkAddresses(func(addr boson.Address) error { return nil }); err != nil {
 				return err
 			}
-
-			_ = chunkAddressFunc(reference)
-
-		} else {
-			return s.traverseChunkAddressesAsFile(ctx, reference, chunkAddressFunc, e)
 		}
-
-	} else {
-		return s.processBytes(ctx, reference, chunkAddressFunc)
+		return nil
 	}
 
-	return nil
+	pyramid = make(map[string][]byte)
+	err = s.traverseAndProcess(ctx, addr, storePyramidHashes)
+
+	return
 }
 
-func (s *traversalService) TraverseBytesAddresses(
-	ctx context.Context,
-	reference boson.Address,
-	chunkAddressFunc boson.AddressIterFunc,
-) error {
-	return s.processBytes(ctx, reference, chunkAddressFunc)
-}
+type noopChainWriter struct{}
 
-func (s *traversalService) TraverseFileAddresses(
-	ctx context.Context,
-	reference boson.Address,
-	chunkAddressFunc boson.AddressIterFunc,
-) error {
+func (n *noopChainWriter) ChainWrite(_ *pipeline.PipeWriteArgs) error { return nil }
+func (n *noopChainWriter) Sum() ([]byte, error)                       { return nil, nil }
 
-	isFile, e, _, err := s.checkIsFile(ctx, reference)
-	if err != nil {
-		return err
+var ErrInvalidPyramid = errors.New("traversal: invalid pyramid")
+
+// GetChunkHashes implements Traverser.GetChunkHashes method.
+func (s *service) GetChunkHashes(ctx context.Context, addr boson.Address, pyramid map[string][]byte) (hashes [][][]byte, err error) {
+	if _, exists := pyramid[addr.String()]; !exists {
+		return nil, fmt.Errorf("invalid pyramid without reference %s\n", addr)
 	}
 
-	// reference address could be missrepresented as file when:
-	// - content size is 64 bytes (or 128 for encrypted reference)
-	// - second reference exists and is JSON (and not actually file metadata)
-
-	if !isFile {
-		return ErrInvalidType
-	}
-
-	return s.traverseChunkAddressesAsFile(ctx, reference, chunkAddressFunc, e)
-}
-
-func (s *traversalService) TraverseManifestAddresses(
-	ctx context.Context,
-	reference boson.Address,
-	chunkAddressFunc boson.AddressIterFunc,
-) error {
-
-	isFile, e, metadata, err := s.checkIsFile(ctx, reference)
-	if err != nil {
-		return err
-	}
-
-	if !isFile {
-		return ErrInvalidType
-	}
-
-	isManifest, m, err := s.checkIsManifest(ctx, reference, e, metadata)
-	if err != nil {
-		return err
-	}
-
-	// reference address could be missrepresented as manifest when:
-	// - file content type is actually on of manifest type (manually set)
-	// - content was unmarshalled
-	//
-	// even though content could be unmarshaled in some case, iteration
-	// through addresses will not be possible
-
-	if !isManifest {
-		return ErrInvalidType
-	}
-
-	err = m.IterateAddresses(ctx, func(manifestNodeAddr boson.Address) error {
-		return s.traverseChunkAddressesFromManifest(ctx, manifestNodeAddr, chunkAddressFunc)
-	})
-	if err != nil {
-		return fmt.Errorf("traversal: iterate chunks: %s: %w", reference, err)
-	}
-
-	metadataReference := e.Metadata()
-
-	err = s.processBytes(ctx, metadataReference, chunkAddressFunc)
-	if err != nil {
-		return err
-	}
-
-	_ = chunkAddressFunc(reference)
-
-	return nil
-}
-
-func (s *traversalService) traverseChunkAddressesFromManifest(
-	ctx context.Context,
-	reference boson.Address,
-	chunkAddressFunc boson.AddressIterFunc,
-) error {
-
-	isFile, e, _, err := s.checkIsFile(ctx, reference)
-	if err != nil {
-		return err
-	}
-
-	if isFile {
-		return s.traverseChunkAddressesAsFile(ctx, reference, chunkAddressFunc, e)
-	}
-
-	return s.processBytes(ctx, reference, chunkAddressFunc)
-}
-
-func (s *traversalService) traverseChunkAddressesAsFile(
-	ctx context.Context,
-	reference boson.Address,
-	chunkAddressFunc boson.AddressIterFunc,
-	e *entry.Entry,
-) (err error) {
-
-	bytesReference := e.Reference()
-
-	err = s.processBytes(ctx, bytesReference, chunkAddressFunc)
-	if err != nil {
-		// possible it was custom JSON bytes, which matches entry JSON
-		// but in fact is not file, and does not contain reference to
-		// existing address, which is why it was not found in storage
-		if !errors.Is(err, storage.ErrNotFound) {
-			return nil
+	// verify each data could be sum up the correct hash.
+	bmtWriter := bmt.NewBmtWriter(&noopChainWriter{})
+	for hash, data := range pyramid {
+		var ref boson.Address
+		args := pipeline.PipeWriteArgs{Data: data}
+		err = bmtWriter.ChainWrite(&args)
+		if err != nil {
+			return
 		}
-		// ignore
+		ref, err = boson.ParseHexAddress(hash)
+		if err != nil {
+			return
+		}
+		if !bytes.Equal(args.Ref, ref.Bytes()) {
+			err = ErrInvalidPyramid
+			return
+		}
 	}
 
-	metadataReference := e.Metadata()
+	// iterate the given pyramid
+	p := newPyramid(pyramid)
+	storeChunkHashes := func(nodeType int, path, prefix, hash []byte, metadata map[string]string) error {
+		switch nodeType {
+		case int(manifest.File):
+			ref := boson.NewAddress(hash)
+			j, _, err := joiner.New(ctx, p, ref)
+			if err != nil {
+				return fmt.Errorf("traversal: joiner error on %q: %w", ref, err)
+			}
+			j.SetSaveDataChunks()
+			if err := j.IterateChunkAddresses(func(addr boson.Address) error {return nil}); err != nil {
+				return err
+			}
+			hashes = append(hashes, j.GetDataChunks())
+		}
+		return nil
+	}
 
-	err = s.processBytes(ctx, metadataReference, chunkAddressFunc)
+	// process as manifest
+	ls := loadsave.NewReadonly(p)
+	switch mf, err := manifest.NewDefaultManifestReference(addr, ls); {
+	case errors.Is(err, manifest.ErrInvalidManifestType):
+		// Non-manifest processing.
+		if err := storeChunkHashes(int(manifest.File), []byte{}, []byte{}, addr.Bytes(), nil); err != nil {
+			return hashes, fmt.Errorf("traversal: unable to process bytes for %q: %w", addr, err)
+		}
+	case err != nil:
+		return hashes, fmt.Errorf("traversal: unable to create manifest reference for %q: %w", addr, err)
+	default:
+		err := mf.IterateNodes(ctx, []byte{}, -1, storeChunkHashes)
+		if errors.Is(err, mantaray.ErrTooShort) || errors.Is(err, mantaray.ErrInvalidVersionHash) {
+			// Based on the returned errors we conclude that it might
+			// not be a manifest, so we try non-manifest processing.
+			if err := storeChunkHashes(int(manifest.File), []byte{}, []byte{}, addr.Bytes(), nil); err != nil {
+				return hashes, fmt.Errorf("traversal: unable to process bytes for %q: %w", addr, err)
+			}
+		}
+		if err != nil {
+			return hashes, fmt.Errorf("traversal: unable to process bytes for %q: %w", addr, err)
+		}
+	}
+
+	// here we can put those data into localstore.
+	rctx := sctx.SetRootCID(ctx, addr)
+	// first we put root chunk
+	_, err = s.store.Put(rctx, storage.ModePutRequest, boson.NewChunk(addr, pyramid[addr.String()]))
 	if err != nil {
 		return
 	}
-
-	_ = chunkAddressFunc(reference)
-
-	return nil
-}
-
-// checkIsFile checks if the content is file.
-func (s *traversalService) checkIsFile(
-	ctx context.Context,
-	reference boson.Address,
-) (bool, *entry.Entry, *entry.Metadata, error) {
-	return s.checkIsFileWithCustomStore(ctx, s.storer, reference)
-}
-
-// checkIsFileWithCustomStore checks by specify store if the content is file.
-func (s *traversalService) checkIsFileWithCustomStore(
-	ctx context.Context,
-	getter storage.Getter,
-	reference boson.Address,
-) (isFile bool, e *entry.Entry, metadata *entry.Metadata, err error) {
-
-	var (
-		j    file.Joiner
-		span int64
-	)
-
-	j, span, err = joiner.New(ctx, getter, reference)
-	if err != nil {
-		err = fmt.Errorf("traversal: joiner: %s: %w", reference, err)
-		return
-	}
-
-	maybeIsFile := entry.CanUnmarshal(span)
-
-	if maybeIsFile {
-		buf := bytes.NewBuffer(nil)
-		_, err = file.JoinReadAll(ctx, j, buf)
+	delete(p.seen, addr.String())
+	for k := range p.seen {
+		addr, err = boson.ParseHexAddress(k)
 		if err != nil {
-			err = fmt.Errorf("traversal: read entry: %s: %w", reference, err)
 			return
 		}
-
-		e = &entry.Entry{}
-		err = e.UnmarshalBinary(buf.Bytes())
+		_, err = s.store.Put(rctx, storage.ModePutRequest, boson.NewChunk(addr, pyramid[k]))
 		if err != nil {
-			err = fmt.Errorf("traversal: unmarshal entry: %s: %w", reference, err)
 			return
 		}
-
-		// address sizes must match
-		if len(reference.Bytes()) != len(e.Reference().Bytes()) {
-			return
-		}
-
-		// NOTE: any bytes will unmarshall to addresses; we need to check metadata
-
-		// read metadata
-		j, _, err = joiner.New(ctx, getter, e.Metadata())
-		if err != nil {
-			// ignore
-			err = nil
-			return
-		}
-
-		buf = bytes.NewBuffer(nil)
-		_, err = file.JoinReadAll(ctx, j, buf)
-		if err != nil {
-			err = fmt.Errorf("traversal: read metadata: %s: %w", reference, err)
-			return
-		}
-
-		metadata = &entry.Metadata{}
-
-		dec := json.NewDecoder(buf)
-		dec.DisallowUnknownFields()
-		err = dec.Decode(metadata)
-		if err != nil {
-			// may not be metadata JSON
-			err = nil
-			return
-		}
-
-		isFile = true
 	}
 
 	return
 }
 
-// checkIsManifest checks if the content is manifest.
-func (s *traversalService) checkIsManifest(
-	ctx context.Context,
-	reference boson.Address,
-	e *entry.Entry,
-	metadata *entry.Metadata,
-) (bool, manifest.Interface, error) {
-	return s.checkIsManifestWithCustomStore(ctx, s.storer, reference, e, metadata)
+type pyramid struct {
+	data map[string][]byte
+	seen map[string]struct{}
+	mu   sync.Mutex
 }
 
-// checkIsManifestWithCustomStore checks by specify store if the content is manifest.
-func (s *traversalService) checkIsManifestWithCustomStore(
-	ctx context.Context,
-	storer storage.Storer,
-	reference boson.Address,
-	e *entry.Entry,
-	metadata *entry.Metadata,
-) (isManifest bool, m manifest.Interface, err error) {
+func newPyramid(data map[string][]byte) *pyramid {
+	return &pyramid{
+		data: data,
+		seen: make(map[string]struct{}),
+	}
+}
 
-	// NOTE: 'encrypted' parameter only used for saving manifest
-	m, err = manifest.NewManifestReference(
-		metadata.MimeType,
-		e.Reference(),
-		loadsave.NewReadonly(storer),
-	)
-	if err != nil {
-		if err == manifest.ErrInvalidManifestType {
-			// ignore
-			err = nil
-			return
-		}
-		err = fmt.Errorf("traversal: read manifest: %s: %w", reference, err)
+func (p *pyramid) Get(ctx context.Context, mode storage.ModeGet, addr boson.Address) (ch boson.Chunk, err error) {
+	select {
+	case <-ctx.Done():
+		err = ctx.Err()
+		return
+	default:
+	}
+
+	addrStr := addr.String()
+	val, exists := p.data[addrStr]
+	if !exists {
+		err = storage.ErrNotFound
 		return
 	}
 
-	isManifest = true
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if _, exists := p.seen[addrStr]; !exists {
+		p.seen[addrStr] = struct{}{}
+	}
 
+	ch = boson.NewChunk(addr, val)
 	return
 }
 
-func (s *traversalService) processBytes(
-	ctx context.Context,
-	reference boson.Address,
-	chunkAddressFunc boson.AddressIterFunc,
-) error {
-	return s.processBytesWithCustomStore(ctx, s.storer, reference, chunkAddressFunc)
+func (p *pyramid) Put(_ context.Context, _ storage.ModePut, _ ...boson.Chunk) ([]bool, error) {
+	panic("not implemented")
 }
 
-func (s *traversalService) processBytesWithCustomStore(
-	ctx context.Context,
-	getter storage.Getter,
-	reference boson.Address,
-	chunkAddressFunc boson.AddressIterFunc,
-) error {
-	j, _, err := joiner.New(ctx, getter, reference)
-	if err != nil {
-		return fmt.Errorf("traversal: joiner: %s: %w", reference, err)
-	}
+func (p *pyramid) GetMulti(_ context.Context, _ storage.ModeGet, _ ...boson.Address) ([]boson.Chunk, error) {
+	panic("not implemented")
+}
 
-	err = j.IterateChunkAddresses(chunkAddressFunc)
-	if err != nil {
-		return fmt.Errorf("traversal: iterate chunks: %s: %w", reference, err)
-	}
+func (p *pyramid) Set(_ context.Context, _ storage.ModeSet, _ ...boson.Address) error {
+	panic("not implemented")
+}
 
+func (p *pyramid) Has(_ context.Context, hasMode storage.ModeHas, _ boson.Address) (bool, error) {
+	panic("not implemented")
+}
+
+func (p *pyramid) HasMulti(_ context.Context, hasMode storage.ModeHas, _ ...boson.Address) ([]bool, error) {
+	panic("not implemented")
+}
+
+func (p *pyramid) Close() error {
 	return nil
 }

@@ -37,11 +37,11 @@ func (ci *ChunkInfo) initChunkPyramid(ctx context.Context, rootCid boson.Address
 	if ci.cp.pyramid[rootCid.String()] != nil {
 		return nil
 	}
-	trie, err := ci.traversal.GetTrieData(ctx, rootCid)
+	trie, err := ci.traversal.GetPyramid(ctx, rootCid)
 	if err != nil {
 		return err
 	}
-	data, err := ci.traversal.CheckTrieData(ctx, rootCid, trie)
+	data, err := ci.traversal.GetChunkHashes(ctx, rootCid, trie)
 	if err != nil {
 		return err
 	}
@@ -98,7 +98,7 @@ func (ci *ChunkInfo) getChunkPyramid(cxt context.Context, rootCid boson.Address)
 	if v, ok := ci.cp.mateData[rootCid.String()]; ok {
 		return v, nil
 	}
-	v, err := ci.traversal.GetTrieData(cxt, rootCid)
+	v, err := ci.traversal.GetPyramid(cxt, rootCid)
 	if err != nil {
 		return nil, err
 	}
@@ -117,7 +117,7 @@ func (ci *ChunkInfo) getChunkSize(cxt context.Context, rootCid boson.Address) (i
 	if err != nil {
 		return 0, err
 	}
-	trie, err := ci.traversal.CheckTrieData(cxt, rootCid, v)
+	trie, err := ci.traversal.GetChunkHashes(cxt, rootCid, v)
 	if err != nil {
 		return 0, err
 	}

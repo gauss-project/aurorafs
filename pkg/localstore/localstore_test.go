@@ -20,21 +20,26 @@ import (
 	"bytes"
 	"context"
 	"errors"
-	"fmt"
-	"io/ioutil"
+	"io"
 	"math/rand"
 	"runtime"
-	"sort"
 	"sync"
 	"testing"
 	"time"
 
 	"github.com/gauss-project/aurorafs/pkg/boson"
+	chunkinfo "github.com/gauss-project/aurorafs/pkg/chunkinfo/mock"
 	"github.com/gauss-project/aurorafs/pkg/logging"
+	routetab "github.com/gauss-project/aurorafs/pkg/routetab/mock"
 	"github.com/gauss-project/aurorafs/pkg/shed"
 	"github.com/gauss-project/aurorafs/pkg/storage"
 	chunktesting "github.com/gauss-project/aurorafs/pkg/storage/testing"
 	"github.com/syndtr/goleveldb/leveldb"
+)
+
+var (
+	// chunkinfo service inject
+	ci = chunkinfo.New(routetab.NewMockRouteTable())
 )
 
 func init() {
@@ -57,13 +62,13 @@ func init() {
 	}
 }
 
-func TestDBCapacity(t *testing.T) {
+func TestCacheCapacity(t *testing.T) {
 	lo := Options{
 		Capacity: 500,
 	}
 	db := newTestDB(t, &lo)
 	if db.capacity != 500 {
-		t.Fatal("could not set db capacity")
+		t.Fatal("could not set cache capacity")
 	}
 }
 
@@ -156,11 +161,12 @@ func newTestDB(t testing.TB, o *Options) *DB {
 	if _, err := rand.Read(baseKey); err != nil {
 		t.Fatal(err)
 	}
-	logger := logging.New(ioutil.Discard, 0)
+	logger := logging.New(io.Discard, 0)
 	db, err := New("", baseKey, o, logger)
 	if err != nil {
 		t.Fatal(err)
 	}
+	db.Config(ci)
 	t.Cleanup(func() {
 		err := db.Close()
 		if err != nil {
@@ -322,17 +328,6 @@ func newPinIndexTest(db *DB, chunk boson.Chunk, wantError error) func(t *testing
 	}
 }
 
-func newPinChunkValidateTest(db *DB, chunk boson.Chunk, wantError error) error {
-	_, err := db.pinIndex.Get(shed.Item{
-		Address: chunk.Address().Bytes(),
-	})
-	if errors.Is(err, leveldb.ErrNotFound) {
-		return nil
-	} else {
-		return errors.New("Chunk in Stored In Pin")
-	}
-}
-
 // newItemsCountTest returns a test function that validates if
 // an index contains expected number of key/value pairs.
 func newItemsCountTest(i shed.Index, want int) func(t *testing.T) {
@@ -374,39 +369,6 @@ func newIndexGCSizeTest(db *DB) func(t *testing.T) {
 		if got != want {
 			t.Errorf("got gc size %v, want %v", got, want)
 		}
-	}
-}
-
-// testIndexChunk embeds storageChunk with additional data that is stored
-// in database. It is used for index values validations.
-type testIndexChunk struct {
-	boson.Chunk
-	binID uint64
-}
-
-// testItemsOrder tests the order of chunks in the index. If sortFunc is not nil,
-// chunks will be sorted with it before validation.
-func testItemsOrder(t *testing.T, i shed.Index, chunks []testIndexChunk, sortFunc func(i, j int) (less bool)) {
-	t.Helper()
-
-	newItemsCountTest(i, len(chunks))(t)
-
-	if sortFunc != nil {
-		sort.Slice(chunks, sortFunc)
-	}
-
-	var cursor int
-	err := i.Iterate(func(item shed.Item) (stop bool, err error) {
-		want := chunks[cursor].Address()
-		got := item.Address
-		if !bytes.Equal(got, want.Bytes()) {
-			return true, fmt.Errorf("got address %x at position %v, want %x", got, cursor, want)
-		}
-		cursor++
-		return false, nil
-	}, nil)
-	if err != nil {
-		t.Fatal(err)
 	}
 }
 
@@ -487,22 +449,10 @@ func TestSetNow(t *testing.T) {
 	}
 }
 
-func testIndexCounts(t *testing.T, pushIndex, pullIndex, gcIndex, gcExcludeIndex, pinIndex, retrievalDataIndex, retrievalAccessIndex int, indexInfo map[string]int) {
+func testIndexCounts(t *testing.T, gcIndex, pinIndex, retrievalDataIndex, retrievalAccessIndex int, indexInfo map[string]int) {
 	t.Helper()
-	if indexInfo["pushIndex"] != pushIndex {
-		t.Fatalf("pushIndex count mismatch. got %d want %d", indexInfo["pushIndex"], pushIndex)
-	}
-
-	if indexInfo["pullIndex"] != pullIndex {
-		t.Fatalf("pullIndex count mismatch. got %d want %d", indexInfo["pullIndex"], pullIndex)
-	}
-
 	if indexInfo["gcIndex"] != gcIndex {
 		t.Fatalf("gcIndex count mismatch. got %d want %d", indexInfo["gcIndex"], gcIndex)
-	}
-
-	if indexInfo["gcExcludeIndex"] != gcExcludeIndex {
-		t.Fatalf("gcExcludeIndex count mismatch. got %d want %d", indexInfo["gcExcludeIndex"], gcExcludeIndex)
 	}
 
 	if indexInfo["pinIndex"] != pinIndex {
@@ -541,7 +491,7 @@ func TestDBDebugIndexes(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	testIndexCounts(t, 1, 1, 0, 0, 0, 1, 0, indexCounts)
+	testIndexCounts(t, 0, 0, 1, 0, indexCounts)
 
 	// set the chunk for pinning and expect the index count to grow
 	err = db.Set(ctx, storage.ModeSetPin, ch.Address())
@@ -555,5 +505,5 @@ func TestDBDebugIndexes(t *testing.T) {
 	}
 
 	// assert that there's a pin and gc exclude entry now
-	testIndexCounts(t, 1, 1, 0, 1, 1, 1, 0, indexCounts)
+	testIndexCounts(t, 0, 1, 1, 0, indexCounts)
 }

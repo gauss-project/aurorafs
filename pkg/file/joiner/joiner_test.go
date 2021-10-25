@@ -3,16 +3,17 @@ package joiner_test
 import (
 	"bytes"
 	"context"
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	mrand "math/rand"
 	"sync"
 	"testing"
 	"time"
 
 	"github.com/gauss-project/aurorafs/pkg/boson"
+	"github.com/gauss-project/aurorafs/pkg/cac"
 	"github.com/gauss-project/aurorafs/pkg/encryption/store"
 	"github.com/gauss-project/aurorafs/pkg/file/joiner"
 	"github.com/gauss-project/aurorafs/pkg/file/pipeline/builder"
@@ -20,6 +21,7 @@ import (
 	filetest "github.com/gauss-project/aurorafs/pkg/file/testing"
 	"github.com/gauss-project/aurorafs/pkg/storage"
 	"github.com/gauss-project/aurorafs/pkg/storage/mock"
+	testingc "github.com/gauss-project/aurorafs/pkg/storage/testing"
 	"gitlab.com/nolash/go-mockbytes"
 )
 
@@ -60,7 +62,7 @@ func TestJoinerSingleChunk(t *testing.T) {
 	if l != int64(len(mockData)) {
 		t.Fatalf("expected join data length %d, got %d", len(mockData), l)
 	}
-	joinData, err := ioutil.ReadAll(joinReader)
+	joinData, err := io.ReadAll(joinReader)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -98,7 +100,7 @@ func TestJoinerDecryptingStore_NormalChunk(t *testing.T) {
 	if l != int64(len(mockData)) {
 		t.Fatalf("expected join data length %d, got %d", len(mockData), l)
 	}
-	joinData, err := ioutil.ReadAll(joinReader)
+	joinData, err := io.ReadAll(joinReader)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -158,6 +160,51 @@ func TestJoinerWithReference(t *testing.T) {
 	}
 }
 
+func TestJoinerMalformed(t *testing.T) {
+	store := mock.NewStorer()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	subTrie := []byte{8085: 1}
+	pb := builder.NewPipelineBuilder(ctx, store, storage.ModePutUpload, false)
+	c1addr, _ := builder.FeedPipeline(ctx, pb, bytes.NewReader(subTrie))
+
+	chunk2 := testingc.GenerateTestRandomChunk()
+	_, err := store.Put(ctx, storage.ModePutUpload, chunk2)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// root chunk
+	rootChunkData := make([]byte, 8+64)
+	binary.LittleEndian.PutUint64(rootChunkData[:8], uint64(boson.ChunkSize*2))
+
+	copy(rootChunkData[8:], c1addr.Bytes())
+	copy(rootChunkData[8+32:], chunk2.Address().Bytes())
+
+	rootChunk, err := cac.NewWithDataSpan(rootChunkData)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, err = store.Put(ctx, storage.ModePutUpload, rootChunk)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	joinReader, _, err := joiner.New(ctx, store, rootChunk.Address())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	resultBuffer := make([]byte, boson.ChunkSize)
+	_, err = joinReader.Read(resultBuffer)
+	if !errors.Is(err, joiner.ErrMalformedTrie) {
+		t.Fatalf("expected %v, got %v", joiner.ErrMalformedTrie, err)
+	}
+}
+
 func TestEncryptDecrypt(t *testing.T) {
 	var tests = []struct {
 		chunkLength int
@@ -183,7 +230,7 @@ func TestEncryptDecrypt(t *testing.T) {
 			ctx := context.Background()
 			pipe := builder.NewPipelineBuilder(ctx, store, storage.ModePutUpload, true)
 			testDataReader := bytes.NewReader(testData)
-			resultAddress, err := builder.FeedPipeline(ctx, pipe, testDataReader, int64(len(testData)))
+			resultAddress, err := builder.FeedPipeline(ctx, pipe, testDataReader)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -264,13 +311,13 @@ func TestSeek(t *testing.T) {
 			store := mock.NewStorer()
 			defer store.Close()
 
-			data, err := ioutil.ReadAll(io.LimitReader(r, tc.size))
+			data, err := io.ReadAll(io.LimitReader(r, tc.size))
 			if err != nil {
 				t.Fatal(err)
 			}
 
 			s := splitter.NewSimpleSplitter(store, storage.ModePutUpload)
-			addr, err := s.Split(ctx, ioutil.NopCloser(bytes.NewReader(data)), tc.size, false)
+			addr, err := s.Split(ctx, io.NopCloser(bytes.NewReader(data)), tc.size, false)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -542,13 +589,13 @@ func TestPrefetch(t *testing.T) {
 			store := mock.NewStorer()
 			defer store.Close()
 
-			data, err := ioutil.ReadAll(io.LimitReader(r, tc.size))
+			data, err := io.ReadAll(io.LimitReader(r, tc.size))
 			if err != nil {
 				t.Fatal(err)
 			}
 
 			s := splitter.NewSimpleSplitter(store, storage.ModePutUpload)
-			addr, err := s.Split(ctx, ioutil.NopCloser(bytes.NewReader(data)), tc.size, false)
+			addr, err := s.Split(ctx, io.NopCloser(bytes.NewReader(data)), tc.size, false)
 			if err != nil {
 				t.Fatal(err)
 			}

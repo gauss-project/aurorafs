@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"errors"
-
 	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/file"
 	"github.com/gauss-project/aurorafs/pkg/file/joiner"
@@ -66,7 +65,7 @@ func (ls *loadSave) Save(ctx context.Context, data []byte) ([]byte, error) {
 	}
 
 	pipe := ls.pipelineFn()
-	address, err := builder.FeedPipeline(ctx, pipe, bytes.NewReader(data), int64(len(data)))
+	address, err := builder.FeedPipeline(ctx, pipe, bytes.NewReader(data))
 	if err != nil {
 		return boson.ZeroAddress.Bytes(), err
 	}

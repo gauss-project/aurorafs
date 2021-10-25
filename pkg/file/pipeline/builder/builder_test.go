@@ -67,7 +67,7 @@ func TestEmpty(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	exp := boson.MustParseHexAddress("ffd70157e48063fc33c97a050f7f640233bf646cc98d9524c6b92bcf3ab56f83")
+	exp := boson.MustParseHexAddress("b34ca8c22b9e982354f9c7f50b470d66db428d880c8a904d5fe4ec9713171526")
 	if !bytes.Equal(exp.Bytes(), sum) {
 		t.Fatalf("expected %s got %s", exp.String(), hex.EncodeToString(sum))
 	}

@@ -15,14 +15,18 @@ import (
 )
 
 func (s *server) setupRouting() {
-	apiVersion := "v1" // only one api version exists, this should be configurable with more
+	const (
+		apiVersion = "v1" // Only one api version exists, this should be configurable with more.
+		rootPath   = "/" + apiVersion
+	)
 
-	handle := func(router *mux.Router, path string, handler http.Handler) {
+	router := mux.NewRouter()
+
+	handle := func(path string, handler http.Handler) {
 		router.Handle(path, handler)
 		router.Handle("/"+apiVersion+path, handler)
 	}
 
-	router := mux.NewRouter()
 	router.NotFoundHandler = http.HandlerFunc(jsonhttp.NotFoundHandler)
 
 	router.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
@@ -33,36 +37,50 @@ func (s *server) setupRouting() {
 		fmt.Fprintln(w, "User-agent: *\nDisallow: /")
 	})
 
-	handle(router, "/files", jsonhttp.MethodHandler{
+	handle("/bytes", jsonhttp.MethodHandler{
 		"POST": web.ChainHandlers(
-			s.newTracingHandler("files-upload"),
-			web.FinalHandlerFunc(s.fileUploadHandler),
-		),
-		"GET": web.ChainHandlers(
-			s.newTracingHandler("files-list"),
-			web.FinalHandlerFunc(s.fileListHandler),
+			s.newTracingHandler("bytes-upload"),
+			web.FinalHandlerFunc(s.bytesUploadHandler),
 		),
 	})
 
-	handle(router, "/files/{address}", jsonhttp.MethodHandler{
+	handle("/bytes/{address}", jsonhttp.MethodHandler{
 		"GET": web.ChainHandlers(
-			s.newTracingHandler("files-download"),
-			web.FinalHandlerFunc(s.fileDownloadHandler),
-		),
-		"DELETE": web.ChainHandlers(
-			s.newTracingHandler("files-delete"),
-			web.FinalHandlerFunc(s.fileDeleteHandler),
+			s.newTracingHandler("bytes-download"),
+			web.FinalHandlerFunc(s.bytesGetHandler),
 		),
 	})
 
-	handle(router, "/aurora", jsonhttp.MethodHandler{
+	handle("/chunks", jsonhttp.MethodHandler{
 		"POST": web.ChainHandlers(
-			s.newTracingHandler("dirs-upload"),
-			web.FinalHandlerFunc(s.dirUploadHandler),
+			jsonhttp.NewMaxBodyBytesHandler(boson.ChunkWithSpanSize),
+			web.FinalHandlerFunc(s.chunkUploadHandler),
 		),
 	})
 
-	handle(router, "/aurora/{address}", jsonhttp.MethodHandler{
+	handle("/chunks/{addr}", jsonhttp.MethodHandler{
+		"GET": http.HandlerFunc(s.chunkGetHandler),
+	})
+
+	handle("/soc/{owner}/{id}", jsonhttp.MethodHandler{
+		"POST": web.ChainHandlers(
+			jsonhttp.NewMaxBodyBytesHandler(boson.ChunkWithSpanSize),
+			web.FinalHandlerFunc(s.socUploadHandler),
+		),
+	})
+
+	handle("/aurora", jsonhttp.MethodHandler{
+		"GET": web.ChainHandlers(
+			s.newTracingHandler("aurora-list"),
+			web.FinalHandlerFunc(s.auroraListHandler),
+		),
+		"POST": web.ChainHandlers(
+			s.newTracingHandler("aurora-upload"),
+			web.FinalHandlerFunc(s.auroraUploadHandler),
+		),
+	})
+
+	handle("/aurora/{address}", jsonhttp.MethodHandler{
 		"GET": http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			u := r.URL
 			u.Path += "/"
@@ -70,18 +88,18 @@ func (s *server) setupRouting() {
 		}),
 		"DELETE": web.ChainHandlers(
 			s.newTracingHandler("aurora-delete"),
-			web.FinalHandlerFunc(s.dirDeleteHandler),
+			web.FinalHandlerFunc(s.auroraDeleteHandler),
 		),
 	})
 
-	handle(router, "/aurora/{address}/{path:.*}", jsonhttp.MethodHandler{
+	handle("/aurora/{address}/{path:.*}", jsonhttp.MethodHandler{
 		"GET": web.ChainHandlers(
 			s.newTracingHandler("aurora-download"),
-			web.FinalHandlerFunc(s.dirDownloadHandler),
+			web.FinalHandlerFunc(s.auroraDownloadHandler),
 		),
 	})
 
-	handle(router, "/manifest/{address}", jsonhttp.MethodHandler{
+	handle("/manifest/{address}", jsonhttp.MethodHandler{
 		"GET": http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			u := r.URL
 			u.Path += "/"
@@ -89,77 +107,41 @@ func (s *server) setupRouting() {
 		}),
 	})
 
-	handle(router, "/manifest/{address}/{path:.*}", jsonhttp.MethodHandler{
+	handle("/manifest/{address}/{path:.*}", jsonhttp.MethodHandler{
 		"GET": web.ChainHandlers(
 			s.newTracingHandler("manifest-view"),
 			web.FinalHandlerFunc(s.manifestViewHandler),
 		),
 	})
 
-	handle(router, "/bytes", jsonhttp.MethodHandler{
-		"POST": web.ChainHandlers(
-			s.newTracingHandler("bytes-upload"),
-			web.FinalHandlerFunc(s.bytesUploadHandler),
-		),
-	})
-	handle(router, "/bytes/{address}", jsonhttp.MethodHandler{
-		"GET": web.ChainHandlers(
-			s.newTracingHandler("bytes-download"),
-			web.FinalHandlerFunc(s.bytesGetHandler),
-		),
-	})
+	handle("/pins", web.ChainHandlers(
+		s.gatewayModeForbidEndpointHandler,
+		web.FinalHandler(jsonhttp.MethodHandler{
+			"GET": http.HandlerFunc(s.listPinnedRootHashes),
+		})),
+	)
 
-	handle(router, "/chunks", jsonhttp.MethodHandler{
-		"POST": web.ChainHandlers(
-			jsonhttp.NewMaxBodyBytesHandler(boson.ChunkWithSpanSize),
-			web.FinalHandlerFunc(s.chunkUploadHandler),
-		),
-	})
-
-	handle(router, "/chunks/{addr}", jsonhttp.MethodHandler{
-		"GET": http.HandlerFunc(s.chunkGetHandler),
-	})
-
-	handle(router, "/soc/{owner}/{id}", jsonhttp.MethodHandler{
-		"POST": web.ChainHandlers(
-			jsonhttp.NewMaxBodyBytesHandler(boson.ChunkWithSpanSize),
-			web.FinalHandlerFunc(s.socUploadHandler),
-		),
-	})
-
-	handle(router, "/pin/files/{address}", jsonhttp.MethodHandler{
-		"POST": web.ChainHandlers(
-			s.newTracingHandler("pin-files-post"),
-			web.FinalHandlerFunc(s.pinFile),
-		),
-		"DELETE": web.ChainHandlers(
-			s.newTracingHandler("pin-files-delete"),
-			web.FinalHandlerFunc(s.unpinFile),
-		),
-	})
-
-	handle(router, "/pin/aurora/{address}", jsonhttp.MethodHandler{
-		"POST": web.ChainHandlers(
-			s.newTracingHandler("pin-aurora-post"),
-			web.FinalHandlerFunc(s.pinAuroras),
-		),
-		"DELETE": web.ChainHandlers(
-			s.newTracingHandler("pin-aurora-delete"),
-			web.FinalHandlerFunc(s.unpinAuroras),
-		),
-	})
+	handle("/pins/{reference}", web.ChainHandlers(
+		s.gatewayModeForbidEndpointHandler,
+		web.FinalHandler(jsonhttp.MethodHandler{
+			"GET":    http.HandlerFunc(s.getPinnedRootHash),
+			"POST":   http.HandlerFunc(s.pinRootHash),
+			"DELETE": http.HandlerFunc(s.unpinRootHash),
+		})),
+	)
 
 	s.Handler = web.ChainHandlers(
 		httpaccess.NewHTTPAccessLogHandler(s.logger, logrus.InfoLevel, s.tracer, "api access"),
 		handlers.CompressHandler,
 		// todo: add recovery handler
+		s.responseCodeMetricsHandler,
 		s.pageviewMetricsHandler,
 		func(h http.Handler) http.Handler {
 			return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				if o := r.Header.Get("Origin"); o != "" && s.checkOrigin(r) {
 					w.Header().Set("Access-Control-Allow-Credentials", "true")
 					w.Header().Set("Access-Control-Allow-Origin", o)
-					w.Header().Set("Access-Control-Allow-Headers", "Origin, Accept, Authorization, Content-Type, X-Requested-With, Access-Control-Request-Headers, Access-Control-Request-Method, Boson-Tag, Boson-Pin, Boson-Encrypt, Boson-Index-Document, Boson-Error-Document")
+					w.Header().Set("Access-Control-Allow-Headers", "Origin, Accept, Authorization, Content-Type, X-Requested-With, Access-Control-Request-Headers, Access-Control-Request-Method, Aurora-Tag, Aurora-Pin, Aurora-Encrypt, Aurora-Index-Document, Aurora-Error-Document, Aurora-Collection, Aurora-Collection-Name")
 					w.Header().Set("Access-Control-Allow-Methods", "GET, HEAD, OPTIONS, POST, PUT, DELETE")
 					w.Header().Set("Access-Control-Max-Age", "3600")
 				}
@@ -171,26 +153,26 @@ func (s *server) setupRouting() {
 	)
 }
 
-//func (s *server) gatewayModeForbidEndpointHandler(h http.Handler) http.Handler {
-//	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-//		if s.GatewayMode {
-//			s.logger.Tracef("gateway mode: forbidden %s", r.URL.String())
-//			jsonhttp.Forbidden(w, nil)
-//			return
-//		}
-//		h.ServeHTTP(w, r)
-//	})
-//}
+func (s *server) gatewayModeForbidEndpointHandler(h http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if s.GatewayMode {
+			s.logger.Tracef("gateway mode: forbidden %s", r.URL.String())
+			jsonhttp.Forbidden(w, nil)
+			return
+		}
+		h.ServeHTTP(w, r)
+	})
+}
 
 func (s *server) gatewayModeForbidHeadersHandler(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if s.GatewayMode {
-			if strings.ToLower(r.Header.Get(BosonPinHeader)) == "true" {
+			if strings.ToLower(r.Header.Get(AuroraPinHeader)) == "true" {
 				s.logger.Tracef("gateway mode: forbidden pinning %s", r.URL.String())
 				jsonhttp.Forbidden(w, "pinning is disabled")
 				return
 			}
-			if strings.ToLower(r.Header.Get(BosonEncryptHeader)) == "true" {
+			if strings.ToLower(r.Header.Get(AuroraEncryptHeader)) == "true" {
 				s.logger.Tracef("gateway mode: forbidden encryption %s", r.URL.String())
 				jsonhttp.Forbidden(w, "encryption is disabled")
 				return

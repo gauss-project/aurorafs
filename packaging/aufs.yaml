@@ -16,8 +16,8 @@ config: /etc/aurorafs/aurorafs.yaml
 # cors-allowed-origins: []
 ## data directory (default "/home/<user>/.aurorafs")
 data-dir: /var/lib/aurorafs
-## db capacity in chunks, multiply by 4096 to get approximate capacity in bytes
-# db-capacity: 5000000
+## cache capacity in chunks, multiply by 4096 to get approximate capacity in bytes
+# cache-capacity: 80000
 ## number of open files allowed by database
 # db-open-files-limit: 200
 ## size of block cache of the database in bytes

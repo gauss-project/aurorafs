@@ -1,7 +1,6 @@
 package leveldb_test
 
 import (
-	"io/ioutil"
 	"os"
 	"testing"
 
@@ -12,7 +11,7 @@ import (
 
 func TestPersistentStateStore(t *testing.T) {
 	test.Run(t, func(t *testing.T) storage.StateStorer {
-		dir, err := ioutil.TempDir("", "statestore_test")
+		dir, err := os.MkdirTemp("", "statestore_test")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -46,7 +45,7 @@ func TestPersistentStateStore(t *testing.T) {
 }
 
 func TestGetSchemaName(t *testing.T) {
-	dir, err := ioutil.TempDir("", "statestore_test")
+	dir, err := os.MkdirTemp("", "statestore_test")
 	if err != nil {
 		t.Fatal(err)
 	}

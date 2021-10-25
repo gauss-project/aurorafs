@@ -7,8 +7,6 @@ import (
 	_ "embed"
 	"errors"
 	"fmt"
-	"io/ioutil"
-
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -26,7 +24,6 @@ import (
 	"github.com/gauss-project/aurorafs/pkg/node"
 	"github.com/gauss-project/aurorafs/pkg/resolver/multiresolver"
 	"github.com/kardianos/service"
-	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 )
 
@@ -47,22 +44,10 @@ func (c *command) initStartCmd() (err error) {
 				return cmd.Help()
 			}
 
-			var logger logging.Logger
-			switch v := strings.ToLower(c.config.GetString(optionNameVerbosity)); v {
-			case "0", "silent":
-				logger = logging.New(ioutil.Discard, 0)
-			case "1", "error":
-				logger = logging.New(cmd.OutOrStdout(), logrus.ErrorLevel)
-			case "2", "warn":
-				logger = logging.New(cmd.OutOrStdout(), logrus.WarnLevel)
-			case "3", "info":
-				logger = logging.New(cmd.OutOrStdout(), logrus.InfoLevel)
-			case "4", "debug":
-				logger = logging.New(cmd.OutOrStdout(), logrus.DebugLevel)
-			case "5", "trace":
-				logger = logging.New(cmd.OutOrStdout(), logrus.TraceLevel)
-			default:
-				return fmt.Errorf("unknown verbosity level %q", v)
+			v := strings.ToLower(c.config.GetString(optionNameVerbosity))
+			logger, err := newLogger(cmd, v)
+			if err != nil {
+				return fmt.Errorf("new logger: %v", err)
 			}
 
 			go startTimeBomb(logger)
@@ -120,7 +105,7 @@ func (c *command) initStartCmd() (err error) {
 
 			b, err := node.NewAurora(c.config.GetString(optionNameP2PAddr), signerConfig.address, *signerConfig.publicKey, signerConfig.signer, c.config.GetUint64(optionNameNetworkID), logger, signerConfig.libp2pPrivateKey, signerConfig.pssPrivateKey, node.Options{
 				DataDir:                  c.config.GetString(optionNameDataDir),
-				DBCapacity:               c.config.GetUint64(optionNameDBCapacity),
+				CacheCapacity:            c.config.GetUint64(optionNameCacheCapacity),
 				DBOpenFilesLimit:         c.config.GetUint64(optionNameDBOpenFilesLimit),
 				DBBlockCacheCapacity:     c.config.GetUint64(optionNameDBBlockCacheCapacity),
 				DBWriteBufferSize:        c.config.GetUint64(optionNameDBWriteBufferSize),
@@ -285,7 +270,7 @@ func (c *command) configureSigner(cmd *cobra.Command, logger logging.Logger) (co
 	if p := c.config.GetString(optionNamePassword); p != "" {
 		password = p
 	} else if pf := c.config.GetString(optionNamePasswordFile); pf != "" {
-		b, err := ioutil.ReadFile(pf)
+		b, err := os.ReadFile(pf)
 		if err != nil {
 			return nil, err
 		}
