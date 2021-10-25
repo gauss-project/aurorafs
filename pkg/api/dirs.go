@@ -2,24 +2,21 @@ package api
 
 import (
 	"archive/tar"
-	"bytes"
 	"context"
-	"encoding/binary"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"mime"
+	"mime/multipart"
 	"net/http"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 
 	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/chunkinfo"
-	"github.com/gauss-project/aurorafs/pkg/collection/entry"
 	"github.com/gauss-project/aurorafs/pkg/file"
-	"github.com/gauss-project/aurorafs/pkg/file/joiner"
 	"github.com/gauss-project/aurorafs/pkg/file/loadsave"
 	"github.com/gauss-project/aurorafs/pkg/jsonhttp"
 	"github.com/gauss-project/aurorafs/pkg/logging"
@@ -31,89 +28,113 @@ import (
 	"github.com/syndtr/goleveldb/leveldb"
 )
 
-const (
-	contentTypeHeader = "Content-Type"
-	contentTypeTar    = "application/x-tar"
-)
-
-const (
-	manifestRootPath                      = "/"
-	manifestWebsiteIndexDocumentSuffixKey = "website-index-document"
-	manifestWebsiteErrorDocumentPathKey   = "website-error-document"
-)
-
 // dirUploadHandler uploads a directory supplied as a tar in an HTTP request
 func (s *server) dirUploadHandler(w http.ResponseWriter, r *http.Request) {
 	logger := tracing.NewLoggerWithTraceID(r.Context(), s.logger)
-	err := validateRequest(r)
+	if r.Body == http.NoBody {
+		logger.Error("aurora upload dir: request has no body")
+		jsonhttp.BadRequest(w, invalidRequest)
+		return
+	}
+	contentType := r.Header.Get(contentTypeHeader)
+	mediaType, params, err := mime.ParseMediaType(contentType)
 	if err != nil {
-		logger.Errorf("dir upload, validate request")
-		logger.Debugf("dir upload, validate request err: %v", err)
-		jsonhttp.BadRequest(w, "could not validate request")
+		logger.Errorf("aurora upload dir: invalid content-type")
+		logger.Debugf("aurora upload dir: invalid content-type err: %v", err)
+		jsonhttp.BadRequest(w, invalidContentType)
 		return
 	}
 
-	// Add the tag to the context
+	var dReader dirReader
+	switch mediaType {
+	case contentTypeTar:
+		dReader = &tarReader{r: tar.NewReader(r.Body), logger: s.logger}
+	case multiPartFormData:
+		dReader = &multipartReader{r: multipart.NewReader(r.Body, params["boundary"])}
+	default:
+		logger.Error("aurora upload dir: invalid content-type for directory upload")
+		jsonhttp.BadRequest(w, invalidContentType)
+		return
+	}
+	defer r.Body.Close()
+
 	ctx := r.Context()
+
 	p := requestPipelineFn(s.storer, r)
-	encrypt := requestEncrypt(r)
 	factory := requestPipelineFactory(ctx, s.storer, r)
-	l := loadsave.New(s.storer, factory)
-	reference, err := storeDir(ctx, encrypt, r.Body, s.logger, p, l, r.Header.Get(BosonIndexDocumentHeader), r.Header.Get(BosonErrorDocumentHeader))
+	reference, err := storeDir(
+		ctx,
+		requestEncrypt(r),
+		dReader,
+		s.logger,
+		p,
+		loadsave.New(s.storer, factory),
+		r.Header.Get(AuroraCollectionNameHeader),
+		r.Header.Get(AuroraIndexDocumentHeader),
+		r.Header.Get(AuroraErrorDocumentHeader),
+	)
 	if err != nil {
-		logger.Debugf("dir upload: store dir err: %v", err)
-		logger.Errorf("dir upload: store dir")
-		jsonhttp.InternalServerError(w, "could not store dir")
+		logger.Debugf("aurora upload dir: store dir err: %v", err)
+		logger.Errorf("aurora upload dir: store dir")
+		jsonhttp.InternalServerError(w, directoryStoreError)
 		return
 	}
 
-	a, err := s.traversal.GetTrieData(ctx, reference)
+	pyramid, err := s.traversal.GetPyramid(ctx, reference)
 	if err != nil {
-		logger.Errorf("dir upload: get trie data err: %v", err)
-		jsonhttp.InternalServerError(w, "could not get trie data")
+		logger.Debugf("aurora upload dir: get pyramid err: %v", err)
+		logger.Errorf("aurora upload dir: get pyramid err")
+		jsonhttp.InternalServerError(w, "could not get pyramid")
 		return
 	}
-	dataChunks, _ := s.traversal.CheckTrieData(ctx, reference, a)
+
+	dataChunks, _ := s.traversal.GetChunkHashes(ctx, reference, pyramid)
 	if err != nil {
-		logger.Errorf("dir upload: check trie data err: %v", err)
-		jsonhttp.InternalServerError(w, "check trie data error")
+		logger.Debugf("aurora upload dir: get chunk hashes err: %v", err)
+		logger.Errorf("aurora upload dir: get chunk hashes err")
+		jsonhttp.InternalServerError(w, "could not get chunk hashes")
 		return
 	}
+
 	for _, li := range dataChunks {
 		for _, b := range li {
 			err := s.chunkInfo.OnChunkTransferred(boson.NewAddress(b), reference, s.overlay, boson.ZeroAddress)
 			if err != nil {
-				logger.Errorf("chunk transfer data err: %v", err)
+				logger.Errorf("aurora upload dir: chunk transfer data err: %v", err)
+				logger.Errorf("aurora upload dir: chunk transfer data err")
 				jsonhttp.InternalServerError(w, "chunk transfer data error")
 				return
 			}
 		}
 	}
 
-	jsonhttp.OK(w, fileUploadResponse{
+	if strings.ToLower(r.Header.Get(AuroraPinHeader)) == "true" {
+		if err := s.pinning.CreatePin(r.Context(), reference, false); err != nil {
+			logger.Debugf("aurora upload dir: creation of pin for %q failed: %v", reference, err)
+			logger.Error("aurora upload dir: creation of pin failed")
+			jsonhttp.InternalServerError(w, nil)
+			return
+		}
+	}
+
+	jsonhttp.Created(w, auroraUploadResponse{
 		Reference: reference,
 	})
 }
 
-// validateRequest validates an HTTP request for a directory to be uploaded
-func validateRequest(r *http.Request) error {
-	if r.Body == http.NoBody {
-		return errors.New("request has no body")
-	}
-	contentType := r.Header.Get(contentTypeHeader)
-	mediaType, _, err := mime.ParseMediaType(contentType)
-	if err != nil {
-		return err
-	}
-	if mediaType != contentTypeTar {
-		return errors.New("content-type not set to tar")
-	}
-	return nil
-}
-
-// storeDir stores all files recursively contained in the directory given as a tar
+// storeDir stores all files recursively contained in the directory given as a tar/multipart
 // it returns the hash for the uploaded manifest corresponding to the uploaded dir
-func storeDir(ctx context.Context, encrypt bool, reader io.ReadCloser, log logging.Logger, p pipelineFunc, ls file.LoadSaver, indexFilename string, errorFilename string) (boson.Address, error) {
+func storeDir(
+	ctx context.Context,
+	encrypt bool,
+	reader dirReader,
+	log logging.Logger,
+	p pipelineFunc,
+	ls file.LoadSaver,
+	dirName,
+	indexFilename,
+	errorFilename string,
+) (boson.Address, error) {
 	logger := tracing.NewLoggerWithTraceID(ctx, log)
 
 	dirManifest, err := manifest.NewDefaultManifest(ls, encrypt)
@@ -125,58 +146,33 @@ func storeDir(ctx context.Context, encrypt bool, reader io.ReadCloser, log loggi
 		return boson.ZeroAddress, fmt.Errorf("index document suffix must not include slash character")
 	}
 
-	// set up HTTP body reader
-	tarReader := tar.NewReader(reader)
-	defer reader.Close()
+	if dirName != "" && strings.ContainsRune(dirName, '/') {
+		return boson.ZeroAddress, fmt.Errorf("dir name must not include slash character")
+	}
 
 	filesAdded := 0
 
 	// iterate through the files in the supplied tar
 	for {
-		fileHeader, err := tarReader.Next()
+		fileInfo, err := reader.Next()
 		if err == io.EOF {
 			break
 		} else if err != nil {
 			return boson.ZeroAddress, fmt.Errorf("read tar stream: %w", err)
 		}
 
-		filePath := filepath.Clean(fileHeader.Name)
-
-		if filePath == "." {
-			logger.Warning("skipping file upload empty path")
-			continue
-		}
-
-		if runtime.GOOS == "windows" {
-			// always use Unix path separator
-			filePath = filepath.ToSlash(filePath)
-		}
-
-		// only store regular files
-		if !fileHeader.FileInfo().Mode().IsRegular() {
-			logger.Warningf("skipping file upload for %s as it is not a regular file", filePath)
-			continue
-		}
-
-		fileName := fileHeader.FileInfo().Name()
-		contentType := mime.TypeByExtension(filepath.Ext(fileHeader.Name))
-
-		// upload file
-		fileInfo := &fileUploadInfo{
-			name:        fileName,
-			size:        fileHeader.FileInfo().Size(),
-			contentType: contentType,
-			reader:      tarReader,
-		}
-
-		fileReference, err := storeFile(ctx, fileInfo, p, encrypt)
+		fileReference, err := p(ctx, fileInfo.Reader)
 		if err != nil {
 			return boson.ZeroAddress, fmt.Errorf("store dir file: %w", err)
 		}
-		logger.Tracef("uploaded dir file %v with reference %v", filePath, fileReference)
+		logger.Tracef("uploaded dir file %v with reference %v", fileInfo.Path, fileReference)
 
+		fileMetadata := map[string]string{
+			manifest.EntryMetadataContentTypeKey: fileInfo.ContentType,
+			manifest.EntryMetadataFilenameKey:    fileInfo.Name,
+		}
 		// add file entry to dir manifest
-		err = dirManifest.Add(ctx, filePath, manifest.NewEntry(fileReference, nil))
+		err = dirManifest.Add(ctx, fileInfo.Path, manifest.NewEntry(fileReference, fileMetadata))
 		if err != nil {
 			return boson.ZeroAddress, fmt.Errorf("add to manifest: %w", err)
 		}
@@ -190,16 +186,19 @@ func storeDir(ctx context.Context, encrypt bool, reader io.ReadCloser, log loggi
 	}
 
 	// store website information
-	if indexFilename != "" || errorFilename != "" {
+	if dirName != "" || indexFilename != "" || errorFilename != "" {
 		metadata := map[string]string{}
+		if dirName != "" {
+			metadata[manifest.EntryMetadataDirnameKey] = dirName
+		}
 		if indexFilename != "" {
-			metadata[manifestWebsiteIndexDocumentSuffixKey] = indexFilename
+			metadata[manifest.WebsiteIndexDocumentSuffixKey] = indexFilename
 		}
 		if errorFilename != "" {
-			metadata[manifestWebsiteErrorDocumentPathKey] = errorFilename
+			metadata[manifest.WebsiteErrorDocumentPathKey] = errorFilename
 		}
 		rootManifestEntry := manifest.NewEntry(boson.ZeroAddress, metadata)
-		err = dirManifest.Add(ctx, manifestRootPath, rootManifestEntry)
+		err = dirManifest.Add(ctx, manifest.RootPath, rootManifestEntry)
 		if err != nil {
 			return boson.ZeroAddress, fmt.Errorf("add to manifest: %w", err)
 		}
@@ -208,86 +207,121 @@ func storeDir(ctx context.Context, encrypt bool, reader io.ReadCloser, log loggi
 	storeSizeFn := []manifest.StoreSizeFunc{}
 
 	// save manifest
-	manifestBytesReference, err := dirManifest.Store(ctx, storeSizeFn...)
+	manifestReference, err := dirManifest.Store(ctx, storeSizeFn...)
 	if err != nil {
 		return boson.ZeroAddress, fmt.Errorf("store manifest: %w", err)
 	}
+	logger.Tracef("finished uploaded dir with reference %v", manifestReference)
 
-	// store the manifest metadata and get its reference
-	m := entry.NewMetadata(manifestBytesReference.String())
-	m.MimeType = dirManifest.Type()
-	metadataBytes, err := json.Marshal(m)
-	if err != nil {
-		return boson.ZeroAddress, fmt.Errorf("metadata marshal: %w", err)
-	}
-
-	mr, err := p(ctx, bytes.NewReader(metadataBytes), int64(len(metadataBytes)))
-	if err != nil {
-		return boson.ZeroAddress, fmt.Errorf("split metadata: %w", err)
-	}
-
-	// now join both references (fr, mr) to create an entry and store it
-	e := entry.New(manifestBytesReference, mr)
-	fileEntryBytes, err := e.MarshalBinary()
-	if err != nil {
-		return boson.ZeroAddress, fmt.Errorf("entry marshal: %w", err)
-	}
-
-	manifestFileReference, err := p(ctx, bytes.NewReader(fileEntryBytes), int64(len(fileEntryBytes)))
-	if err != nil {
-		return boson.ZeroAddress, fmt.Errorf("split entry: %w", err)
-	}
-
-	return manifestFileReference, nil
+	return manifestReference, nil
 }
 
-// storeFile uploads the given file and returns its reference
-// this function was extracted from `fileUploadHandler` and should eventually replace its current code
-func storeFile(ctx context.Context, fileInfo *fileUploadInfo, p pipelineFunc, encrypt bool) (boson.Address, error) {
-	// first store the file and get its reference
-	fr, err := p(ctx, fileInfo.reader, fileInfo.size)
-	if err != nil {
-		return boson.ZeroAddress, fmt.Errorf("split file: %w", err)
-	}
-
-	// if filename is still empty, use the file hash as the filename
-	if fileInfo.name == "" {
-		fileInfo.name = fr.String()
-	}
-
-	// then store the metadata and get its reference
-	m := entry.NewMetadata(fileInfo.name)
-	m.MimeType = fileInfo.contentType
-	metadataBytes, err := json.Marshal(m)
-	if err != nil {
-		return boson.ZeroAddress, fmt.Errorf("metadata marshal: %w", err)
-	}
-
-	mr, err := p(ctx, bytes.NewReader(metadataBytes), int64(len(metadataBytes)))
-	if err != nil {
-		return boson.ZeroAddress, fmt.Errorf("split metadata: %w", err)
-	}
-
-	// now join both references (mr, fr) to create an entry and store it
-	e := entry.New(fr, mr)
-	fileEntryBytes, err := e.MarshalBinary()
-	if err != nil {
-		return boson.ZeroAddress, fmt.Errorf("entry marshal: %w", err)
-	}
-	ref, err := p(ctx, bytes.NewReader(fileEntryBytes), int64(len(fileEntryBytes)))
-	if err != nil {
-		return boson.ZeroAddress, fmt.Errorf("split entry: %w", err)
-	}
-
-	return ref, nil
+type FileInfo struct {
+	Path        string
+	Name        string
+	ContentType string
+	Size        int64
+	Reader      io.Reader
 }
 
-func (s *server) dirDeleteHandler(w http.ResponseWriter, r *http.Request) {
+type dirReader interface {
+	Next() (*FileInfo, error)
+}
+
+type tarReader struct {
+	r      *tar.Reader
+	logger logging.Logger
+}
+
+func (t *tarReader) Next() (*FileInfo, error) {
+	for {
+		fileHeader, err := t.r.Next()
+		if err != nil {
+			return nil, err
+		}
+
+		fileName := fileHeader.FileInfo().Name()
+		contentType := mime.TypeByExtension(filepath.Ext(fileHeader.Name))
+		fileSize := fileHeader.FileInfo().Size()
+		filePath := filepath.Clean(fileHeader.Name)
+
+		if filePath == "." {
+			t.logger.Warning("skipping file upload empty path")
+			continue
+		}
+		if runtime.GOOS == "windows" {
+			// always use Unix path separator
+			filePath = filepath.ToSlash(filePath)
+		}
+		// only store regular files
+		if !fileHeader.FileInfo().Mode().IsRegular() {
+			t.logger.Warningf("skipping file upload for %s as it is not a regular file", filePath)
+			continue
+		}
+
+		return &FileInfo{
+			Path:        filePath,
+			Name:        fileName,
+			ContentType: contentType,
+			Size:        fileSize,
+			Reader:      t.r,
+		}, nil
+	}
+}
+
+// multipart reader returns files added as a multipart form. We will ensure all the
+// part headers are passed correctly
+type multipartReader struct {
+	r *multipart.Reader
+}
+
+func (m *multipartReader) Next() (*FileInfo, error) {
+	part, err := m.r.NextPart()
+	if err != nil {
+		return nil, err
+	}
+
+	fileName := part.FileName()
+	if fileName == "" {
+		fileName = part.FormName()
+	}
+	if fileName == "" {
+		return nil, errors.New("filename missing")
+	}
+
+	contentType := part.Header.Get(contentTypeHeader)
+	if contentType == "" {
+		return nil, errors.New("content-type missing")
+	}
+
+	contentLength := part.Header.Get("Content-Length")
+	if contentLength == "" {
+		return nil, errors.New("content-length missing")
+	}
+	fileSize, err := strconv.ParseInt(contentLength, 10, 64)
+	if err != nil {
+		return nil, errors.New("invalid file size")
+	}
+
+	if filepath.Dir(fileName) != "." {
+		return nil, errors.New("multipart upload supports only single directory")
+	}
+
+	return &FileInfo{
+		Path:        fileName,
+		Name:        fileName,
+		ContentType: contentType,
+		Size:        fileSize,
+		Reader:      part,
+	}, nil
+}
+
+func (s *server) auroraDeleteHandler(w http.ResponseWriter, r *http.Request) {
 	addr := mux.Vars(r)["address"]
 	hash, err := boson.ParseHexAddress(addr)
 	if err != nil {
-		s.logger.Debugf("delete aurora: parse address: %w", err)
-		s.logger.Errorf("delete aurora: parse address %s", addr)
+		s.logger.Debugf("aurora delete: parse address: %w", err)
+		s.logger.Errorf("aurora delete: parse address %s", addr)
 		jsonhttp.BadRequest(w, "invalid address")
 		return
 	}
@@ -303,8 +337,8 @@ func (s *server) dirDeleteHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		s.logger.Debugf("delete aurora: check %s exists: %w", hash, err)
-		s.logger.Errorf("delete aurora: check %s exists", hash)
+		s.logger.Debugf("aurora delete: check %s exists: %w", hash, err)
+		s.logger.Errorf("aurora delete: check %s exists", hash)
 		jsonhttp.InternalServerError(w, err)
 		return
 	}
@@ -318,8 +352,8 @@ func (s *server) dirDeleteHandler(w http.ResponseWriter, r *http.Request) {
 
 	ok := s.chunkInfo.DelFile(hash)
 	if !ok {
-		s.logger.Errorf("delete aurora: chunk info report remove %s failed", hash)
-		jsonhttp.InternalServerError(w, "dirs deleting occur error")
+		s.logger.Errorf("aurora delete: chunk info report remove %s failed", hash)
+		jsonhttp.InternalServerError(w, "aurora deleting occur error")
 		return
 	}
 
@@ -335,9 +369,9 @@ func (s *server) dirDeleteHandler(w http.ResponseWriter, r *http.Request) {
 					continue
 				}
 
-				s.logger.Debugf("delete aurora: remove chunk: %w", err)
-				s.logger.Errorf("delete aurora: remove chunk %s", chunk.Cid)
-				jsonhttp.InternalServerError(w, "dirs deletion occur error")
+				s.logger.Debugf("aurora delete: remove chunk: %w", err)
+				s.logger.Errorf("aurora delete: remove chunk %s", chunk.Cid)
+				jsonhttp.InternalServerError(w, "aurora deleting occur error")
 				return
 			}
 		}
@@ -346,320 +380,19 @@ func (s *server) dirDeleteHandler(w http.ResponseWriter, r *http.Request) {
 	err = s.storer.Set(r.Context(), storage.ModeSetRemove, hash)
 	if err != nil {
 		if !errors.Is(err, leveldb.ErrNotFound) {
-			s.logger.Debugf("delete aurora: remove chunk: %w", err)
-			s.logger.Errorf("delete aurora: remove chunk %s", hash)
-			jsonhttp.InternalServerError(w, "dirs deletion occur error")
+			s.logger.Debugf("aurora delete: remove chunk: %w", err)
+			s.logger.Errorf("aurora delete: remove chunk %s", hash)
+			jsonhttp.InternalServerError(w, "aurora deleting occur error")
 			return
 		}
 	}
 
 	ok = s.chunkInfo.DelPyramid(hash)
 	if !ok {
-		s.logger.Errorf("delete aurora: chunk info report delete %s related pyramid failed", hash)
-		jsonhttp.InternalServerError(w, "dirs deleting occur error")
+		s.logger.Errorf("aurora delete: chunk info report delete %s related pyramid failed", hash)
+		jsonhttp.InternalServerError(w, "aurora deleting occur error")
 		return
 	}
 
 	jsonhttp.OK(w, nil)
-}
-
-func (s *server) serveManifestMetadata(w http.ResponseWriter, r *http.Request, e *entry.Entry) {
-	var (
-		logger = tracing.NewLoggerWithTraceID(r.Context(), s.logger)
-		ctx    = r.Context()
-		buf    = bytes.NewBuffer(nil)
-	)
-
-	// read metadata
-	j, _, err := joiner.New(ctx, s.storer, e.Metadata())
-	if err != nil {
-		logger.Debugf("manifest view: joiner %s: %v", e.Metadata(), err)
-		logger.Errorf("manifest view: joiner %s", e.Metadata())
-		jsonhttp.NotFound(w, nil)
-		return
-	}
-
-	buf = bytes.NewBuffer(nil)
-	_, err = file.JoinReadAll(ctx, j, buf)
-	if err != nil {
-		logger.Debugf("manifest view: read metadata %s: %v", e.Metadata(), err)
-		logger.Errorf("manifest view: read metadata %s", e.Metadata())
-		jsonhttp.NotFound(w, nil)
-		return
-	}
-
-	metadata := &entry.Metadata{}
-	err = json.Unmarshal(buf.Bytes(), metadata)
-	if err != nil {
-		logger.Debugf("manifest view: unmarshal metadata %s: %v", e.Metadata(), err)
-		logger.Errorf("manifest view: unmarshal metadata %s", e.Metadata())
-		jsonhttp.NotFound(w, nil)
-		return
-	}
-
-	refChunk, err := s.storer.Get(ctx, storage.ModeGetRequest, e.Reference())
-	if err != nil {
-		jsonhttp.NotFound(w, nil)
-		return
-	}
-
-	if len(refChunk.Data()) < boson.SpanSize {
-		s.logger.Error("manifest view: chunk data too short")
-		jsonhttp.BadRequest(w, "short chunk data")
-		return
-	}
-
-	var ext string
-	lastDot := strings.LastIndexByte(metadata.Filename, '.')
-	if lastDot != -1 {
-		ext = metadata.Filename[lastDot:]
-	}
-
-	type FsType struct {
-		Name      string `json:"name"`
-		Size      uint64 `json:"size"`
-		Extension string `json:"ext"`
-		MimeType  string `json:"mime"`
-	}
-
-	jsonhttp.OK(w, &FsType{
-		Name:      metadata.Filename,
-		Size:      binary.LittleEndian.Uint64(refChunk.Data()[:boson.SpanSize]),
-		Extension: ext,
-		MimeType:  metadata.MimeType,
-	})
-}
-
-func (s *server) manifestViewHandler(w http.ResponseWriter, r *http.Request) {
-	logger := tracing.NewLoggerWithTraceID(r.Context(), s.logger)
-	ls := loadsave.NewReadonly(s.storer)
-
-	nameOrHex := mux.Vars(r)["address"]
-	pathVar := mux.Vars(r)["path"]
-
-	depth := 1
-	if r.URL.Query().Get("recursive") != "" {
-		depth = -1
-	}
-
-	address, err := s.resolveNameOrAddress(nameOrHex)
-	if err != nil {
-		logger.Debugf("manifest view: parse address %s: %v", nameOrHex, err)
-		logger.Error("manifest view: parse address")
-		jsonhttp.NotFound(w, nil)
-		return
-	}
-
-	// read manifest entry
-	j, _, err := joiner.New(r.Context(), s.storer, address)
-	if err != nil {
-		logger.Debugf("manifest view: joiner manifest entry %s: %v", address, err)
-		logger.Errorf("manifest view: joiner %s", address)
-		jsonhttp.NotFound(w, nil)
-		return
-	}
-
-	buf := bytes.NewBuffer(nil)
-	_, err = file.JoinReadAll(r.Context(), j, buf)
-	if err != nil {
-		logger.Debugf("manifest view: read entry %s: %v", address, err)
-		logger.Errorf("manifest view: read entry %s", address)
-		jsonhttp.NotFound(w, nil)
-		return
-	}
-
-	e := &entry.Entry{}
-	err = e.UnmarshalBinary(buf.Bytes())
-	if err != nil {
-		logger.Debugf("manifest view: unmarshal entry %s: %v", address, err)
-		logger.Errorf("manifest view: unmarshal entry %s", address)
-		jsonhttp.NotFound(w, nil)
-		return
-	}
-
-	// read metadata
-	j, _, err = joiner.New(r.Context(), s.storer, e.Metadata())
-	if err != nil {
-		logger.Debugf("manifest view: joiner metadata %s: %v", address, err)
-		logger.Errorf("manifest view: joiner %s", address)
-		jsonhttp.NotFound(w, nil)
-		return
-	}
-
-	// read metadata
-	buf = bytes.NewBuffer(nil)
-	_, err = file.JoinReadAll(r.Context(), j, buf)
-	if err != nil {
-		logger.Debugf("manifest view: read metadata %s: %v", address, err)
-		logger.Errorf("manifest view: read metadata %s", address)
-		jsonhttp.NotFound(w, nil)
-		return
-	}
-
-	metadata := &entry.Metadata{}
-	err = json.Unmarshal(buf.Bytes(), metadata)
-	if err != nil {
-		logger.Debugf("manifest view: unmarshal metadata %s: %v", address, err)
-		logger.Errorf("manifest view: unmarshal metadata %s", address)
-		jsonhttp.NotFound(w, nil)
-		return
-	}
-
-	var fe *entry.Entry
-
-	switch metadata.MimeType {
-	case manifest.ManifestSimpleContentType, manifest.ManifestMantarayContentType:
-		m, err := manifest.NewManifestReference(
-			metadata.MimeType,
-			e.Reference(),
-			ls,
-		)
-		if err != nil {
-			logger.Debugf("manifest view: load manifest %s: %v", address, err)
-			logger.Error("manifest view: load manifest")
-			jsonhttp.NotFound(w, nil)
-			return
-		}
-
-		if pathVar == "" || strings.HasSuffix(pathVar, "/") {
-			type FsNode struct {
-				Type  string             `json:"type"`
-				Hash  string             `json:"hash,omitempty"`
-				Nodes map[string]*FsNode `json:"sub,omitempty"`
-			}
-
-			rootNode := &FsNode{
-				Type: manifest.Directory.String(),
-			}
-
-			findNode := func(n *FsNode, path []byte) *FsNode {
-				i := 0
-				p := n
-				for j := 0; j < len(path); j++ {
-					if path[j] == '/' {
-						if p.Nodes == nil {
-							p.Nodes = make(map[string]*FsNode)
-						}
-						dir := path[i:j]
-						sub, ok := p.Nodes[string(dir)]
-						if !ok {
-							p.Nodes[string(dir)] = &FsNode{
-								Type: manifest.Directory.String(),
-							}
-							sub = p.Nodes[string(dir)]
-						}
-						p = sub
-						i = j + 1
-					}
-				}
-				return p
-			}
-
-			fn := func(nodeType int, path, prefix, hash []byte) error {
-				node := findNode(rootNode, path)
-				if nodeType == int(manifest.File) {
-					if node.Nodes == nil {
-						node.Nodes = make(map[string]*FsNode)
-					}
-					node.Nodes[string(prefix)] = &FsNode{
-						Type: manifest.File.String(),
-						Hash: boson.NewAddress(hash).String(),
-					}
-				}
-
-				return nil
-			}
-
-			pathVar = strings.Trim(pathVar, "/")
-			if len(pathVar) != 0 {
-				pathVar += "/"
-			}
-
-			if err := m.IterateNodes(r.Context(), []byte(pathVar), depth, fn); err != nil {
-				jsonhttp.InternalServerError(w, err)
-				return
-			}
-
-			if indexDocumentSuffixKey, ok := manifestMetadataLoad(r.Context(), m, manifestRootPath, manifestWebsiteIndexDocumentSuffixKey); ok {
-				_, err := m.Lookup(r.Context(), indexDocumentSuffixKey)
-				if err != nil {
-					logger.Debugf("manifest view: invalid index %s/%s: %v", address, indexDocumentSuffixKey, err)
-					logger.Error("manifest view: invalid index")
-				}
-
-				indexNode, ok := rootNode.Nodes[indexDocumentSuffixKey]
-				if ok && indexNode.Type == manifest.File.String() {
-					indexNode.Type = manifest.IndexItem.String()
-				}
-			}
-
-			jsonhttp.OK(w, rootNode)
-			return
-		}
-
-		me, err := m.Lookup(r.Context(), pathVar)
-		if err != nil {
-			logger.Debugf("manifest view: invalid path %s/%s: %v", address, pathVar, err)
-			logger.Error("manifest view: invalid path")
-			jsonhttp.NotFound(w, nil)
-			return
-		}
-
-		reference := me.Reference()
-
-		// read file entry
-		j, _, err := joiner.New(r.Context(), s.storer, reference)
-		if err != nil {
-			logger.Debugf("manifest view: joiner read file entry %s: %v", address, err)
-			logger.Errorf("manifest view: joiner read file entry %s", address)
-			jsonhttp.NotFound(w, nil)
-			return
-		}
-
-		buf = bytes.NewBuffer(nil)
-		_, err = file.JoinReadAll(r.Context(), j, buf)
-		if err != nil {
-			logger.Debugf("manifest view: read file entry %s: %v", address, err)
-			logger.Errorf("manifest view: read file entry %s", address)
-			jsonhttp.NotFound(w, nil)
-			return
-		}
-		fe = &entry.Entry{}
-		err = fe.UnmarshalBinary(buf.Bytes())
-		if err != nil {
-			logger.Debugf("manifest view: unmarshal file entry %s: %v", address, err)
-			logger.Errorf("manifest view: unmarshal file entry %s", address)
-			jsonhttp.NotFound(w, nil)
-			return
-		}
-	default:
-		// read entry
-		j, _, err := joiner.New(r.Context(), s.storer, address)
-		if err != nil {
-			errors.Is(err, storage.ErrNotFound)
-			logger.Debugf("manifest view: joiner %s: %v", address, err)
-			logger.Errorf("manifest view: joiner %s", address)
-			jsonhttp.NotFound(w, nil)
-			return
-		}
-
-		buf := bytes.NewBuffer(nil)
-		_, err = file.JoinReadAll(r.Context(), j, buf)
-		if err != nil {
-			logger.Debugf("manifest view: read entry %s: %v", address, err)
-			logger.Errorf("manifest view: read entry %s", address)
-			jsonhttp.NotFound(w, nil)
-			return
-		}
-		fe = &entry.Entry{}
-		err = fe.UnmarshalBinary(buf.Bytes())
-		if err != nil {
-			logger.Debugf("manifest view: unmarshal entry %s: %v", address, err)
-			logger.Errorf("manifest view: unmarshal entry %s", address)
-			jsonhttp.NotFound(w, nil)
-			return
-		}
-	}
-
-	s.serveManifestMetadata(w, r, fe)
 }

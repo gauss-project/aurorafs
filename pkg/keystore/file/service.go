@@ -3,7 +3,6 @@ package file
 import (
 	"crypto/ecdsa"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 
@@ -26,7 +25,7 @@ func New(dir string) *Service {
 func (s *Service) Exists(name string) (bool, error) {
 	filename := s.keyFilename(name)
 
-	data, err := ioutil.ReadFile(filename)
+	data, err := os.ReadFile(filename)
 	if err != nil && !os.IsNotExist(err) {
 		return false, fmt.Errorf("read private key: %w", err)
 	}
@@ -40,7 +39,7 @@ func (s *Service) Exists(name string) (bool, error) {
 func (s *Service) Key(name, password string) (pk *ecdsa.PrivateKey, created bool, err error) {
 	filename := s.keyFilename(name)
 
-	data, err := ioutil.ReadFile(filename)
+	data, err := os.ReadFile(filename)
 	if err != nil && !os.IsNotExist(err) {
 		return nil, false, fmt.Errorf("read private key: %w", err)
 	}
@@ -59,7 +58,7 @@ func (s *Service) Key(name, password string) (pk *ecdsa.PrivateKey, created bool
 		if err := os.MkdirAll(filepath.Dir(filename), 0700); err != nil {
 			return nil, false, err
 		}
-		if err := ioutil.WriteFile(filename, d, 0600); err != nil {
+		if err := os.WriteFile(filename, d, 0600); err != nil {
 			return nil, false, err
 		}
 		return pk, true, nil

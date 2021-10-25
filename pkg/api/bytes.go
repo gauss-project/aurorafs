@@ -2,6 +2,7 @@ package api
 
 import (
 	"net/http"
+	"strings"
 
 	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/file/pipeline/builder"
@@ -22,7 +23,7 @@ func (s *server) bytesUploadHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
 	pipe := builder.NewPipelineBuilder(ctx, s.storer, requestModePut(r), requestEncrypt(r))
-	address, err := builder.FeedPipeline(ctx, pipe, r.Body, r.ContentLength)
+	address, err := builder.FeedPipeline(ctx, pipe, r.Body)
 	if err != nil {
 		logger.Debugf("bytes upload: split write all: %v", err)
 		logger.Error("bytes upload: split write all")
@@ -30,7 +31,16 @@ func (s *server) bytesUploadHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	jsonhttp.OK(w, bytesPostResponse{
+	if strings.ToLower(r.Header.Get(AuroraPinHeader)) == "true" {
+		if err := s.pinning.CreatePin(ctx, address, false); err != nil {
+			logger.Debugf("bytes upload: creation of pin for %q failed: %v", address, err)
+			logger.Error("bytes upload: creation of pin failed")
+			jsonhttp.InternalServerError(w, nil)
+			return
+		}
+	}
+
+	jsonhttp.Created(w, bytesPostResponse{
 		Reference: address,
 	})
 }

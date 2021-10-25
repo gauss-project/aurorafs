@@ -3,7 +3,7 @@ package accounting_test
 import (
 	"context"
 	"errors"
-	"io/ioutil"
+	"io"
 	"math/big"
 	"testing"
 
@@ -34,7 +34,7 @@ type booking struct {
 
 // TestAccountingAddBalance does several accounting actions and verifies the balance after each steep
 func TestAccountingAddBalance(t *testing.T) {
-	logger := logging.New(ioutil.Discard, 0)
+	logger := logging.New(io.Discard, 0)
 
 	store := mock.NewStateStore()
 	defer store.Close()
@@ -95,7 +95,7 @@ func TestAccountingAddBalance(t *testing.T) {
 // It creates an accounting instance, does some accounting
 // Then it creates a new accounting instance with the same store and verifies the balances
 func TestAccountingAdd_persistentBalances(t *testing.T) {
-	logger := logging.New(ioutil.Discard, 0)
+	logger := logging.New(io.Discard, 0)
 
 	store := mock.NewStateStore()
 	defer store.Close()
@@ -153,7 +153,7 @@ func TestAccountingAdd_persistentBalances(t *testing.T) {
 
 // TestAccountingReserve tests that reserve returns an error if the payment threshold would be exceeded
 func TestAccountingReserve(t *testing.T) {
-	logger := logging.New(ioutil.Discard, 0)
+	logger := logging.New(io.Discard, 0)
 
 	store := mock.NewStateStore()
 	defer store.Close()
@@ -181,7 +181,7 @@ func TestAccountingReserve(t *testing.T) {
 
 // TestAccountingDisconnect tests that exceeding the disconnect threshold with Debit returns a p2p.DisconnectError
 func TestAccountingDisconnect(t *testing.T) {
-	logger := logging.New(ioutil.Discard, 0)
+	logger := logging.New(io.Discard, 0)
 
 	store := mock.NewStateStore()
 	defer store.Close()
@@ -216,7 +216,7 @@ func TestAccountingDisconnect(t *testing.T) {
 
 // TestAccountingCallSettlement tests that settlement is called correctly if the payment threshold is hit
 func TestAccountingCallSettlement(t *testing.T) {
-	logger := logging.New(ioutil.Discard, 0)
+	logger := logging.New(io.Discard, 0)
 
 	store := mock.NewStateStore()
 	defer store.Close()
@@ -313,7 +313,7 @@ func TestAccountingCallSettlement(t *testing.T) {
 
 // TestAccountingCallSettlementEarly tests that settlement is called correctly if the payment threshold minus early payment is hit
 func TestAccountingCallSettlementEarly(t *testing.T) {
-	logger := logging.New(ioutil.Discard, 0)
+	logger := logging.New(io.Discard, 0)
 
 	store := mock.NewStateStore()
 	defer store.Close()
@@ -364,7 +364,7 @@ func TestAccountingCallSettlementEarly(t *testing.T) {
 }
 
 func TestAccountingSurplusBalance(t *testing.T) {
-	logger := logging.New(ioutil.Discard, 0)
+	logger := logging.New(io.Discard, 0)
 
 	store := mock.NewStateStore()
 	defer store.Close()
@@ -472,7 +472,7 @@ func TestAccountingSurplusBalance(t *testing.T) {
 
 // TestAccountingNotifyPayment tests that payments adjust the balance and payment which put us into debt are rejected
 func TestAccountingNotifyPayment(t *testing.T) {
-	logger := logging.New(ioutil.Discard, 0)
+	logger := logging.New(io.Discard, 0)
 
 	store := mock.NewStateStore()
 	defer store.Close()
@@ -523,7 +523,7 @@ func (p *pricingMock) AnnouncePaymentThreshold(ctx context.Context, peer boson.A
 }
 
 func TestAccountingConnected(t *testing.T) {
-	logger := logging.New(ioutil.Discard, 0)
+	logger := logging.New(io.Discard, 0)
 
 	store := mock.NewStateStore()
 	defer store.Close()
@@ -559,7 +559,7 @@ func TestAccountingConnected(t *testing.T) {
 }
 
 func TestAccountingNotifyPaymentThreshold(t *testing.T) {
-	logger := logging.New(ioutil.Discard, 0)
+	logger := logging.New(io.Discard, 0)
 
 	store := mock.NewStateStore()
 	defer store.Close()

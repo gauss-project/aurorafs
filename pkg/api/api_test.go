@@ -1,10 +1,8 @@
 package api_test
 
 import (
-	"context"
 	"errors"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -13,38 +11,34 @@ import (
 
 	"github.com/gauss-project/aurorafs/pkg/api"
 	"github.com/gauss-project/aurorafs/pkg/boson"
-	"github.com/gauss-project/aurorafs/pkg/chunkinfo"
-	"github.com/gauss-project/aurorafs/pkg/file/pipeline"
-	"github.com/gauss-project/aurorafs/pkg/file/pipeline/builder"
+	chunkinfo "github.com/gauss-project/aurorafs/pkg/chunkinfo/mock"
 	"github.com/gauss-project/aurorafs/pkg/logging"
+	"github.com/gauss-project/aurorafs/pkg/pinning"
 	"github.com/gauss-project/aurorafs/pkg/resolver"
 	resolverMock "github.com/gauss-project/aurorafs/pkg/resolver/mock"
 	"github.com/gauss-project/aurorafs/pkg/storage"
-
 	"github.com/gauss-project/aurorafs/pkg/traversal"
 	"github.com/gorilla/websocket"
 	"resenje.org/web"
 )
 
 type testServerOptions struct {
-	Storer   storage.Storer
-	Resolver resolver.Interface
-
-	Traversal traversal.Service
-	WsPath    string
-
-	GatewayMode     bool
-	WsPingPeriod    time.Duration
-	Logger          logging.Logger
-	PreventRedirect bool
-
+	Storer             storage.Storer
+	Resolver           resolver.Interface
+	Traversal          traversal.Traverser
+	Pinning            pinning.Interface
+	WsPath             string
+	GatewayMode        bool
+	WsPingPeriod       time.Duration
+	Logger             logging.Logger
+	PreventRedirect    bool
 	CORSAllowedOrigins []string
 	ChunkInfo          *chunkinfo.ChunkInfo
 }
 
 func newTestServer(t *testing.T, o testServerOptions) (*http.Client, *websocket.Conn, string) {
 	if o.Logger == nil {
-		o.Logger = logging.New(ioutil.Discard, 0)
+		o.Logger = logging.New(io.Discard, 0)
 	}
 	if o.Resolver == nil {
 		o.Resolver = resolverMock.NewResolver()
@@ -55,7 +49,7 @@ func newTestServer(t *testing.T, o testServerOptions) (*http.Client, *websocket.
 
 	serverAddress := boson.MustParseHexAddress("01")
 
-	s := api.New(o.Storer, o.Resolver, serverAddress, o.ChunkInfo, o.Traversal, o.Logger, nil, api.Options{
+	s := api.New(o.Storer, o.Resolver, serverAddress, o.ChunkInfo, o.Traversal, o.Pinning, o.Logger, nil, api.Options{
 		CORSAllowedOrigins: o.CORSAllowedOrigins,
 		GatewayMode:        o.GatewayMode,
 		WsPingPeriod:       60 * time.Second,
@@ -113,14 +107,8 @@ func request(t *testing.T, client *http.Client, method, resource string, body io
 	return resp
 }
 
-func pipelineFactory(s storage.Putter, mode storage.ModePut, encrypt bool) func() pipeline.Interface {
-	return func() pipeline.Interface {
-		return builder.NewPipelineBuilder(context.Background(), s, mode, encrypt)
-	}
-}
-
 func TestParseName(t *testing.T) {
-	const bzzHash = "89c17d0d8018a19057314aa035e61c9d23c47581a61dd3a79a7839692c617e4d"
+	const auroraHash = "89c17d0d8018a19057314aa035e61c9d23c47581a61dd3a79a7839692c617e4d"
 
 	testCases := []struct {
 		desc       string
@@ -138,14 +126,14 @@ func TestParseName(t *testing.T) {
 		},
 		{
 			desc:    "aurora hash",
-			name:    bzzHash,
-			wantAdr: boson.MustParseHexAddress(bzzHash),
+			name:    auroraHash,
+			wantAdr: boson.MustParseHexAddress(auroraHash),
 		},
 		{
 			desc:       "no resolver connected with aurora hash",
-			name:       bzzHash,
+			name:       auroraHash,
 			noResolver: true,
-			wantAdr:    boson.MustParseHexAddress(bzzHash),
+			wantAdr:    boson.MustParseHexAddress(auroraHash),
 		},
 		{
 			desc:       "no resolver connected with name",
@@ -171,7 +159,7 @@ func TestParseName(t *testing.T) {
 	}
 	for _, tC := range testCases {
 		if tC.log == nil {
-			tC.log = logging.New(ioutil.Discard, 0)
+			tC.log = logging.New(io.Discard, 0)
 		}
 		if tC.res == nil && !tC.noResolver {
 			tC.res = resolverMock.NewResolver(
@@ -180,7 +168,7 @@ func TestParseName(t *testing.T) {
 				}))
 		}
 
-		//s := api.New( nil, tC.res, nil,  tC.log, nil, api.Options{}).(*api.Server)
+		//s := api.New(nil, tC.res, nil, nil, tC.log, nil, api.Options{}).(*api.Server)
 
 		//t.Run(tC.desc, func(t *testing.T) {
 		//	got, err := s.ResolveNameOrAddress(tC.name)

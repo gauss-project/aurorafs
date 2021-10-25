@@ -8,18 +8,17 @@ type (
 	BytesPostResponse    = bytesPostResponse
 	ChunkAddressResponse = chunkAddressResponse
 	SocPostResponse      = socPostResponse
+	AuroraUploadResponse = auroraUploadResponse
+)
 
-	FileUploadResponse = fileUploadResponse
+var (
+	InvalidContentType  = invalidContentType
+	InvalidRequest      = invalidRequest
+	DirectoryStoreError = directoryStoreError
 )
 
 var (
 	ContentTypeTar = contentTypeTar
-)
-
-var (
-	ManifestRootPath                      = manifestRootPath
-	ManifestWebsiteIndexDocumentSuffixKey = manifestWebsiteIndexDocumentSuffixKey
-	ManifestWebsiteErrorDocumentPathKey   = manifestWebsiteErrorDocumentPathKey
 )
 
 var (

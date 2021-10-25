@@ -3,7 +3,7 @@ package jsonhttp_test
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -17,7 +17,7 @@ func TestMethodHandler(t *testing.T) {
 
 	h := jsonhttp.MethodHandler{
 		"POST": http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			got, err := ioutil.ReadAll(r.Body)
+			got, err := io.ReadAll(r.Body)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -115,7 +115,7 @@ func TestNewMaxBodyBytesHandler(t *testing.T) {
 	var limit int64 = 10
 
 	h := jsonhttp.NewMaxBodyBytesHandler(limit)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		_, err := ioutil.ReadAll(r.Body)
+		_, err := io.ReadAll(r.Body)
 		if err != nil {
 			if jsonhttp.HandleBodyReadError(err, w) {
 				return

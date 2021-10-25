@@ -21,8 +21,6 @@ import (
 	"errors"
 	"testing"
 
-	chunkinfo "github.com/gauss-project/aurorafs/pkg/chunkinfo/mock"
-	routetab "github.com/gauss-project/aurorafs/pkg/routetab/mock"
 	"github.com/gauss-project/aurorafs/pkg/storage"
 	"github.com/syndtr/goleveldb/leveldb"
 )
@@ -32,9 +30,6 @@ func TestModeSetRemove(t *testing.T) {
 	for _, tc := range multiChunkTestCases {
 		t.Run(tc.name, func(t *testing.T) {
 			db := newTestDB(t, nil)
-
-			ci := chunkinfo.New(routetab.NewMockRouteTable())
-			db.Config(ci)
 
 			chunks := generateTestRandomChunks(tc.count)
 

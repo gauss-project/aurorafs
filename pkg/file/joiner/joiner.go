@@ -88,19 +88,19 @@ func (j *joiner) Read(b []byte) (n int, err error) {
 	return read, err
 }
 
-func (j *joiner) ReadAt(b []byte, off int64) (read int, err error) {
+func (j *joiner) ReadAt(buffer []byte, off int64) (read int, err error) {
 	// since offset is int64 and boson spans are uint64 it means we cannot seek beyond int64 max value
 	if off >= j.span {
 		return 0, io.EOF
 	}
 
-	readLen := int64(cap(b))
+	readLen := int64(cap(buffer))
 	if readLen > j.span-off {
 		readLen = j.span - off
 	}
 	var bytesRead int64
 	var eg errgroup.Group
-	j.readAtOffset(b, j.rootData, 0, j.span, off, 0, readLen, &bytesRead, &eg)
+	j.readAtOffset(buffer, j.rootData, 0, j.span, off, 0, readLen, &bytesRead, &eg)
 
 	err = eg.Wait()
 	if err != nil {
@@ -109,6 +109,8 @@ func (j *joiner) ReadAt(b []byte, off int64) (read int, err error) {
 
 	return int(atomic.LoadInt64(&bytesRead)), nil
 }
+
+var ErrMalformedTrie = errors.New("malformed tree")
 
 func (j *joiner) readAtOffset(b, data []byte, cur, subTrieSize, off, bufferOffset, bytesToRead int64, bytesRead *int64, eg *errgroup.Group) {
 	// we are at a leaf data chunk
@@ -140,7 +142,10 @@ func (j *joiner) readAtOffset(b, data []byte, cur, subTrieSize, off, bufferOffse
 
 		// if we are here it means that we are within the bounds of the data we need to read
 		address := boson.NewAddress(data[cursor : cursor+j.refLength])
+
 		subtrieSpan := sec
+		subtrieSpanLimit := sec
+
 		currentReadSize := subtrieSpan - (off - cur) // the size of the subtrie, minus the offset from the start of the trie
 
 		// upper bound alignments
@@ -151,7 +156,7 @@ func (j *joiner) readAtOffset(b, data []byte, cur, subTrieSize, off, bufferOffse
 			currentReadSize = subtrieSpan
 		}
 
-		func(address boson.Address, b []byte, cur, subTrieSize, off, bufferOffset, bytesToRead int64) {
+		func(address boson.Address, b []byte, cur, subTrieSize, off, bufferOffset, bytesToRead, subtrieSpanLimit int64) {
 			eg.Go(func() error {
 				ch, err := j.getter.Get(j.ctx, storage.ModeGetRequest, address)
 				if err != nil {
@@ -160,10 +165,15 @@ func (j *joiner) readAtOffset(b, data []byte, cur, subTrieSize, off, bufferOffse
 
 				chunkData := ch.Data()[8:]
 				subtrieSpan := int64(chunkToSpan(ch.Data()))
+
+				if subtrieSpan > subtrieSpanLimit {
+					return ErrMalformedTrie
+				}
+
 				j.readAtOffset(b, chunkData, cur, subtrieSpan, off, bufferOffset, currentReadSize, bytesRead, eg)
 				return nil
 			})
-		}(address, b, cur, subtrieSpan, off, bufferOffset, currentReadSize)
+		}(address, b, cur, subtrieSpan, off, bufferOffset, currentReadSize, subtrieSpanLimit)
 
 		bufferOffset += currentReadSize
 		bytesToRead -= currentReadSize

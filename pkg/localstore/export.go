@@ -22,7 +22,6 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"sync"
 
 	"github.com/gauss-project/aurorafs/pkg/shed"
@@ -80,11 +79,8 @@ func (db *DB) Export(w io.Writer) (count int64, err error) {
 // Import reads a tar structured data from the reader and
 // stores chunks in the database. It returns the number of
 // chunks imported.
-func (db *DB) Import(r io.Reader, legacy bool) (count int64, err error) {
+func (db *DB) Import(ctx context.Context, r io.Reader) (count int64, err error) {
 	tr := tar.NewReader(r)
-
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
 
 	errC := make(chan error)
 	doneC := make(chan struct{})
@@ -112,7 +108,7 @@ func (db *DB) Import(r io.Reader, legacy bool) (count int64, err error) {
 			if firstFile {
 				firstFile = false
 				if hdr.Name == exportVersionFilename {
-					data, err := ioutil.ReadAll(tr)
+					data, err := io.ReadAll(tr)
 					if err != nil {
 						select {
 						case errC <- err:
@@ -135,7 +131,7 @@ func (db *DB) Import(r io.Reader, legacy bool) (count int64, err error) {
 				continue
 			}
 
-			data, err := ioutil.ReadAll(tr)
+			data, err := io.ReadAll(tr)
 			if err != nil {
 				select {
 				case errC <- err:

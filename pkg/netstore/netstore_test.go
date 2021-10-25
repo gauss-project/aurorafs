@@ -5,7 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -128,7 +128,7 @@ func TestInvalidRecoveryFunction(t *testing.T) {
 func newRetrievingNetstore() (ret *retrievalMock, mockStore, ns storage.Storer) {
 	retrieve := &retrievalMock{}
 	store := mock.NewStorer()
-	logger := logging.New(ioutil.Discard, 0)
+	logger := logging.New(io.Discard, 0)
 	return retrieve, store, netstore.New(store, retrieve, logger)
 }
 

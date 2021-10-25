@@ -9,7 +9,7 @@ import (
 	rmock "github.com/gauss-project/aurorafs/pkg/routetab/mock"
 	"sync"
 
-	"io/ioutil"
+	"io"
 	"testing"
 	"time"
 
@@ -41,7 +41,7 @@ func TestDelivery(t *testing.T) {
 	var (
 		// chunk                = testingc.FixtureChunk("0033")
 		rootAddr   = boson.MustParseHexAddress("3300")
-		logger     = logging.New(ioutil.Discard, 0)
+		logger     = logging.New(io.Discard, 0)
 		mockStorer = storemock.NewStorer()
 		clientAddr = boson.MustParseHexAddress("9ee7add8")
 		serverAddr = boson.MustParseHexAddress("9ee7add7")
@@ -166,7 +166,7 @@ func TestRetrievalChunk(t *testing.T) {
 	// 	ForceColors:      true,
 	// }
 	// logger.NewEntry().Logger.SetFormatter(&logFormater)
-	logger := logging.New(ioutil.Discard, 0)
+	logger := logging.New(io.Discard, 0)
 	var (
 		mockRouteTable = rmock.NewMockRouteTable()
 	)
@@ -287,7 +287,7 @@ func TestNeighborRetrieval(t *testing.T) {
 	// }
 	// logger.NewEntry().Logger.SetFormatter(&logFormater)
 
-	logger := logging.New(ioutil.Discard, 0)
+	logger := logging.New(io.Discard, 0)
 
 	address := boson.MustParseHexAddress("8a74889a73c23fe2be037886c6b709e3175b95b8deea9c95eeda0dbc60740bd8")
 	data := []uint8{3, 0, 0, 0, 0, 0, 0, 0, 102, 111, 111}
@@ -370,7 +370,7 @@ func TestRetrievePreemptiveRetry(t *testing.T) {
 	// 	ForceColors: true,
 	// }
 	// logger.NewEntry().Logger.SetFormatter(&logFormater)
-	logger := logging.New(ioutil.Discard, 0)
+	logger := logging.New(io.Discard, 0)
 
 	var fixtureChunks = map[string]boson.Chunk{
 		"c8ea": boson.NewChunk(
@@ -551,10 +551,8 @@ func hasher(data []byte) func([]byte) ([]byte, error) {
 		hasher := bmtpool.Get()
 		defer bmtpool.Put(hasher)
 
-		if err := hasher.SetSpanBytes(span); err != nil {
-			return nil, err
-		}
-		if _, err := hasher.Write(data); err != nil {
+		hasher.SetHeader(span)
+		if _, err := hasher.Write(data[boson.SpanSize:]); err != nil {
 			return nil, err
 		}
 		return hasher.Sum(nil), nil

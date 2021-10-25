@@ -1,85 +1,80 @@
 # Copy this file to .env, then update it with your own settings
 
-### CLEF
-
-## chain id to use for signing (1=mainnet, 3=ropsten, 4=rinkeby, 5=goerli) (default: 12345)
-CLEF_CHAINID=5
-
-### aufs
+### AURORA
 
 ## HTTP API listen address (default :1633)
-# aufs_API_ADDR=:1633
+# AURORA_API_ADDR=:1633
 ## initial nodes to connect to (default [/dnsaddr/bootnode.ethswarm.org])
 
 ## cause the node to always accept incoming connections
-# aufs_BOOTNODE_MODE=false
+# AURORA_BOOTNODE_MODE=false
 ## enable clef signer
-aufs_CLEF_SIGNER_ENABLE=true
+AURORA_CLEF_SIGNER_ENABLE=true
 ## clef signer endpoint
-# aufs_CLEF_SIGNER_ENDPOINT=
+# AURORA_CLEF_SIGNER_ENDPOINT=
 ## config file (default is /home/<user>/.aufs.yaml)
-# aufs_CONFIG=/home/aufs/.aufs.yaml
+# AURORA_CONFIG=/home/aufs/.aufs.yaml
 ## origins with CORS headers enabled
-# aufs_CORS_ALLOWED_ORIGINS=[]
+# AURORA_CORS_ALLOWED_ORIGINS=[]
 ## data directory (default /home/<user>/.aufs)
-# aufs_DATA_DIR=/home/aufs/.aufs
-## db capacity in chunks, multiply by 4096 to get approximate capacity in bytes
-# aufs_DB_CAPACITY=5000000
+# AURORA_DATA_DIR=/home/aufs/.aufs
+## cache capacity in chunks, multiply by 4096 to get approximate capacity in bytes
+# AURORA_CACHE_CAPACITY=80000
 ## number of open files allowed by database
-# aufs_DB_OPEN_FILES_LIMIT=200
+# AURORA_DB_OPEN_FILES_LIMIT=200
 ## size of block cache of the database in bytes
-# aufs_DB_BLOCK_CACHE_CAPACITY=33554432
+# AURORA_DB_BLOCK_CACHE_CAPACITY=33554432
 ## size of the database write buffer in bytes
-# aufs_DB_WRITE_BUFFER_SIZE=33554432
+# AURORA_DB_WRITE_BUFFER_SIZE=33554432
 ## disables db compactions triggered by seeks
-# aufs_DB_DISABLE_SEEKS_COMPACTION=false
+# AURORA_DB_DISABLE_SEEKS_COMPACTION=false
 ## debug HTTP API listen address (default :1635)
-# aufs_DEBUG_API_ADDR=:1635
+# AURORA_DEBUG_API_ADDR=:1635
 ## enable debug HTTP API
-# aufs_DEBUG_API_ENABLE=false
+# AURORA_DEBUG_API_ENABLE=false
 ## disable a set of sensitive features in the api
-# aufs_GATEWAY_MODE=false
+# AURORA_GATEWAY_MODE=false
 ## enable global pinning
-# aufs_GLOBAL_PINNING_ENABLE=false
+# AURORA_GLOBAL_PINNING_ENABLE=false
 ## NAT exposed address
-# aufs_NAT_ADDR=
+# AURORA_NAT_ADDR=
 ## ID of the Aurora network (default 1)
-# aufs_NETWORK_ID=1
+# AURORA_NETWORK_ID=1
 ## P2P listen address (default :1634)
-# aufs_P2P_ADDR=:1634
+# AURORA_P2P_ADDR=:1634
 ## enable P2P QUIC protocol
-# aufs_P2P_QUIC_ENABLE=false
+# AURORA_P2P_QUIC_ENABLE=false
 ## enable P2P WebSocket transport
-# aufs_P2P_WS_ENABLE=false
+# AURORA_P2P_WS_ENABLE=false
 ## password for decrypting keys
-# aufs_PASSWORD=
+# AURORA_PASSWORD=
 ## path to a file that contains password for decrypting keys
-# aufs_PASSWORD_FILE=
+# AURORA_PASSWORD_FILE=
 ## amount in BZZ below the peers payment threshold when we initiate settlement (default 10000)
-# aufs_PAYMENT_EARLY=10000
+# AURORA_PAYMENT_EARLY=10000
 ## threshold in BZZ where you expect to get paid from your peers (default 100000)
-# aufs_PAYMENT_THRESHOLD=100000
+# AURORA_PAYMENT_THRESHOLD=100000
 ## excess debt above payment threshold in BZZ where you disconnect from your peer (default 10000)
-# aufs_PAYMENT_TOLERANCE=10000
+# AURORA_PAYMENT_TOLERANCE=10000
 ## ENS compatible API endpoint for a TLD and with contract address, can be repeated, format [tld:][contract-addr@]url
-# aufs_RESOLVER_OPTIONS=[]
+# AURORA_RESOLVER_OPTIONS=[]
 ## whether we want the node to start with no listen addresses for p2p
-# aufs_STANDALONE=false
+# AURORA_STANDALONE=false
 ## enable swap (default true)
-# aufs_SWAP_ENABLE=true
+# AURORA_SWAP_ENABLE=true
 ## swap ethereum blockchain endpoint (default http://localhost:8545)
-# aufs_SWAP_ENDPOINT=http://localhost:8545
+# AURORA_SWAP_ENDPOINT=http://localhost:8545
 ## swap factory address
-# aufs_SWAP_FACTORY_ADDRESS=
+# AURORA_SWAP_FACTORY_ADDRESS=
 ## initial deposit if deploying a new chequebook (default 100000000)
-# aufs_SWAP_INITIAL_DEPOSIT=100000000
+# AURORA_SWAP_INITIAL_DEPOSIT=100000000
 ## enable tracing
-# aufs_TRACING_ENABLE=false
+# AURORA_TRACING_ENABLE=false
 ## endpoint to send tracing data (default 127.0.0.1:6831)
-# aufs_TRACING_ENDPOINT=127.0.0.1:6831
+# AURORA_TRACING_ENDPOINT=127.0.0.1:6831
 ## service name identifier for tracing (default aufs)
-# aufs_TRACING_SERVICE_NAME=aufs
+# AURORA_TRACING_SERVICE_NAME=aufs
 ## log verbosity level 0=silent, 1=error, 2=warn, 3=info, 4=debug, 5=trace (default info)
-# aufs_VERBOSITY=info
+# AURORA_VERBOSITY=info
 ## send a welcome message string during handshakes
-# aufs_WELCOME_MESSAGE=
+# AURORA_WELCOME_MESSAGE=

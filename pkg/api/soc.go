@@ -4,7 +4,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"github.com/gauss-project/aurorafs/pkg/storage"
-	"io/ioutil"
+	"io"
 	"net/http"
 
 	"github.com/gauss-project/aurorafs/pkg/boson"
@@ -52,7 +52,7 @@ func (s *server) socUploadHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	data, err := ioutil.ReadAll(r.Body)
+	data, err := io.ReadAll(r.Body)
 	if err != nil {
 		if jsonhttp.HandleBodyReadError(err, w) {
 			return

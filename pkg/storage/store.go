@@ -124,12 +124,6 @@ type Descriptor struct {
 	BinID   uint64
 }
 
-// Pinner holds the required information for pinning
-type Pinner struct {
-	Address    boson.Address
-	PinCounter uint64
-}
-
 func (d *Descriptor) String() string {
 	if d == nil {
 		return ""
@@ -143,11 +137,6 @@ type Storer interface {
 	GetMulti(ctx context.Context, mode ModeGet, addrs ...boson.Address) (ch []boson.Chunk, err error)
 	Hasser
 	Setter
-	//LastPullSubscriptionBinID(bin uint8) (id uint64, err error)
-	//PullSubscriber
-	//SubscribePush(ctx context.Context) (c <-chan boson.Chunk, stop func())
-	//PinnedChunks(ctx context.Context, offset, limit int) (pinnedChunks []*Pinner, err error)
-	//PinCounter(address boson.Address) (uint64, error)
 	io.Closer
 }
 
@@ -167,10 +156,6 @@ type Hasser interface {
 	Has(ctx context.Context, hasMode ModeHas, addr boson.Address) (yes bool, err error)
 	HasMulti(ctx context.Context, hasMode ModeHas, addrs ...boson.Address) (yes []bool, err error)
 }
-
-//type PullSubscriber interface {
-//	SubscribePull(ctx context.Context, bin uint8, since, until uint64) (c <-chan Descriptor, closed <-chan struct{}, stop func())
-//}
 
 // StateStorer defines methods required to get, set, delete values for different keys
 // and close the underlying resources.
