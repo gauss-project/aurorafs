@@ -2,7 +2,6 @@ package api_test
 
 import (
 	"errors"
-	"github.com/gauss-project/aurorafs/pkg/pinning"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -14,6 +13,7 @@ import (
 	"github.com/gauss-project/aurorafs/pkg/boson"
 	chunkinfo "github.com/gauss-project/aurorafs/pkg/chunkinfo/mock"
 	"github.com/gauss-project/aurorafs/pkg/logging"
+	"github.com/gauss-project/aurorafs/pkg/pinning"
 	"github.com/gauss-project/aurorafs/pkg/resolver"
 	resolverMock "github.com/gauss-project/aurorafs/pkg/resolver/mock"
 	"github.com/gauss-project/aurorafs/pkg/storage"
