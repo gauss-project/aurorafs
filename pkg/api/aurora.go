@@ -375,7 +375,6 @@ type auroraListResponse struct {
 	FileHash  string              `json:"fileHash"`
 	Size      int                 `json:"size"`
 	FileSize  int                 `json:"fileSize"`
-	PinState  bool                `json:"pinState"`
 	BitVector aurora.BitVectorApi `json:"bitVector"`
 }
 
@@ -386,17 +385,11 @@ func (s *server) auroraListHandler(w http.ResponseWriter, r *http.Request) {
 	fileListInfo, addressList := s.chunkInfo.GetFileList(s.overlay)
 
 	if len(fileListInfo) > 0 && len(addressList) > 0 {
-		yes, err := s.storer.HasMulti(context.Background(), storage.ModeHasPin, addressList...)
-		if err != nil {
-			return
-		}
-		for i, v := range addressList {
-			//fileListInfo[v.String()].PinState = yes[i]
+		for _, v := range addressList {
 			Response := auroraListResponse{}
 			Response.FileHash = v.String()
 			Response.FileSize = fileListInfo[v.String()].FileSize
 			Response.Size = fileListInfo[v.String()].TreeSize
-			Response.PinState = yes[i]
 			Response.BitVector = fileListInfo[v.String()].Bitvector
 			responseList = append(responseList, Response)
 		}
