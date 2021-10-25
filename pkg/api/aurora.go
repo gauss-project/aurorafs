@@ -231,11 +231,11 @@ func (s *server) auroraDownloadHandler(w http.ResponseWriter, r *http.Request) {
 		logger.Tracef("aurora download: handle empty path %s", address)
 
 		if indexDocumentSuffixKey, ok := manifestMetadataLoad(ctx, m, manifest.RootPath, manifest.WebsiteIndexDocumentSuffixKey); ok {
-			pathWithIndex := path.Join(pathVar, indexDocumentSuffixKey)
-			indexDocumentManifestEntry, err := m.Lookup(ctx, pathWithIndex)
+			pathVar = path.Join(pathVar, indexDocumentSuffixKey)
+			indexDocumentManifestEntry, err := m.Lookup(ctx, pathVar)
 			if err == nil {
 				// index document exists
-				logger.Debugf("aurora download: serving path: %s", pathWithIndex)
+				logger.Debugf("aurora download: serving path: %s", pathVar)
 
 				s.serveManifestEntry(w, r, address, indexDocumentManifestEntry, true)
 				return
