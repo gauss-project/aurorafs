@@ -82,15 +82,17 @@ func (s *server) dirUploadHandler(w http.ResponseWriter, r *http.Request) {
 
 	pyramid, err := s.traversal.GetPyramid(ctx, reference)
 	if err != nil {
-		logger.Errorf("dir upload: get trie data err: %v", err)
-		jsonhttp.InternalServerError(w, "could not get trie data")
+		logger.Debugf("aurora upload dir: get pyramid err: %v", err)
+		logger.Errorf("aurora upload dir: get pyramid err")
+		jsonhttp.InternalServerError(w, "could not get pyramid")
 		return
 	}
 
 	dataChunks, _ := s.traversal.GetChunkHashes(ctx, reference, pyramid)
 	if err != nil {
-		logger.Errorf("dir upload: check trie data err: %v", err)
-		jsonhttp.InternalServerError(w, "check trie data error")
+		logger.Debugf("aurora upload dir: get chunk hashes err: %v", err)
+		logger.Errorf("aurora upload dir: get chunk hashes err")
+		jsonhttp.InternalServerError(w, "could not get chunk hashes")
 		return
 	}
 
@@ -98,7 +100,8 @@ func (s *server) dirUploadHandler(w http.ResponseWriter, r *http.Request) {
 		for _, b := range li {
 			err := s.chunkInfo.OnChunkTransferred(boson.NewAddress(b), reference, s.overlay, boson.ZeroAddress)
 			if err != nil {
-				logger.Errorf("chunk transfer data err: %v", err)
+				logger.Errorf("aurora upload dir: chunk transfer data err: %v", err)
+				logger.Errorf("aurora upload dir: chunk transfer data err")
 				jsonhttp.InternalServerError(w, "chunk transfer data error")
 				return
 			}
@@ -107,8 +110,8 @@ func (s *server) dirUploadHandler(w http.ResponseWriter, r *http.Request) {
 
 	if strings.ToLower(r.Header.Get(AuroraPinHeader)) == "true" {
 		if err := s.pinning.CreatePin(r.Context(), reference, false); err != nil {
-			logger.Debugf("bzz upload dir: creation of pin for %q failed: %v", reference, err)
-			logger.Error("bzz upload dir: creation of pin failed")
+			logger.Debugf("aurora upload dir: creation of pin for %q failed: %v", reference, err)
+			logger.Error("aurora upload dir: creation of pin failed")
 			jsonhttp.InternalServerError(w, nil)
 			return
 		}

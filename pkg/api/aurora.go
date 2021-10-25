@@ -143,15 +143,17 @@ func (s *server) fileUploadHandler(w http.ResponseWriter, r *http.Request) {
 
 	pyramid, err := s.traversal.GetPyramid(ctx, manifestReference)
 	if err != nil {
-		logger.Errorf("file upload: get trie data, file %q: %v", fileName, err)
-		jsonhttp.InternalServerError(w, "could not get trie data")
+		logger.Debugf("aurora upload file: get pyramid of file %q: %v", fileName, err)
+		logger.Errorf("aurora upload file: get pyramid of file %q", fileName)
+		jsonhttp.InternalServerError(w, "could not get pyramid")
 		return
 	}
 
 	dataChunks, _ := s.traversal.GetChunkHashes(ctx, manifestReference, pyramid)
 	if err != nil {
-		logger.Errorf("file upload: check trie data, file %q: %v", fileName, err)
-		jsonhttp.InternalServerError(w, "check trie data error")
+		logger.Debugf("aurora upload file: get chunk hashes of file %q: %v", fileName, err)
+		logger.Errorf("aurora upload file: get chunk hashes of file %q", fileName)
+		jsonhttp.InternalServerError(w, "could not get chunk hashes")
 		return
 	}
 
@@ -159,7 +161,8 @@ func (s *server) fileUploadHandler(w http.ResponseWriter, r *http.Request) {
 		for _, b := range li {
 			err := s.chunkInfo.OnChunkTransferred(boson.NewAddress(b), manifestReference, s.overlay, boson.ZeroAddress)
 			if err != nil {
-				logger.Errorf("chunk transfer data err: %v", err)
+				logger.Debugf("aurora upload file: chunk transfer data err: %v", err)
+				logger.Errorf("aurora upload file: chunk transfer data err")
 				jsonhttp.InternalServerError(w, "chunk transfer data error")
 				return
 			}
@@ -168,8 +171,8 @@ func (s *server) fileUploadHandler(w http.ResponseWriter, r *http.Request) {
 
 	if strings.ToLower(r.Header.Get(AuroraPinHeader)) == "true" {
 		if err := s.pinning.CreatePin(ctx, manifestReference, false); err != nil {
-			logger.Debugf("bzz upload file: creation of pin for %q failed: %v", manifestReference, err)
-			logger.Error("bzz upload file: creation of pin failed")
+			logger.Debugf("aurora upload file: creation of pin for %q failed: %v", manifestReference, err)
+			logger.Error("aurora upload file: creation of pin failed")
 			jsonhttp.InternalServerError(w, nil)
 			return
 		}
