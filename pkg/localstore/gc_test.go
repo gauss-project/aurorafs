@@ -24,6 +24,7 @@ import (
 	"math/rand"
 	"os"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -52,7 +53,7 @@ func TestDB_collectGarbageWorker(t *testing.T) {
 func TestDB_collectGarbageWorker_multipleBatches(t *testing.T) {
 	// lower the maximal number of chunks in a single
 	// gc batch to ensure multiple batches.
-	defer func(s uint64) { gcBatchSize = s }(gcBatchSize)
+	defer func(s uint64) { atomic.StoreUint64(&gcBatchSize, s) }(gcBatchSize)
 	gcBatchSize = 2
 
 	testDBCollectGarbageWorker(t)
