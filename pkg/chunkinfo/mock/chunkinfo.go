@@ -3,12 +3,13 @@ package mock
 import (
 	"context"
 	"fmt"
+	"sync"
+
 	"github.com/gauss-project/aurorafs/pkg/aurora"
 	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/chunkinfo"
 	"github.com/gauss-project/aurorafs/pkg/retrieval/aco"
 	"github.com/gauss-project/aurorafs/pkg/routetab/mock"
-	"sync"
 )
 
 var (
