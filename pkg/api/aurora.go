@@ -375,34 +375,43 @@ func (s *server) downloadHandler(w http.ResponseWriter, r *http.Request, referen
 }
 
 type auroraListResponse struct {
-	FileHash  string              `json:"fileHash"`
+	FileHash  boson.Address       `json:"fileHash"`
 	Size      int                 `json:"size"`
 	FileSize  int                 `json:"fileSize"`
+	PinState  bool                `json:"pinState"`
 	BitVector aurora.BitVectorApi `json:"bitVector"`
 }
 
 // auroraListHandler
 func (s *server) auroraListHandler(w http.ResponseWriter, r *http.Request) {
 	responseList := make([]auroraListResponse, 0)
-
 	fileListInfo, addressList := s.chunkInfo.GetFileList(s.overlay)
 
-	if len(fileListInfo) > 0 && len(addressList) > 0 {
-		for _, v := range addressList {
-			Response := auroraListResponse{}
-			Response.FileHash = v.String()
-			Response.FileSize = fileListInfo[v.String()].FileSize
-			Response.Size = fileListInfo[v.String()].TreeSize
-			Response.BitVector = fileListInfo[v.String()].Bitvector
-			responseList = append(responseList, Response)
-		}
-		if len(responseList) > 0 {
-			sort.Slice(responseList, func(i, j int) bool {
-				return responseList[i].FileHash < responseList[j].FileHash
+	for _, v := range addressList {
+		info, ok := fileListInfo[v.String()]
+		if ok {
+			pinned, err := s.pinning.HasPin(v)
+			if err != nil {
+				s.logger.Debugf("aurora list: check hash %s pinning err: %v", v, err)
+				s.logger.Errorf("aurora list: check hash %s pinning err", v)
+				continue
+			}
+
+			responseList = append(responseList, auroraListResponse{
+				FileHash:  v,
+				Size:      info.FileSize,
+				FileSize:  info.TreeSize,
+				PinState:  pinned,
+				BitVector: info.Bitvector,
 			})
 		}
-
 	}
+
+	sort.Slice(responseList, func(i, j int) bool {
+		closer, _ := responseList[i].FileHash.Closer(boson.ZeroAddress, responseList[j].FileHash)
+		return closer
+	})
+
 	jsonhttp.OK(w, responseList)
 }
 
