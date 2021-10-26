@@ -45,11 +45,13 @@ const (
 // Recommended value is 8 or 16 times the io.Copy default buffer value which is 32kB, depending
 // on the file size. Use lookaheadBufferSize() to get the correct buffer size for the request.
 const (
-	smallFileBufferSize = 8 * 32 * 1024 * 8
-	largeFileBufferSize = 16 * 32 * 1024 * 8
+	smallFileBufferSize = 8 * 32 * 1024
+	largeFileBufferSize = 16 * 32 * 1024
 
 	largeBufferFilesizeThreshold = 10 * 1000000 // ten megs
 )
+
+var BufferSizeMul int
 
 const (
 	contentTypeHeader = "Content-Type"
@@ -96,6 +98,7 @@ type Options struct {
 	CORSAllowedOrigins []string
 	GatewayMode        bool
 	WsPingPeriod       time.Duration
+	BufferSizeMul      int
 }
 
 const (
@@ -119,6 +122,7 @@ func New(storer storage.Storer, resolver resolver.Interface, addr boson.Address,
 		quit:      make(chan struct{}),
 	}
 
+	BufferSizeMul = o.BufferSizeMul
 	s.setupRouting()
 
 	return s
@@ -208,10 +212,13 @@ func (s *server) newTracingHandler(spanName string) func(h http.Handler) http.Ha
 }
 
 func lookaheadBufferSize(size int64) int {
-	if size <= largeBufferFilesizeThreshold {
-		return smallFileBufferSize
+	if BufferSizeMul < 1 {
+		BufferSizeMul = 8 // default 2mb/4mb
 	}
-	return largeFileBufferSize
+	if size <= largeBufferFilesizeThreshold {
+		return smallFileBufferSize * BufferSizeMul
+	}
+	return largeFileBufferSize * BufferSizeMul
 }
 
 // checkOrigin returns true if the origin is not set or is equal to the request host.
