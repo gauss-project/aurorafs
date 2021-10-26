@@ -3,6 +3,8 @@ package mock
 import (
 	"context"
 	"fmt"
+	"sync"
+
 	"github.com/gauss-project/aurorafs/pkg/aurora"
 	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/chunkinfo"
@@ -12,6 +14,7 @@ import (
 
 var (
 	chunkMap map[string][]aco.Route
+	mu sync.Mutex
 )
 
 func init() {
@@ -89,9 +92,11 @@ func (ci *ChunkInfo) CancelFindChunkInfo(rootCid boson.Address) {
 
 func (ci *ChunkInfo) OnChunkTransferred(cid boson.Address, rootCid boson.Address, overlays, target boson.Address) error {
 	mapKey := fmt.Sprintf("%v,%v", rootCid.String(), cid.String())
+	mu.Lock()
 	if _, exist := chunkMap[mapKey]; !exist {
 		chunkMap[mapKey] = make([]aco.Route, 0)
 	}
+	mu.Unlock()
 	route := aco.NewRoute(overlays, overlays)
 	chunkMap[mapKey] = append(chunkMap[mapKey], route)
 	return nil

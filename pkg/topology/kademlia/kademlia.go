@@ -768,8 +768,8 @@ func recalcDepth(peers *pslice.PSlice, radius uint8) uint8 {
 	return shallowestUnsaturated
 }
 
-// connect connects to a peer and gossips its address to our connected peers,
-// as well as sends the peers we are connected to to the newly connected peer
+// connect to a peer and gossips its address to our connected peers,
+// as well as sends the peers we are connected to the newly connected peer
 func (k *Kad) connect(ctx context.Context, peer boson.Address, ma ma.Multiaddr) error {
 	k.logger.Infof("kademlia: attempting to connect to peer %q", peer)
 

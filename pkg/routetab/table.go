@@ -42,7 +42,7 @@ type Path struct {
 type Table struct {
 	self   boson.Address
 	items  map[common.Hash]Route
-	signed map[common.Hash]*Path
+	signed sync.Map
 
 	mu    sync.RWMutex
 	store storage.StateStorer
@@ -52,7 +52,6 @@ func newRouteTable(self boson.Address, store storage.StateStorer) *Table {
 	return &Table{
 		self:   self,
 		items:  make(map[common.Hash]Route),
-		signed: make(map[common.Hash]*Path),
 		mu:     sync.RWMutex{},
 		store:  store,
 	}
@@ -138,7 +137,7 @@ func (t *Table) RespToSaveOne(p *pb.Path) error {
 		Item:       items,
 		UsedTime:   time.Now(),
 	}
-	t.signed[signKey] = &path
+	t.signed.Store(signKey, &path)
 	_ = t.store.Put(signedPrefix+signKey.String(), path)
 
 	for i := 2; i < len(path.Item); i++ {
@@ -182,9 +181,9 @@ func (t *Table) Get(dest boson.Address) ([]*Path, error) {
 	paths := make([]*Path, 0)
 	for _, v := range route.Index {
 		signKey := common.BytesToHash(v.Sign)
-		path, has := t.signed[signKey]
+		path, has := t.signed.Load(signKey)
 		if has {
-			paths = append(paths, path)
+			paths = append(paths, path.(*Path))
 			newIndex = append(newIndex, v)
 		} else {
 			needUpdate = true
@@ -213,7 +212,7 @@ func (t *Table) GetNextHop(dest boson.Address, sign []byte) (next boson.Address)
 	for k, v := range route.Index {
 		if bytes.Equal(v.Sign, sign) {
 			signKey := common.BytesToHash(v.Sign)
-			_, ok := t.signed[signKey]
+			_, ok := t.signed.Load(signKey)
 			if ok {
 				next = v.NextHop
 			} else {
@@ -238,19 +237,19 @@ func (t *Table) GetNextHop(dest boson.Address, sign []byte) (next boson.Address)
 }
 
 func (t *Table) Gc(expire time.Duration) {
-	for _, path := range t.signed {
+	t.signed.Range(func(key, value interface{}) bool {
+		path := value.(*Path)
 		if time.Since(path.UsedTime).Milliseconds() > expire.Milliseconds() {
 			t.Delete(path)
 		}
-	}
+		return true
+	})
 }
 
 func (t *Table) Delete(path *Path) {
 	signKey := common.BytesToHash(path.Sign)
-	t.mu.Lock()
-	delete(t.signed, signKey)
+	t.signed.Delete(signKey)
 	_ = t.store.Delete(signedPrefix + signKey.String())
-	t.mu.Unlock()
 }
 
 func (t *Table) ResumeSigned() {
@@ -262,9 +261,7 @@ func (t *Table) ResumeSigned() {
 		if err != nil {
 			_ = t.store.Delete(signedPrefix + hex)
 		} else {
-			t.mu.Lock()
-			t.signed[signKey] = path
-			t.mu.Unlock()
+			t.signed.Store(signKey, path)
 		}
 		return false, nil
 	})
