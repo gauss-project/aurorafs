@@ -70,21 +70,21 @@ type Options struct {
 	DBDisableSeeksCompaction bool
 	APIAddr                  string
 	DebugAPIAddr             string
-	//Addr                     string
-	NATAddr               string
-	EnableWS              bool
-	EnableQUIC            bool
-	WelcomeMessage        string
-	Bootnodes             []string
-	OracleEndpoint        string
-	OracleContractAddress string
-	CORSAllowedOrigins    []string
-	Logger                logging.Logger
-	Standalone            bool
-	IsDev                 bool
-	TracingEnabled        bool
-	TracingEndpoint       string
-	TracingServiceName    string
+	ApiBufferSizeMul         int
+	NATAddr                  string
+	EnableWS                 bool
+	EnableQUIC               bool
+	WelcomeMessage           string
+	Bootnodes                []string
+	OracleEndpoint           string
+	OracleContractAddress    string
+	CORSAllowedOrigins       []string
+	Logger                   logging.Logger
+	Standalone               bool
+	IsDev                    bool
+	TracingEnabled           bool
+	TracingEndpoint          string
+	TracingServiceName       string
 	//GlobalPinningEnabled     bool
 	//PaymentThreshold         string
 	//PaymentTolerance         string
@@ -453,6 +453,7 @@ func NewAurora(addr string, bosonAddress boson.Address, publicKey ecdsa.PublicKe
 			CORSAllowedOrigins: o.CORSAllowedOrigins,
 			GatewayMode:        o.GatewayMode,
 			WsPingPeriod:       60 * time.Second,
+			BufferSizeMul:      o.ApiBufferSizeMul,
 		})
 		apiListener, err := net.Listen("tcp", o.APIAddr)
 		if err != nil {
