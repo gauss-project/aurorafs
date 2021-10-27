@@ -74,7 +74,7 @@ func (ci *ChunkInfo) sendData(ctx context.Context, address boson.Address, stream
 
 	stream, err := ci.streamer.NewStream(ctx, address, nil, protocolName, protocolVersion, streamName)
 	if err != nil {
-		ci.logger.Errorf("[chunk info] new stream: %w", err)
+		ci.logger.Errorf("[chunk info] new stream.")
 		return err
 	}
 	defer func() {
@@ -88,7 +88,6 @@ func (ci *ChunkInfo) sendData(ctx context.Context, address boson.Address, stream
 	switch streamName {
 	case streamChunkInfoReqName:
 		req := msg.(pb.ChunkInfoReq)
-		ci.logger.Tracef("[chunk info] %s : %s %s", boson.NewAddress(req.GetRootCid()).String(), boson.NewAddress(req.GetTarget()).String(), boson.NewAddress(req.GetReq()).String())
 		if err := w.WriteMsgWithContext(ctx, &req); err != nil {
 			ci.logger.Errorf("[chunk info req] write message: %w", err)
 			return err
@@ -101,7 +100,7 @@ func (ci *ChunkInfo) sendData(ctx context.Context, address boson.Address, stream
 		}
 	}
 	ci.metrics.ChunkInfoRequestCounter.Inc()
-	ci.logger.Tracef("got chunk info req %q", msg)
+	ci.logger.Tracef("got chunk info req")
 	return nil
 }
 
@@ -170,15 +169,21 @@ func (ci *ChunkInfo) sendPyramid(ctx context.Context, address boson.Address, str
 	}
 }
 
-func (ci *ChunkInfo) handlerChunkInfoReq(ctx context.Context, p p2p.Peer, stream p2p.Stream) error {
+func (ci *ChunkInfo) handlerChunkInfoReq(ctx context.Context, p p2p.Peer, stream p2p.Stream) (err error) {
 	r := protobuf.NewReader(stream)
-	defer stream.FullClose()
+	defer func() {
+		if err != nil {
+			_ = stream.Reset()
+		} else {
+			stream.FullClose()
+		}
+	}()
 	var req pb.ChunkInfoReq
-	if err := r.ReadMsgWithContext(ctx, &req); err != nil {
+	if err = r.ReadMsgWithContext(ctx, &req); err != nil {
 		ci.logger.Errorf("[chunk info] read chunk info req message: %w", err)
 		return fmt.Errorf("read chunk info req message: %w", err)
 	}
-	ci.logger.Tracef("[chunk info] got chunk info req: %q", req)
+	ci.logger.Tracef("[chunk info] got chunk info req.")
 
 	target := boson.NewAddress(req.GetTarget())
 	if target.Equal(ci.addr) {
@@ -188,15 +193,21 @@ func (ci *ChunkInfo) handlerChunkInfoReq(ctx context.Context, p p2p.Peer, stream
 	}
 }
 
-func (ci *ChunkInfo) handlerChunkInfoResp(ctx context.Context, p p2p.Peer, stream p2p.Stream) error {
+func (ci *ChunkInfo) handlerChunkInfoResp(ctx context.Context, p p2p.Peer, stream p2p.Stream) (err error) {
 	r := protobuf.NewReader(stream)
-	defer stream.FullClose()
+	defer func() {
+		if err != nil {
+			_ = stream.Reset()
+		} else {
+			stream.FullClose()
+		}
+	}()
 	var resp pb.ChunkInfoResp
-	if err := r.ReadMsgWithContext(ctx, &resp); err != nil {
+	if err = r.ReadMsgWithContext(ctx, &resp); err != nil {
 		ci.logger.Errorf("[chunk info] read message: %w", err)
 		return fmt.Errorf("[chunk info] read message: %w", err)
 	}
-	ci.logger.Tracef("[chunk info] got chunk info resp: %q", resp)
+	ci.logger.Tracef("[chunk info] got chunk info resp.")
 	overlay := boson.NewAddress(resp.GetReq())
 	target := boson.NewAddress(resp.GetTarget())
 
@@ -205,7 +216,7 @@ func (ci *ChunkInfo) handlerChunkInfoResp(ctx context.Context, p p2p.Peer, strea
 	} else {
 		return ci.sendData(ctx, overlay, streamChunkInfoRespName, resp)
 	}
-	return nil
+	return
 }
 
 func (ci *ChunkInfo) handlerPyramid(ctx context.Context, p p2p.Peer, stream p2p.Stream) error {
