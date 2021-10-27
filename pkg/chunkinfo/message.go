@@ -74,7 +74,7 @@ func (ci *ChunkInfo) sendData(ctx context.Context, address boson.Address, stream
 
 	stream, err := ci.streamer.NewStream(ctx, address, nil, protocolName, protocolVersion, streamName)
 	if err != nil {
-		ci.logger.Errorf("[chunk info] new stream.")
+		ci.logger.Errorf("[chunk info] new stream: %w", err)
 		return err
 	}
 	defer func() {
@@ -227,7 +227,7 @@ func (ci *ChunkInfo) handlerPyramid(ctx context.Context, p p2p.Peer, stream p2p.
 		ci.logger.Errorf("[pyramid hash] read pyramid hash message: %w", err)
 		return fmt.Errorf("[chunk info] read pyramid hash message: %w", err)
 	}
-	ci.logger.Tracef("[pyramid hash]  got pyramid req: %q", req)
+	ci.logger.Tracef("[pyramid hash]  got pyramid req.")
 
 	target := boson.NewAddress(req.GetTarget())
 
