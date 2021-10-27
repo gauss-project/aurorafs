@@ -182,7 +182,11 @@ func (ci *ChunkInfo) updateQueue(ctx context.Context, authInfo []byte, rootCid, 
 		return
 	}
 	for over := range chunkInfo {
-		n := boson.MustParseHexAddress(over).Bytes()
+		o := boson.MustParseHexAddress(over)
+		n := o.Bytes()
+		if o.Equal(ci.addr) {
+			continue
+		}
 		if q.len(UnPull) >= PullerMax {
 			break
 		}
