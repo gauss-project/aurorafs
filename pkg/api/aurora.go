@@ -98,12 +98,27 @@ func (s *server) fileUploadHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	realIndexFilename, err := UnescapeUnicode(fileName)
+	if err != nil {
+		logger.Debugf("aurora upload file: filename %q unescape err: %v", fileName, err)
+		logger.Errorf("aurora upload file: filename %q unescape err", fileName)
+		jsonhttp.BadRequest(w, nil)
+		return
+	}
+
 	rootMtdt := map[string]string{
-		manifest.WebsiteIndexDocumentSuffixKey: fileName,
+		manifest.WebsiteIndexDocumentSuffixKey: realIndexFilename,
 	}
 
 	if dirName != "" {
-		rootMtdt[manifest.EntryMetadataDirnameKey] = dirName
+		realDirName, err := UnescapeUnicode(dirName)
+		if err != nil {
+			logger.Debugf("aurora upload file: dirname %q unescape err: %v", dirName, err)
+			logger.Errorf("aurora upload file: dirname %q unescape err", dirName)
+			jsonhttp.BadRequest(w, nil)
+			return
+		}
+		rootMtdt[manifest.EntryMetadataDirnameKey] = realDirName
 	}
 
 	err = m.Add(ctx, manifest.RootPath, manifest.NewEntry(boson.ZeroAddress, rootMtdt))
@@ -116,7 +131,7 @@ func (s *server) fileUploadHandler(w http.ResponseWriter, r *http.Request) {
 
 	fileMtdt := map[string]string{
 		manifest.EntryMetadataContentTypeKey: contentType,
-		manifest.EntryMetadataFilenameKey:    fileName,
+		manifest.EntryMetadataFilenameKey:    realIndexFilename,
 	}
 
 	err = m.Add(ctx, fileName, manifest.NewEntry(fr, fileMtdt))
