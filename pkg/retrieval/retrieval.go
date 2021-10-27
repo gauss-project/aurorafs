@@ -15,6 +15,7 @@ import (
 	"github.com/gauss-project/aurorafs/pkg/retrieval/aco"
 	"github.com/gauss-project/aurorafs/pkg/retrieval/pb"
 	"github.com/gauss-project/aurorafs/pkg/routetab"
+	"github.com/gauss-project/aurorafs/pkg/sctx"
 	"github.com/gauss-project/aurorafs/pkg/soc"
 	"github.com/gauss-project/aurorafs/pkg/storage"
 	"github.com/gauss-project/aurorafs/pkg/tracing"
@@ -313,7 +314,7 @@ func (s *Service) retrieveChunk(ctx context.Context, route aco.Route, rootAddr, 
 		return nil, fmt.Errorf("retrieval: report chunk transfer: %w", err)
 	}
 
-	_, err = s.storer.Put(ctx, storage.ModePutRequest, chunk)
+	_, err = s.storer.Put(sctx.SetRootCID(ctx, rootAddr), storage.ModePutRequest, chunk)
 	if err != nil {
 		return nil, fmt.Errorf("retrieval: storage put cache:%w", err)
 	}
@@ -332,17 +333,19 @@ func (s *Service) handler(ctx context.Context, p p2p.Peer, stream p2p.Stream) (e
 	}()
 	s.logger.Tracef("handler %v recv msg from: %v", s.addr.String(), p.Address.String())
 
+	ctx = context.WithValue(ctx, requestSourceContextKey{}, p.Address.String())
+
 	var req pb.RequestChunk
 	if err := r.ReadMsgWithContext(ctx, &req); err != nil {
 		return fmt.Errorf("read request: %w peer %s", err, p.Address.String())
 	}
+
+	targetAddr, rootAddr, chunkAddr := boson.NewAddress(req.TargetAddr), boson.NewAddress(req.RootAddr), boson.NewAddress(req.ChunkAddr)
+
 	span, _, ctx := s.tracer.StartSpanFromContext(ctx, "handle-retrieve-chunk",
-		s.logger, opentracing.Tag{Key: "address", Value: fmt.Sprintf("%v,%v", boson.NewAddress(req.RootAddr).String(), boson.NewAddress(req.ChunkAddr).String())},
+		s.logger, opentracing.Tag{Key: "address", Value: fmt.Sprintf("%s,%s", rootAddr, chunkAddr)},
 	)
 	defer span.Finish()
-
-	ctx = context.WithValue(ctx, requestSourceContextKey{}, p.Address.String())
-	targetAddr, rootAddr, chunkAddr := boson.NewAddress(req.TargetAddr), boson.NewAddress(req.RootAddr), boson.NewAddress(req.ChunkAddr)
 
 	forward := false
 	chunk, err := s.storer.Get(ctx, storage.ModeGetRequest, chunkAddr)
@@ -379,7 +382,7 @@ func (s *Service) handler(ctx context.Context, p p2p.Peer, stream p2p.Stream) (e
 	}
 
 	if forward {
-		_, err = s.storer.Put(ctx, storage.ModePutRequest, chunk)
+		_, err = s.storer.Put(sctx.SetRootCID(ctx, rootAddr), storage.ModePutRequest, chunk)
 		if err != nil {
 			return fmt.Errorf("retrieve cache put :%w", err)
 		}
