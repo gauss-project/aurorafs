@@ -1,25 +1,21 @@
 package debugapi
 
-import (
-	"math/big"
-)
-
-var (
-	errCantSettlements     = "can not get settlements"
-	errCantSettlementsPeer = "can not get settlements for peer"
-)
-
-type settlementResponse struct {
-	Peer               string   `json:"peer"`
-	SettlementReceived *big.Int `json:"received"`
-	SettlementSent     *big.Int `json:"sent"`
-}
-
-type settlementsResponse struct {
-	TotalSettlementReceived *big.Int             `json:"totalreceived"`
-	TotalSettlementSent     *big.Int             `json:"totalsent"`
-	Settlements             []settlementResponse `json:"settlements"`
-}
+//var (
+//	errCantSettlements     = "can not get settlements"
+//	errCantSettlementsPeer = "can not get settlements for peer"
+//)
+//
+//type settlementResponse struct {
+//	Peer               string   `json:"peer"`
+//	SettlementReceived *big.Int `json:"received"`
+//	SettlementSent     *big.Int `json:"sent"`
+//}
+//
+//type settlementsResponse struct {
+//	TotalSettlementReceived *big.Int             `json:"totalreceived"`
+//	TotalSettlementSent     *big.Int             `json:"totalsent"`
+//	Settlements             []settlementResponse `json:"settlements"`
+//}
 
 //func (s *Service) settlementsHandler(w http.ResponseWriter, r *http.Request) {
 //
