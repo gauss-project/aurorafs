@@ -81,7 +81,7 @@ func (ci *ChunkInfo) sendData(ctx context.Context, address boson.Address, stream
 		if err != nil {
 			_ = stream.Reset()
 		} else {
-			_ = stream.FullClose()
+			go stream.FullClose()
 		}
 	}()
 	w, _ := protobuf.NewWriterAndReader(stream)
@@ -148,7 +148,7 @@ func (ci *ChunkInfo) sendPyramid(ctx context.Context, address boson.Address, str
 		if err != nil {
 			_ = stream.Reset()
 		} else {
-			_ = stream.FullClose()
+			go stream.FullClose()
 		}
 	}()
 	w, r := protobuf.NewWriterAndReader(stream)

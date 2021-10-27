@@ -68,7 +68,7 @@ type Service struct {
 	signer                crypto.Signer
 	advertisableAddresser AdvertisableAddressResolver
 	overlay               boson.Address
-	nodeMode              Model
+	nodeMode              aurora.Model
 	networkID             uint64
 	welcomeMessage        atomic.Value
 	receivedHandshakes    map[libp2ppeer.ID]struct{}
@@ -80,37 +80,6 @@ type Service struct {
 	picker                p2p.Picker
 	lightNodes            lightnode.LightNodes
 	lightNodeLimit        int
-}
-
-type Model struct {
-	Bv *bitvector.BitVector
-}
-
-func (m Model) IsFull() bool {
-	return m.Bv.Get(FullNode)
-}
-
-func (m Model) IsLight() bool {
-	return m.Bv.Get(LightNode)
-}
-
-const (
-	FullNode = iota
-	LightNode
-)
-
-// Info contains the information received from the handshake.
-type Info struct {
-	BzzAddress *aurora.Address
-	NodeMode   Model
-}
-
-func (i *Info) LightString() string {
-	if i.NodeMode.IsLight() {
-		return " (light)"
-	}
-
-	return ""
 }
 
 // New creates a new handshake Service.
@@ -125,7 +94,7 @@ func New(signer crypto.Signer, advertisableAddresser AdvertisableAddressResolver
 		advertisableAddresser: advertisableAddresser,
 		overlay:               overlay,
 		networkID:             networkID,
-		nodeMode:              Model{Bv: bv},
+		nodeMode:              aurora.Model{Bv: bv},
 		receivedHandshakes:    make(map[libp2ppeer.ID]struct{}),
 		logger:                logger,
 		libp2pID:              ownPeerID,
@@ -137,9 +106,9 @@ func New(signer crypto.Signer, advertisableAddresser AdvertisableAddressResolver
 	svc.welcomeMessage.Store(welcomeMessage)
 
 	if fullNode {
-		svc.nodeMode.Bv.Set(FullNode)
+		svc.nodeMode.Bv.Set(aurora.FullNode)
 	} else {
-		svc.nodeMode.Bv.Set(LightNode)
+		svc.nodeMode.Bv.Set(aurora.LightNode)
 	}
 	return svc, nil
 }
@@ -149,7 +118,7 @@ func (s *Service) SetPicker(n p2p.Picker) {
 }
 
 // Handshake initiates a handshake with a peer.
-func (s *Service) Handshake(ctx context.Context, stream p2p.Stream, peerMultiaddr ma.Multiaddr, peerID libp2ppeer.ID) (i *Info, err error) {
+func (s *Service) Handshake(ctx context.Context, stream p2p.Stream, peerMultiaddr ma.Multiaddr, peerID libp2ppeer.ID) (i *aurora.AddressInfo, err error) {
 	ctx, cancel := context.WithTimeout(ctx, handshakeTimeout)
 	defer cancel()
 
@@ -235,14 +204,14 @@ func (s *Service) Handshake(ctx context.Context, stream p2p.Stream, peerMultiadd
 	}
 
 	bv, _ := bitvector.NewFromBytes(resp.Ack.NodeMode, bitVictorNodeModeLen)
-	return &Info{
-		BzzAddress: remoteBzzAddress,
-		NodeMode:   Model{Bv: bv},
+	return &aurora.AddressInfo{
+		Address:  remoteBzzAddress,
+		NodeMode: aurora.Model{Bv: bv},
 	}, nil
 }
 
 // Handle handles an incoming handshake from a peer.
-func (s *Service) Handle(ctx context.Context, stream p2p.Stream, remoteMultiaddr ma.Multiaddr, remotePeerID libp2ppeer.ID) (i *Info, err error) {
+func (s *Service) Handle(ctx context.Context, stream p2p.Stream, remoteMultiaddr ma.Multiaddr, remotePeerID libp2ppeer.ID) (i *aurora.AddressInfo, err error) {
 	ctx, cancel := context.WithTimeout(ctx, handshakeTimeout)
 	defer cancel()
 
@@ -327,7 +296,7 @@ func (s *Service) Handle(ctx context.Context, stream p2p.Stream, remoteMultiaddr
 
 	overlay := boson.NewAddress(ack.Address.Overlay)
 	bv, _ := bitvector.NewFromBytes(ack.NodeMode, bitVictorNodeModeLen)
-	mode := Model{Bv: bv}
+	mode := aurora.Model{Bv: bv}
 
 	if s.picker != nil {
 		if mode.IsFull() {
@@ -352,9 +321,9 @@ func (s *Service) Handle(ctx context.Context, stream p2p.Stream, remoteMultiaddr
 		s.logger.Infof("greeting \"%s\" from peer: %s", ack.WelcomeMessage, remoteBzzAddress.Overlay.String())
 	}
 
-	return &Info{
-		BzzAddress: remoteBzzAddress,
-		NodeMode:   mode,
+	return &aurora.AddressInfo{
+		Address:  remoteBzzAddress,
+		NodeMode: mode,
 	}, nil
 }
 

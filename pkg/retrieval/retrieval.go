@@ -266,7 +266,7 @@ func (s *Service) retrieveChunk(ctx context.Context, route aco.Route, rootAddr, 
 		if err != nil {
 			_ = stream.Reset()
 		} else {
-			_ = stream.FullClose()
+			go stream.FullClose()
 		}
 	}()
 
@@ -325,7 +325,7 @@ func (s *Service) handler(ctx context.Context, p p2p.Peer, stream p2p.Stream) (e
 		if err != nil {
 			_ = stream.Reset()
 		} else {
-			_ = stream.FullClose()
+			go stream.FullClose()
 		}
 	}()
 	s.logger.Tracef("handler %v recv msg from: %v", s.addr.String(), p.Address.String())

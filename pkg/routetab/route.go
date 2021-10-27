@@ -15,7 +15,6 @@ import (
 	"github.com/gauss-project/aurorafs/pkg/storage"
 	"github.com/gauss-project/aurorafs/pkg/topology/kademlia"
 	"github.com/gauss-project/aurorafs/pkg/topology/lightnode"
-	"github.com/gogf/gf/os/gcache"
 	"resenje.org/singleflight"
 	"sync"
 	"time"
@@ -491,10 +490,6 @@ func (s *Service) Connect(ctx context.Context, target boson.Address) error {
 		return errors.New("cannot connected to self")
 	}
 	key := "route_connect_" + target.String()
-	val, _ := gcache.GetVar(key)
-	if val.String() != "" {
-		return errors.New(val.String())
-	}
 	_, _, err := s.singleflight.Do(ctx, key, func(ctx context.Context) (interface{}, error) {
 		if !s.isConnected(ctx, target) {
 			err := s.connect(ctx, target)
@@ -502,9 +497,6 @@ func (s *Service) Connect(ctx context.Context, target boson.Address) error {
 		}
 		return nil, nil
 	})
-	if err != nil {
-		_ = gcache.Set(key, err.Error(), time.Second*30)
-	}
 	return err
 }
 
