@@ -1,24 +1,20 @@
 package debugapi
 
-import (
-	"math/big"
-)
-
 var (
-	errCantBalances   = "Cannot get balances"
-	errCantBalance    = "Cannot get balance"
-	errNoBalance      = "No balance for peer"
-	errInvalidAddress = "Invalid address"
+	//errCantBalances   = "Cannot get balances"
+	//errCantBalance    = "Cannot get balance"
+	//errNoBalance      = "No balance for peer"
+	//errInvalidAddress = "Invalid address"
 )
 
-type balanceResponse struct {
-	Peer    string   `json:"peer"`
-	Balance *big.Int `json:"balance"`
-}
-
-type balancesResponse struct {
-	Balances []balanceResponse `json:"balances"`
-}
+//type balanceResponse struct {
+//	Peer    string   `json:"peer"`
+//	Balance *big.Int `json:"balance"`
+//}
+//
+//type balancesResponse struct {
+//	Balances []balanceResponse `json:"balances"`
+//}
 
 //func (s *Service) balancesHandler(w http.ResponseWriter, r *http.Request) {
 //	balances, err := s.accounting.Balances()

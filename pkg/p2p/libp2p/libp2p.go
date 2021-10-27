@@ -299,7 +299,7 @@ func (s *Service) handleIncoming(stream network.Stream) {
 		return
 	}
 
-	overlay := i.BzzAddress.Overlay
+	overlay := i.Address.Overlay
 
 	blocked, err := s.blocklist.Exists(overlay)
 	if err != nil {
@@ -335,11 +335,11 @@ func (s *Service) handleIncoming(stream network.Stream) {
 	}
 
 	if i.NodeMode.IsFull() {
-		err = s.addressbook.Put(i.BzzAddress.Overlay, *i.BzzAddress)
+		err = s.addressbook.Put(i.Address.Overlay, *i.Address)
 		if err != nil {
 			s.logger.Debugf("stream handler: addressbook put error %s: %v", peerID, err)
 			s.logger.Errorf("stream handler: unable to persist peer %v", peerID)
-			_ = s.Disconnect(i.BzzAddress.Overlay, "unable to persist peer in addressbook")
+			_ = s.Disconnect(i.Address.Overlay, "unable to persist peer in addressbook")
 			return
 		}
 	}
@@ -383,7 +383,7 @@ func (s *Service) handleIncoming(stream network.Stream) {
 			}
 		} else {
 			if err := s.notifier.Connected(s.ctx, peer, false); err != nil {
-				s.logger.Debugf("stream handler: notifier.Connected: peer disconnected: %s: %v", i.BzzAddress.Overlay, err)
+				s.logger.Debugf("stream handler: notifier.Connected: peer disconnected: %s: %v", i.Address.Overlay, err)
 				// note: this cannot be unit tested since the node
 				// waiting on handshakeStream.FullClose() on the other side
 				// might actually get a stream reset when we disconnect here
@@ -419,8 +419,8 @@ func (s *Service) handleIncoming(stream network.Stream) {
 
 	peerUserAgent := appendSpace(s.peerUserAgent(s.ctx, peerID))
 
-	s.logger.Debugf("stream handler: successfully connected to peer %s%s%s (inbound)", i.BzzAddress.ShortString(), i.LightString(), peerUserAgent)
-	s.logger.Infof("stream handler: successfully connected to peer %s%s%s (inbound)", i.BzzAddress.Overlay, i.LightString(), peerUserAgent)
+	s.logger.Debugf("stream handler: successfully connected to peer %s%s%s (inbound)", i.Address.ShortString(), i.LightString(), peerUserAgent)
+	s.logger.Infof("stream handler: successfully connected to peer %s%s%s (inbound)", i.Address.Overlay, i.LightString(), peerUserAgent)
 }
 
 func (s *Service) SetPickyNotifier(n p2p.PickyNotifier) {
@@ -615,7 +615,7 @@ func (s *Service) Connect(ctx context.Context, addr ma.Multiaddr) (address *auro
 		return nil, p2p.ErrDialLightNode
 	}
 
-	overlay := i.BzzAddress.Overlay
+	overlay := i.Address.Overlay
 
 	blocked, err := s.blocklist.Exists(overlay)
 	if err != nil {
@@ -639,7 +639,7 @@ func (s *Service) Connect(ctx context.Context, addr ma.Multiaddr) (address *auro
 			return nil, fmt.Errorf("peer exists, full close: %w", err)
 		}
 
-		return i.BzzAddress, nil
+		return i.Address, nil
 	}
 
 	if err := handshakeStream.FullClose(); err != nil {
@@ -648,7 +648,7 @@ func (s *Service) Connect(ctx context.Context, addr ma.Multiaddr) (address *auro
 	}
 
 	if i.NodeMode.IsFull() {
-		err = s.addressbook.Put(overlay, *i.BzzAddress)
+		err = s.addressbook.Put(overlay, *i.Address)
 		if err != nil {
 			_ = s.Disconnect(overlay, "failed storing peer in addressbook")
 			return nil, fmt.Errorf("storing bzz address: %w", err)
@@ -677,9 +677,9 @@ func (s *Service) Connect(ctx context.Context, addr ma.Multiaddr) (address *auro
 
 	peerUserAgent := appendSpace(s.peerUserAgent(ctx, info.ID))
 
-	s.logger.Debugf("successfully connected to peer %s%s%s (outbound)", i.BzzAddress.ShortString(), i.LightString(), peerUserAgent)
+	s.logger.Debugf("successfully connected to peer %s%s%s (outbound)", i.Address.ShortString(), i.LightString(), peerUserAgent)
 	s.logger.Infof("successfully connected to peer %s%s%s (outbound)", overlay, i.LightString(), peerUserAgent)
-	return i.BzzAddress, nil
+	return i.Address, nil
 }
 
 func (s *Service) Disconnect(overlay boson.Address, reason string) error {
