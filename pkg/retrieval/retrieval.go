@@ -34,6 +34,7 @@ var _ Interface = (*Service)(nil)
 
 type Interface interface {
 	RetrieveChunk(ctx context.Context, rootAddr, chunkAddr boson.Address) (chunk boson.Chunk, err error)
+	GetRouteScore(time int64) map[string]int64
 }
 
 type Service struct {
@@ -255,7 +256,8 @@ func (s *Service) retrieveChunk(ctx context.Context, route aco.Route, rootAddr, 
 	}
 	s.acoServer.OnDownloadStart(route)
 	defer s.acoServer.OnDownloadEnd(route)
-
+	ctx, cancel := context.WithTimeout(ctx, retrieveChunkTimeout)
+	defer cancel()
 	stream, err := s.streamer.NewStream(ctx, route.LinkNode, nil, protocolName, protocolVersion, streamName)
 	if err != nil {
 		s.metrics.TotalErrors.Inc()
@@ -403,4 +405,8 @@ func (s *Service) getRetrievalRouteList(ctx context.Context, rootAddr, chunkAddr
 	}
 
 	return routList
+}
+
+func (s *Service) GetRouteScore(time int64) map[string]int64 {
+	return s.acoServer.GetRouteScore(time)
 }

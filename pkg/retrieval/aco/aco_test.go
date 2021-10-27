@@ -52,7 +52,7 @@ func TestUsingCount(t *testing.T) {
 		for i := int64(0); i < randNum; i++ {
 			wg.Add(1)
 			go func() {
-				server.OnDownloadFinish(route1, nil)
+				server.OnDownloadFinish(route1, &DownloadDetail{StartMs: 1, EndMs: 2, Size: CHUNK_SIZE})
 				wg.Done()
 			}()
 		}
