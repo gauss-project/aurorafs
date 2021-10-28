@@ -48,8 +48,8 @@ func (ora *ChainOracle) GetNodesFromCid(cid []byte) []boson.Address {
 		ora.logger.Errorf("Get overlays based on cid : %v", err)
 		return overs
 	}
-	for _, over := range overlays {
-		overs = append(overs, boson.NewAddress(over[:]))
+	for i := range overlays {
+		overs = append(overs, boson.NewAddress(overlays[i][:]))
 	}
 	return overs
 }
