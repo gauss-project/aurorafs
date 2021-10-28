@@ -164,7 +164,7 @@ func (s *server) fileUploadHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	dataChunks, _ := s.traversal.GetChunkHashes(ctx, manifestReference, pyramid)
+	dataChunks, err := s.traversal.GetChunkHashes(ctx, manifestReference, pyramid)
 	if err != nil {
 		logger.Debugf("aurora upload file: get chunk hashes of file %q: %v", fileName, err)
 		logger.Errorf("aurora upload file: get chunk hashes of file %q", fileName)
