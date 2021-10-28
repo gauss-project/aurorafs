@@ -177,7 +177,7 @@ func TestRetrievalChunk(t *testing.T) {
 		// chunk := testingc.FixtureChunk("02c2")
 
 		chunkBytes := []uint8{3, 0, 0, 0, 0, 0, 0, 0, 102, 111, 111}
-		h := hasher(chunkBytes[boson.SpanSize:])
+		h := hasher(chunkBytes)
 		addressBytes, _ := h(chunkBytes[:boson.SpanSize])
 		chunkAddr := boson.NewAddress(addressBytes)
 		chunk := boson.NewChunk(chunkAddr, chunkBytes)
@@ -254,11 +254,12 @@ func TestRetrievalChunk(t *testing.T) {
 		client := retrieval.New(clientAddress, c2fRecorder, &mockRouteTable, clientStorer, true, logger, nil)
 
 		clientChunkInfo := mock.New(rmock.MockRouteTable{})
+		client.Config(clientChunkInfo)
+		forwarder.Config(clientChunkInfo)
 		err = clientChunkInfo.OnChunkTransferred(chunk.Address(), rootAddr, serverAddress, boson.ZeroAddress)
 		if err != nil {
 			t.Fatal(err)
 		}
-		client.Config(clientChunkInfo)
 
 		if got, _ := forwarderStorer.Has(context.Background(), storage.ModeHasChunk, chunk.Address()); got {
 			t.Fatalf("forwarder node already has chunk")
@@ -347,6 +348,7 @@ func TestNeighborRetrieval(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
+		neighborServer.Config(clientChunkInfo)
 		client.Config(clientChunkInfo)
 
 		got, err := client.RetrieveChunk(context.Background(), rootAddr, chunk.Address())

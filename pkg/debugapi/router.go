@@ -90,8 +90,8 @@ func (s *Service) newRouter() *mux.Router {
 		"GET": http.HandlerFunc(s.topologyHandler),
 	})
 	router.Handle("/route/{peer-id}", jsonhttp.MethodHandler{
-		"GET": http.HandlerFunc(s.getRouteHandel),
-		"POST": http.HandlerFunc(s.findRouteHandel),
+		"GET":    http.HandlerFunc(s.getRouteHandel),
+		"POST":   http.HandlerFunc(s.findRouteHandel),
 		"DELETE": http.HandlerFunc(s.delRouteHandel),
 	})
 	router.Handle("/welcome-message", jsonhttp.MethodHandler{
@@ -116,6 +116,9 @@ func (s *Service) newRouter() *mux.Router {
 		"GET": http.HandlerFunc(s.statusHandler),
 	})
 
+	router.Handle("/aco/{timestamp}", jsonhttp.MethodHandler{
+		"GET": http.HandlerFunc(s.getRouteScoreHandle),
+	})
 	//router.Handle("/balances", jsonhttp.MethodHandler{
 	//	"GET": http.HandlerFunc(s.compensatedBalancesHandler),
 	//})
