@@ -27,9 +27,9 @@ import (
 type Traverser interface {
 	// Traverse iterates through each address related to the supplied one, if possible.
 	Traverse(context.Context, boson.Address, boson.AddressIterFunc) error
-	// GetPyramid
+	// GetPyramid returns pyramid hash and its contains data.
 	GetPyramid(context.Context, boson.Address) (map[string][]byte, error)
-	// GetChunkHashes
+	// GetChunkHashes returns all stored data chunk related to the given reference, if possible.
 	GetChunkHashes(context.Context, boson.Address, map[string][]byte) ([][][]byte, error)
 }
 

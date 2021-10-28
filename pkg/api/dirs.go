@@ -122,6 +122,15 @@ func (s *server) dirUploadHandler(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// UnescapeUnicode convert the raw Unicode encoding to character
+func UnescapeUnicode(raw string) (string, error) {
+	str, err := strconv.Unquote(strings.Replace(strconv.Quote(raw), `\\u`, `\u`, -1))
+	if err != nil {
+		return "", err
+	}
+	return str, nil
+}
+
 // storeDir stores all files recursively contained in the directory given as a tar/multipart
 // it returns the hash for the uploaded manifest corresponding to the uploaded dir
 func storeDir(
@@ -189,13 +198,25 @@ func storeDir(
 	if dirName != "" || indexFilename != "" || errorFilename != "" {
 		metadata := map[string]string{}
 		if dirName != "" {
-			metadata[manifest.EntryMetadataDirnameKey] = dirName
+			realDirName, err := UnescapeUnicode(dirName)
+			if err != nil {
+				return boson.ZeroAddress, err
+			}
+			metadata[manifest.EntryMetadataDirnameKey] = realDirName
 		}
 		if indexFilename != "" {
-			metadata[manifest.WebsiteIndexDocumentSuffixKey] = indexFilename
+			realIndexFilename, err := UnescapeUnicode(indexFilename)
+			if err != nil {
+				return boson.ZeroAddress, err
+			}
+			metadata[manifest.WebsiteIndexDocumentSuffixKey] = realIndexFilename
 		}
 		if errorFilename != "" {
-			metadata[manifest.WebsiteErrorDocumentPathKey] = errorFilename
+			realErrorFilename, err := UnescapeUnicode(errorFilename)
+			if err != nil {
+				return boson.ZeroAddress, err
+			}
+			metadata[manifest.WebsiteErrorDocumentPathKey] = realErrorFilename
 		}
 		rootManifestEntry := manifest.NewEntry(boson.ZeroAddress, metadata)
 		err = dirManifest.Add(ctx, manifest.RootPath, rootManifestEntry)
