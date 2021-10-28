@@ -6,6 +6,7 @@ package debugapi
 import (
 	"crypto/ecdsa"
 	"github.com/gauss-project/aurorafs/pkg/chunkinfo"
+	"github.com/gauss-project/aurorafs/pkg/retrieval"
 	"github.com/gauss-project/aurorafs/pkg/routetab"
 	"github.com/gauss-project/aurorafs/pkg/topology/lightnode"
 	"net/http"
@@ -38,6 +39,7 @@ type Service struct {
 	lightNodes      *lightnode.Container
 	routetab        routetab.RouteTab
 	chunkInfo       chunkinfo.Interface
+	retrieval       retrieval.Interface
 	//accounting         accounting.Interface
 	//settlement         settlement.Interface
 	//chequebookEnabled  bool
@@ -86,7 +88,7 @@ func New(overlay boson.Address, publicKey, pssPublicKey ecdsa.PublicKey, ethereu
 // Configure injects required dependencies and configuration parameters and
 // constructs HTTP routes that depend on them. It is intended and safe to call
 // this method only once.
-func (s *Service) Configure(p2p p2p.DebugService, pingpong pingpong.Interface, topologyDriver topology.Driver, lightNodes *lightnode.Container, storer storage.Storer, route routetab.RouteTab, chunkinfo chunkinfo.Interface) {
+func (s *Service) Configure(p2p p2p.DebugService, pingpong pingpong.Interface, topologyDriver topology.Driver, lightNodes *lightnode.Container, storer storage.Storer, route routetab.RouteTab, chunkinfo chunkinfo.Interface, retrieval retrieval.Interface) {
 	s.p2p = p2p
 	s.pingpong = pingpong
 	s.topologyDriver = topologyDriver
@@ -94,6 +96,7 @@ func (s *Service) Configure(p2p p2p.DebugService, pingpong pingpong.Interface, t
 	s.lightNodes = lightNodes
 	s.routetab = route
 	s.chunkInfo = chunkinfo
+	s.retrieval = retrieval
 	//s.accounting = accounting
 	//s.settlement = settlement
 	//s.chequebookEnabled = chequebookEnabled

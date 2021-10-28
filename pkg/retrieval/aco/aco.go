@@ -254,6 +254,47 @@ func (s *AcoServer) getCurRouteScore(route Route) int64 {
 	return scoreAtCurrent
 }
 
+func (s *AcoServer) GetRouteScore(time int64) map[string]int64 {
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
+	res := make(map[string]int64)
+	for k, v := range s.routeMetric {
+		res[k] = s.getCur(time, v)
+	}
+	return res
+}
+
+func (s *AcoServer) getCur(t int64, curRouteState *routeMetric) int64 {
+
+	if t == 0 {
+		t = time.Now().Unix()
+	}
+	elapsed := t - (curRouteState.downloadDetail.EndMs / 1000)
+	if elapsed < 0 {
+		elapsed = 0
+	}
+
+	if elapsed >= s.toZeroElapsed {
+		return defaultRate / (curRouteState.downloadCount + 1)
+	}
+
+	if curRouteState.downloadDetail.EndMs == 0 {
+		return defaultRate / (curRouteState.downloadCount + 1)
+	}
+
+	downloadDuration := float64(curRouteState.downloadDetail.EndMs-curRouteState.downloadDetail.StartMs) / 1000.
+	downloadSize := float64(curRouteState.downloadDetail.Size)
+
+	downloadRate := int64(downloadSize / downloadDuration)
+	weightedDownloadRate := downloadRate / (curRouteState.downloadCount + 1)
+
+	reserveScale := 1.0 - (float64(elapsed) / float64(s.toZeroElapsed))
+
+	scoreAtCurrent := int64(float64(weightedDownloadRate-defaultRate)*reserveScale) + defaultRate
+
+	return scoreAtCurrent
+}
+
 func (s *AcoServer) cleanTrigger() {
 	t := time.NewTicker(cleanTime)
 	go func() {
