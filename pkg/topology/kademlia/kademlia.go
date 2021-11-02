@@ -893,12 +893,12 @@ func (k *Kad) AddPeers(addrs ...boson.Address) {
 }
 
 func (k *Kad) Outbound(peer boson.Address) {
-	k.waitNext.Set(peer, time.Now().Add(shortRetry), 0)
-
 	k.connectedPeers.Add(peer)
 
 	k.metrics.TotalOutboundConnections.Inc()
 	k.collector.Record(peer, im.PeerLogIn(time.Now(), im.PeerConnectionDirectionOutbound))
+
+	k.waitNext.Remove(peer)
 
 	k.depthMu.Lock()
 	k.depth = recalcDepth(k.connectedPeers, k.radius)
@@ -906,6 +906,7 @@ func (k *Kad) Outbound(peer boson.Address) {
 
 	po := boson.Proximity(k.base.Bytes(), peer.Bytes())
 	k.logger.Debugf("kademlia: connected to peer: %q in bin: %d", peer, po)
+
 	k.notifyManageLoop()
 	k.notifyPeerSig()
 }
@@ -966,6 +967,9 @@ func (k *Kad) onConnected(ctx context.Context, addr boson.Address) error {
 	k.depthMu.Lock()
 	k.depth = recalcDepth(k.connectedPeers, k.radius)
 	k.depthMu.Unlock()
+
+	po := boson.Proximity(k.base.Bytes(), addr.Bytes())
+	k.logger.Debugf("kademlia: connected from peer: %q in bin: %d", addr, po)
 
 	k.notifyManageLoop()
 	k.notifyPeerSig()
