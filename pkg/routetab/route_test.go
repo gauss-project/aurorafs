@@ -303,6 +303,65 @@ func TestService_FindRouteMaxTTL(t *testing.T) {
 	}
 }
 
+func TestService_FindRouteTargetIsNeighbor(t *testing.T) {
+	ctx := context.Background()
+
+	// connect 0--1--2--3--4
+	//          \______/
+	nodes := createTopology(t, 5)
+
+	nodes[0].addOne(t, nodes[3].addr, true)
+	nodes[3].addOne(t, nodes[0].addr, true)
+
+	nodes[0].SetStreamer(streamtest.New(
+		streamtest.WithBaseAddr(nodes[0].overlay),
+		streamtest.WithPeerProtocols(map[string]p2p.ProtocolSpec{
+			nodes[1].overlay.String(): nodes[1].Protocol(),
+			nodes[3].overlay.String(): nodes[3].Protocol(),
+		}),
+	))
+
+	nodes[3].SetStreamer(streamtest.New(
+		streamtest.WithBaseAddr(nodes[3].overlay),
+		streamtest.WithPeerProtocols(map[string]p2p.ProtocolSpec{
+			nodes[0].overlay.String(): nodes[0].Protocol(),
+			nodes[2].overlay.String(): nodes[2].Protocol(),
+			nodes[4].overlay.String(): nodes[4].Protocol(),
+		}),
+	))
+
+	if nodes[0].kad.Snapshot().Connected != 2 {
+		t.Fatalf("expect node 0 connected 2")
+	}
+	if nodes[3].kad.Snapshot().Connected != 3 {
+		t.Fatalf("expect node 0 connected 3")
+	}
+
+	// find dest 1
+	_, err := nodes[0].GetRoute(ctx, nodes[1].overlay)
+	if !errors.Is(err, routetab.ErrNotFound) {
+		t.Fatalf("expect dest 1 route not found")
+	}
+	route, err := nodes[0].FindRoute(ctx, nodes[1].overlay)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(route) != 1 {
+		t.Fatalf("expect dest 1 route path len 1,got %d", len(route))
+	}
+	// check route
+	r, err := nodes[0].GetRoute(ctx, nodes[1].overlay)
+	if err != nil {
+		t.Fatal(err)
+	}
+	exp := []boson.Address{nodes[0].overlay, nodes[3].overlay, nodes[2].overlay, nodes[1].overlay}
+	for k, v := range r[0].Item {
+		if !v.Equal(exp[k]) {
+			t.Fatalf("expect item %s,got %s", exp[k], v)
+		}
+	}
+}
+
 func TestService_GetTargetNeighbor(t *testing.T) {
 	ctx := context.Background()
 

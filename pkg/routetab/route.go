@@ -232,7 +232,7 @@ func (s *Service) onRouteReq(ctx context.Context, p p2p.Peer, stream p2p.Stream)
 	return nil
 }
 
-func (s *Service) onRouteResp(ctx context.Context, _ p2p.Peer, stream p2p.Stream) error {
+func (s *Service) onRouteResp(ctx context.Context, peer p2p.Peer, stream p2p.Stream) error {
 	r := protobuf.NewReader(stream)
 	defer func() {
 		go func() {
@@ -260,12 +260,12 @@ func (s *Service) onRouteResp(ctx context.Context, _ p2p.Peer, stream p2p.Stream
 		return err
 	}
 	// doing forward resp
-	s.respForward(ctx, target, &resp)
+	s.respForward(ctx, target, peer.Address, &resp)
 	return nil
 }
 
-func (s *Service) respForward(ctx context.Context, target boson.Address, resp *pb.RouteResp) {
-	res := s.pendingCalls.Get(target)
+func (s *Service) respForward(ctx context.Context, target, next boson.Address, resp *pb.RouteResp) {
+	res := s.pendingCalls.Get(target, next)
 	if res == nil {
 		return
 	}
@@ -295,7 +295,7 @@ func (s *Service) doRouteReq(ctx context.Context, peer, src, dest boson.Address,
 			},
 		}
 	}
-	has := s.pendingCalls.Add(boson.NewAddress(req.Dest), src, ch)
+	has := s.pendingCalls.Add(boson.NewAddress(req.Dest), src, peer, ch)
 	if !has {
 		s.sendDataToNode(ctx, peer, streamOnRouteReq, req)
 		s.metrics.FindRouteReqSentCount.Inc()
@@ -381,11 +381,7 @@ func (s *Service) FindRoute(ctx context.Context, target boson.Address) (paths []
 		err = fmt.Errorf("target=%s is self", target.String())
 		return
 	}
-	if s.IsNeighbor(target) {
-		err = fmt.Errorf("target=%s is neighbor", target.String())
-		return
-	}
-	forward := s.getNeighbor(target, DefaultNeighborAlpha)
+	forward := s.getNeighbor(target, DefaultNeighborAlpha, target)
 	if len(forward) > 0 {
 		ct, cancel := context.WithTimeout(ctx, PendingTimeout)
 		defer cancel()
@@ -393,13 +389,18 @@ func (s *Service) FindRoute(ctx context.Context, target boson.Address) (paths []
 		for _, next := range forward {
 			s.doRouteReq(ct, next, s.self, target, nil, resCh)
 		}
+		remove := func() {
+			for _, v := range forward {
+				s.pendingCalls.Delete(target, v)
+			}
+		}
 		select {
 		case <-ct.Done():
-			s.pendingCalls.Delete(target)
+			remove()
 			err = fmt.Errorf("route: FindRoute dest %s timeout %.0fs", target.String(), PendingTimeout.Seconds())
 			s.logger.Debugf(err.Error())
 		case <-ctx.Done():
-			s.pendingCalls.Delete(target)
+			remove()
 			err = fmt.Errorf("route: FindRoute dest %s praent ctx.Done %s", target.String(), ctx.Err())
 			s.logger.Debugf(err.Error())
 		case <-resCh:
