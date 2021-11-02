@@ -139,6 +139,10 @@ type retrievalMock struct {
 	addr      boson.Address
 }
 
+func (r *retrievalMock) GetRouteScore(time int64) map[string]int64 {
+	panic("implement me")
+}
+
 func (r *retrievalMock) RetrieveChunk(ctx context.Context, rootAddr, addr boson.Address) (chunk boson.Chunk, err error) {
 	if r.failure {
 		return nil, fmt.Errorf("chunk not found")

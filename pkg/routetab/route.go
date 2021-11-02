@@ -578,6 +578,7 @@ func (s *Service) connect(ctx context.Context, peer boson.Address) (err error) {
 
 	s.metrics.TotalOutboundConnections.Inc()
 	s.kad.KnownPeers().Add(peer)
+	s.kad.Outbound(peer)
 
 	return nil
 }
