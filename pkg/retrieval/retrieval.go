@@ -259,7 +259,7 @@ func (s *Service) retrieveChunk(ctx context.Context, route aco.Route, rootAddr, 
 	defer func() {
 		if err == nil || (err != nil && (ctx.Err() == nil || !errors.Is(ctx.Err(), context.Canceled))) {
 			endMs = time.Now().UnixNano() / 1e6
-			s.logger.Infof("link : %s  , from  %d  to %d, chunk size: %d ", route.ToString(), startMs, endMs, dataSize)
+			s.logger.Tracef("link : %s  , from  %d  to %d, chunk size: %d ", route.ToString(), startMs, endMs, dataSize)
 			downloadDetail := aco.DownloadDetail{
 				StartMs: startMs,
 				EndMs:   endMs,
