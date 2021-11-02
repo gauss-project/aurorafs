@@ -32,7 +32,7 @@ func (s *Service) peerConnectHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.topologyDriver.Outbound(*peer)
-	
+
 	jsonhttp.OK(w, peerConnectResponse{
 		Address: peer.Address.String(),
 	})
@@ -99,12 +99,17 @@ func (s *Service) peerBlockingHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 type peersResponse struct {
-	Peers []p2p.Peer `json:"peers"`
+	Peers []PeerItem `json:"peers"`
+}
+
+type PeerItem struct {
+	Address  boson.Address `json:"address"`
+	FullNode bool          `json:"fullNode"`
 }
 
 func (s *Service) peersHandler(w http.ResponseWriter, r *http.Request) {
 	jsonhttp.OK(w, peersResponse{
-		Peers: s.p2p.Peers(),
+		Peers: convPeer(s.p2p.Peers()),
 	})
 }
 
@@ -117,6 +122,22 @@ func (s *Service) blocklistedPeersHandler(w http.ResponseWriter, r *http.Request
 	}
 
 	jsonhttp.OK(w, peersResponse{
-		Peers: peers,
+		Peers: convPeer(peers),
 	})
+}
+
+func convPeer(peers []p2p.Peer) []PeerItem {
+	list := make([]PeerItem, 0)
+	for _, v := range peers {
+		list = append(list, PeerItem{
+			Address: v.Address,
+			FullNode: func() bool {
+				if v.Mode.Bv != nil {
+					return v.Mode.IsFull()
+				}
+				return false
+			}(),
+		})
+	}
+	return list
 }

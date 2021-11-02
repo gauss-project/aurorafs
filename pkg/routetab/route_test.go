@@ -6,8 +6,8 @@ import (
 	"github.com/gauss-project/aurorafs/pkg/shed"
 	"github.com/gauss-project/aurorafs/pkg/topology/kademlia"
 	"github.com/gauss-project/aurorafs/pkg/topology/lightnode"
+	"io"
 	"math/rand"
-	"os"
 	"testing"
 	"time"
 
@@ -34,7 +34,7 @@ const underlayBase = "/ip4/127.0.0.1/tcp/1634/dns/"
 
 var (
 	nonConnectableAddress, _        = ma.NewMultiaddr(underlayBase + "16Uiu2HAkx8ULY8cTXhdVAcMmLcH9AsTKz6uBQ7DPLKRjMLgBVYkA")
-	noopLogger                      = logging.New(os.Stdout, logrus.TraceLevel)
+	noopLogger                      = logging.New(io.Discard, logrus.TraceLevel)
 	networkId                uint64 = 0
 )
 
@@ -109,7 +109,7 @@ func newTestNode(t *testing.T) *Node {
 	ab := addressbook.New(mockstate.NewStateStore()) // address book
 	p2ps := p2pMock(ab, base.Overlay, signer)
 	disc := mock.NewDiscovery()
-	kad, err := kademlia.New(base.Overlay, ab, disc, p2ps, metricsDB, noopLogger, kademlia.Options{BinMaxPeers: 10, NodeMode: aurora.NewModel().SetMode(aurora.FullNode)}) // kademlia instance
+	kad, err := kademlia.New(base.Overlay, ab, disc, p2ps, nil, metricsDB, noopLogger, kademlia.Options{BinMaxPeers: 10, NodeMode: aurora.NewModel().SetMode(aurora.FullNode)}) // kademlia instance
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -413,7 +413,7 @@ func createTopology(t *testing.T, total int) []*Node {
 	nodes := make([]*Node, 0)
 	for i := 0; i < total; i++ {
 		nodes = append(nodes, newTestNode(t))
-		t.Log("node", i, nodes[i].overlay)
+		//t.Log("node", i, nodes[i].overlay)
 		if i > 0 {
 			nodes[i].addOne(t, nodes[i-1].addr, true)
 			nodes[i-1].addOne(t, nodes[i].addr, true)

@@ -369,7 +369,7 @@ func NewAurora(addr string, bosonAddress boson.Address, publicKey ecdsa.PublicKe
 		return nil, fmt.Errorf("hive service: %w", err)
 	}
 
-	kad, err := kademlia.New(bosonAddress, addressBook, hiveObj, p2ps, metricsDB, logger, kademlia.Options{
+	kad, err := kademlia.New(bosonAddress, addressBook, hiveObj, p2ps, bootNodes, metricsDB, logger, kademlia.Options{
 		Bootnodes:   bootnodes,
 		NodeMode:    o.NodeMode,
 		BinMaxPeers: o.KadBinMaxPeers,
@@ -507,7 +507,7 @@ func NewAurora(addr string, bosonAddress boson.Address, publicKey ecdsa.PublicKe
 		//}
 
 		// inject dependencies and configure full debug api http path routes
-		debugAPIService.Configure(p2ps, pingPong, kad, lightNodes, storer, route, chunkInfo, retrieve)
+		debugAPIService.Configure(p2ps, pingPong, kad, lightNodes, bootNodes, storer, route, chunkInfo, retrieve)
 	}
 
 	if err := kad.Start(p2pCtx); err != nil {

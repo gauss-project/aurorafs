@@ -4,7 +4,7 @@ import (
 	"context"
 	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/p2p"
-	"github.com/gauss-project/aurorafs/pkg/topology"
+	"github.com/gauss-project/aurorafs/pkg/topology/model"
 )
 
 type BootNodes interface {
@@ -12,5 +12,5 @@ type BootNodes interface {
 	Disconnected(p2p.Peer)
 	Count() int
 	RandomPeer(boson.Address) (boson.Address, error)
-	EachPeer(pf topology.EachPeerFunc) error
+	EachPeer(pf model.EachPeerFunc) error
 }

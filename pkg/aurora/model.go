@@ -2,6 +2,7 @@ package aurora
 
 import (
 	"errors"
+	"fmt"
 	"github.com/gauss-project/aurorafs/pkg/bitvector"
 )
 
@@ -44,6 +45,17 @@ func (m Model) IsBootNode() bool {
 	return m.Bv.Get(BootNode)
 }
 
+func (m Model) String() string {
+	if m.IsBootNode() {
+		return "boot-node"
+	}
+	if !m.IsFull() {
+		return "light"
+	}
+
+	return "full"
+}
+
 // AddressInfo contains the information received from the handshake.
 type AddressInfo struct {
 	Address  *Address
@@ -51,12 +63,5 @@ type AddressInfo struct {
 }
 
 func (i *AddressInfo) LightString() string {
-	if i.NodeMode.IsBootNode() {
-		return " (boot-node)"
-	}
-	if !i.NodeMode.IsFull() {
-		return " (light)"
-	}
-
-	return ""
+	return fmt.Sprintf(" (%s)", i.NodeMode.String())
 }

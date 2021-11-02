@@ -3,12 +3,12 @@ package bootnode
 import (
 	"context"
 	"crypto/rand"
+	"github.com/gauss-project/aurorafs/pkg/topology/model"
 	"math/big"
 	"sync"
 
 	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/p2p"
-	"github.com/gauss-project/aurorafs/pkg/topology"
 	"github.com/gauss-project/aurorafs/pkg/topology/pslice"
 )
 
@@ -92,12 +92,12 @@ PICKPEER:
 	return addr, nil
 }
 
-func (c *Container) EachPeer(pf topology.EachPeerFunc) error {
+func (c *Container) EachPeer(pf model.EachPeerFunc) error {
 	return c.connectedPeers.EachBin(pf)
 }
 
-func (c *Container) PeerInfo() topology.BinInfo {
-	return topology.BinInfo{
+func (c *Container) PeerInfo() model.BinInfo {
+	return model.BinInfo{
 		BinPopulation:     uint(c.connectedPeers.Length()),
 		BinConnected:      uint(c.connectedPeers.Length()),
 		DisconnectedPeers: peersInfo(c.disconnectedPeers),
@@ -105,13 +105,13 @@ func (c *Container) PeerInfo() topology.BinInfo {
 	}
 }
 
-func peersInfo(s *pslice.PSlice) []*topology.PeerInfo {
+func peersInfo(s *pslice.PSlice) []*model.PeerInfo {
 	if s.Length() == 0 {
 		return nil
 	}
-	peers := make([]*topology.PeerInfo, 0, s.Length())
+	peers := make([]*model.PeerInfo, 0, s.Length())
 	_ = s.EachBin(func(addr boson.Address, po uint8) (bool, bool, error) {
-		peers = append(peers, &topology.PeerInfo{Address: addr})
+		peers = append(peers, &model.PeerInfo{Address: addr})
 		return false, false, nil
 	})
 	return peers

@@ -2,6 +2,7 @@ package mock
 
 import (
 	"context"
+	"github.com/gauss-project/aurorafs/pkg/topology/model"
 	"sync"
 
 	"github.com/gauss-project/aurorafs/pkg/boson"
@@ -87,7 +88,16 @@ func (d *mock) Outbound(peer p2p.Peer) {
 }
 
 func (d *mock) DisconnectForce(addr boson.Address, reason string) error {
-	panic("implement me")
+	d.mtx.Lock()
+	defer d.mtx.Unlock()
+
+	for i, p := range d.peers {
+		if p.Equal(addr) {
+			d.peers = append(d.peers[:i], d.peers[i+1:]...)
+			return nil
+		}
+	}
+	return p2p.ErrPeerNotFound
 }
 
 func (d *mock) Disconnected(peer p2p.Peer) {
@@ -114,11 +124,11 @@ func (d *mock) Peers() []boson.Address {
 	return d.peers
 }
 
-func (d *mock) EachKnownPeer(f topology.EachPeerFunc) error {
+func (d *mock) EachKnownPeer(f model.EachPeerFunc) error {
 	return nil
 }
 
-func (d *mock) EachKnownPeerRev(f topology.EachPeerFunc) error {
+func (d *mock) EachKnownPeerRev(f model.EachPeerFunc) error {
 	return nil
 }
 
@@ -191,16 +201,16 @@ func (m *mock) IsWithinDepth(addr boson.Address) bool {
 	return false
 }
 
-func (m *mock) EachNeighbor(f topology.EachPeerFunc) error {
+func (m *mock) EachNeighbor(f model.EachPeerFunc) error {
 	return m.EachPeer(f)
 }
 
-func (*mock) EachNeighborRev(topology.EachPeerFunc) error {
+func (*mock) EachNeighborRev(model.EachPeerFunc) error {
 	panic("not implemented") // TODO: Implement
 }
 
 // EachPeer iterates from closest bin to farthest
-func (d *mock) EachPeer(f topology.EachPeerFunc) (err error) {
+func (d *mock) EachPeer(f model.EachPeerFunc) (err error) {
 	d.mtx.Lock()
 	defer d.mtx.Unlock()
 
@@ -219,7 +229,7 @@ func (d *mock) EachPeer(f topology.EachPeerFunc) (err error) {
 }
 
 // EachPeerRev iterates from farthest bin to closest
-func (d *mock) EachPeerRev(f topology.EachPeerFunc) (err error) {
+func (d *mock) EachPeerRev(f model.EachPeerFunc) (err error) {
 	d.mtx.Lock()
 	defer d.mtx.Unlock()
 
@@ -233,8 +243,8 @@ func (d *mock) EachPeerRev(f topology.EachPeerFunc) (err error) {
 	return nil
 }
 
-func (d *mock) Snapshot() *topology.KadParams {
-	return new(topology.KadParams)
+func (d *mock) Snapshot() *model.KadParams {
+	return new(model.KadParams)
 }
 
 func (d *mock) Halt()        {}

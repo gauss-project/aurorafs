@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/gauss-project/aurorafs/pkg/topology/model"
 	"io"
 	"math/rand"
 	"reflect"
@@ -888,7 +889,7 @@ func TestClosestPeer(t *testing.T) {
 	disc := mock.NewDiscovery()
 	ab := addressbook.New(mockstate.NewStateStore())
 
-	kad, err := kademlia.New(base, ab, disc, p2pMock(ab, nil, nil, nil), metricsDB, logger, kademlia.Options{})
+	kad, err := kademlia.New(base, ab, disc, p2pMock(ab, nil, nil, nil), nil, metricsDB, logger, kademlia.Options{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1109,7 +1110,7 @@ func TestSnapshot(t *testing.T) {
 	}
 }
 
-func getBinPopulation(bins *topology.KadBins, po uint8) uint64 {
+func getBinPopulation(bins *model.KadBins, po uint8) uint64 {
 	rv := reflect.ValueOf(bins)
 	bin := fmt.Sprintf("Bin%d", po)
 	b0 := reflect.Indirect(rv).FieldByName(bin)
@@ -1417,12 +1418,12 @@ func newTestKademliaWithAddrDiscovery(
 		signer = beeCrypto.NewDefaultSigner(pk)                      // signer
 		ab     = addressbook.New(mockstate.NewStateStore())          // address book
 		p2p    = p2pMock(ab, signer, connCounter, failedConnCounter) // p2p mock
-		logger = logging.New(io.Discard, 0)                      // logger
+		logger = logging.New(io.Discard, 0)                          // logger
 	)
 	if kadOpts.NodeMode.Bv == nil {
 		kadOpts.NodeMode = aurora.NewModel().SetMode(aurora.FullNode)
 	}
-	kad, err := kademlia.New(base, ab, disc, p2p, metricsDB, logger, kadOpts)
+	kad, err := kademlia.New(base, ab, disc, p2p, nil, metricsDB, logger, kadOpts)
 	if err != nil {
 		t.Fatal(err)
 	}

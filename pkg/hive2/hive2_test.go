@@ -112,7 +112,7 @@ func newTestNode(t *testing.T, peer boson.Address, po int) *Node {
 	stream := streamtest.New(streamtest.WithBaseAddr(base.Overlay))
 	Hive2 := hive2.New(stream, ab, networkId, noopLogger)
 
-	kad, err := kademlia.New(base.Overlay, ab, Hive2, p2ps, metricsDB, noopLogger, kademlia.Options{BinMaxPeers: 5, NodeMode: aurora.NewModel().SetMode(aurora.FullNode)}) // kademlia instance
+	kad, err := kademlia.New(base.Overlay, ab, Hive2, p2ps, nil, metricsDB, noopLogger, kademlia.Options{BinMaxPeers: 5, NodeMode: aurora.NewModel().SetMode(aurora.FullNode)}) // kademlia instance
 	if err != nil {
 		t.Fatal(err)
 	}
