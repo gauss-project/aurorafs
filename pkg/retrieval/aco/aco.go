@@ -147,8 +147,7 @@ func (s *AcoServer) onDownloadTaskFinish(route Route, startMs int64, endMs int64
 }
 
 func (s *AcoServer) GetRouteAcoIndex(routeList []Route, count ...int) []int {
-	s.mutex.Lock()
-	defer s.mutex.Unlock()
+
 	routeCount := len(routeList)
 	if routeCount == 0 {
 		return []int{}
@@ -206,6 +205,8 @@ func (s *AcoServer) GetRouteAcoIndex(routeList []Route, count ...int) []int {
 }
 
 func (s *AcoServer) getSelectRouteListScore(routeList []Route) []int64 {
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
 	routeCount := len(routeList)
 	routeScoreList := make([]int64, routeCount)
 
