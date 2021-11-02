@@ -5,6 +5,7 @@ import (
 	random "crypto/rand"
 	"encoding/json"
 	"errors"
+	"github.com/gauss-project/aurorafs/pkg/aurora"
 	"golang.org/x/sync/errgroup"
 	"math/big"
 	"net"
@@ -66,7 +67,7 @@ var noopSanctionedPeerFn = func(_ boson.Address) bool { return false }
 type Options struct {
 	SaturationFunc  binSaturationFunc
 	Bootnodes       []ma.Multiaddr
-	BootnodeMode    bool
+	NodeMode        aurora.Model
 	BitSuffixLength int
 	PruneFunc       pruneFunc
 	BinMaxPeers     int // every k bucket max connes
@@ -91,7 +92,7 @@ type Kad struct {
 	peerSig           []chan struct{}
 	peerSigMtx        sync.Mutex
 	logger            logging.Logger // logger
-	bootnode          bool           // indicates whether the node is working in bootnode mode
+	nodeMode          aurora.Model   // indicates whether the node working mode
 	collector         *im.Collector
 	quit              chan struct{} // quit channel
 	halt              chan struct{} // halt channel
@@ -129,7 +130,7 @@ func New(
 		}
 
 		os := overSaturationPeers
-		if o.BootnodeMode {
+		if o.NodeMode.IsBootNode() {
 			os = bootNodeOverSaturationPeers
 		}
 		o.SaturationFunc = binSaturated(os)
@@ -159,7 +160,7 @@ func New(
 		manageC:           make(chan struct{}, 1),
 		waitNext:          waitnext.New(),
 		logger:            logger,
-		bootnode:          o.BootnodeMode,
+		nodeMode:          o.NodeMode,
 		collector:         imc,
 		quit:              make(chan struct{}),
 		halt:              make(chan struct{}),
@@ -462,7 +463,7 @@ func (k *Kad) manage() {
 			default:
 			}
 
-			if k.bootnode {
+			if k.nodeMode.IsBootNode() {
 				k.depthMu.Lock()
 				depth := k.depth
 				radius := k.radius
@@ -913,7 +914,7 @@ func (k *Kad) Outbound(peer boson.Address) {
 
 func (k *Kad) Pick(peer p2p.Peer) bool {
 	k.metrics.PickCalls.Inc()
-	if k.bootnode {
+	if k.nodeMode.IsBootNode() {
 		// shortcircuit for bootnode mode - always accept connections,
 		// at least until we find a better solution.
 		return true
@@ -935,7 +936,7 @@ func (k *Kad) Connected(ctx context.Context, peer p2p.Peer, forceConnection bool
 	po := boson.Proximity(k.base.Bytes(), address.Bytes())
 
 	if _, overSaturated := k.saturationFunc(po, k.knownPeers, k.connectedPeers); overSaturated {
-		if k.bootnode {
+		if k.nodeMode.IsBootNode() {
 			randPeer, err := k.randomPeer(po)
 			if err != nil {
 				return err

@@ -7,6 +7,7 @@ import (
 	"context"
 	"crypto/ecdsa"
 	"fmt"
+	"github.com/gauss-project/aurorafs/pkg/aurora"
 	"github.com/gauss-project/aurorafs/pkg/chunkinfo"
 	"github.com/gauss-project/aurorafs/pkg/hive2"
 	"github.com/gauss-project/aurorafs/pkg/pinning"
@@ -91,12 +92,11 @@ type Options struct {
 	//PaymentEarly             string
 	ResolverConnectionCfgs []multiresolver.ConnectionConfig
 	GatewayMode            bool
-	BootnodeMode           bool
 	//SwapEndpoint             string
 	//SwapFactoryAddress       string
 	//SwapInitialDeposit       string
 	//SwapEnable               bool
-	FullNode          bool
+	NodeMode          aurora.Model
 	KadBinMaxPeers    int
 	LightNodeMaxPeers int
 }
@@ -139,8 +139,7 @@ func NewAurora(addr string, bosonAddress boson.Address, publicKey ecdsa.PublicKe
 			NATAddr:        o.NATAddr,
 			EnableWS:       o.EnableWS,
 			EnableQUIC:     o.EnableQUIC,
-			FullNode:       o.FullNode,
-			BootNodeMode:   o.BootnodeMode,
+			NodeMode:       o.NodeMode,
 			WelcomeMessage: o.WelcomeMessage,
 			LightNodeLimit: o.LightNodeMaxPeers,
 		})
@@ -252,7 +251,7 @@ func NewAurora(addr string, bosonAddress boson.Address, publicKey ecdsa.PublicKe
 		EnableWS:       o.EnableWS,
 		EnableQUIC:     o.EnableQUIC,
 		WelcomeMessage: o.WelcomeMessage,
-		FullNode:       o.FullNode,
+		NodeMode:       o.NodeMode,
 		LightNodeLimit: o.LightNodeMaxPeers,
 	})
 	if err != nil {
@@ -370,7 +369,7 @@ func NewAurora(addr string, bosonAddress boson.Address, publicKey ecdsa.PublicKe
 
 	kad, err := kademlia.New(bosonAddress, addressBook, hiveObj, p2ps, metricsDB, logger, kademlia.Options{
 		Bootnodes:    bootnodes,
-		BootnodeMode: o.BootnodeMode,
+		NodeMode:     o.NodeMode,
 		BinMaxPeers:  o.KadBinMaxPeers,
 	})
 	if err != nil {
@@ -419,7 +418,7 @@ func NewAurora(addr string, bosonAddress boson.Address, publicKey ecdsa.PublicKe
 	}
 	b.localstoreCloser = storer
 
-	retrieve := retrieval.New(bosonAddress, p2ps, route, storer, o.FullNode, logger, tracer)
+	retrieve := retrieval.New(bosonAddress, p2ps, route, storer, o.NodeMode.IsFull(), logger, tracer)
 	if err = p2ps.AddProtocol(retrieve.Protocol()); err != nil {
 		return nil, fmt.Errorf("retrieval service: %w", err)
 	}

@@ -5,6 +5,7 @@ package debugapi
 
 import (
 	"crypto/ecdsa"
+	"github.com/gauss-project/aurorafs/pkg/aurora"
 	"github.com/gauss-project/aurorafs/pkg/chunkinfo"
 	"github.com/gauss-project/aurorafs/pkg/retrieval"
 	"github.com/gauss-project/aurorafs/pkg/routetab"
@@ -58,8 +59,7 @@ type Options struct {
 	NATAddr        string
 	EnableWS       bool
 	EnableQUIC     bool
-	FullNode       bool
-	BootNodeMode   bool
+	NodeMode       aurora.Model
 	LightNodeLimit int
 	WelcomeMessage string
 	Transaction    []byte

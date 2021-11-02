@@ -82,7 +82,7 @@ type Options struct {
 	NATAddr        string
 	EnableWS       bool
 	EnableQUIC     bool
-	FullNode       bool
+	NodeMode       aurora.Model
 	LightNodeLimit int
 	WelcomeMessage string
 	Transaction    []byte
@@ -218,7 +218,7 @@ func New(ctx context.Context, signer beecrypto.Signer, networkID uint64, overlay
 		o.LightNodeLimit = lightnode.DefaultLightNodeLimit
 	}
 
-	handshakeService, err := handshake.New(signer, advertisableAddresser, overlay, networkID, o.FullNode, o.WelcomeMessage, h.ID(), logger, lightNodes, o.LightNodeLimit)
+	handshakeService, err := handshake.New(signer, advertisableAddresser, overlay, networkID, o.NodeMode, o.WelcomeMessage, h.ID(), logger, lightNodes, o.LightNodeLimit)
 	if err != nil {
 		return nil, fmt.Errorf("handshake service: %w", err)
 	}
@@ -317,7 +317,7 @@ func (s *Service) handleIncoming(stream network.Stream) {
 		return
 	}
 
-	if exists := s.peers.addIfNotExists(stream.Conn(), overlay, i.NodeMode.IsFull()); exists {
+	if exists := s.peers.addIfNotExists(stream.Conn(), overlay, i.NodeMode); exists {
 		s.logger.Debugf("stream handler: peer %s already exists", overlay)
 		if err = handshakeStream.FullClose(); err != nil {
 			s.logger.Debugf("stream handler: could not close stream %s: %v", overlay, err)
@@ -344,7 +344,7 @@ func (s *Service) handleIncoming(stream network.Stream) {
 		}
 	}
 
-	peer := p2p.Peer{Address: overlay, FullNode: i.NodeMode.IsFull()}
+	peer := p2p.Peer{Address: overlay, Mode: i.NodeMode}
 
 	s.protocolsmu.RLock()
 	for _, tn := range s.protocols {
@@ -446,7 +446,7 @@ func (s *Service) AddProtocol(p p2p.ProtocolSpec) (err error) {
 				s.logger.Debugf("overlay address for peer %q not found", peerID)
 				return
 			}
-			full, found := s.peers.fullnode(peerID)
+			md, found := s.peers.mode(peerID)
 			if !found {
 				_ = streamlibp2p.Reset()
 				s.logger.Debugf("fullnode info for peer %q not found", peerID)
@@ -480,7 +480,7 @@ func (s *Service) AddProtocol(p p2p.ProtocolSpec) (err error) {
 			logger := tracing.NewLoggerWithTraceID(ctx, s.logger)
 
 			s.metrics.HandledStreamCount.Inc()
-			if err := ss.Handler(ctx, p2p.Peer{Address: overlay, FullNode: full}, stream); err != nil {
+			if err := ss.Handler(ctx, p2p.Peer{Address: overlay, Mode: md}, stream); err != nil {
 				var de *p2p.DisconnectError
 				if errors.As(err, &de) {
 					logger.Tracef("libp2p handler(%s): disconnecting %s", p.Name, overlay.String())
@@ -633,7 +633,7 @@ func (s *Service) Connect(ctx context.Context, addr ma.Multiaddr) (address *auro
 		return nil, fmt.Errorf("peer blocklisted")
 	}
 
-	if exists := s.peers.addIfNotExists(stream.Conn(), overlay, i.NodeMode.IsFull()); exists {
+	if exists := s.peers.addIfNotExists(stream.Conn(), overlay, i.NodeMode); exists {
 		if err := handshakeStream.FullClose(); err != nil {
 			_ = s.Disconnect(overlay, "failed closing handshake stream after connect")
 			return nil, fmt.Errorf("peer exists, full close: %w", err)
@@ -658,7 +658,7 @@ func (s *Service) Connect(ctx context.Context, addr ma.Multiaddr) (address *auro
 	s.protocolsmu.RLock()
 	for _, tn := range s.protocols {
 		if tn.ConnectOut != nil {
-			if err := tn.ConnectOut(ctx, p2p.Peer{Address: overlay, FullNode: i.NodeMode.IsFull()}); err != nil {
+			if err := tn.ConnectOut(ctx, p2p.Peer{Address: overlay, Mode: i.NodeMode}); err != nil {
 				s.logger.Debugf("connectOut: protocol: %s, version:%s, peer: %s: %v", tn.Name, tn.Version, overlay, err)
 				_ = s.Disconnect(overlay, "failed to process outbound connection notifier")
 				s.protocolsmu.RUnlock()
@@ -692,7 +692,7 @@ func (s *Service) Disconnect(overlay boson.Address, reason string) error {
 
 	_ = s.host.Network().ClosePeer(peerID)
 
-	peer := p2p.Peer{Address: overlay, FullNode: full}
+	peer := p2p.Peer{Address: overlay, Mode: full}
 
 	s.protocolsmu.RLock()
 	for _, tn := range s.protocols {
@@ -725,9 +725,9 @@ func (s *Service) disconnected(address boson.Address) {
 	peerID, found := s.peers.peerID(address)
 	if found {
 		// peerID might not always be found on shutdown
-		full, found := s.peers.fullnode(peerID)
+		md, found := s.peers.mode(peerID)
 		if found {
-			peer.FullNode = full
+			peer.Mode = md
 		}
 	}
 	s.protocolsmu.RLock()

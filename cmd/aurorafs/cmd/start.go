@@ -5,8 +5,8 @@ import (
 	"context"
 	"crypto/ecdsa"
 	_ "embed"
-	"errors"
 	"fmt"
+	"github.com/gauss-project/aurorafs/pkg/aurora"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -94,13 +94,16 @@ func (c *command) initStartCmd() (err error) {
 
 			bootNode := c.config.GetBool(optionNameBootnodeMode)
 			fullNode := c.config.GetBool(optionNameFullNode)
-			if bootNode && !fullNode {
-				return errors.New("boot node must be started as a full node")
-			}
-			if fullNode {
-				logger.Info("start node mode full.")
+			mode := aurora.NewModel()
+			if bootNode {
+				mode.SetMode(aurora.BootNode)
+				mode.SetMode(aurora.FullNode)
+				logger.Info("Start node mode boot.")
+			} else if fullNode {
+				mode.SetMode(aurora.FullNode)
+				logger.Info("Start node mode full.")
 			} else {
-				logger.Info("start node mode light.")
+				logger.Info("Start node mode light.")
 			}
 
 			b, err := node.NewAurora(c.config.GetString(optionNameP2PAddr), signerConfig.address, *signerConfig.publicKey, signerConfig.signer, c.config.GetUint64(optionNameNetworkID), logger, signerConfig.libp2pPrivateKey, signerConfig.pssPrivateKey, node.Options{
@@ -118,7 +121,7 @@ func (c *command) initStartCmd() (err error) {
 				EnableQUIC:               c.config.GetBool(optionNameP2PQUICEnable),
 				WelcomeMessage:           c.config.GetString(optionWelcomeMessage),
 				Bootnodes:                c.config.GetStringSlice(optionNameBootnodes),
-				FullNode:                 fullNode,
+				NodeMode:                 mode,
 				OracleEndpoint:           c.config.GetString(optionNameOracleEndpoint),
 				OracleContractAddress:    c.config.GetString(optionNameOracleContractAddr),
 				CORSAllowedOrigins:       c.config.GetStringSlice(optionCORSAllowedOrigins),
@@ -134,7 +137,6 @@ func (c *command) initStartCmd() (err error) {
 				//PaymentEarly:             c.config.GetString(optionNamePaymentEarly),
 				ResolverConnectionCfgs: resolverCfgs,
 				GatewayMode:            c.config.GetBool(optionNameGatewayMode),
-				BootnodeMode:           bootNode,
 				//SwapEndpoint:             c.config.GetString(optionNameSwapEndpoint),
 				//SwapFactoryAddress:       c.config.GetString(optionNameSwapFactoryAddress),
 				//SwapInitialDeposit:       c.config.GetString(optionNameSwapInitialDeposit),

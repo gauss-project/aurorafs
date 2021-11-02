@@ -3,6 +3,7 @@ package libp2p_test
 import (
 	"context"
 	"fmt"
+	"github.com/gauss-project/aurorafs/pkg/aurora"
 	"testing"
 	"time"
 
@@ -21,10 +22,10 @@ func TestHeaders(t *testing.T) {
 	defer cancel()
 
 	s1, overlay1 := newService(t, 1, libp2pServiceOpts{libp2pOpts: libp2p.Options{
-		FullNode: true,
+		NodeMode: aurora.NewModel().SetMode(aurora.FullNode),
 	}})
 
-	s2, overlay2 := newService(t, 1, libp2pServiceOpts{})
+	s2, overlay2 := newService(t, 1, libp2pServiceOpts{libp2pOpts: libp2p.Options{NodeMode: aurora.NewModel()}})
 
 	var gotHeaders p2p.Headers
 	handled := make(chan struct{})
@@ -70,10 +71,10 @@ func TestHeaders_empty(t *testing.T) {
 	defer cancel()
 
 	s1, overlay1 := newService(t, 1, libp2pServiceOpts{libp2pOpts: libp2p.Options{
-		FullNode: true,
+		NodeMode: aurora.NewModel().SetMode(aurora.FullNode),
 	}})
 
-	s2, overlay2 := newService(t, 1, libp2pServiceOpts{})
+	s2, overlay2 := newService(t, 1, libp2pServiceOpts{libp2pOpts: libp2p.Options{NodeMode: aurora.NewModel()}})
 
 	var gotHeaders p2p.Headers
 	handled := make(chan struct{})
@@ -128,10 +129,10 @@ func TestHeadler(t *testing.T) {
 	defer cancel()
 
 	s1, overlay1 := newService(t, 1, libp2pServiceOpts{libp2pOpts: libp2p.Options{
-		FullNode: true,
+		NodeMode: aurora.NewModel().SetMode(aurora.FullNode),
 	}})
 
-	s2, _ := newService(t, 1, libp2pServiceOpts{})
+	s2, _ := newService(t, 1, libp2pServiceOpts{libp2pOpts: libp2p.Options{NodeMode: aurora.NewModel()}})
 
 	var gotReceivedHeaders p2p.Headers
 	handled := make(chan struct{})

@@ -492,7 +492,7 @@ func TestOversaturationBootnode(t *testing.T) {
 
 	var (
 		conns                    int32 // how many connect calls were made to the p2p mock
-		base, kad, ab, _, signer = newTestKademlia(t, &conns, nil, kademlia.Options{BootnodeMode: true})
+		base, kad, ab, _, signer = newTestKademlia(t, &conns, nil, kademlia.Options{NodeMode: aurora.NewModel().SetMode(aurora.BootNode)})
 	)
 	kad.SetRadius(boson.MaxPO) // don't use radius for checks
 
@@ -553,7 +553,7 @@ func TestBootnodeMaxConnections(t *testing.T) {
 
 	var (
 		conns                    int32 // how many connect calls were made to the p2p mock
-		base, kad, ab, _, signer = newTestKademlia(t, &conns, nil, kademlia.Options{BootnodeMode: true})
+		base, kad, ab, _, signer = newTestKademlia(t, &conns, nil, kademlia.Options{NodeMode: aurora.NewModel().SetMode(aurora.BootNode)})
 	)
 	kad.SetRadius(boson.MaxPO) // don't use radius for checks
 
@@ -1419,6 +1419,9 @@ func newTestKademliaWithAddrDiscovery(
 		p2p    = p2pMock(ab, signer, connCounter, failedConnCounter) // p2p mock
 		logger = logging.New(io.Discard, 0)                      // logger
 	)
+	if kadOpts.NodeMode.Bv == nil {
+		kadOpts.NodeMode = aurora.NewModel().SetMode(aurora.FullNode)
+	}
 	kad, err := kademlia.New(base, ab, disc, p2p, metricsDB, logger, kadOpts)
 	if err != nil {
 		t.Fatal(err)

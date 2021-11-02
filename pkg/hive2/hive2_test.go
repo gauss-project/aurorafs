@@ -74,8 +74,8 @@ func p2pMock(ab addressbook.Interface, overlay boson.Address, signer crypto.Sign
 		p2pmock.WithPeersFunc(func() (out []p2p.Peer) {
 			_ = ab.IterateOverlays(func(address boson.Address) (bool, error) {
 				out = append(out, p2p.Peer{
-					Address:  address,
-					FullNode: true,
+					Address: address,
+					Mode:    aurora.NewModel().SetMode(aurora.FullNode),
 				})
 				return false, nil
 			})
@@ -106,7 +106,7 @@ func newTestNode(t *testing.T, peer boson.Address, po int) *Node {
 	stream := streamtest.New(streamtest.WithBaseAddr(base.Overlay))
 	Hive2 := hive2.New(stream, ab, networkId, noopLogger)
 
-	kad, err := kademlia.New(base.Overlay, ab, Hive2, p2ps, metricsDB, noopLogger, kademlia.Options{BinMaxPeers: 5}) // kademlia instance
+	kad, err := kademlia.New(base.Overlay, ab, Hive2, p2ps, metricsDB, noopLogger, kademlia.Options{BinMaxPeers: 5, NodeMode: aurora.NewModel().SetMode(aurora.FullNode)}) // kademlia instance
 	if err != nil {
 		t.Fatal(err)
 	}
