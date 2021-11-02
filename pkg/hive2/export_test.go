@@ -17,7 +17,7 @@ func (l *lookup) Query(node boson.Address) {
 }
 
 func (l *lookup) GetTotal() int32 {
-	return l.total.Load()
+	return l.total
 }
 
 func (l *lookup) GetFind() []boson.Address {

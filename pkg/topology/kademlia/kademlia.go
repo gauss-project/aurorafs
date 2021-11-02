@@ -621,7 +621,9 @@ func (k *Kad) Start(_ context.Context) error {
 		k.AddPeers(addresses...)
 		k.metrics.StartAddAddressBookOverlaysTime.Observe(time.Since(start).Seconds())
 
-		k.discovery.NotifyDiscoverWork()
+		if k.connectedPeers.Length() > 0 {
+			k.discovery.NotifyDiscoverWork()
+		}
 	}()
 
 	// trigger the first manage loop immediately so that
