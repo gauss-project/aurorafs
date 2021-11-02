@@ -82,6 +82,9 @@ func (d *mock) Connected(ctx context.Context, peer p2p.Peer, _ bool) error {
 	d.AddPeers(peer.Address)
 	return nil
 }
+func (d *mock) Outbound(peer p2p.Peer) {
+	d.AddPeers(peer.Address)
+}
 
 func (d *mock) DisconnectForce(addr boson.Address, reason string) error {
 	panic("implement me")

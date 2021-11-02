@@ -14,6 +14,7 @@ import (
 	"github.com/gauss-project/aurorafs/pkg/routetab"
 	"github.com/gauss-project/aurorafs/pkg/settlement/swap/oracle"
 	"github.com/gauss-project/aurorafs/pkg/shed"
+	"github.com/gauss-project/aurorafs/pkg/topology/bootnode"
 	"github.com/gauss-project/aurorafs/pkg/topology/kademlia"
 	"github.com/gauss-project/aurorafs/pkg/topology/lightnode"
 	"io"
@@ -244,8 +245,9 @@ func NewAurora(addr string, bosonAddress boson.Address, publicKey ecdsa.PublicKe
 
 	addressBook := addressbook.New(stateStore)
 	lightNodes := lightnode.NewContainer(bosonAddress)
+	bootNodes := bootnode.NewContainer(bosonAddress)
 
-	p2ps, err := libp2p.New(p2pCtx, signer, networkID, bosonAddress, addr, addressBook, stateStore, lightNodes, logger, tracer, libp2p.Options{
+	p2ps, err := libp2p.New(p2pCtx, signer, networkID, bosonAddress, addr, addressBook, stateStore, lightNodes, bootNodes, logger, tracer, libp2p.Options{
 		PrivateKey:     libp2pPrivateKey,
 		NATAddr:        o.NATAddr,
 		EnableWS:       o.EnableWS,
@@ -368,9 +370,9 @@ func NewAurora(addr string, bosonAddress boson.Address, publicKey ecdsa.PublicKe
 	}
 
 	kad, err := kademlia.New(bosonAddress, addressBook, hiveObj, p2ps, metricsDB, logger, kademlia.Options{
-		Bootnodes:    bootnodes,
-		NodeMode:     o.NodeMode,
-		BinMaxPeers:  o.KadBinMaxPeers,
+		Bootnodes:   bootnodes,
+		NodeMode:    o.NodeMode,
+		BinMaxPeers: o.KadBinMaxPeers,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("unable to create kademlia: %w", err)
@@ -485,7 +487,12 @@ func NewAurora(addr string, bosonAddress boson.Address, publicKey ecdsa.PublicKe
 		debugAPIService.MustRegisterMetrics(pingPong.Metrics()...)
 		//debugAPIService.MustRegisterMetrics(acc.Metrics()...)
 		debugAPIService.MustRegisterMetrics(storer.Metrics()...)
-
+		debugAPIService.MustRegisterMetrics(kad.Metrics()...)
+		debugAPIService.MustRegisterMetrics(lightNodes.Metrics()...)
+		debugAPIService.MustRegisterMetrics(bootNodes.Metrics()...)
+		debugAPIService.MustRegisterMetrics(hiveObj.Metrics()...)
+		debugAPIService.MustRegisterMetrics(chunkInfo.Metrics()...)
+		debugAPIService.MustRegisterMetrics(route.Metrics()...)
 		debugAPIService.MustRegisterMetrics(retrieve.Metrics()...)
 
 		if apiService != nil {

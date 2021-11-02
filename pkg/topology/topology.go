@@ -29,7 +29,7 @@ type Driver interface {
 	Halter
 	Snapshot() *KadParams
 	DisconnectForce(addr boson.Address, reason string) error
-
+	Outbound(peer p2p.Peer)
 	EachKnownPeerer
 }
 

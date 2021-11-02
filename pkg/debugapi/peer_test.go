@@ -42,11 +42,14 @@ func TestConnect(t *testing.T) {
 	}
 
 	testServer := newTestServer(t, testServerOptions{
-		P2P: mock.New(mock.WithConnectFunc(func(ctx context.Context, addr ma.Multiaddr) (*aurora.Address, error) {
+		P2P: mock.New(mock.WithConnectFunc(func(ctx context.Context, addr ma.Multiaddr) (*p2p.Peer, error) {
 			if addr.String() == errorUnderlay {
 				return nil, testErr
 			}
-			return bzzAddress, nil
+			return &p2p.Peer{
+				Address: bzzAddress.Overlay,
+				Mode:    aurora.NewModel().SetMode(aurora.FullNode),
+			}, nil
 		})),
 	})
 
@@ -78,11 +81,14 @@ func TestConnect(t *testing.T) {
 
 	t.Run("error - add peer", func(t *testing.T) {
 		testServer := newTestServer(t, testServerOptions{
-			P2P: mock.New(mock.WithConnectFunc(func(ctx context.Context, addr ma.Multiaddr) (*aurora.Address, error) {
+			P2P: mock.New(mock.WithConnectFunc(func(ctx context.Context, addr ma.Multiaddr) (*p2p.Peer, error) {
 				if addr.String() == errorUnderlay {
 					return nil, testErr
 				}
-				return bzzAddress, nil
+				return &p2p.Peer{
+					Address: bzzAddress.Overlay,
+					Mode:    aurora.NewModel().SetMode(aurora.FullNode),
+				}, nil
 			})),
 		})
 

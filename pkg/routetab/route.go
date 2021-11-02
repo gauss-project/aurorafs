@@ -206,7 +206,7 @@ func (s *Service) onRouteReq(ctx context.Context, p p2p.Peer, stream p2p.Stream)
 	if s.IsNeighbor(target) {
 		// dest in neighbor
 		s.logger.Tracef("route:%s handlerFindRouteReq target=%s in neighbor", s.self.String(), target.String())
-		s.doRouteReq(ctx, target, p.Address, target, &req, nil)
+		s.doRouteReq(ctx, []boson.Address{target}, p.Address, target, &req, nil)
 		return nil
 	}
 
@@ -224,11 +224,7 @@ func (s *Service) onRouteReq(ctx context.Context, p p2p.Peer, stream p2p.Stream)
 		skip = append(skip, boson.NewAddress(v))
 	}
 	forward := s.getNeighbor(target, req.Alpha, skip...)
-	for _, next := range forward {
-		// forward
-		s.doRouteReq(ctx, next, p.Address, target, &req, nil)
-		s.logger.Tracef("route:%s handlerFindRouteReq target=%s forward to %s", s.self.String(), target.String(), next.String())
-	}
+	s.doRouteReq(ctx, forward, p.Address, target, &req, nil)
 	return nil
 }
 
@@ -280,14 +276,14 @@ func (s *Service) respForward(ctx context.Context, target, next boson.Address, r
 	}
 }
 
-func (s *Service) doRouteReq(ctx context.Context, peer, src, dest boson.Address, req *pb.RouteReq, ch chan struct{}) {
+func (s *Service) doRouteReq(ctx context.Context, next []boson.Address, src, target boson.Address, req *pb.RouteReq, ch chan struct{}) {
 	if req != nil {
 		// forward add sign
 		req.Path.Sign = bls.Sign(s.self.Bytes()) // todo
 		req.Path.Item = append(req.Path.Item, s.self.Bytes())
 	} else {
 		req = &pb.RouteReq{
-			Dest:  dest.Bytes(),
+			Dest:  target.Bytes(),
 			Alpha: DefaultNeighborAlpha,
 			Path: &pb.Path{
 				Sign: bls.Sign(s.self.Bytes()), // todo
@@ -295,10 +291,12 @@ func (s *Service) doRouteReq(ctx context.Context, peer, src, dest boson.Address,
 			},
 		}
 	}
-	has := s.pendingCalls.Add(boson.NewAddress(req.Dest), src, peer, ch)
-	if !has {
-		s.sendDataToNode(ctx, peer, streamOnRouteReq, req)
-		s.metrics.FindRouteReqSentCount.Inc()
+	for _, v := range next {
+		has := s.pendingCalls.Add(boson.NewAddress(req.Dest), src, v, ch)
+		if !has {
+			s.sendDataToNode(ctx, v, streamOnRouteReq, req)
+			s.metrics.FindRouteReqSentCount.Inc()
+		}
 	}
 }
 
@@ -386,9 +384,7 @@ func (s *Service) FindRoute(ctx context.Context, target boson.Address) (paths []
 		ct, cancel := context.WithTimeout(ctx, PendingTimeout)
 		defer cancel()
 		resCh := make(chan struct{}, len(forward))
-		for _, next := range forward {
-			s.doRouteReq(ct, next, s.self, target, nil, resCh)
-		}
+		s.doRouteReq(ct, forward, s.self, target, nil, resCh)
 		remove := func() {
 			for _, v := range forward {
 				s.pendingCalls.Delete(target, v)
@@ -556,11 +552,12 @@ func (s *Service) connect(ctx context.Context, peer boson.Address) (err error) {
 
 	s.logger.Tracef("route: connect to overlay=%s,underlay=%s", peer, auroraAddr.Underlay.String())
 
-	switch i, err := s.p2ps.Connect(ctx, auroraAddr.Underlay); {
+	i, err := s.p2ps.Connect(ctx, auroraAddr.Underlay)
+	switch {
 	case errors.Is(err, p2p.ErrDialLightNode):
 		return errPruneEntry
 	case errors.Is(err, p2p.ErrAlreadyConnected):
-		if !i.Overlay.Equal(peer) {
+		if !i.Address.Equal(peer) {
 			return errOverlayMismatch
 		}
 		return nil
@@ -571,15 +568,14 @@ func (s *Service) connect(ctx context.Context, peer boson.Address) (err error) {
 		s.metrics.TotalOutboundConnectionFailedAttempts.Inc()
 		remove(peer)
 		return err
-	case !i.Overlay.Equal(peer):
+	case !i.Address.Equal(peer):
 		_ = s.p2ps.Disconnect(peer, errOverlayMismatch.Error())
-		_ = s.p2ps.Disconnect(i.Overlay, errOverlayMismatch.Error())
+		_ = s.p2ps.Disconnect(i.Address, errOverlayMismatch.Error())
 		return errOverlayMismatch
 	}
 
 	s.metrics.TotalOutboundConnections.Inc()
-	s.kad.KnownPeers().Add(peer)
-	s.kad.Outbound(peer)
+	s.kad.Outbound(*i)
 
 	return nil
 }

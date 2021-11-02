@@ -5,7 +5,6 @@ import (
 	"errors"
 	"time"
 
-	"github.com/gauss-project/aurorafs/pkg/aurora"
 	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/p2p"
 	ma "github.com/multiformats/go-multiaddr"
@@ -14,7 +13,7 @@ import (
 // Service is the mock of a P2P Service
 type Service struct {
 	addProtocolFunc       func(p2p.ProtocolSpec) error
-	connectFunc           func(ctx context.Context, addr ma.Multiaddr) (address *aurora.Address, err error)
+	connectFunc           func(ctx context.Context, addr ma.Multiaddr) (peer *p2p.Peer, err error)
 	disconnectFunc        func(overlay boson.Address, reason string) error
 	peersFunc             func() []p2p.Peer
 	blocklistedPeersFunc  func() ([]p2p.Peer, error)
@@ -34,7 +33,7 @@ func WithAddProtocolFunc(f func(p2p.ProtocolSpec) error) Option {
 }
 
 // WithConnectFunc sets the mock implementation of the Connect function
-func WithConnectFunc(f func(ctx context.Context, addr ma.Multiaddr) (address *aurora.Address, err error)) Option {
+func WithConnectFunc(f func(ctx context.Context, addr ma.Multiaddr) (peer *p2p.Peer, err error)) Option {
 	return optionFunc(func(s *Service) {
 		s.connectFunc = f
 	})
@@ -104,7 +103,7 @@ func (s *Service) AddProtocol(spec p2p.ProtocolSpec) error {
 	return s.addProtocolFunc(spec)
 }
 
-func (s *Service) Connect(ctx context.Context, addr ma.Multiaddr) (address *aurora.Address, err error) {
+func (s *Service) Connect(ctx context.Context, addr ma.Multiaddr) (peer *p2p.Peer, err error) {
 	if s.connectFunc == nil {
 		return nil, errors.New("function Connect not configured")
 	}
@@ -173,7 +172,7 @@ func (s *Service) SetPickyNotifier(f p2p.PickyNotifier) {
 	s.notifierFunc = f
 }
 
-func (s *Service) SetConnectFunc(f func(ctx context.Context, addr ma.Multiaddr) (address *aurora.Address, err error)) {
+func (s *Service) SetConnectFunc(f func(ctx context.Context, addr ma.Multiaddr) (peer *p2p.Peer, err error)) {
 	s.connectFunc = f
 }
 

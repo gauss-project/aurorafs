@@ -24,24 +24,17 @@ func (s *Service) peerConnectHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	bzzAddr, err := s.p2p.Connect(r.Context(), addr)
+	peer, err := s.p2p.Connect(r.Context(), addr)
 	if err != nil {
 		s.logger.Debugf("debug api: peer connect %s: %v", addr, err)
 		s.logger.Errorf("unable to connect to peer %s", addr)
 		jsonhttp.InternalServerError(w, err)
 		return
 	}
-
-	if err := s.topologyDriver.Connected(r.Context(), p2p.Peer{Address: bzzAddr.Overlay}, true); err != nil {
-		_ = s.p2p.Disconnect(bzzAddr.Overlay, "failed to notify topology")
-		s.logger.Debugf("debug api: peer connect handler %s: %v", addr, err)
-		s.logger.Errorf("unable to connect to peer %s", addr)
-		jsonhttp.InternalServerError(w, err)
-		return
-	}
-
+	s.topologyDriver.Outbound(*peer)
+	
 	jsonhttp.OK(w, peerConnectResponse{
-		Address: bzzAddr.Overlay.String(),
+		Address: peer.Address.String(),
 	})
 }
 

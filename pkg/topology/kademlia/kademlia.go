@@ -335,7 +335,8 @@ func (k *Kad) connectionAttemptsHandler(ctx context.Context, wg *sync.WaitGroup,
 			}
 		}
 
-		switch err = k.connect(ctx, peer.addr, bzzAddr.Underlay); {
+		i, err := k.connect(ctx, peer.addr, bzzAddr.Underlay)
+		switch {
 		case errors.Is(err, errPruneEntry):
 			k.logger.Debugf("kademlia: dial to light node with overlay %q and underlay %q", peer.addr, bzzAddr.Underlay)
 			remove(peer)
@@ -350,7 +351,7 @@ func (k *Kad) connectionAttemptsHandler(ctx context.Context, wg *sync.WaitGroup,
 			return
 		}
 
-		k.Outbound(peer.addr)
+		k.Outbound(*i)
 	}
 
 	var (
@@ -632,7 +633,7 @@ func (k *Kad) connectBootNodes(ctx context.Context) {
 			if attempts >= maxBootNodeAttempts {
 				return true, nil
 			}
-			bzzAddress, err := k.p2p.Connect(ctx, addr)
+			peer, err := k.p2p.Connect(ctx, addr)
 
 			attempts++
 			k.metrics.TotalBootNodesConnectionAttempts.Inc()
@@ -643,17 +644,15 @@ func (k *Kad) connectBootNodes(ctx context.Context) {
 					k.logger.Warningf("connect to bootnode %s", addr)
 					return false, err
 				}
+				k.discovery.NotifyDiscoverWork(peer.Address)
 				k.logger.Debugf("connect to bootnode fail: %v", err)
 				return false, nil
 			}
 
-			if err := k.onConnected(ctx, bzzAddress.Overlay); err != nil {
-				return false, err
-			}
-			k.discovery.NotifyDiscoverWork(bzzAddress.Overlay)
+			k.discovery.NotifyDiscoverWork(peer.Address)
 
 			k.metrics.TotalOutboundConnections.Inc()
-			k.collector.Record(bzzAddress.Overlay, im.PeerLogIn(time.Now(), im.PeerConnectionDirectionOutbound))
+			k.collector.Record(peer.Address, im.PeerLogIn(time.Now(), im.PeerConnectionDirectionOutbound))
 			k.logger.Tracef("connected to bootnode %s", addr)
 			connected++
 
@@ -758,7 +757,7 @@ func recalcDepth(peers *pslice.PSlice, radius uint8) uint8 {
 
 // connect to a peer and gossips its address to our connected peers,
 // as well as sends the peers we are connected to the newly connected peer
-func (k *Kad) connect(ctx context.Context, peer boson.Address, ma ma.Multiaddr) error {
+func (k *Kad) connect(ctx context.Context, peer boson.Address, ma ma.Multiaddr) (*p2p.Peer, error) {
 	k.logger.Infof("kademlia: attempting to connect to peer %q", peer)
 
 	ctx, cancel := context.WithTimeout(ctx, peerConnectionAttemptTimeout)
@@ -766,16 +765,17 @@ func (k *Kad) connect(ctx context.Context, peer boson.Address, ma ma.Multiaddr) 
 
 	k.metrics.TotalOutboundConnectionAttempts.Inc()
 
-	switch i, err := k.p2p.Connect(ctx, ma); {
+	i, err := k.p2p.Connect(ctx, ma)
+	switch {
 	case errors.Is(err, p2p.ErrDialLightNode):
-		return errPruneEntry
+		return nil, errPruneEntry
 	case errors.Is(err, p2p.ErrAlreadyConnected):
-		if !i.Overlay.Equal(peer) {
-			return errOverlayMismatch
+		if !i.Address.Equal(peer) {
+			return nil, errOverlayMismatch
 		}
-		return nil
+		return i, nil
 	case errors.Is(err, context.Canceled):
-		return err
+		return nil, err
 	case err != nil:
 		k.logger.Debugf("kademlia: could not connect to peer %q: %v", peer, err)
 
@@ -805,14 +805,14 @@ func (k *Kad) connect(ctx context.Context, peer boson.Address, ma ma.Multiaddr) 
 			k.waitNext.Set(peer, retryTime, failedAttempts)
 		}
 
-		return err
-	case !i.Overlay.Equal(peer):
+		return nil, err
+	case !i.Address.Equal(peer):
 		_ = k.p2p.Disconnect(peer, errOverlayMismatch.Error())
-		_ = k.p2p.Disconnect(i.Overlay, errOverlayMismatch.Error())
-		return errOverlayMismatch
+		_ = k.p2p.Disconnect(i.Address, errOverlayMismatch.Error())
+		return nil, errOverlayMismatch
 	}
 
-	return k.Announce(ctx, peer, true)
+	return i, k.Announce(ctx, i.Address, i.Mode.IsFull())
 }
 
 // Announce a newly connected peer to our connected peers, but also
@@ -893,19 +893,23 @@ func (k *Kad) AddPeers(addrs ...boson.Address) {
 	k.notifyManageLoop()
 }
 
-func (k *Kad) Outbound(peer boson.Address) {
-	k.connectedPeers.Add(peer)
+func (k *Kad) Outbound(peer p2p.Peer) {
+	if peer.Mode.IsBootNode() {
+		return
+	}
+	k.knownPeers.Add(peer.Address)
+	k.connectedPeers.Add(peer.Address)
 
 	k.metrics.TotalOutboundConnections.Inc()
-	k.collector.Record(peer, im.PeerLogIn(time.Now(), im.PeerConnectionDirectionOutbound))
+	k.collector.Record(peer.Address, im.PeerLogIn(time.Now(), im.PeerConnectionDirectionOutbound))
 
-	k.waitNext.Remove(peer)
+	k.waitNext.Remove(peer.Address)
 
 	k.depthMu.Lock()
 	k.depth = recalcDepth(k.connectedPeers, k.radius)
 	k.depthMu.Unlock()
 
-	po := boson.Proximity(k.base.Bytes(), peer.Bytes())
+	po := boson.Proximity(k.base.Bytes(), peer.Address.Bytes())
 	k.logger.Debugf("kademlia: connected to peer: %q in bin: %d", peer, po)
 
 	k.notifyManageLoop()

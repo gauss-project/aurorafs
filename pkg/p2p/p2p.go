@@ -26,7 +26,7 @@ type Service interface {
 
 type Connect interface {
 	// Connect to a peer but do not notify topology about the established connection.
-	Connect(ctx context.Context, addr ma.Multiaddr) (address *aurora.Address, err error)
+	Connect(ctx context.Context, addr ma.Multiaddr) (peer *Peer, err error)
 }
 
 type Disconnecter interface {
@@ -117,9 +117,8 @@ type StreamSpec struct {
 
 // Peer holds information about a Peer.
 type Peer struct {
-	Address  boson.Address `json:"address"`
-	Mode     aurora.Model  `json:"mode"`
-	//FullNode bool          `json:"fullNode"`
+	Address boson.Address `json:"address"`
+	Mode    aurora.Model  `json:"mode"`
 }
 
 // HandlerFunc handles a received Stream from a Peer.

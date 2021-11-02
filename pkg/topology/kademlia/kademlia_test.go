@@ -1454,7 +1454,7 @@ func newTestKademliaWithDiscovery(
 
 func p2pMock(ab addressbook.Interface, signer beeCrypto.Signer, counter, failedCounter *int32) p2p.Service {
 	p2ps := p2pmock.New(
-		p2pmock.WithConnectFunc(func(ctx context.Context, addr ma.Multiaddr) (*aurora.Address, error) {
+		p2pmock.WithConnectFunc(func(ctx context.Context, addr ma.Multiaddr) (*p2p.Peer, error) {
 			if addr.Equal(nonConnectableAddress) {
 				_ = atomic.AddInt32(failedCounter, 1)
 				return nil, errors.New("non reachable node")
@@ -1470,7 +1470,10 @@ func p2pMock(ab addressbook.Interface, signer beeCrypto.Signer, counter, failedC
 
 			for _, a := range addresses {
 				if a.Underlay.Equal(addr) {
-					return &a, nil
+					return &p2p.Peer{
+						Address: a.Overlay,
+						Mode:    aurora.NewModel().SetMode(aurora.FullNode),
+					}, nil
 				}
 			}
 
@@ -1484,7 +1487,10 @@ func p2pMock(ab addressbook.Interface, signer beeCrypto.Signer, counter, failedC
 				return nil, err
 			}
 
-			return auroraAddr, nil
+			return &p2p.Peer{
+				Address: auroraAddr.Overlay,
+				Mode:    aurora.NewModel().SetMode(aurora.FullNode),
+			}, nil
 		}),
 		p2pmock.WithDisconnectFunc(func(boson.Address, string) error {
 			if counter != nil {

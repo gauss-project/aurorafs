@@ -6,8 +6,8 @@ import (
 	"github.com/gauss-project/aurorafs/pkg/shed"
 	"github.com/gauss-project/aurorafs/pkg/topology/kademlia"
 	"github.com/gauss-project/aurorafs/pkg/topology/lightnode"
-	"io"
 	"math/rand"
+	"os"
 	"testing"
 	"time"
 
@@ -34,7 +34,7 @@ const underlayBase = "/ip4/127.0.0.1/tcp/1634/dns/"
 
 var (
 	nonConnectableAddress, _        = ma.NewMultiaddr(underlayBase + "16Uiu2HAkx8ULY8cTXhdVAcMmLcH9AsTKz6uBQ7DPLKRjMLgBVYkA")
-	noopLogger                      = logging.New(io.Discard, logrus.TraceLevel)
+	noopLogger                      = logging.New(os.Stdout, logrus.TraceLevel)
 	networkId                uint64 = 0
 )
 
@@ -52,7 +52,7 @@ type Node struct {
 
 func p2pMock(ab addressbook.Interface, overlay boson.Address, signer crypto.Signer) p2p.Service {
 	p2ps := p2pmock.New(
-		p2pmock.WithConnectFunc(func(ctx context.Context, underlay ma.Multiaddr) (*aurora.Address, error) {
+		p2pmock.WithConnectFunc(func(ctx context.Context, underlay ma.Multiaddr) (*p2p.Peer, error) {
 			if underlay.Equal(nonConnectableAddress) {
 				return nil, errors.New("non reachable node")
 			}
@@ -63,7 +63,10 @@ func p2pMock(ab addressbook.Interface, overlay boson.Address, signer crypto.Sign
 
 			for _, a := range addresses {
 				if a.Underlay.Equal(underlay) {
-					return &a, nil
+					return &p2p.Peer{
+						Address: a.Overlay,
+						Mode:    aurora.NewModel().SetMode(aurora.FullNode),
+					}, nil
 				}
 			}
 
@@ -76,7 +79,10 @@ func p2pMock(ab addressbook.Interface, overlay boson.Address, signer crypto.Sign
 				return nil, err
 			}
 
-			return bzzAddr, nil
+			return &p2p.Peer{
+				Address: bzzAddr.Overlay,
+				Mode:    aurora.NewModel().SetMode(aurora.FullNode),
+			}, nil
 		}),
 		p2pmock.WithDisconnectFunc(func(boson.Address, string) error {
 			return nil
@@ -407,7 +413,7 @@ func createTopology(t *testing.T, total int) []*Node {
 	nodes := make([]*Node, 0)
 	for i := 0; i < total; i++ {
 		nodes = append(nodes, newTestNode(t))
-		//t.Log("node", i, nodes[i].overlay)
+		t.Log("node", i, nodes[i].overlay)
 		if i > 0 {
 			nodes[i].addOne(t, nodes[i-1].addr, true)
 			nodes[i-1].addOne(t, nodes[i].addr, true)
