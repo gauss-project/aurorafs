@@ -42,11 +42,14 @@ func TestConnect(t *testing.T) {
 	}
 
 	testServer := newTestServer(t, testServerOptions{
-		P2P: mock.New(mock.WithConnectFunc(func(ctx context.Context, addr ma.Multiaddr) (*aurora.Address, error) {
+		P2P: mock.New(mock.WithConnectFunc(func(ctx context.Context, addr ma.Multiaddr) (*p2p.Peer, error) {
 			if addr.String() == errorUnderlay {
 				return nil, testErr
 			}
-			return bzzAddress, nil
+			return &p2p.Peer{
+				Address: bzzAddress.Overlay,
+				Mode:    aurora.NewModel().SetMode(aurora.FullNode),
+			}, nil
 		})),
 	})
 
@@ -78,11 +81,14 @@ func TestConnect(t *testing.T) {
 
 	t.Run("error - add peer", func(t *testing.T) {
 		testServer := newTestServer(t, testServerOptions{
-			P2P: mock.New(mock.WithConnectFunc(func(ctx context.Context, addr ma.Multiaddr) (*aurora.Address, error) {
+			P2P: mock.New(mock.WithConnectFunc(func(ctx context.Context, addr ma.Multiaddr) (*p2p.Peer, error) {
 				if addr.String() == errorUnderlay {
 					return nil, testErr
 				}
-				return bzzAddress, nil
+				return &p2p.Peer{
+					Address: bzzAddress.Overlay,
+					Mode:    aurora.NewModel().SetMode(aurora.FullNode),
+				}, nil
 			})),
 		})
 
@@ -163,7 +169,7 @@ func TestPeer(t *testing.T) {
 	t.Run("ok", func(t *testing.T) {
 		jsonhttptest.Request(t, testServer.Client, http.MethodGet, "/peers", http.StatusOK,
 			jsonhttptest.WithExpectedJSONResponse(debugapi.PeersResponse{
-				Peers: []p2p.Peer{{Address: overlay}},
+				Peers: []debugapi.PeerItem{{Address: overlay}},
 			}),
 		)
 	})
@@ -188,7 +194,7 @@ func TestBlocklistedPeers(t *testing.T) {
 
 	jsonhttptest.Request(t, testServer.Client, http.MethodGet, "/blocklist", http.StatusOK,
 		jsonhttptest.WithExpectedJSONResponse(debugapi.PeersResponse{
-			Peers: []p2p.Peer{{Address: overlay}},
+			Peers: []debugapi.PeerItem{{Address: overlay}},
 		}),
 	)
 }

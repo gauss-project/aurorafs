@@ -5,6 +5,9 @@ import (
 	random "crypto/rand"
 	"encoding/json"
 	"errors"
+	"github.com/gauss-project/aurorafs/pkg/aurora"
+	"github.com/gauss-project/aurorafs/pkg/topology/bootnode"
+	"github.com/gauss-project/aurorafs/pkg/topology/model"
 	"golang.org/x/sync/errgroup"
 	"math/big"
 	"net"
@@ -66,7 +69,7 @@ var noopSanctionedPeerFn = func(_ boson.Address) bool { return false }
 type Options struct {
 	SaturationFunc  binSaturationFunc
 	Bootnodes       []ma.Multiaddr
-	BootnodeMode    bool
+	NodeMode        aurora.Model
 	BitSuffixLength int
 	PruneFunc       pruneFunc
 	BinMaxPeers     int // every k bucket max connes
@@ -84,6 +87,7 @@ type Kad struct {
 	connectedPeers    *pslice.PSlice        // a slice of peers sorted and indexed by po, indexes kept in `bins`
 	knownPeers        *pslice.PSlice        // both are po aware slice of addresses
 	bootnodes         []ma.Multiaddr
+	bootNodes         *bootnode.Container
 	depth             uint8         // current neighborhood depth
 	radius            uint8         // storage area of responsibility
 	depthMu           sync.RWMutex  // protect depth changes
@@ -91,7 +95,7 @@ type Kad struct {
 	peerSig           []chan struct{}
 	peerSigMtx        sync.Mutex
 	logger            logging.Logger // logger
-	bootnode          bool           // indicates whether the node is working in bootnode mode
+	nodeMode          aurora.Model   // indicates whether the node working mode
 	collector         *im.Collector
 	quit              chan struct{} // quit channel
 	halt              chan struct{} // halt channel
@@ -110,6 +114,7 @@ func New(
 	addressbook addressbook.Interface,
 	discovery discovery.Driver,
 	p2p p2p.Service,
+	bootNodes *bootnode.Container,
 	metricsDB *shed.DB,
 	logger logging.Logger,
 	o Options,
@@ -129,7 +134,7 @@ func New(
 		}
 
 		os := overSaturationPeers
-		if o.BootnodeMode {
+		if o.NodeMode.IsBootNode() {
 			os = bootNodeOverSaturationPeers
 		}
 		o.SaturationFunc = binSaturated(os)
@@ -156,10 +161,11 @@ func New(
 		connectedPeers:    pslice.New(int(boson.MaxBins), base),
 		knownPeers:        pslice.New(int(boson.MaxBins), base),
 		bootnodes:         o.Bootnodes,
+		bootNodes:         bootNodes,
 		manageC:           make(chan struct{}, 1),
 		waitNext:          waitnext.New(),
 		logger:            logger,
-		bootnode:          o.BootnodeMode,
+		nodeMode:          o.NodeMode,
 		collector:         imc,
 		quit:              make(chan struct{}),
 		halt:              make(chan struct{}),
@@ -334,7 +340,8 @@ func (k *Kad) connectionAttemptsHandler(ctx context.Context, wg *sync.WaitGroup,
 			}
 		}
 
-		switch err = k.connect(ctx, peer.addr, bzzAddr.Underlay); {
+		i, err := k.connect(ctx, peer.addr, bzzAddr.Underlay)
+		switch {
 		case errors.Is(err, errPruneEntry):
 			k.logger.Debugf("kademlia: dial to light node with overlay %q and underlay %q", peer.addr, bzzAddr.Underlay)
 			remove(peer)
@@ -349,20 +356,7 @@ func (k *Kad) connectionAttemptsHandler(ctx context.Context, wg *sync.WaitGroup,
 			return
 		}
 
-		k.waitNext.Set(peer.addr, time.Now().Add(shortRetry), 0)
-
-		k.connectedPeers.Add(peer.addr)
-
-		k.metrics.TotalOutboundConnections.Inc()
-		k.collector.Record(peer.addr, im.PeerLogIn(time.Now(), im.PeerConnectionDirectionOutbound))
-
-		k.depthMu.Lock()
-		k.depth = recalcDepth(k.connectedPeers, k.radius)
-		k.depthMu.Unlock()
-
-		k.logger.Debugf("kademlia: connected to peer: %q in bin: %d", peer.addr, peer.po)
-		k.notifyManageLoop()
-		k.notifyPeerSig()
+		k.Outbound(*i)
 	}
 
 	var (
@@ -475,7 +469,7 @@ func (k *Kad) manage() {
 			default:
 			}
 
-			if k.bootnode {
+			if k.nodeMode.IsBootNode() {
 				k.depthMu.Lock()
 				depth := k.depth
 				radius := k.radius
@@ -518,8 +512,19 @@ func (k *Kad) manage() {
 					continue
 				default:
 				}
+
 				k.logger.Debug("kademlia: no connected peers, trying bootnodes")
 				k.connectBootNodes(ctx)
+
+				if k.bootNodes != nil && k.bootNodes.Count() > 0 {
+					go func() {
+						_ = k.bootNodes.EachPeer(func(address boson.Address, u uint8) (stop, jumpToNext bool, err error) {
+							k.discovery.NotifyDiscoverWork(address)
+							time.Sleep(time.Second)
+							return false, false, nil
+						})
+					}()
+				}
 			}
 		}
 	}
@@ -617,7 +622,9 @@ func (k *Kad) Start(_ context.Context) error {
 		k.AddPeers(addresses...)
 		k.metrics.StartAddAddressBookOverlaysTime.Observe(time.Since(start).Seconds())
 
-		k.discovery.NotifyDiscoverWork()
+		if k.connectedPeers.Length() > 0 {
+			k.discovery.NotifyDiscoverWork()
+		}
 	}()
 
 	// trigger the first manage loop immediately so that
@@ -644,7 +651,7 @@ func (k *Kad) connectBootNodes(ctx context.Context) {
 			if attempts >= maxBootNodeAttempts {
 				return true, nil
 			}
-			bzzAddress, err := k.p2p.Connect(ctx, addr)
+			peer, err := k.p2p.Connect(ctx, addr)
 
 			attempts++
 			k.metrics.TotalBootNodesConnectionAttempts.Inc()
@@ -655,17 +662,15 @@ func (k *Kad) connectBootNodes(ctx context.Context) {
 					k.logger.Warningf("connect to bootnode %s", addr)
 					return false, err
 				}
+				k.discovery.NotifyDiscoverWork(peer.Address)
 				k.logger.Debugf("connect to bootnode fail: %v", err)
 				return false, nil
 			}
 
-			if err := k.onConnected(ctx, bzzAddress.Overlay); err != nil {
-				return false, err
-			}
-			k.discovery.NotifyDiscoverWork(bzzAddress.Overlay)
+			k.discovery.NotifyDiscoverWork(peer.Address)
 
 			k.metrics.TotalOutboundConnections.Inc()
-			k.collector.Record(bzzAddress.Overlay, im.PeerLogIn(time.Now(), im.PeerConnectionDirectionOutbound))
+			k.collector.Record(peer.Address, im.PeerLogIn(time.Now(), im.PeerConnectionDirectionOutbound))
 			k.logger.Tracef("connected to bootnode %s", addr)
 			connected++
 
@@ -770,7 +775,7 @@ func recalcDepth(peers *pslice.PSlice, radius uint8) uint8 {
 
 // connect to a peer and gossips its address to our connected peers,
 // as well as sends the peers we are connected to the newly connected peer
-func (k *Kad) connect(ctx context.Context, peer boson.Address, ma ma.Multiaddr) error {
+func (k *Kad) connect(ctx context.Context, peer boson.Address, ma ma.Multiaddr) (*p2p.Peer, error) {
 	k.logger.Infof("kademlia: attempting to connect to peer %q", peer)
 
 	ctx, cancel := context.WithTimeout(ctx, peerConnectionAttemptTimeout)
@@ -778,16 +783,17 @@ func (k *Kad) connect(ctx context.Context, peer boson.Address, ma ma.Multiaddr) 
 
 	k.metrics.TotalOutboundConnectionAttempts.Inc()
 
-	switch i, err := k.p2p.Connect(ctx, ma); {
+	i, err := k.p2p.Connect(ctx, ma)
+	switch {
 	case errors.Is(err, p2p.ErrDialLightNode):
-		return errPruneEntry
+		return nil, errPruneEntry
 	case errors.Is(err, p2p.ErrAlreadyConnected):
-		if !i.Overlay.Equal(peer) {
-			return errOverlayMismatch
+		if !i.Address.Equal(peer) {
+			return nil, errOverlayMismatch
 		}
-		return nil
+		return i, nil
 	case errors.Is(err, context.Canceled):
-		return err
+		return nil, err
 	case err != nil:
 		k.logger.Debugf("kademlia: could not connect to peer %q: %v", peer, err)
 
@@ -817,14 +823,14 @@ func (k *Kad) connect(ctx context.Context, peer boson.Address, ma ma.Multiaddr) 
 			k.waitNext.Set(peer, retryTime, failedAttempts)
 		}
 
-		return err
-	case !i.Overlay.Equal(peer):
+		return nil, err
+	case !i.Address.Equal(peer):
 		_ = k.p2p.Disconnect(peer, errOverlayMismatch.Error())
-		_ = k.p2p.Disconnect(i.Overlay, errOverlayMismatch.Error())
-		return errOverlayMismatch
+		_ = k.p2p.Disconnect(i.Address, errOverlayMismatch.Error())
+		return nil, errOverlayMismatch
 	}
 
-	return k.Announce(ctx, peer, true)
+	return i, k.Announce(ctx, i.Address, i.Mode.IsFull())
 }
 
 // Announce a newly connected peer to our connected peers, but also
@@ -905,9 +911,34 @@ func (k *Kad) AddPeers(addrs ...boson.Address) {
 	k.notifyManageLoop()
 }
 
+func (k *Kad) Outbound(peer p2p.Peer) {
+
+	k.metrics.TotalOutboundConnections.Inc()
+	k.collector.Record(peer.Address, im.PeerLogIn(time.Now(), im.PeerConnectionDirectionOutbound))
+
+	k.waitNext.Remove(peer.Address)
+
+	po := boson.Proximity(k.base.Bytes(), peer.Address.Bytes())
+	k.logger.Debugf("kademlia: connected to peer: %q in bin: %d", peer, po)
+
+	if peer.Mode.IsBootNode() {
+		k.knownPeers.Remove(peer.Address)
+		return
+	}
+	k.knownPeers.Add(peer.Address)
+	k.connectedPeers.Add(peer.Address)
+
+	k.depthMu.Lock()
+	k.depth = recalcDepth(k.connectedPeers, k.radius)
+	k.depthMu.Unlock()
+
+	k.notifyManageLoop()
+	k.notifyPeerSig()
+}
+
 func (k *Kad) Pick(peer p2p.Peer) bool {
 	k.metrics.PickCalls.Inc()
-	if k.bootnode {
+	if k.nodeMode.IsBootNode() {
 		// shortcircuit for bootnode mode - always accept connections,
 		// at least until we find a better solution.
 		return true
@@ -929,7 +960,7 @@ func (k *Kad) Connected(ctx context.Context, peer p2p.Peer, forceConnection bool
 	po := boson.Proximity(k.base.Bytes(), address.Bytes())
 
 	if _, overSaturated := k.saturationFunc(po, k.knownPeers, k.connectedPeers); overSaturated {
-		if k.bootnode {
+		if k.nodeMode.IsBootNode() {
 			randPeer, err := k.randomPeer(po)
 			if err != nil {
 				return err
@@ -961,6 +992,9 @@ func (k *Kad) onConnected(ctx context.Context, addr boson.Address) error {
 	k.depthMu.Lock()
 	k.depth = recalcDepth(k.connectedPeers, k.radius)
 	k.depthMu.Unlock()
+
+	po := boson.Proximity(k.base.Bytes(), addr.Bytes())
+	k.logger.Debugf("kademlia: connected from peer: %q in bin: %d", addr, po)
 
 	k.notifyManageLoop()
 	k.notifyPeerSig()
@@ -1149,7 +1183,7 @@ func (k *Kad) IsWithinDepth(addr boson.Address) bool {
 }
 
 // EachNeighbor iterates from closest bin to farthest of the neighborhood peers.
-func (k *Kad) EachNeighbor(f topology.EachPeerFunc) error {
+func (k *Kad) EachNeighbor(f model.EachPeerFunc) error {
 	depth := k.NeighborhoodDepth()
 	fn := func(a boson.Address, po uint8) (bool, bool, error) {
 		if po < depth {
@@ -1161,7 +1195,7 @@ func (k *Kad) EachNeighbor(f topology.EachPeerFunc) error {
 }
 
 // EachNeighborRev iterates from farthest bin to closest of the neighborhood peers.
-func (k *Kad) EachNeighborRev(f topology.EachPeerFunc) error {
+func (k *Kad) EachNeighborRev(f model.EachPeerFunc) error {
 	depth := k.NeighborhoodDepth()
 	fn := func(a boson.Address, po uint8) (bool, bool, error) {
 		if po < depth {
@@ -1173,22 +1207,22 @@ func (k *Kad) EachNeighborRev(f topology.EachPeerFunc) error {
 }
 
 // EachPeer iterates from closest bin to farthest.
-func (k *Kad) EachPeer(f topology.EachPeerFunc) error {
+func (k *Kad) EachPeer(f model.EachPeerFunc) error {
 	return k.connectedPeers.EachBin(f)
 }
 
 // EachPeerRev iterates from farthest bin to closest.
-func (k *Kad) EachPeerRev(f topology.EachPeerFunc) error {
+func (k *Kad) EachPeerRev(f model.EachPeerFunc) error {
 	return k.connectedPeers.EachBinRev(f)
 }
 
 // EachKnownPeer iterates from closest bin to farthest.
-func (k *Kad) EachKnownPeer(f topology.EachPeerFunc) error {
+func (k *Kad) EachKnownPeer(f model.EachPeerFunc) error {
 	return k.knownPeers.EachBin(f)
 }
 
 // EachKnownPeerRev iterates from farthest bin to closest.
-func (k *Kad) EachKnownPeerRev(f topology.EachPeerFunc) error {
+func (k *Kad) EachKnownPeerRev(f model.EachPeerFunc) error {
 	return k.knownPeers.EachBinRev(f)
 }
 
@@ -1267,8 +1301,7 @@ func (k *Kad) IsBalanced(bin uint8) bool {
 }
 
 func (k *Kad) IsSaturated(bin uint8) bool {
-	saturate, _ := k.saturationFunc(bin, k.knownPeers, k.connectedPeers)
-	return saturate
+	return k.connectedPeers.BinSize(bin) >= saturationPeers
 }
 
 func (k *Kad) SetRadius(r uint8) {
@@ -1285,10 +1318,10 @@ func (k *Kad) SetRadius(r uint8) {
 	}
 }
 
-func (k *Kad) Snapshot() *topology.KadParams {
-	var infos []topology.BinInfo
+func (k *Kad) Snapshot() *model.KadParams {
+	var infos []model.BinInfo
 	for i := int(boson.MaxPO); i >= 0; i-- {
-		infos = append(infos, topology.BinInfo{})
+		infos = append(infos, model.BinInfo{})
 	}
 
 	ss := k.collector.Snapshot(time.Now())
@@ -1297,7 +1330,7 @@ func (k *Kad) Snapshot() *topology.KadParams {
 		infos[po].BinConnected++
 		infos[po].ConnectedPeers = append(
 			infos[po].ConnectedPeers,
-			&topology.PeerInfo{
+			&model.PeerInfo{
 				Address: addr,
 				Metrics: createMetricsSnapshotView(ss[addr.ByteString()]),
 			},
@@ -1318,7 +1351,7 @@ func (k *Kad) Snapshot() *topology.KadParams {
 
 		infos[po].DisconnectedPeers = append(
 			infos[po].DisconnectedPeers,
-			&topology.PeerInfo{
+			&model.PeerInfo{
 				Address: addr,
 				Metrics: createMetricsSnapshotView(ss[addr.ByteString()]),
 			},
@@ -1326,14 +1359,14 @@ func (k *Kad) Snapshot() *topology.KadParams {
 		return false, false, nil
 	})
 
-	return &topology.KadParams{
+	return &model.KadParams{
 		Base:           k.base.String(),
 		Population:     k.knownPeers.Length(),
 		Connected:      k.connectedPeers.Length(),
 		Timestamp:      time.Now(),
 		NNLowWatermark: nnLowWatermark,
 		Depth:          k.NeighborhoodDepth(),
-		Bins: topology.KadBins{
+		Bins: model.KadBins{
 			Bin0:  infos[0],
 			Bin1:  infos[1],
 			Bin2:  infos[2],
@@ -1472,11 +1505,11 @@ func (k *Kad) randomPeer(bin uint8) (boson.Address, error) {
 // createMetricsSnapshotView creates new topology.MetricSnapshotView from the
 // given metrics.Snapshot and rounds all the timestamps and durations to its
 // nearest second.
-func createMetricsSnapshotView(ss *im.Snapshot) *topology.MetricSnapshotView {
+func createMetricsSnapshotView(ss *im.Snapshot) *model.MetricSnapshotView {
 	if ss == nil {
 		return nil
 	}
-	return &topology.MetricSnapshotView{
+	return &model.MetricSnapshotView{
 		LastSeenTimestamp:          time.Unix(0, ss.LastSeenTimestamp).Unix(),
 		SessionConnectionRetry:     ss.SessionConnectionRetry,
 		ConnectionTotalDuration:    ss.ConnectionTotalDuration.Truncate(time.Second).Seconds(),

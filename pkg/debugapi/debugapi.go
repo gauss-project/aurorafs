@@ -5,9 +5,11 @@ package debugapi
 
 import (
 	"crypto/ecdsa"
+	"github.com/gauss-project/aurorafs/pkg/aurora"
 	"github.com/gauss-project/aurorafs/pkg/chunkinfo"
 	"github.com/gauss-project/aurorafs/pkg/retrieval"
 	"github.com/gauss-project/aurorafs/pkg/routetab"
+	"github.com/gauss-project/aurorafs/pkg/topology/bootnode"
 	"github.com/gauss-project/aurorafs/pkg/topology/lightnode"
 	"net/http"
 	"sync"
@@ -37,6 +39,7 @@ type Service struct {
 	logger          logging.Logger
 	tracer          *tracing.Tracer
 	lightNodes      *lightnode.Container
+	bootNodes       *bootnode.Container
 	routetab        routetab.RouteTab
 	chunkInfo       chunkinfo.Interface
 	retrieval       retrieval.Interface
@@ -58,8 +61,7 @@ type Options struct {
 	NATAddr        string
 	EnableWS       bool
 	EnableQUIC     bool
-	FullNode       bool
-	BootNodeMode   bool
+	NodeMode       aurora.Model
 	LightNodeLimit int
 	WelcomeMessage string
 	Transaction    []byte
@@ -88,12 +90,13 @@ func New(overlay boson.Address, publicKey, pssPublicKey ecdsa.PublicKey, ethereu
 // Configure injects required dependencies and configuration parameters and
 // constructs HTTP routes that depend on them. It is intended and safe to call
 // this method only once.
-func (s *Service) Configure(p2p p2p.DebugService, pingpong pingpong.Interface, topologyDriver topology.Driver, lightNodes *lightnode.Container, storer storage.Storer, route routetab.RouteTab, chunkinfo chunkinfo.Interface, retrieval retrieval.Interface) {
+func (s *Service) Configure(p2p p2p.DebugService, pingpong pingpong.Interface, topologyDriver topology.Driver, lightNodes *lightnode.Container, bootNodes *bootnode.Container, storer storage.Storer, route routetab.RouteTab, chunkinfo chunkinfo.Interface, retrieval retrieval.Interface) {
 	s.p2p = p2p
 	s.pingpong = pingpong
 	s.topologyDriver = topologyDriver
 	s.storer = storer
 	s.lightNodes = lightNodes
+	s.bootNodes = bootNodes
 	s.routetab = route
 	s.chunkInfo = chunkinfo
 	s.retrieval = retrieval

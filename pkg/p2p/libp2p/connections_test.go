@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"github.com/gauss-project/aurorafs/pkg/aurora"
 	"github.com/gauss-project/aurorafs/pkg/logging"
 	"io"
 	"strings"
@@ -30,7 +31,7 @@ const (
 )
 
 func TestAddresses(t *testing.T) {
-	s, _ := newService(t, 1, libp2pServiceOpts{})
+	s, _ := newService(t, 1, libp2pServiceOpts{libp2pOpts: libp2p.Options{NodeMode: aurora.NewModel()}})
 
 	addrs, err := s.Addresses()
 	if err != nil {
@@ -46,9 +47,9 @@ func TestConnectDisconnect(t *testing.T) {
 	defer cancel()
 
 	s1, overlay1 := newService(t, 1, libp2pServiceOpts{libp2pOpts: libp2p.Options{
-		FullNode: true,
+		NodeMode: aurora.NewModel().SetMode(aurora.FullNode),
 	}})
-	s2, overlay2 := newService(t, 1, libp2pServiceOpts{})
+	s2, overlay2 := newService(t, 1, libp2pServiceOpts{libp2pOpts: libp2p.Options{NodeMode: aurora.NewModel()}})
 
 	addr := serviceUnderlayAddress(t, s1)
 
@@ -60,7 +61,7 @@ func TestConnectDisconnect(t *testing.T) {
 	expectPeers(t, s2, overlay1)
 	expectPeersEventually(t, s1, overlay2)
 
-	if err := s2.Disconnect(bzzAddr.Overlay, testDisconnectMsg); err != nil {
+	if err := s2.Disconnect(bzzAddr.Address, testDisconnectMsg); err != nil {
 		t.Fatal(err)
 	}
 
@@ -73,9 +74,9 @@ func TestConnectToLightPeer(t *testing.T) {
 	defer cancel()
 
 	s1, _ := newService(t, 1, libp2pServiceOpts{libp2pOpts: libp2p.Options{
-		FullNode: false,
+		NodeMode: aurora.NewModel(),
 	}})
-	s2, _ := newService(t, 1, libp2pServiceOpts{})
+	s2, _ := newService(t, 1, libp2pServiceOpts{libp2pOpts: libp2p.Options{NodeMode: aurora.NewModel()}})
 
 	addr := serviceUnderlayAddress(t, s1)
 
@@ -99,7 +100,7 @@ func TestLightPeerLimit(t *testing.T) {
 			lightNodes: container,
 			libp2pOpts: libp2p.Options{
 				LightNodeLimit: limit,
-				FullNode:       true,
+				NodeMode: aurora.NewModel().SetMode(aurora.FullNode),
 			},
 		})
 
@@ -112,7 +113,7 @@ func TestLightPeerLimit(t *testing.T) {
 	for i := 0; i < 5; i++ {
 		sl, _ := newService(t, 1, libp2pServiceOpts{
 			libp2pOpts: libp2p.Options{
-				FullNode: false,
+				NodeMode: aurora.NewModel(),
 			},
 		})
 		_, err := sl.Connect(ctx, addr)
@@ -139,9 +140,9 @@ func TestDoubleConnect(t *testing.T) {
 	defer cancel()
 
 	s1, overlay1 := newService(t, 1, libp2pServiceOpts{libp2pOpts: libp2p.Options{
-		FullNode: true,
+		NodeMode: aurora.NewModel().SetMode(aurora.FullNode),
 	}})
-	s2, overlay2 := newService(t, 1, libp2pServiceOpts{})
+	s2, overlay2 := newService(t, 1, libp2pServiceOpts{libp2pOpts: libp2p.Options{NodeMode: aurora.NewModel()}})
 
 	addr := serviceUnderlayAddress(t, s1)
 
@@ -165,9 +166,9 @@ func TestDoubleDisconnect(t *testing.T) {
 	defer cancel()
 
 	s1, overlay1 := newService(t, 1, libp2pServiceOpts{libp2pOpts: libp2p.Options{
-		FullNode: true,
+		NodeMode: aurora.NewModel().SetMode(aurora.FullNode),
 	}})
-	s2, overlay2 := newService(t, 1, libp2pServiceOpts{})
+	s2, overlay2 := newService(t, 1, libp2pServiceOpts{libp2pOpts: libp2p.Options{NodeMode: aurora.NewModel()}})
 
 	addr := serviceUnderlayAddress(t, s1)
 
@@ -179,14 +180,14 @@ func TestDoubleDisconnect(t *testing.T) {
 	expectPeers(t, s2, overlay1)
 	expectPeersEventually(t, s1, overlay2)
 
-	if err := s2.Disconnect(bzzAddr.Overlay, testDisconnectMsg); err != nil {
+	if err := s2.Disconnect(bzzAddr.Address, testDisconnectMsg); err != nil {
 		t.Fatal(err)
 	}
 
 	expectPeers(t, s2)
 	expectPeersEventually(t, s1)
 
-	if err := s2.Disconnect(bzzAddr.Overlay, testDisconnectMsg); !errors.Is(err, p2p.ErrPeerNotFound) {
+	if err := s2.Disconnect(bzzAddr.Address, testDisconnectMsg); !errors.Is(err, p2p.ErrPeerNotFound) {
 		t.Errorf("got error %v, want %v", err, p2p.ErrPeerNotFound)
 	}
 
@@ -199,10 +200,10 @@ func TestMultipleConnectDisconnect(t *testing.T) {
 	defer cancel()
 
 	s1, overlay1 := newService(t, 1, libp2pServiceOpts{libp2pOpts: libp2p.Options{
-		FullNode: true,
+		NodeMode: aurora.NewModel().SetMode(aurora.FullNode),
 	}})
 
-	s2, overlay2 := newService(t, 1, libp2pServiceOpts{})
+	s2, overlay2 := newService(t, 1, libp2pServiceOpts{libp2pOpts: libp2p.Options{NodeMode: aurora.NewModel()}})
 
 	addr := serviceUnderlayAddress(t, s1)
 
@@ -214,7 +215,7 @@ func TestMultipleConnectDisconnect(t *testing.T) {
 	expectPeers(t, s2, overlay1)
 	expectPeersEventually(t, s1, overlay2)
 
-	if err := s2.Disconnect(bzzAddr.Overlay, testDisconnectMsg); err != nil {
+	if err := s2.Disconnect(bzzAddr.Address, testDisconnectMsg); err != nil {
 		t.Fatal(err)
 	}
 
@@ -229,7 +230,7 @@ func TestMultipleConnectDisconnect(t *testing.T) {
 	expectPeers(t, s2, overlay1)
 	expectPeersEventually(t, s1, overlay2)
 
-	if err := s2.Disconnect(bzzAddr.Overlay, testDisconnectMsg); err != nil {
+	if err := s2.Disconnect(bzzAddr.Address, testDisconnectMsg); err != nil {
 		t.Fatal(err)
 	}
 
@@ -242,10 +243,10 @@ func TestConnectDisconnectOnAllAddresses(t *testing.T) {
 	defer cancel()
 
 	s1, overlay1 := newService(t, 1, libp2pServiceOpts{libp2pOpts: libp2p.Options{
-		FullNode: true,
+		NodeMode: aurora.NewModel().SetMode(aurora.FullNode),
 	}})
 
-	s2, overlay2 := newService(t, 1, libp2pServiceOpts{})
+	s2, overlay2 := newService(t, 1, libp2pServiceOpts{libp2pOpts: libp2p.Options{NodeMode: aurora.NewModel()}})
 
 	addrs, err := s1.Addresses()
 	if err != nil {
@@ -260,7 +261,7 @@ func TestConnectDisconnectOnAllAddresses(t *testing.T) {
 		expectPeers(t, s2, overlay1)
 		expectPeersEventually(t, s1, overlay2)
 
-		if err := s2.Disconnect(bzzAddr.Overlay, testDisconnectMsg); err != nil {
+		if err := s2.Disconnect(bzzAddr.Address, testDisconnectMsg); err != nil {
 			t.Fatal(err)
 		}
 
@@ -274,7 +275,7 @@ func TestDoubleConnectOnAllAddresses(t *testing.T) {
 	defer cancel()
 
 	s1, overlay1 := newService(t, 1, libp2pServiceOpts{libp2pOpts: libp2p.Options{
-		FullNode: true,
+		NodeMode: aurora.NewModel().SetMode(aurora.FullNode),
 	}})
 	addrs, err := s1.Addresses()
 	if err != nil {
@@ -282,7 +283,7 @@ func TestDoubleConnectOnAllAddresses(t *testing.T) {
 	}
 	for _, addr := range addrs {
 		// creating new remote host for each address
-		s2, overlay2 := newService(t, 1, libp2pServiceOpts{})
+		s2, overlay2 := newService(t, 1, libp2pServiceOpts{libp2pOpts: libp2p.Options{NodeMode: aurora.NewModel()}})
 
 		if _, err := s2.Connect(ctx, addr); err != nil {
 			t.Fatal(err)
@@ -313,8 +314,8 @@ func TestDifferentNetworkIDs(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	s1, _ := newService(t, 1, libp2pServiceOpts{})
-	s2, _ := newService(t, 2, libp2pServiceOpts{})
+	s1, _ := newService(t, 1, libp2pServiceOpts{libp2pOpts: libp2p.Options{NodeMode: aurora.NewModel()}})
+	s2, _ := newService(t, 2, libp2pServiceOpts{libp2pOpts: libp2p.Options{NodeMode: aurora.NewModel()}})
 
 	addr := serviceUnderlayAddress(t, s1)
 
@@ -334,7 +335,7 @@ func TestConnectWithEnabledQUICAndWSTransports(t *testing.T) {
 		libp2pOpts: libp2p.Options{
 			EnableQUIC: true,
 			EnableWS:   true,
-			FullNode:   true,
+			NodeMode: aurora.NewModel().SetMode(aurora.FullNode),
 		},
 	})
 
@@ -342,7 +343,7 @@ func TestConnectWithEnabledQUICAndWSTransports(t *testing.T) {
 		libp2pOpts: libp2p.Options{
 			EnableQUIC: true,
 			EnableWS:   true,
-			FullNode:   true,
+			NodeMode: aurora.NewModel().SetMode(aurora.FullNode),
 		},
 	})
 
@@ -363,14 +364,14 @@ func TestConnectWithEnabledWSTransports(t *testing.T) {
 	s1, overlay1 := newService(t, 1, libp2pServiceOpts{
 		libp2pOpts: libp2p.Options{
 			EnableWS: true,
-			FullNode: true,
+			NodeMode: aurora.NewModel().SetMode(aurora.FullNode),
 		},
 	})
 
 	s2, overlay2 := newService(t, 1, libp2pServiceOpts{
 		libp2pOpts: libp2p.Options{
 			EnableWS: true,
-			FullNode: true,
+			NodeMode: aurora.NewModel().SetMode(aurora.FullNode),
 		},
 	})
 
@@ -390,9 +391,9 @@ func TestConnectRepeatHandshake(t *testing.T) {
 	defer cancel()
 
 	s1, overlay1 := newService(t, 1, libp2pServiceOpts{libp2pOpts: libp2p.Options{
-		FullNode: true,
+		NodeMode: aurora.NewModel().SetMode(aurora.FullNode),
 	}})
-	s2, overlay2 := newService(t, 1, libp2pServiceOpts{})
+	s2, overlay2 := newService(t, 1, libp2pServiceOpts{libp2pOpts: libp2p.Options{NodeMode: aurora.NewModel()}})
 
 	addr := serviceUnderlayAddress(t, s1)
 
@@ -424,9 +425,9 @@ func TestConnectRepeatHandshake(t *testing.T) {
 
 func TestBlocklisting(t *testing.T) {
 	s1, overlay1 := newService(t, 1, libp2pServiceOpts{libp2pOpts: libp2p.Options{
-		FullNode: true,
+		NodeMode: aurora.NewModel().SetMode(aurora.FullNode),
 	}})
-	s2, overlay2 := newService(t, 1, libp2pServiceOpts{})
+	s2, overlay2 := newService(t, 1, libp2pServiceOpts{libp2pOpts: libp2p.Options{NodeMode: aurora.NewModel()}})
 
 	addr1 := serviceUnderlayAddress(t, s1)
 	addr2 := serviceUnderlayAddress(t, s2)
@@ -507,7 +508,7 @@ func TestTopologyNotifier(t *testing.T) {
 	s1, overlay1 := newService(t, 1, libp2pServiceOpts{
 		Addressbook: ab1,
 		libp2pOpts: libp2p.Options{
-			FullNode: true,
+			NodeMode: aurora.NewModel().SetMode(aurora.FullNode),
 		},
 	})
 	s1.SetPickyNotifier(notifier1)
@@ -516,7 +517,7 @@ func TestTopologyNotifier(t *testing.T) {
 	s2, overlay2 := newService(t, 1, libp2pServiceOpts{
 		Addressbook: ab2,
 		libp2pOpts: libp2p.Options{
-			FullNode: true,
+			NodeMode: aurora.NewModel().SetMode(aurora.FullNode),
 		},
 	})
 	s2.SetPickyNotifier(notifier2)
@@ -543,7 +544,7 @@ func TestTopologyNotifier(t *testing.T) {
 	checkAddressbook(t, ab2, overlay1, addr)
 
 	// s2 disconnects from s1 so s1 disconnect notifiee should be called
-	if err := s2.Disconnect(bzzAddr.Overlay, testDisconnectMsg); err != nil {
+	if err := s2.Disconnect(bzzAddr.Address, testDisconnectMsg); err != nil {
 		t.Fatal(err)
 	}
 
@@ -572,7 +573,7 @@ func TestTopologyNotifier(t *testing.T) {
 	waitAddrSet(t, &n2connectedPeer.Address, &mtx, overlay1)
 
 	// s1 disconnects from s2 so s2 disconnect notifiee should be called
-	if err := s1.Disconnect(bzzAddr2.Overlay, testDisconnectMsg); err != nil {
+	if err := s1.Disconnect(bzzAddr2.Address, testDisconnectMsg); err != nil {
 		t.Fatal(err)
 	}
 	expectPeers(t, s1)
@@ -614,7 +615,7 @@ func TestTopologyAnnounce(t *testing.T) {
 	s1, overlay1 := newService(t, 1, libp2pServiceOpts{
 		Addressbook: ab1,
 		libp2pOpts: libp2p.Options{
-			FullNode: true,
+			NodeMode: aurora.NewModel().SetMode(aurora.FullNode),
 		},
 	})
 	s1.SetPickyNotifier(notifier1)
@@ -622,14 +623,14 @@ func TestTopologyAnnounce(t *testing.T) {
 	s2, overlay2 := newService(t, 1, libp2pServiceOpts{
 		Addressbook: ab2,
 		libp2pOpts: libp2p.Options{
-			FullNode: true,
+			NodeMode: aurora.NewModel().SetMode(aurora.FullNode),
 		},
 	})
 
 	s3, overlay3 := newService(t, 1, libp2pServiceOpts{
 		Addressbook: ab3,
 		libp2pOpts: libp2p.Options{
-			FullNode: false,
+			NodeMode: aurora.NewModel(),
 		},
 	})
 
@@ -734,12 +735,14 @@ func TestTopologyOverSaturated(t *testing.T) {
 	// this notifier will not pick the peer
 	notifier1 := mockNotifier(n1c, n1d, false)
 	s1, overlay1 := newService(t, 1, libp2pServiceOpts{Addressbook: ab1, libp2pOpts: libp2p.Options{
-		FullNode: true,
+		NodeMode: aurora.NewModel().SetMode(aurora.FullNode),
 	}})
 	s1.SetPickyNotifier(notifier1)
 
 	notifier2 := mockNotifier(n2c, n2d, false)
-	s2, _ := newService(t, 1, libp2pServiceOpts{Addressbook: ab2})
+	s2, _ := newService(t, 1, libp2pServiceOpts{Addressbook: ab2, libp2pOpts: libp2p.Options{
+		NodeMode: aurora.NewModel().SetMode(aurora.FullNode),
+	}})
 	s2.SetPickyNotifier(notifier2)
 
 	addr := serviceUnderlayAddress(t, s1)
@@ -761,9 +764,9 @@ func TestWithDisconnectStreams(t *testing.T) {
 	defer cancel()
 
 	s1, overlay1 := newService(t, 1, libp2pServiceOpts{libp2pOpts: libp2p.Options{
-		FullNode: true,
+		NodeMode: aurora.NewModel().SetMode(aurora.FullNode),
 	}})
-	s2, overlay2 := newService(t, 1, libp2pServiceOpts{})
+	s2, overlay2 := newService(t, 1, libp2pServiceOpts{libp2pOpts: libp2p.Options{NodeMode: aurora.NewModel()}})
 
 	testSpec := p2p.ProtocolSpec{
 		Name:    testProtocolName,
@@ -807,9 +810,9 @@ func TestWithBlocklistStreams(t *testing.T) {
 	defer cancel()
 
 	s1, overlay1 := newService(t, 1, libp2pServiceOpts{libp2pOpts: libp2p.Options{
-		FullNode: true,
+		NodeMode: aurora.NewModel().SetMode(aurora.FullNode),
 	}})
-	s2, overlay2 := newService(t, 1, libp2pServiceOpts{})
+	s2, overlay2 := newService(t, 1, libp2pServiceOpts{libp2pOpts: libp2p.Options{NodeMode: aurora.NewModel()}})
 
 	testSpec := p2p.ProtocolSpec{
 		Name:    testProtocolName,
@@ -862,11 +865,14 @@ func TestUserAgentLogging(t *testing.T) {
 
 	s1, _ := newService(t, 1, libp2pServiceOpts{
 		libp2pOpts: libp2p.Options{
-			FullNode: true,
+			NodeMode: aurora.NewModel().SetMode(aurora.FullNode),
 		},
 		Logger: logging.New(s1Logs, 5),
 	})
 	s2, _ := newService(t, 1, libp2pServiceOpts{
+		libp2pOpts: libp2p.Options{
+			NodeMode: aurora.NewModel(),
+		},
 		Logger: logging.New(s2Logs, 5),
 	})
 
@@ -975,7 +981,7 @@ func expectStreamReset(t *testing.T, s io.ReadCloser, err error) {
 
 func expectFullNode(t *testing.T, p p2p.Peer) {
 	t.Helper()
-	if !p.FullNode {
+	if !p.Mode.IsFull() {
 		t.Fatal("expected peer to be a full node")
 	}
 }

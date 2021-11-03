@@ -96,9 +96,9 @@ func (ci *ChunkInfo) OnChunkTransferred(cid boson.Address, rootCid boson.Address
 	if _, exist := chunkMap[mapKey]; !exist {
 		chunkMap[mapKey] = make([]aco.Route, 0)
 	}
-	mu.Unlock()
 	route := aco.NewRoute(overlays, overlays)
 	chunkMap[mapKey] = append(chunkMap[mapKey], route)
+	mu.Unlock()
 	return nil
 }
 

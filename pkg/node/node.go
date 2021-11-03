@@ -7,12 +7,14 @@ import (
 	"context"
 	"crypto/ecdsa"
 	"fmt"
+	"github.com/gauss-project/aurorafs/pkg/aurora"
 	"github.com/gauss-project/aurorafs/pkg/chunkinfo"
 	"github.com/gauss-project/aurorafs/pkg/hive2"
 	"github.com/gauss-project/aurorafs/pkg/pinning"
 	"github.com/gauss-project/aurorafs/pkg/routetab"
 	"github.com/gauss-project/aurorafs/pkg/settlement/swap/oracle"
 	"github.com/gauss-project/aurorafs/pkg/shed"
+	"github.com/gauss-project/aurorafs/pkg/topology/bootnode"
 	"github.com/gauss-project/aurorafs/pkg/topology/kademlia"
 	"github.com/gauss-project/aurorafs/pkg/topology/lightnode"
 	"io"
@@ -91,12 +93,11 @@ type Options struct {
 	//PaymentEarly             string
 	ResolverConnectionCfgs []multiresolver.ConnectionConfig
 	GatewayMode            bool
-	BootnodeMode           bool
 	//SwapEndpoint             string
 	//SwapFactoryAddress       string
 	//SwapInitialDeposit       string
 	//SwapEnable               bool
-	FullNode          bool
+	NodeMode          aurora.Model
 	KadBinMaxPeers    int
 	LightNodeMaxPeers int
 }
@@ -139,8 +140,7 @@ func NewAurora(addr string, bosonAddress boson.Address, publicKey ecdsa.PublicKe
 			NATAddr:        o.NATAddr,
 			EnableWS:       o.EnableWS,
 			EnableQUIC:     o.EnableQUIC,
-			FullNode:       o.FullNode,
-			BootNodeMode:   o.BootnodeMode,
+			NodeMode:       o.NodeMode,
 			WelcomeMessage: o.WelcomeMessage,
 			LightNodeLimit: o.LightNodeMaxPeers,
 		})
@@ -245,14 +245,15 @@ func NewAurora(addr string, bosonAddress boson.Address, publicKey ecdsa.PublicKe
 
 	addressBook := addressbook.New(stateStore)
 	lightNodes := lightnode.NewContainer(bosonAddress)
+	bootNodes := bootnode.NewContainer(bosonAddress)
 
-	p2ps, err := libp2p.New(p2pCtx, signer, networkID, bosonAddress, addr, addressBook, stateStore, lightNodes, logger, tracer, libp2p.Options{
+	p2ps, err := libp2p.New(p2pCtx, signer, networkID, bosonAddress, addr, addressBook, stateStore, lightNodes, bootNodes, logger, tracer, libp2p.Options{
 		PrivateKey:     libp2pPrivateKey,
 		NATAddr:        o.NATAddr,
 		EnableWS:       o.EnableWS,
 		EnableQUIC:     o.EnableQUIC,
 		WelcomeMessage: o.WelcomeMessage,
-		FullNode:       o.FullNode,
+		NodeMode:       o.NodeMode,
 		LightNodeLimit: o.LightNodeMaxPeers,
 	})
 	if err != nil {
@@ -368,10 +369,10 @@ func NewAurora(addr string, bosonAddress boson.Address, publicKey ecdsa.PublicKe
 		return nil, fmt.Errorf("hive service: %w", err)
 	}
 
-	kad, err := kademlia.New(bosonAddress, addressBook, hiveObj, p2ps, metricsDB, logger, kademlia.Options{
-		Bootnodes:    bootnodes,
-		BootnodeMode: o.BootnodeMode,
-		BinMaxPeers:  o.KadBinMaxPeers,
+	kad, err := kademlia.New(bosonAddress, addressBook, hiveObj, p2ps, bootNodes, metricsDB, logger, kademlia.Options{
+		Bootnodes:   bootnodes,
+		NodeMode:    o.NodeMode,
+		BinMaxPeers: o.KadBinMaxPeers,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("unable to create kademlia: %w", err)
@@ -419,7 +420,7 @@ func NewAurora(addr string, bosonAddress boson.Address, publicKey ecdsa.PublicKe
 	}
 	b.localstoreCloser = storer
 
-	retrieve := retrieval.New(bosonAddress, p2ps, route, storer, o.FullNode, logger, tracer)
+	retrieve := retrieval.New(bosonAddress, p2ps, route, storer, o.NodeMode.IsFull(), logger, tracer)
 	if err = p2ps.AddProtocol(retrieve.Protocol()); err != nil {
 		return nil, fmt.Errorf("retrieval service: %w", err)
 	}
@@ -486,7 +487,12 @@ func NewAurora(addr string, bosonAddress boson.Address, publicKey ecdsa.PublicKe
 		debugAPIService.MustRegisterMetrics(pingPong.Metrics()...)
 		//debugAPIService.MustRegisterMetrics(acc.Metrics()...)
 		debugAPIService.MustRegisterMetrics(storer.Metrics()...)
-
+		debugAPIService.MustRegisterMetrics(kad.Metrics()...)
+		debugAPIService.MustRegisterMetrics(lightNodes.Metrics()...)
+		debugAPIService.MustRegisterMetrics(bootNodes.Metrics()...)
+		debugAPIService.MustRegisterMetrics(hiveObj.Metrics()...)
+		debugAPIService.MustRegisterMetrics(chunkInfo.Metrics()...)
+		debugAPIService.MustRegisterMetrics(route.Metrics()...)
 		debugAPIService.MustRegisterMetrics(retrieve.Metrics()...)
 
 		if apiService != nil {
@@ -501,7 +507,7 @@ func NewAurora(addr string, bosonAddress boson.Address, publicKey ecdsa.PublicKe
 		//}
 
 		// inject dependencies and configure full debug api http path routes
-		debugAPIService.Configure(p2ps, pingPong, kad, lightNodes, storer, route, chunkInfo, retrieve)
+		debugAPIService.Configure(p2ps, pingPong, kad, lightNodes, bootNodes, storer, route, chunkInfo, retrieve)
 	}
 
 	if err := kad.Start(p2pCtx); err != nil {

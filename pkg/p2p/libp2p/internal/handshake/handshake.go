@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/gauss-project/aurorafs/pkg/bitvector"
 	"github.com/gauss-project/aurorafs/pkg/topology/lightnode"
 	"sync"
 	"sync/atomic"
@@ -33,7 +32,6 @@ const (
 	// MaxWelcomeMessageLength is maximum number of characters allowed in the welcome message.
 	MaxWelcomeMessageLength = 140
 	handshakeTimeout        = 15 * time.Second
-	bitVictorNodeModeLen    = 1
 )
 
 var (
@@ -83,18 +81,17 @@ type Service struct {
 }
 
 // New creates a new handshake Service.
-func New(signer crypto.Signer, advertisableAddresser AdvertisableAddressResolver, overlay boson.Address, networkID uint64, fullNode bool, welcomeMessage string, ownPeerID libp2ppeer.ID, logger logging.Logger, lightNodes *lightnode.Container, lightLimit int) (*Service, error) {
+func New(signer crypto.Signer, advertisableAddresser AdvertisableAddressResolver, overlay boson.Address, networkID uint64, nodeMode aurora.Model, welcomeMessage string, ownPeerID libp2ppeer.ID, logger logging.Logger, lightNodes *lightnode.Container, lightLimit int) (*Service, error) {
 	if len(welcomeMessage) > MaxWelcomeMessageLength {
 		return nil, ErrWelcomeMessageLength
 	}
 
-	bv, _ := bitvector.New(bitVictorNodeModeLen)
 	svc := &Service{
 		signer:                signer,
 		advertisableAddresser: advertisableAddresser,
 		overlay:               overlay,
 		networkID:             networkID,
-		nodeMode:              aurora.Model{Bv: bv},
+		nodeMode:              nodeMode,
 		receivedHandshakes:    make(map[libp2ppeer.ID]struct{}),
 		logger:                logger,
 		libp2pID:              ownPeerID,
@@ -105,11 +102,6 @@ func New(signer crypto.Signer, advertisableAddresser AdvertisableAddressResolver
 	}
 	svc.welcomeMessage.Store(welcomeMessage)
 
-	if fullNode {
-		svc.nodeMode.Bv.Set(aurora.FullNode)
-	} else {
-		svc.nodeMode.Bv.Set(aurora.LightNode)
-	}
 	return svc, nil
 }
 
@@ -203,10 +195,13 @@ func (s *Service) Handshake(ctx context.Context, stream p2p.Stream, peerMultiadd
 		s.logger.Infof("greeting \"%s\" from peer: %s", resp.Ack.WelcomeMessage, remoteBzzAddress.Overlay.String())
 	}
 
-	bv, _ := bitvector.NewFromBytes(resp.Ack.NodeMode, bitVictorNodeModeLen)
+	md, err := aurora.NewModelFromBytes(resp.Ack.NodeMode)
+	if err != nil {
+		return nil, aurora.ErrInvalidNodeMode
+	}
 	return &aurora.AddressInfo{
 		Address:  remoteBzzAddress,
-		NodeMode: aurora.Model{Bv: bv},
+		NodeMode: md,
 	}, nil
 }
 
@@ -294,13 +289,15 @@ func (s *Service) Handle(ctx context.Context, stream p2p.Stream, remoteMultiaddr
 		return nil, ErrNetworkIDIncompatible
 	}
 
+	mode, err := aurora.NewModelFromBytes(ack.NodeMode)
+	if err != nil {
+		return nil, aurora.ErrInvalidNodeMode
+	}
 	overlay := boson.NewAddress(ack.Address.Overlay)
-	bv, _ := bitvector.NewFromBytes(ack.NodeMode, bitVictorNodeModeLen)
-	mode := aurora.Model{Bv: bv}
 
 	if s.picker != nil {
 		if mode.IsFull() {
-			if !s.picker.Pick(p2p.Peer{Address: overlay, FullNode: mode.IsFull()}) {
+			if !s.picker.Pick(p2p.Peer{Address: overlay, Mode: mode}) {
 				return nil, ErrPicker
 			}
 		} else {

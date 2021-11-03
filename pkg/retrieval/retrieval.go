@@ -385,7 +385,7 @@ func (s *Service) handler(ctx context.Context, p p2p.Peer, stream p2p.Stream) (e
 		return fmt.Errorf("write delivery: %w peer %s", err, p.Address.String())
 	}
 
-	if s.chunkinfo != nil && p.FullNode {
+	if s.chunkinfo != nil && p.Mode.IsFull() {
 		s.logger.Tracef("retrieval: chunk %s transfer to node %s", chunkAddr, p.Address)
 		err := s.chunkinfo.OnChunkTransferred(chunkAddr, rootAddr, p.Address, targetAddr)
 		if err != nil {

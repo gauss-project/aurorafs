@@ -165,7 +165,9 @@ func (s *Service) onFindNode(ctx context.Context, peer p2p.Peer, stream p2p.Stre
 
 	_ = s.config.Kad.EachPeer(addrFunc)
 	limit = int(req.Limit)
-	_ = s.config.Kad.EachKnownPeer(addrFunc)
+	if len(resp.Peers) < limit {
+		_ = s.config.Kad.EachKnownPeer(addrFunc)
+	}
 
 	s.metrics.OnFindNodePeers.Add(float64(len(resp.Peers)))
 
@@ -207,6 +209,7 @@ func (s *Service) DoFindNode(ctx context.Context, target, peer boson.Address, po
 		return
 	}
 
+	s.logger.Tracef("hive2: result peers %d from %s", len(result.Peers), peer)
 	s.metrics.DoFindNodePeers.Add(float64(len(result.Peers)))
 
 	res = make(chan boson.Address, 1)
@@ -299,7 +302,7 @@ func (s *Service) checkAndAddPeers(ctx context.Context, result resultChan) {
 			if s.addPeersHandler != nil {
 				s.addPeersHandler(auroraAddress.Overlay)
 			}
-			<-time.After(time.Millisecond * 200)
+			<-time.After(time.Millisecond * 500)
 			result.syncResult <- auroraAddress.Overlay
 
 		}(p)

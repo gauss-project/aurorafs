@@ -1,10 +1,10 @@
 package pslice
 
 import (
+	"github.com/gauss-project/aurorafs/pkg/topology/model"
 	"sync"
 
 	"github.com/gauss-project/aurorafs/pkg/boson"
-	"github.com/gauss-project/aurorafs/pkg/topology"
 )
 
 // PSlice maintains a list of addresses, indexing them by their different proximity orders.
@@ -74,7 +74,7 @@ func (s *PSlice) Add(addrs ...boson.Address) {
 }
 
 // iterates over all peers from deepest bin to shallowest.
-func (s *PSlice) EachBin(pf topology.EachPeerFunc) error {
+func (s *PSlice) EachBin(pf model.EachPeerFunc) error {
 
 	for i := s.maxBins - 1; i >= 0; i-- {
 
@@ -100,7 +100,7 @@ func (s *PSlice) EachBin(pf topology.EachPeerFunc) error {
 }
 
 // EachBinRev iterates over all peers from shallowest bin to deepest.
-func (s *PSlice) EachBinRev(pf topology.EachPeerFunc) error {
+func (s *PSlice) EachBinRev(pf model.EachPeerFunc) error {
 
 	for i := 0; i < s.maxBins; i++ {
 
