@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	au "github.com/gauss-project/aurorafs"
+	"github.com/gauss-project/aurorafs/pkg/topology/bootnode"
 	"net"
 	"runtime"
 	"sync"
@@ -73,6 +74,7 @@ type Service struct {
 	ready             chan struct{}
 	halt              chan struct{}
 	lightNodes        lightnode.LightNodes
+	bootNodes         bootnode.BootNodes
 	lightNodeLimit    int
 	protocolsmu       sync.RWMutex
 }
@@ -82,14 +84,14 @@ type Options struct {
 	NATAddr        string
 	EnableWS       bool
 	EnableQUIC     bool
-	FullNode       bool
+	NodeMode       aurora.Model
 	LightNodeLimit int
 	WelcomeMessage string
 	Transaction    []byte
 	hostFactory    func(context.Context, ...libp2p.Option) (host.Host, error)
 }
 
-func New(ctx context.Context, signer beecrypto.Signer, networkID uint64, overlay boson.Address, addr string, ab addressbook.Putter, storer storage.StateStorer, lightNodes *lightnode.Container, logger logging.Logger, tracer *tracing.Tracer, o Options) (*Service, error) {
+func New(ctx context.Context, signer beecrypto.Signer, networkID uint64, overlay boson.Address, addr string, ab addressbook.Putter, storer storage.StateStorer, lightNodes *lightnode.Container, bootNodes *bootnode.Container, logger logging.Logger, tracer *tracing.Tracer, o Options) (*Service, error) {
 	hostObj, port, err := net.SplitHostPort(addr)
 	if err != nil {
 		return nil, fmt.Errorf("address: %w", err)
@@ -218,7 +220,7 @@ func New(ctx context.Context, signer beecrypto.Signer, networkID uint64, overlay
 		o.LightNodeLimit = lightnode.DefaultLightNodeLimit
 	}
 
-	handshakeService, err := handshake.New(signer, advertisableAddresser, overlay, networkID, o.FullNode, o.WelcomeMessage, h.ID(), logger, lightNodes, o.LightNodeLimit)
+	handshakeService, err := handshake.New(signer, advertisableAddresser, overlay, networkID, o.NodeMode, o.WelcomeMessage, h.ID(), logger, lightNodes, o.LightNodeLimit)
 	if err != nil {
 		return nil, fmt.Errorf("handshake service: %w", err)
 	}
@@ -253,6 +255,7 @@ func New(ctx context.Context, signer beecrypto.Signer, networkID uint64, overlay
 		connectionBreaker: breaker.NewBreaker(breaker.Options{}), // use default options
 		ready:             make(chan struct{}),
 		halt:              make(chan struct{}),
+		bootNodes:         bootNodes,
 		lightNodes:        lightNodes,
 		lightNodeLimit:    o.LightNodeLimit,
 	}
@@ -317,7 +320,7 @@ func (s *Service) handleIncoming(stream network.Stream) {
 		return
 	}
 
-	if exists := s.peers.addIfNotExists(stream.Conn(), overlay, i.NodeMode.IsFull()); exists {
+	if exists := s.peers.addIfNotExists(stream.Conn(), overlay, i.NodeMode); exists {
 		s.logger.Debugf("stream handler: peer %s already exists", overlay)
 		if err = handshakeStream.FullClose(); err != nil {
 			s.logger.Debugf("stream handler: could not close stream %s: %v", overlay, err)
@@ -344,7 +347,7 @@ func (s *Service) handleIncoming(stream network.Stream) {
 		}
 	}
 
-	peer := p2p.Peer{Address: overlay, FullNode: i.NodeMode.IsFull()}
+	peer := p2p.Peer{Address: overlay, Mode: i.NodeMode}
 
 	s.protocolsmu.RLock()
 	for _, tn := range s.protocols {
@@ -360,7 +363,7 @@ func (s *Service) handleIncoming(stream network.Stream) {
 	s.protocolsmu.RUnlock()
 
 	if s.notifier != nil {
-		if !i.NodeMode.IsFull() {
+		if !i.NodeMode.IsFull() && s.lightNodes != nil {
 			s.lightNodes.Connected(s.ctx, peer)
 			// light node announces explicitly
 			if err := s.notifier.Announce(s.ctx, peer.Address, i.NodeMode.IsFull()); err != nil {
@@ -382,31 +385,35 @@ func (s *Service) handleIncoming(stream network.Stream) {
 				}
 			}
 		} else {
-			if err := s.notifier.Connected(s.ctx, peer, false); err != nil {
-				s.logger.Debugf("stream handler: notifier.Connected: peer disconnected: %s: %v", i.Address.Overlay, err)
-				// note: this cannot be unit tested since the node
-				// waiting on handshakeStream.FullClose() on the other side
-				// might actually get a stream reset when we disconnect here
-				// resulting in a flaky response from the Connect method on
-				// the other side.
-				// that is why the Pick method has been added to the notifier
-				// interface, in addition to the possibility of deciding whether
-				// a peer connection is wanted prior to adding the peer to the
-				// peer registry and starting the protocols.
-				_ = s.Disconnect(overlay, "unable to signal connection notifier")
-				return
+			if i.NodeMode.IsBootNode() && s.bootNodes != nil {
+				s.bootNodes.Connected(s.ctx, peer)
+			} else {
+				if err := s.notifier.Connected(s.ctx, peer, false); err != nil {
+					s.logger.Debugf("stream handler: notifier.Connected: peer disconnected: %s: %v", i.Address.Overlay, err)
+					// note: this cannot be unit tested since the node
+					// waiting on handshakeStream.FullClose() on the other side
+					// might actually get a stream reset when we disconnect here
+					// resulting in a flaky response from the Connect method on
+					// the other side.
+					// that is why the Pick method has been added to the notifier
+					// interface, in addition to the possibility of deciding whether
+					// a peer connection is wanted prior to adding the peer to the
+					// peer registry and starting the protocols.
+					_ = s.Disconnect(overlay, "unable to signal connection notifier")
+					return
+				}
+				// when a full node connects, we gossip about it to the
+				// light nodes so that they can also have a chance at building
+				// a solid topology.
+				_ = s.lightNodes.EachPeer(func(addr boson.Address, _ uint8) (bool, bool, error) {
+					go func(addressee, peer boson.Address, fullnode bool) {
+						if err := s.notifier.AnnounceTo(s.ctx, addressee, peer, fullnode); err != nil {
+							s.logger.Debugf("stream handler: notifier.Announce to light node %s %s: %v", addressee.String(), peer.String(), err)
+						}
+					}(addr, peer.Address, i.NodeMode.IsFull())
+					return false, false, nil
+				})
 			}
-			// when a full node connects, we gossip about it to the
-			// light nodes so that they can also have a chance at building
-			// a solid topology.
-			_ = s.lightNodes.EachPeer(func(addr boson.Address, _ uint8) (bool, bool, error) {
-				go func(addressee, peer boson.Address, fullnode bool) {
-					if err := s.notifier.AnnounceTo(s.ctx, addressee, peer, fullnode); err != nil {
-						s.logger.Debugf("stream handler: notifier.Announce to light node %s %s: %v", addressee.String(), peer.String(), err)
-					}
-				}(addr, peer.Address, i.NodeMode.IsFull())
-				return false, false, nil
-			})
 		}
 	}
 
@@ -446,7 +453,7 @@ func (s *Service) AddProtocol(p p2p.ProtocolSpec) (err error) {
 				s.logger.Debugf("overlay address for peer %q not found", peerID)
 				return
 			}
-			full, found := s.peers.fullnode(peerID)
+			md, found := s.peers.mode(peerID)
 			if !found {
 				_ = streamlibp2p.Reset()
 				s.logger.Debugf("fullnode info for peer %q not found", peerID)
@@ -480,7 +487,7 @@ func (s *Service) AddProtocol(p p2p.ProtocolSpec) (err error) {
 			logger := tracing.NewLoggerWithTraceID(ctx, s.logger)
 
 			s.metrics.HandledStreamCount.Inc()
-			if err := ss.Handler(ctx, p2p.Peer{Address: overlay, FullNode: full}, stream); err != nil {
+			if err := ss.Handler(ctx, p2p.Peer{Address: overlay, Mode: md}, stream); err != nil {
 				var de *p2p.DisconnectError
 				if errors.As(err, &de) {
 					logger.Tracef("libp2p handler(%s): disconnecting %s", p.Name, overlay.String())
@@ -565,7 +572,7 @@ func buildUnderlayAddress(addr ma.Multiaddr, peerID libp2ppeer.ID) (ma.Multiaddr
 	return addr.Encapsulate(hostAddr), nil
 }
 
-func (s *Service) Connect(ctx context.Context, addr ma.Multiaddr) (address *aurora.Address, err error) {
+func (s *Service) Connect(ctx context.Context, addr ma.Multiaddr) (peer *p2p.Peer, err error) {
 	// Extract the peer ID from the multiaddr.
 	info, err := libp2ppeer.AddrInfoFromP2pAddr(addr)
 	if err != nil {
@@ -579,12 +586,8 @@ func (s *Service) Connect(ctx context.Context, addr ma.Multiaddr) (address *auro
 
 	remoteAddr := addr.Decapsulate(hostAddr)
 
-	if overlay, found := s.peers.isConnected(info.ID, remoteAddr); found {
-		address = &aurora.Address{
-			Overlay:  overlay,
-			Underlay: addr,
-		}
-		return address, p2p.ErrAlreadyConnected
+	if peer, found := s.peers.isConnected(info.ID, remoteAddr); found {
+		return peer, p2p.ErrAlreadyConnected
 	}
 
 	if err := s.connectionBreaker.Execute(func() error { return s.host.Connect(ctx, *info) }); err != nil {
@@ -633,13 +636,16 @@ func (s *Service) Connect(ctx context.Context, addr ma.Multiaddr) (address *auro
 		return nil, fmt.Errorf("peer blocklisted")
 	}
 
-	if exists := s.peers.addIfNotExists(stream.Conn(), overlay, i.NodeMode.IsFull()); exists {
+	if exists := s.peers.addIfNotExists(stream.Conn(), overlay, i.NodeMode); exists {
 		if err := handshakeStream.FullClose(); err != nil {
 			_ = s.Disconnect(overlay, "failed closing handshake stream after connect")
 			return nil, fmt.Errorf("peer exists, full close: %w", err)
 		}
 
-		return i.Address, nil
+		return &p2p.Peer{
+			Address: overlay,
+			Mode:    i.NodeMode,
+		}, nil
 	}
 
 	if err := handshakeStream.FullClose(); err != nil {
@@ -658,7 +664,7 @@ func (s *Service) Connect(ctx context.Context, addr ma.Multiaddr) (address *auro
 	s.protocolsmu.RLock()
 	for _, tn := range s.protocols {
 		if tn.ConnectOut != nil {
-			if err := tn.ConnectOut(ctx, p2p.Peer{Address: overlay, FullNode: i.NodeMode.IsFull()}); err != nil {
+			if err := tn.ConnectOut(ctx, p2p.Peer{Address: overlay, Mode: i.NodeMode}); err != nil {
 				s.logger.Debugf("connectOut: protocol: %s, version:%s, peer: %s: %v", tn.Name, tn.Version, overlay, err)
 				_ = s.Disconnect(overlay, "failed to process outbound connection notifier")
 				s.protocolsmu.RUnlock()
@@ -673,13 +679,20 @@ func (s *Service) Connect(ctx context.Context, addr ma.Multiaddr) (address *auro
 		return nil, fmt.Errorf("libp2p connect: peer %s does not exist %w", overlay, p2p.ErrPeerNotFound)
 	}
 
+	if i.NodeMode.IsBootNode() {
+		s.bootNodes.Connected(ctx, p2p.Peer{Address: overlay, Mode: i.NodeMode})
+	}
+
 	s.metrics.CreatedConnectionCount.Inc()
 
 	peerUserAgent := appendSpace(s.peerUserAgent(ctx, info.ID))
 
 	s.logger.Debugf("successfully connected to peer %s%s%s (outbound)", i.Address.ShortString(), i.LightString(), peerUserAgent)
 	s.logger.Infof("successfully connected to peer %s%s%s (outbound)", overlay, i.LightString(), peerUserAgent)
-	return i.Address, nil
+	return &p2p.Peer{
+		Address: overlay,
+		Mode:    i.NodeMode,
+	}, nil
 }
 
 func (s *Service) Disconnect(overlay boson.Address, reason string) error {
@@ -692,7 +705,7 @@ func (s *Service) Disconnect(overlay boson.Address, reason string) error {
 
 	_ = s.host.Network().ClosePeer(peerID)
 
-	peer := p2p.Peer{Address: overlay, FullNode: full}
+	peer := p2p.Peer{Address: overlay, Mode: full}
 
 	s.protocolsmu.RLock()
 	for _, tn := range s.protocols {
@@ -710,6 +723,9 @@ func (s *Service) Disconnect(overlay boson.Address, reason string) error {
 	if s.lightNodes != nil {
 		s.lightNodes.Disconnected(peer)
 	}
+	if s.bootNodes != nil {
+		s.bootNodes.Disconnected(peer)
+	}
 
 	if !found {
 		s.logger.Debugf("libp2p disconnect: peer %s not found", overlay)
@@ -725,9 +741,9 @@ func (s *Service) disconnected(address boson.Address) {
 	peerID, found := s.peers.peerID(address)
 	if found {
 		// peerID might not always be found on shutdown
-		full, found := s.peers.fullnode(peerID)
+		md, found := s.peers.mode(peerID)
 		if found {
-			peer.FullNode = full
+			peer.Mode = md
 		}
 	}
 	s.protocolsmu.RLock()
@@ -746,6 +762,9 @@ func (s *Service) disconnected(address boson.Address) {
 	}
 	if s.lightNodes != nil {
 		s.lightNodes.Disconnected(peer)
+	}
+	if s.bootNodes != nil {
+		s.bootNodes.Disconnected(peer)
 	}
 }
 

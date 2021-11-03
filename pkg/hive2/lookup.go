@@ -4,7 +4,6 @@ import (
 	"context"
 	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/boson/test"
-	"go.uber.org/atomic"
 	"time"
 )
 
@@ -35,13 +34,19 @@ func (s *Service) discover() {
 
 func (s *Service) discoverWork(peers ...boson.Address) {
 	start := time.Now()
-	s.logger.Debugf("hive2 discover start...")
-	defer s.logger.Debugf("hive2 discover took %s to finish", time.Since(start))
+	if len(peers) > 0 {
+		s.logger.Infof("hive2: discover start to %s", peers[0])
+	} else {
+		s.logger.Infof("hive2: discover start to default")
+	}
+	s.logger.Tracef("hive2: discover run self %s", s.config.Base)
 	newLookup(s.config.Base, s).run(peers...)
 	for i := 0; i < 3; i++ {
 		dest := test.RandomAddress()
+		s.logger.Tracef("hive2: discover run random %s", dest)
 		newLookup(dest, s).run(peers...)
 	}
+	s.logger.Infof("hive2: discover end for took %s", time.Since(start))
 }
 
 // NotifyDiscoverWork notifies hive2 discover work.
@@ -57,8 +62,7 @@ func (s *Service) NotifyDiscoverWork(peers ...boson.Address) {
 type lookup struct {
 	h2     *Service
 	target boson.Address
-	total  atomic.Int32
-	stop   chan bool
+	total  int32
 	find   []boson.Address
 	asked  map[string]bool
 }
@@ -67,7 +71,6 @@ func newLookup(target boson.Address, s *Service) *lookup {
 	return &lookup{
 		target: target,
 		h2:     s,
-		stop:   make(chan bool, 1),
 		asked:  make(map[string]bool),
 	}
 }
@@ -75,20 +78,13 @@ func newLookup(target boson.Address, s *Service) *lookup {
 func (l *lookup) run(forward ...boson.Address) {
 	l.findNode(forward...)
 	for {
-		select {
-		case <-l.stop:
+		<-time.After(time.Millisecond * 100)
+		if l.total >= findNodePeerLimit || len(l.find) == 0 {
 			return
-		default:
-			<-time.After(time.Millisecond * 50)
-			if len(l.find) == 0 {
-				return
-			}
-			list := l.find
-			l.find = make([]boson.Address, 0)
-			for _, node := range list {
-				l.query(node)
-			}
 		}
+		list := l.find
+		l.find = make([]boson.Address, 0)
+		l.queryLimit(list)
 	}
 }
 
@@ -104,8 +100,15 @@ func (l *lookup) findNode(forward ...boson.Address) {
 			return
 		}
 	}
+	l.queryLimit(peers)
+}
+
+func (l *lookup) queryLimit(peers []boson.Address) {
 	for _, node := range peers {
 		l.query(node)
+		if l.total >= findNodePeerLimit {
+			return
+		}
 	}
 }
 
@@ -117,24 +120,27 @@ func (l *lookup) query(node boson.Address) {
 			posReq = append(posReq, v)
 		}
 	}
+	l.h2.logger.Tracef("hive2: query target=%s pos=%v limit=%d node=%s", l.target, posReq, findNodePeerLimit-l.total, node)
 	if len(posReq) > 0 {
-		ch, err := l.h2.DoFindNode(context.Background(), l.target, node, posReq, findNodePeerLimit-l.total.Load())
+		ch, err := l.h2.DoFindNode(context.Background(), l.target, node, posReq, findNodePeerLimit-l.total)
 		if err != nil {
 			return
 		}
 		for {
 			addr := <-ch
 			if addr.IsZero() {
+				l.h2.logger.Tracef("hive2: query received peers %d", l.total)
 				return
 			}
 			if _, ok := l.asked[addr.String()]; ok {
+				l.h2.logger.Tracef("hive2: query asked %s", addr)
 				continue
 			}
 			l.asked[addr.String()] = true
 			l.find = append(l.find, addr)
+			l.total++
 
-			if l.total.Inc() >= findNodePeerLimit {
-				l.stop <- true
+			if l.total >= findNodePeerLimit {
 				return
 			}
 		}

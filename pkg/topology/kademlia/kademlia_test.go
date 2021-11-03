@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/gauss-project/aurorafs/pkg/topology/model"
 	"io"
 	"math/rand"
 	"reflect"
@@ -492,7 +493,7 @@ func TestOversaturationBootnode(t *testing.T) {
 
 	var (
 		conns                    int32 // how many connect calls were made to the p2p mock
-		base, kad, ab, _, signer = newTestKademlia(t, &conns, nil, kademlia.Options{BootnodeMode: true})
+		base, kad, ab, _, signer = newTestKademlia(t, &conns, nil, kademlia.Options{NodeMode: aurora.NewModel().SetMode(aurora.BootNode)})
 	)
 	kad.SetRadius(boson.MaxPO) // don't use radius for checks
 
@@ -553,7 +554,7 @@ func TestBootnodeMaxConnections(t *testing.T) {
 
 	var (
 		conns                    int32 // how many connect calls were made to the p2p mock
-		base, kad, ab, _, signer = newTestKademlia(t, &conns, nil, kademlia.Options{BootnodeMode: true})
+		base, kad, ab, _, signer = newTestKademlia(t, &conns, nil, kademlia.Options{NodeMode: aurora.NewModel().SetMode(aurora.BootNode)})
 	)
 	kad.SetRadius(boson.MaxPO) // don't use radius for checks
 
@@ -888,7 +889,7 @@ func TestClosestPeer(t *testing.T) {
 	disc := mock.NewDiscovery()
 	ab := addressbook.New(mockstate.NewStateStore())
 
-	kad, err := kademlia.New(base, ab, disc, p2pMock(ab, nil, nil, nil), metricsDB, logger, kademlia.Options{})
+	kad, err := kademlia.New(base, ab, disc, p2pMock(ab, nil, nil, nil), nil, metricsDB, logger, kademlia.Options{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1109,7 +1110,7 @@ func TestSnapshot(t *testing.T) {
 	}
 }
 
-func getBinPopulation(bins *topology.KadBins, po uint8) uint64 {
+func getBinPopulation(bins *model.KadBins, po uint8) uint64 {
 	rv := reflect.ValueOf(bins)
 	bin := fmt.Sprintf("Bin%d", po)
 	b0 := reflect.Indirect(rv).FieldByName(bin)
@@ -1417,9 +1418,12 @@ func newTestKademliaWithAddrDiscovery(
 		signer = beeCrypto.NewDefaultSigner(pk)                      // signer
 		ab     = addressbook.New(mockstate.NewStateStore())          // address book
 		p2p    = p2pMock(ab, signer, connCounter, failedConnCounter) // p2p mock
-		logger = logging.New(io.Discard, 0)                      // logger
+		logger = logging.New(io.Discard, 0)                          // logger
 	)
-	kad, err := kademlia.New(base, ab, disc, p2p, metricsDB, logger, kadOpts)
+	if kadOpts.NodeMode.Bv == nil {
+		kadOpts.NodeMode = aurora.NewModel().SetMode(aurora.FullNode)
+	}
+	kad, err := kademlia.New(base, ab, disc, p2p, nil, metricsDB, logger, kadOpts)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1451,7 +1455,7 @@ func newTestKademliaWithDiscovery(
 
 func p2pMock(ab addressbook.Interface, signer beeCrypto.Signer, counter, failedCounter *int32) p2p.Service {
 	p2ps := p2pmock.New(
-		p2pmock.WithConnectFunc(func(ctx context.Context, addr ma.Multiaddr) (*aurora.Address, error) {
+		p2pmock.WithConnectFunc(func(ctx context.Context, addr ma.Multiaddr) (*p2p.Peer, error) {
 			if addr.Equal(nonConnectableAddress) {
 				_ = atomic.AddInt32(failedCounter, 1)
 				return nil, errors.New("non reachable node")
@@ -1467,7 +1471,10 @@ func p2pMock(ab addressbook.Interface, signer beeCrypto.Signer, counter, failedC
 
 			for _, a := range addresses {
 				if a.Underlay.Equal(addr) {
-					return &a, nil
+					return &p2p.Peer{
+						Address: a.Overlay,
+						Mode:    aurora.NewModel().SetMode(aurora.FullNode),
+					}, nil
 				}
 			}
 
@@ -1481,7 +1488,10 @@ func p2pMock(ab addressbook.Interface, signer beeCrypto.Signer, counter, failedC
 				return nil, err
 			}
 
-			return auroraAddr, nil
+			return &p2p.Peer{
+				Address: auroraAddr.Overlay,
+				Mode:    aurora.NewModel().SetMode(aurora.FullNode),
+			}, nil
 		}),
 		p2pmock.WithDisconnectFunc(func(boson.Address, string) error {
 			if counter != nil {

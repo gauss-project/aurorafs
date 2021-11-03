@@ -1,4 +1,4 @@
-// Package metrics provides service for collecting various metrics about peers.
+// Package waitnext Package metrics provides service for collecting various metrics about peers.
 // It is intended to be used with the kademlia where the metrics are collected.
 package waitnext
 

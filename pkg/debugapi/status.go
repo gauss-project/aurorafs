@@ -18,7 +18,7 @@ func (s *Service) statusHandler(w http.ResponseWriter, r *http.Request) {
 	jsonhttp.OK(w, statusResponse{
 		Status:       "ok",
 		Version:      aufs.Version,
-		FullNode:     s.nodeOptions.FullNode,
-		BootNodeMode: s.nodeOptions.BootNodeMode,
+		FullNode:     s.nodeOptions.NodeMode.IsFull(),
+		BootNodeMode: s.nodeOptions.NodeMode.IsBootNode(),
 	})
 }

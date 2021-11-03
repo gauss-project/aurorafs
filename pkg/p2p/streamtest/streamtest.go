@@ -3,6 +3,7 @@ package streamtest
 import (
 	"context"
 	"errors"
+	"github.com/gauss-project/aurorafs/pkg/aurora"
 	"io"
 	"sync"
 	"testing"
@@ -28,7 +29,7 @@ var (
 
 type Recorder struct {
 	base               boson.Address
-	fullNode           bool
+	nodeMode           aurora.Model
 	records            map[string][]*Record
 	recordsMu          sync.Mutex
 	protocols          []p2p.ProtocolSpec
@@ -64,7 +65,7 @@ func WithBaseAddr(a boson.Address) Option {
 
 func WithLightNode() Option {
 	return optionFunc(func(r *Recorder) {
-		r.fullNode = false
+		r.nodeMode = aurora.NewModel()
 	})
 }
 
@@ -83,7 +84,7 @@ func WithPingErr(pingErr func(ma.Multiaddr) (time.Duration, error)) Option {
 func New(opts ...Option) *Recorder {
 	r := &Recorder{
 		records:  make(map[string][]*Record),
-		fullNode: true,
+		nodeMode: aurora.NewModel().SetMode(aurora.FullNode),
 	}
 
 	r.middlewares = append(r.middlewares, noopMiddleware)
@@ -142,7 +143,7 @@ func (r *Recorder) NewStream(ctx context.Context, addr boson.Address, h p2p.Head
 		// pass a new context to handler,
 		streamIn.responseHeaders = streamOut.headers
 		// do not cancel it with the client stream context
-		err := handler(context.Background(), p2p.Peer{Address: r.base, FullNode: r.fullNode}, streamIn)
+		err := handler(context.Background(), p2p.Peer{Address: r.base, Mode: r.nodeMode}, streamIn)
 		if err != nil && err != io.EOF {
 			record.setErr(err)
 		}

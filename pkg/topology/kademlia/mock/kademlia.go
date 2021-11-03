@@ -2,11 +2,11 @@ package mock
 
 import (
 	"context"
+	"github.com/gauss-project/aurorafs/pkg/topology/model"
 	"sync"
 
 	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/p2p"
-	"github.com/gauss-project/aurorafs/pkg/topology"
 )
 
 type AddrTuple struct {
@@ -69,16 +69,16 @@ func (m *Mock) IsWithinDepth(adr boson.Address) bool {
 	panic("not implemented") // TODO: Implement
 }
 
-func (m *Mock) EachNeighbor(topology.EachPeerFunc) error {
+func (m *Mock) EachNeighbor(model.EachPeerFunc) error {
 	panic("not implemented") // TODO: Implement
 }
 
-func (m *Mock) EachNeighborRev(topology.EachPeerFunc) error {
+func (m *Mock) EachNeighborRev(model.EachPeerFunc) error {
 	panic("not implemented") // TODO: Implement
 }
 
 // EachPeer iterates from closest bin to farthest
-func (m *Mock) EachPeer(f topology.EachPeerFunc) error {
+func (m *Mock) EachPeer(f model.EachPeerFunc) error {
 	m.mtx.Lock()
 	defer m.mtx.Unlock()
 
@@ -95,7 +95,7 @@ func (m *Mock) EachPeer(f topology.EachPeerFunc) error {
 }
 
 // EachPeerRev iterates from farthest bin to closest
-func (m *Mock) EachPeerRev(f topology.EachPeerFunc) error {
+func (m *Mock) EachPeerRev(f model.EachPeerFunc) error {
 	m.mtx.Lock()
 	defer m.mtx.Unlock()
 	for _, v := range m.eachPeerRev {
@@ -199,7 +199,7 @@ func (m *Mock) ResetPeers() {
 func (m *Mock) Halt()        {}
 func (m *Mock) Close() error { return nil }
 
-func (m *Mock) Snapshot() *topology.KadParams {
+func (m *Mock) Snapshot() *model.KadParams {
 	panic("not implemented") // TODO: Implement
 }
 

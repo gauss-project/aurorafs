@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/ecdsa"
+	"github.com/gauss-project/aurorafs/pkg/topology/bootnode"
 	"io"
 	"sort"
 	"testing"
@@ -27,6 +28,7 @@ type libp2pServiceOpts struct {
 	MockPeerKey *ecdsa.PrivateKey
 	libp2pOpts  libp2p.Options
 	lightNodes  *lightnode.Container
+	bootNodes   *bootnode.Container
 }
 
 // newService constructs a new libp2p service.
@@ -68,9 +70,12 @@ func newService(t *testing.T, networkID uint64, o libp2pServiceOpts) (s *libp2p.
 	if o.lightNodes == nil {
 		o.lightNodes = lightnode.NewContainer(overlay)
 	}
+	if o.bootNodes == nil {
+		o.bootNodes = bootnode.NewContainer(overlay)
+	}
 	opts := o.libp2pOpts
 
-	s, err = libp2p.New(ctx, crypto.NewDefaultSigner(auroraKey), networkID, overlay, addr, o.Addressbook, statestore, o.lightNodes, o.Logger, nil, opts)
+	s, err = libp2p.New(ctx, crypto.NewDefaultSigner(auroraKey), networkID, overlay, addr, o.Addressbook, statestore, o.lightNodes, o.bootNodes, o.Logger, nil, opts)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -151,5 +156,3 @@ func serviceUnderlayAddress(t *testing.T, s *libp2p.Service) multiaddr.Multiaddr
 	}
 	return addrs[0]
 }
-
-
