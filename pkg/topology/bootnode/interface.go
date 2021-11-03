@@ -1,4 +1,4 @@
-package lightnode
+package bootnode
 
 import (
 	"context"
@@ -7,15 +7,10 @@ import (
 	"github.com/gauss-project/aurorafs/pkg/topology/model"
 )
 
-const (
-	DefaultLightNodeLimit = 100
-)
-
-type LightNodes interface {
+type BootNodes interface {
 	Connected(context.Context, p2p.Peer)
 	Disconnected(p2p.Peer)
 	Count() int
 	RandomPeer(boson.Address) (boson.Address, error)
 	EachPeer(pf model.EachPeerFunc) error
 }
-

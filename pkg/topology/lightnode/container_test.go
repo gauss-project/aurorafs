@@ -3,13 +3,13 @@ package lightnode_test
 import (
 	"context"
 	"errors"
+	"github.com/gauss-project/aurorafs/pkg/topology/model"
 	"reflect"
 	"testing"
 
 	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/boson/test"
 	"github.com/gauss-project/aurorafs/pkg/p2p"
-	"github.com/gauss-project/aurorafs/pkg/topology"
 	"github.com/gauss-project/aurorafs/pkg/topology/lightnode"
 )
 
@@ -20,7 +20,7 @@ func TestContainer(t *testing.T) {
 	t.Run("new container is empty container", func(t *testing.T) {
 		c := lightnode.NewContainer(base)
 
-		var empty topology.BinInfo
+		var empty model.BinInfo
 
 		if !reflect.DeepEqual(empty, c.PeerInfo()) {
 			t.Errorf("expected %v, got %v", empty, c.PeerInfo())

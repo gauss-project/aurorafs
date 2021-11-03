@@ -321,7 +321,6 @@ func TestTraversalFiles(t *testing.T) {
 
 			rootMtdt := map[string]string{
 				manifest.WebsiteIndexDocumentSuffixKey: filename,
-				manifest.EntryMetadataDirnameKey: filename,
 			}
 			err = fManifest.Add(ctx, "/", manifest.NewEntry(boson.ZeroAddress, rootMtdt))
 			if err != nil {

@@ -18,7 +18,7 @@ type metrics struct {
 }
 
 func newMetrics() metrics {
-	subsystem := "chunk info"
+	subsystem := "chunkinfo"
 
 	return metrics{
 		ChunkInfoRequestCounter: prometheus.NewCounter(prometheus.CounterOpts{

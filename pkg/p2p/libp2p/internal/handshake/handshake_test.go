@@ -84,22 +84,19 @@ func TestHandshake(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	bv, _ := bitvector.New(1)
-	bv.Set(aurora.FullNode)
-	nodeModel := aurora.Model{Bv: bv}
 	node1Info := aurora.AddressInfo{
 		Address:  node1BzzAddress,
-		NodeMode: nodeModel,
+		NodeMode: aurora.NewModel().SetMode(aurora.FullNode),
 	}
 	node2Info := aurora.AddressInfo{
 		Address:  node2BzzAddress,
-		NodeMode: nodeModel,
+		NodeMode: aurora.NewModel().SetMode(aurora.FullNode),
 	}
 
 	aaddresser := &AdvertisableAddresserMock{}
 
 	light := lightnode.NewContainer(node1Info.Address.Overlay)
-	handshakeService, err := handshake.New(signer1, aaddresser, node1Info.Address.Overlay, networkID, true, testWelcomeMessage, node1AddrInfo.ID, logger, light, lightnode.DefaultLightNodeLimit)
+	handshakeService, err := handshake.New(signer1, aaddresser, node1Info.Address.Overlay, networkID, aurora.NewModel().SetMode(aurora.FullNode), testWelcomeMessage, node1AddrInfo.ID, logger, light, lightnode.DefaultLightNodeLimit)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -122,7 +119,7 @@ func TestHandshake(t *testing.T) {
 					Signature: node2BzzAddress.Signature,
 				},
 				NetworkID:      networkID,
-				NodeMode:       nodeModel.Bv.Bytes(),
+				NodeMode:       node2Info.NodeMode.Bv.Bytes(),
 				WelcomeMessage: testWelcomeMessage,
 			},
 		}); err != nil {
@@ -175,7 +172,7 @@ func TestHandshake(t *testing.T) {
 
 	t.Run("Handshake - picker error", func(t *testing.T) {
 
-		handshakeService, err := handshake.New(signer1, aaddresser, node1Info.Address.Overlay, networkID, true, "", node1AddrInfo.ID, logger, light, lightnode.DefaultLightNodeLimit)
+		handshakeService, err = handshake.New(signer1, aaddresser, node1Info.Address.Overlay, networkID, aurora.NewModel().SetMode(aurora.FullNode), "", node1AddrInfo.ID, logger, light, lightnode.DefaultLightNodeLimit)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -188,22 +185,20 @@ func TestHandshake(t *testing.T) {
 		stream2 := mock.NewStream(&buffer2, &buffer1)
 
 		w := protobuf.NewWriter(stream2)
-		if err := w.WriteMsg(&pb.Syn{
+		if err = w.WriteMsg(&pb.Syn{
 			ObservedUnderlay: node1maBinary,
 		}); err != nil {
 			t.Fatal(err)
 		}
 
-		bv.Set(aurora.FullNode)
-		mode := aurora.Model{Bv: bv}
-		if err := w.WriteMsg(&pb.Ack{
+		if err = w.WriteMsg(&pb.Ack{
 			Address: &pb.BzzAddress{
 				Underlay:  node2maBinary,
 				Overlay:   node2BzzAddress.Overlay.Bytes(),
 				Signature: node2BzzAddress.Signature,
 			},
 			NetworkID: networkID,
-			NodeMode:  mode.Bv.Bytes(),
+			NodeMode:  aurora.NewModel().SetMode(aurora.FullNode).Bv.Bytes(),
 		}); err != nil {
 			t.Fatal(err)
 		}
@@ -217,7 +212,7 @@ func TestHandshake(t *testing.T) {
 
 	t.Run("Handshake - picker light error", func(t *testing.T) {
 
-		handshakeService, err := handshake.New(signer1, aaddresser, node1Info.Address.Overlay, networkID, true, "", node1AddrInfo.ID, logger, light, 0)
+		handshakeService, err = handshake.New(signer1, aaddresser, node1Info.Address.Overlay, networkID, aurora.NewModel().SetMode(aurora.FullNode), "", node1AddrInfo.ID, logger, light, 0)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -230,22 +225,20 @@ func TestHandshake(t *testing.T) {
 		stream2 := mock.NewStream(&buffer2, &buffer1)
 
 		w := protobuf.NewWriter(stream2)
-		if err := w.WriteMsg(&pb.Syn{
+		if err = w.WriteMsg(&pb.Syn{
 			ObservedUnderlay: node1maBinary,
 		}); err != nil {
 			t.Fatal(err)
 		}
-		bv.Unset(aurora.FullNode)
-		bv.Set(aurora.LightNode)
-		mode := aurora.Model{Bv: bv}
-		if err := w.WriteMsg(&pb.Ack{
+
+		if err = w.WriteMsg(&pb.Ack{
 			Address: &pb.BzzAddress{
 				Underlay:  node2maBinary,
 				Overlay:   node2BzzAddress.Overlay.Bytes(),
 				Signature: node2BzzAddress.Signature,
 			},
 			NetworkID: networkID,
-			NodeMode:  mode.Bv.Bytes(),
+			NodeMode:  aurora.NewModel().Bv.Bytes(),
 		}); err != nil {
 			t.Fatal(err)
 		}
@@ -255,15 +248,13 @@ func TestHandshake(t *testing.T) {
 		if !errors.Is(err, expectedErr) {
 			t.Fatal("expected:", expectedErr, "got:", err)
 		}
-		bv.Set(aurora.FullNode)
-		bv.Unset(aurora.LightNode)
 	})
 
 	t.Run("Handshake - welcome message too long", func(t *testing.T) {
 		const LongMessage = "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Morbi consectetur urna ut lorem sollicitudin posuere. Donec sagittis laoreet sapien."
 
 		expectedErr := handshake.ErrWelcomeMessageLength
-		_, err := handshake.New(signer1, aaddresser, node1Info.Address.Overlay, networkID, true, LongMessage, node1AddrInfo.ID, logger, light, lightnode.DefaultLightNodeLimit)
+		_, err = handshake.New(signer1, aaddresser, node1Info.Address.Overlay, networkID, aurora.NewModel().SetMode(aurora.FullNode), LongMessage, node1AddrInfo.ID, logger, light, lightnode.DefaultLightNodeLimit)
 		if err == nil || err.Error() != expectedErr.Error() {
 			t.Fatal("expected:", expectedErr, "got:", err)
 		}
@@ -343,7 +334,7 @@ func TestHandshake(t *testing.T) {
 					Signature: node2BzzAddress.Signature,
 				},
 				NetworkID: networkID,
-				NodeMode:  bv.Bytes(),
+				NodeMode:  node2Info.NodeMode.Bv.Bytes(),
 			},
 		},
 		); err != nil {
@@ -378,7 +369,7 @@ func TestHandshake(t *testing.T) {
 					Signature: node2BzzAddress.Signature,
 				},
 				NetworkID: 5,
-				NodeMode:  bv.Bytes(),
+				NodeMode:  node2Info.NodeMode.Bv.Bytes(),
 			},
 		}); err != nil {
 			t.Fatal(err)
@@ -412,7 +403,7 @@ func TestHandshake(t *testing.T) {
 					Signature: node1BzzAddress.Signature,
 				},
 				NetworkID: networkID,
-				NodeMode:  bv.Bytes(),
+				NodeMode:  node2Info.NodeMode.Bv.Bytes(),
 			},
 		}); err != nil {
 			t.Fatal(err)
@@ -452,7 +443,7 @@ func TestHandshake(t *testing.T) {
 					Signature: node2BzzAddress.Signature,
 				},
 				NetworkID: networkID,
-				NodeMode:  bv.Bytes(),
+				NodeMode:  node2Info.NodeMode.Bv.Bytes(),
 			},
 		}); err != nil {
 			t.Fatal(err)
@@ -471,7 +462,7 @@ func TestHandshake(t *testing.T) {
 	})
 
 	t.Run("Handle - OK", func(t *testing.T) {
-		handshakeService, err := handshake.New(signer1, aaddresser, node1Info.Address.Overlay, networkID, true, "", node1AddrInfo.ID, logger, light, lightnode.DefaultLightNodeLimit)
+		handshakeService, err = handshake.New(signer1, aaddresser, node1Info.Address.Overlay, networkID, aurora.NewModel().SetMode(aurora.FullNode), "", node1AddrInfo.ID, logger, light, lightnode.DefaultLightNodeLimit)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -481,20 +472,20 @@ func TestHandshake(t *testing.T) {
 		stream2 := mock.NewStream(&buffer2, &buffer1)
 
 		w := protobuf.NewWriter(stream2)
-		if err := w.WriteMsg(&pb.Syn{
+		if err = w.WriteMsg(&pb.Syn{
 			ObservedUnderlay: node1maBinary,
 		}); err != nil {
 			t.Fatal(err)
 		}
 
-		if err := w.WriteMsg(&pb.Ack{
+		if err = w.WriteMsg(&pb.Ack{
 			Address: &pb.BzzAddress{
 				Underlay:  node2maBinary,
 				Overlay:   node2BzzAddress.Overlay.Bytes(),
 				Signature: node2BzzAddress.Signature,
 			},
 			NetworkID: networkID,
-			NodeMode:  bv.Bytes(),
+			NodeMode:  node2Info.NodeMode.Bv.Bytes(),
 		}); err != nil {
 			t.Fatal(err)
 		}
@@ -508,7 +499,7 @@ func TestHandshake(t *testing.T) {
 
 		_, r := protobuf.NewWriterAndReader(stream2)
 		var got pb.SynAck
-		if err := r.ReadMsg(&got); err != nil {
+		if err = r.ReadMsg(&got); err != nil {
 			t.Fatal(err)
 		}
 
@@ -521,8 +512,10 @@ func TestHandshake(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		bv2, _ := bitvector.NewFromBytes(got.Ack.NodeMode, 1)
-		nb2 := aurora.Model{Bv: bv2}
+		nb2, err := aurora.NewModelFromBytes(got.Ack.NodeMode)
+		if err != nil {
+			t.Fatal(err)
+		}
 		testInfo(t, node1Info, aurora.AddressInfo{
 			Address:  bzzAddress,
 			NodeMode: nb2,
@@ -530,7 +523,7 @@ func TestHandshake(t *testing.T) {
 	})
 
 	t.Run("Handle - read error ", func(t *testing.T) {
-		handshakeService, err := handshake.New(signer1, aaddresser, node1Info.Address.Overlay, networkID, true, "", node1AddrInfo.ID, logger, light, lightnode.DefaultLightNodeLimit)
+		handshakeService, err = handshake.New(signer1, aaddresser, node1Info.Address.Overlay, networkID, aurora.NewModel().SetMode(aurora.FullNode), "", node1AddrInfo.ID, logger, light, lightnode.DefaultLightNodeLimit)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -549,7 +542,7 @@ func TestHandshake(t *testing.T) {
 	})
 
 	t.Run("Handle - write error ", func(t *testing.T) {
-		handshakeService, err := handshake.New(signer1, aaddresser, node1Info.Address.Overlay, networkID, true, "", node1AddrInfo.ID, logger, light, lightnode.DefaultLightNodeLimit)
+		handshakeService, err = handshake.New(signer1, aaddresser, node1Info.Address.Overlay, networkID, aurora.NewModel().SetMode(aurora.FullNode), "", node1AddrInfo.ID, logger, light, lightnode.DefaultLightNodeLimit)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -576,7 +569,7 @@ func TestHandshake(t *testing.T) {
 	})
 
 	t.Run("Handle - ack read error ", func(t *testing.T) {
-		handshakeService, err := handshake.New(signer1, aaddresser, node1Info.Address.Overlay, networkID, true, "", node1AddrInfo.ID, logger, light, lightnode.DefaultLightNodeLimit)
+		handshakeService, err = handshake.New(signer1, aaddresser, node1Info.Address.Overlay, networkID, aurora.NewModel().SetMode(aurora.FullNode), "", node1AddrInfo.ID, logger, light, lightnode.DefaultLightNodeLimit)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -605,7 +598,7 @@ func TestHandshake(t *testing.T) {
 	})
 
 	t.Run("Handle - networkID mismatch ", func(t *testing.T) {
-		handshakeService, err := handshake.New(signer1, aaddresser, node1Info.Address.Overlay, networkID, true, "", node1AddrInfo.ID, logger, light, lightnode.DefaultLightNodeLimit)
+		handshakeService, err = handshake.New(signer1, aaddresser, node1Info.Address.Overlay, networkID, aurora.NewModel().SetMode(aurora.FullNode), "", node1AddrInfo.ID, logger, light, lightnode.DefaultLightNodeLimit)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -615,20 +608,20 @@ func TestHandshake(t *testing.T) {
 		stream2 := mock.NewStream(&buffer2, &buffer1)
 
 		w := protobuf.NewWriter(stream2)
-		if err := w.WriteMsg(&pb.Syn{
+		if err = w.WriteMsg(&pb.Syn{
 			ObservedUnderlay: node1maBinary,
 		}); err != nil {
 			t.Fatal(err)
 		}
 
-		if err := w.WriteMsg(&pb.Ack{
+		if err = w.WriteMsg(&pb.Ack{
 			Address: &pb.BzzAddress{
 				Underlay:  node2maBinary,
 				Overlay:   node2BzzAddress.Overlay.Bytes(),
 				Signature: node2BzzAddress.Signature,
 			},
 			NetworkID: 5,
-			NodeMode:  bv.Bytes(),
+			NodeMode:  node2Info.NodeMode.Bv.Bytes(),
 		}); err != nil {
 			t.Fatal(err)
 		}
@@ -644,7 +637,7 @@ func TestHandshake(t *testing.T) {
 	})
 
 	t.Run("Handle - duplicate handshake", func(t *testing.T) {
-		handshakeService, err := handshake.New(signer1, aaddresser, node1Info.Address.Overlay, networkID, true, "", node1AddrInfo.ID, logger, light, lightnode.DefaultLightNodeLimit)
+		handshakeService, err = handshake.New(signer1, aaddresser, node1Info.Address.Overlay, networkID, aurora.NewModel().SetMode(aurora.FullNode), "", node1AddrInfo.ID, logger, light, lightnode.DefaultLightNodeLimit)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -667,7 +660,7 @@ func TestHandshake(t *testing.T) {
 				Signature: node2BzzAddress.Signature,
 			},
 			NetworkID: networkID,
-			NodeMode:  bv.Bytes(),
+			NodeMode:  node2Info.NodeMode.Bv.Bytes(),
 		}); err != nil {
 			t.Fatal(err)
 		}
@@ -707,7 +700,7 @@ func TestHandshake(t *testing.T) {
 	})
 
 	t.Run("Handle - invalid ack", func(t *testing.T) {
-		handshakeService, err := handshake.New(signer1, aaddresser, node1Info.Address.Overlay, networkID, true, "", node1AddrInfo.ID, logger, light, lightnode.DefaultLightNodeLimit)
+		handshakeService, err = handshake.New(signer1, aaddresser, node1Info.Address.Overlay, networkID, aurora.NewModel().SetMode(aurora.FullNode), "", node1AddrInfo.ID, logger, light, lightnode.DefaultLightNodeLimit)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -730,7 +723,7 @@ func TestHandshake(t *testing.T) {
 				Signature: node1BzzAddress.Signature,
 			},
 			NetworkID: networkID,
-			NodeMode:  bv.Bytes(),
+			NodeMode:  node2Info.NodeMode.Bv.Bytes(),
 		}); err != nil {
 			t.Fatal(err)
 		}
@@ -743,7 +736,7 @@ func TestHandshake(t *testing.T) {
 
 	//t.Run("Handle - transaction is not on the blockchain", func(t *testing.T) {
 	//
-	//	handshakeService, err := handshake.New(signer1, aaddresser, node1Info.Address.Overlay, networkID, true, "", logger)
+	//	handshakeService, err := handshake.New(signer1, aaddresser, node1Info.Address.Overlay, networkID, aurora.NewModel().SetMode(aurora.FullNode), "", logger)
 	//	if err != nil {
 	//		t.Fatal(err)
 	//	}
@@ -766,7 +759,7 @@ func TestHandshake(t *testing.T) {
 	//			Signature: node2BzzAddress.Signature,
 	//		},
 	//		NetworkID: networkID,
-	//		NodeMode:  bv.Bytes(),
+	//		NodeMode:  node2Info.NodeMode.Bv.Bytes(),
 	//	}); err != nil {
 	//		t.Fatal(err)
 	//	}
@@ -778,7 +771,7 @@ func TestHandshake(t *testing.T) {
 	//})
 
 	t.Run("Handle - advertisable error", func(t *testing.T) {
-		handshakeService, err := handshake.New(signer1, aaddresser, node1Info.Address.Overlay, networkID, true, "", node1AddrInfo.ID, logger, light, lightnode.DefaultLightNodeLimit)
+		handshakeService, err = handshake.New(signer1, aaddresser, node1Info.Address.Overlay, networkID, aurora.NewModel().SetMode(aurora.FullNode), "", node1AddrInfo.ID, logger, light, lightnode.DefaultLightNodeLimit)
 		if err != nil {
 			t.Fatal(err)
 		}

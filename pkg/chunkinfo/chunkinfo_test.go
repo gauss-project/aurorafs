@@ -197,6 +197,8 @@ func TestHandlerChunkInfoResp(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	time.Sleep(time.Millisecond * 500)
+
 	var vb bitVector
 	if err := aOverlay.storer.Get(generateKey(discoverKeyPrefix, rootCid, bAddress), &vb); err != nil {
 		t.Fatal(err)
@@ -465,7 +467,7 @@ func uploadFile(t *testing.T, ctx context.Context, store storage.Storer, file []
 
 	rootMtdt := map[string]string{
 		manifest.WebsiteIndexDocumentSuffixKey: filename,
-		manifest.EntryMetadataDirnameKey: filename,
+		manifest.EntryMetadataDirnameKey:       filename,
 	}
 	err = fManifest.Add(ctx, "/", manifest.NewEntry(boson.ZeroAddress, rootMtdt))
 	if err != nil {

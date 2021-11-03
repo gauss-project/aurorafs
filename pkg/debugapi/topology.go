@@ -13,6 +13,7 @@ func (s *Service) topologyHandler(w http.ResponseWriter, r *http.Request) {
 	params := s.topologyDriver.Snapshot()
 
 	params.LightNodes = s.lightNodes.PeerInfo()
+	params.BootNodes = s.bootNodes.PeerInfo()
 
 	b, err := json.Marshal(params)
 	if err != nil {

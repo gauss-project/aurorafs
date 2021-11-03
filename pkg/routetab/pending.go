@@ -32,13 +32,13 @@ func newPendCallResTab() *pendCallResTab {
 	}
 }
 
-func (pend *pendCallResTab) Delete(target boson.Address) {
+func (pend *pendCallResTab) Delete(target, next boson.Address) {
 	key := target.ByteString()
 	pend.items.Delete(key)
-	pend.reqLog.Delete(key)
+	pend.reqLog.Delete(key + next.ByteString())
 }
 
-func (pend *pendCallResTab) Add(target, src boson.Address, resCh chan struct{}) (has bool) {
+func (pend *pendCallResTab) Add(target, src, next boson.Address, resCh chan struct{}) (has bool) {
 	pending := &PendCallResItem{
 		Src:        src,
 		CreateTime: time.Now(),
@@ -56,17 +56,20 @@ func (pend *pendCallResTab) Add(target, src boson.Address, resCh chan struct{}) 
 		pend.items.Store(key, PendingCallResArray{pending})
 	}
 	// If a find route already exists, no forwarding is required
-	_, has = pend.reqLog.Load(key)
-	pend.reqLog.Store(key, time.Now())
+	reqKey := key + next.ByteString()
+	_, has = pend.reqLog.Load(reqKey)
+	if !has {
+		pend.reqLog.Store(reqKey, time.Now())
+	}
 	return
 }
 
-func (pend *pendCallResTab) Get(target boson.Address) PendingCallResArray {
+func (pend *pendCallResTab) Get(target, next boson.Address) PendingCallResArray {
 	key := target.ByteString()
 	res, ok := pend.items.Load(key)
 	if ok {
 		pend.items.Delete(key)
-		pend.reqLog.Delete(key)
+		pend.reqLog.Delete(key + next.ByteString())
 		return res.(PendingCallResArray)
 	}
 	return nil

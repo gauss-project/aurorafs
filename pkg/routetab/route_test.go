@@ -52,7 +52,7 @@ type Node struct {
 
 func p2pMock(ab addressbook.Interface, overlay boson.Address, signer crypto.Signer) p2p.Service {
 	p2ps := p2pmock.New(
-		p2pmock.WithConnectFunc(func(ctx context.Context, underlay ma.Multiaddr) (*aurora.Address, error) {
+		p2pmock.WithConnectFunc(func(ctx context.Context, underlay ma.Multiaddr) (*p2p.Peer, error) {
 			if underlay.Equal(nonConnectableAddress) {
 				return nil, errors.New("non reachable node")
 			}
@@ -63,7 +63,10 @@ func p2pMock(ab addressbook.Interface, overlay boson.Address, signer crypto.Sign
 
 			for _, a := range addresses {
 				if a.Underlay.Equal(underlay) {
-					return &a, nil
+					return &p2p.Peer{
+						Address: a.Overlay,
+						Mode:    aurora.NewModel().SetMode(aurora.FullNode),
+					}, nil
 				}
 			}
 
@@ -76,7 +79,10 @@ func p2pMock(ab addressbook.Interface, overlay boson.Address, signer crypto.Sign
 				return nil, err
 			}
 
-			return bzzAddr, nil
+			return &p2p.Peer{
+				Address: bzzAddr.Overlay,
+				Mode:    aurora.NewModel().SetMode(aurora.FullNode),
+			}, nil
 		}),
 		p2pmock.WithDisconnectFunc(func(boson.Address, string) error {
 			return nil
@@ -103,7 +109,7 @@ func newTestNode(t *testing.T) *Node {
 	ab := addressbook.New(mockstate.NewStateStore()) // address book
 	p2ps := p2pMock(ab, base.Overlay, signer)
 	disc := mock.NewDiscovery()
-	kad, err := kademlia.New(base.Overlay, ab, disc, p2ps, metricsDB, noopLogger, kademlia.Options{BinMaxPeers: 10}) // kademlia instance
+	kad, err := kademlia.New(base.Overlay, ab, disc, p2ps, nil, metricsDB, noopLogger, kademlia.Options{BinMaxPeers: 10, NodeMode: aurora.NewModel().SetMode(aurora.FullNode)}) // kademlia instance
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -300,6 +306,65 @@ func TestService_FindRouteMaxTTL(t *testing.T) {
 	_, err = nodes[0].FindRoute(ctx, nodes[4].overlay)
 	if err == nil {
 		t.Fatalf("expect not find route")
+	}
+}
+
+func TestService_FindRouteTargetIsNeighbor(t *testing.T) {
+	ctx := context.Background()
+
+	// connect 0--1--2--3--4
+	//          \______/
+	nodes := createTopology(t, 5)
+
+	nodes[0].addOne(t, nodes[3].addr, true)
+	nodes[3].addOne(t, nodes[0].addr, true)
+
+	nodes[0].SetStreamer(streamtest.New(
+		streamtest.WithBaseAddr(nodes[0].overlay),
+		streamtest.WithPeerProtocols(map[string]p2p.ProtocolSpec{
+			nodes[1].overlay.String(): nodes[1].Protocol(),
+			nodes[3].overlay.String(): nodes[3].Protocol(),
+		}),
+	))
+
+	nodes[3].SetStreamer(streamtest.New(
+		streamtest.WithBaseAddr(nodes[3].overlay),
+		streamtest.WithPeerProtocols(map[string]p2p.ProtocolSpec{
+			nodes[0].overlay.String(): nodes[0].Protocol(),
+			nodes[2].overlay.String(): nodes[2].Protocol(),
+			nodes[4].overlay.String(): nodes[4].Protocol(),
+		}),
+	))
+
+	if nodes[0].kad.Snapshot().Connected != 2 {
+		t.Fatalf("expect node 0 connected 2")
+	}
+	if nodes[3].kad.Snapshot().Connected != 3 {
+		t.Fatalf("expect node 0 connected 3")
+	}
+
+	// find dest 1
+	_, err := nodes[0].GetRoute(ctx, nodes[1].overlay)
+	if !errors.Is(err, routetab.ErrNotFound) {
+		t.Fatalf("expect dest 1 route not found")
+	}
+	route, err := nodes[0].FindRoute(ctx, nodes[1].overlay)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(route) != 1 {
+		t.Fatalf("expect dest 1 route path len 1,got %d", len(route))
+	}
+	// check route
+	r, err := nodes[0].GetRoute(ctx, nodes[1].overlay)
+	if err != nil {
+		t.Fatal(err)
+	}
+	exp := []boson.Address{nodes[0].overlay, nodes[3].overlay, nodes[2].overlay, nodes[1].overlay}
+	for k, v := range r[0].Item {
+		if !v.Equal(exp[k]) {
+			t.Fatalf("expect item %s,got %s", exp[k], v)
+		}
 	}
 }
 
