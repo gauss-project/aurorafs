@@ -72,6 +72,9 @@ func NewDB(path string, o *Options) (db *DB, err error) {
 		ldb, err = leveldb.Open(storage.NewMemStorage(), nil)
 	} else {
 		ldb, err = leveldb.OpenFile(path, &opt.Options{
+			BlockSize:              256 * 1024,
+			CompactionTableSize:    128 * 1024 * 1024,
+			CompactionTotalSize:    5 * 128 * 1024 * 1024,
 			OpenFilesCacheCapacity: int(o.OpenFilesLimit),
 			BlockCacheCapacity:     int(o.BlockCacheCapacity),
 			WriteBuffer:            int(o.WriteBufferSize),
