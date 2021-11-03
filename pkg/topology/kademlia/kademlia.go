@@ -917,15 +917,8 @@ func (k *Kad) Outbound(peer p2p.Peer) {
 
 	k.waitNext.Remove(peer.Address)
 
-	k.depthMu.Lock()
-	k.depth = recalcDepth(k.connectedPeers, k.radius)
-	k.depthMu.Unlock()
-
 	po := boson.Proximity(k.base.Bytes(), peer.Address.Bytes())
 	k.logger.Debugf("kademlia: connected to peer: %q in bin: %d", peer, po)
-
-	k.notifyManageLoop()
-	k.notifyPeerSig()
 
 	if peer.Mode.IsBootNode() {
 		k.knownPeers.Remove(peer.Address)
@@ -933,6 +926,13 @@ func (k *Kad) Outbound(peer p2p.Peer) {
 	}
 	k.knownPeers.Add(peer.Address)
 	k.connectedPeers.Add(peer.Address)
+
+	k.depthMu.Lock()
+	k.depth = recalcDepth(k.connectedPeers, k.radius)
+	k.depthMu.Unlock()
+
+	k.notifyManageLoop()
+	k.notifyPeerSig()
 }
 
 func (k *Kad) Pick(peer p2p.Peer) bool {
