@@ -14,6 +14,7 @@ import (
 	"github.com/gauss-project/aurorafs/pkg/p2p/protobuf"
 	"github.com/gauss-project/aurorafs/pkg/topology/kademlia"
 	ma "github.com/multiformats/go-multiaddr"
+	manet "github.com/multiformats/go-multiaddr/net"
 	"golang.org/x/sync/semaphore"
 	"sync"
 	"time"
@@ -53,8 +54,9 @@ type resultChan struct {
 }
 
 type Config struct {
-	Kad  *kademlia.Kad
-	Base boson.Address
+	Kad               *kademlia.Kad
+	Base              boson.Address
+	AllowPrivateCIDRs bool
 }
 
 func New(streamer p2p.StreamerPinger, addressBook addressbook.GetPutter, networkID uint64, logger logging.Logger) *Service {
@@ -112,6 +114,12 @@ func (s *Service) Close() error {
 }
 
 func (s *Service) onFindNode(ctx context.Context, peer p2p.Peer, stream p2p.Stream) error {
+	addr, err := s.addressBook.Get(peer.Address)
+	if err != nil && !errors.Is(err, addressbook.ErrNotFound) {
+		return err
+	}
+	isPeerPublic := addr != nil && manet.IsPublicAddr(addr.Underlay)
+
 	s.metrics.OnFindNode.Inc()
 	s.logger.Tracef("hive2: onFindNode start... peer=%s", peer.Address.String())
 	start := time.Now()
@@ -148,6 +156,10 @@ func (s *Service) onFindNode(ctx context.Context, peer p2p.Peer, stream p2p.Stre
 		if inArray(po, req.Pos) {
 			p, _ := s.addressBook.Get(address)
 			if p != nil {
+				if !s.config.AllowPrivateCIDRs && isPeerPublic && manet.IsPrivateAddr(p.Underlay) {
+					// Don't advertise private CIDRs to the public network.
+					return false, false, nil
+				}
 				resp.Peers = append(resp.Peers, &pb.AuroraAddress{
 					Underlay:  p.Underlay.Bytes(),
 					Signature: p.Signature,
@@ -171,7 +183,7 @@ func (s *Service) onFindNode(ctx context.Context, peer p2p.Peer, stream p2p.Stre
 
 	s.metrics.OnFindNodePeers.Add(float64(len(resp.Peers)))
 
-	err := w.WriteMsgWithContext(ctx, resp)
+	err = w.WriteMsgWithContext(ctx, resp)
 	if err != nil {
 		_ = stream.Reset()
 		return fmt.Errorf("hive2: onFindNode handler write message: %w", err)

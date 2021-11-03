@@ -49,9 +49,9 @@ const (
 	//optionNamePaymentTolerance          = "payment-tolerance"
 	//optionNamePaymentEarly              = "payment-early"
 	//optionNameResolverEndpoints = "resolver-options"
-	optionNameBootnodeMode      = "bootnode-mode"
-	optionNameFullNode          = "full-node"
-	optionNameGatewayMode       = "gateway-mode"
+	optionNameBootnodeMode = "bootnode-mode"
+	optionNameFullNode     = "full-node"
+	optionNameGatewayMode  = "gateway-mode"
 	//optionNameClefSignerEnable          = "clef-signer-enable"
 	//optionNameClefSignerEndpoint        = "clef-signer-endpoint"
 	//optionNameClefSignerEthereumAddress = "clef-signer-ethereum-address"
@@ -59,8 +59,9 @@ const (
 	//optionNameSwapFactoryAddress        = "swap-factory-address"
 	//optionNameSwapInitialDeposit        = "swap-initial-deposit"
 	//optionNameSwapEnable                = "swap-enable"
-	optionNameBinMaxPeers   = "bin-max-peers"
-	optionNameLightMaxPeers = "light-max-peers"
+	optionNameBinMaxPeers       = "bin-max-peers"
+	optionNameLightMaxPeers     = "light-max-peers"
+	optionNameAllowPrivateCIDRs = "allow-private-cidrs"
 )
 
 func init() {
@@ -234,6 +235,7 @@ func (c *command) setAllFlags(cmd *cobra.Command) {
 	cmd.Flags().Bool(optionNameFullNode, true, "full node")
 	cmd.Flags().Int(optionNameLightMaxPeers, 100, "connected light node max limit")
 	cmd.Flags().Int(optionNameBinMaxPeers, 20, "kademlia every k bucket connected peers max limit")
+	cmd.Flags().Bool(optionNameAllowPrivateCIDRs, false, "allow to advertise private CIDRs to the public network")
 }
 
 func newLogger(cmd *cobra.Command, verbosity string) (logging.Logger, error) {
