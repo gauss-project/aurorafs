@@ -310,10 +310,11 @@ func (ci *ChunkInfo) onFindChunkInfo(ctx context.Context, authInfo []byte, rootC
 	if chunkInfo == nil {
 		chunkInfo = make(map[string][]byte, 1)
 	}
-	ci.syncLk.Lock()
-	if msgChan, ok := ci.syncMsg[rootCid.String()]; ok {
+	ci.syncLk.RLock()
+	msgChan, ok := ci.syncMsg[rootCid.String()]
+	ci.syncLk.RUnlock()
+	if ok {
 		msgChan <- true
 	}
-	ci.syncLk.Unlock()
 	ci.updateQueue(ctx, authInfo, rootCid, overlay, chunkInfo)
 }
