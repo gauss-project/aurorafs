@@ -561,7 +561,11 @@ func (k *Kad) pruneOversaturatedBins(depth uint8) {
 			var smallestDuration time.Duration
 			var newestPeer boson.Address
 			for _, peer := range peers {
-				duration := k.collector.Inspect(peer).SessionConnectionDuration
+				ss := k.collector.Inspect(peer)
+				if ss == nil {
+					continue
+				}
+				duration := ss.SessionConnectionDuration
 				if smallestDuration == 0 || duration < smallestDuration {
 					smallestDuration = duration
 					newestPeer = peer
@@ -593,6 +597,8 @@ func (k *Kad) balancedSlotPeers(pseudoAddr boson.Address, peers []boson.Address,
 func (k *Kad) Start(_ context.Context) error {
 	k.wg.Add(1)
 	go k.manage()
+
+	k.AddPeers(k.previouslyConnected()...)
 
 	go func() {
 		select {
@@ -632,6 +638,23 @@ func (k *Kad) Start(_ context.Context) error {
 	k.notifyManageLoop()
 
 	return nil
+}
+
+func (k *Kad) previouslyConnected() []boson.Address {
+
+	now := time.Now()
+	ss := k.collector.Snapshot(now)
+	k.logger.Tracef("kademlia: getting metrics snapshot took %s", time.Since(now))
+
+	var peers []boson.Address
+
+	for addr, p := range ss {
+		if p.ConnectionTotalDuration > 0 {
+			peers = append(peers, boson.NewAddress([]byte(addr)))
+		}
+	}
+
+	return peers
 }
 
 func (k *Kad) connectBootNodes(ctx context.Context) {

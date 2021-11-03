@@ -143,6 +143,7 @@ func (c *command) initStartCmd() (err error) {
 				//SwapEnable:               c.config.GetBool(optionNameSwapEnable),
 				KadBinMaxPeers:    c.config.GetInt(optionNameBinMaxPeers),
 				LightNodeMaxPeers: c.config.GetInt(optionNameLightMaxPeers),
+				AllowPrivateCIDRs: c.config.GetBool(optionNameAllowPrivateCIDRs),
 			})
 			if err != nil {
 				return err

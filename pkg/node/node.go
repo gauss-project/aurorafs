@@ -100,6 +100,7 @@ type Options struct {
 	NodeMode          aurora.Model
 	KadBinMaxPeers    int
 	LightNodeMaxPeers int
+	AllowPrivateCIDRs bool
 }
 
 func NewAurora(addr string, bosonAddress boson.Address, publicKey ecdsa.PublicKey, signer crypto.Signer, networkID uint64, logger logging.Logger, libp2pPrivateKey, pssPrivateKey *ecdsa.PrivateKey, o Options) (b *Aurora, err error) {
@@ -379,7 +380,7 @@ func NewAurora(addr string, bosonAddress boson.Address, publicKey ecdsa.PublicKe
 	}
 	b.topologyCloser = kad
 	hiveObj.SetAddPeersHandler(kad.AddPeers)
-	hiveObj.SetConfig(hive2.Config{Kad: kad, Base: bosonAddress}) // hive2
+	hiveObj.SetConfig(hive2.Config{Kad: kad, Base: bosonAddress, AllowPrivateCIDRs: o.AllowPrivateCIDRs}) // hive2
 
 	p2ps.SetPickyNotifier(kad)
 	addrs, err := p2ps.Addresses()
