@@ -102,18 +102,21 @@ func (ci *ChunkInfo) getRandomChunkInfo(routes []aco.Route) []aco.Route {
 			res = append(res, v)
 		}
 	}
-
+	if len(res) == 0 {
+		return routes
+	}
+	exist := make(map[string]struct{})
 	for _, overlay := range res {
 		for _, i := range routes {
 			if i.TargetNode.Equal(overlay.LinkNode) && i.TargetNode.Equal(i.LinkNode) {
 				continue
 			}
-			res = append(res, i)
+			if _, e := exist[i.LinkNode.String()]; !e {
+				res = append(res, i)
+			}
 		}
 	}
-	if len(res) == 0 {
-		return routes
-	}
+
 	return res
 }
 
