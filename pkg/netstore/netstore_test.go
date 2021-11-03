@@ -149,6 +149,10 @@ func (r *retrievalMock) RetrieveChunk(ctx context.Context, rootAddr, addr boson.
 	return boson.NewChunk(addr, chunkData), nil
 }
 
+func (r *retrievalMock) GetRouteScore(time int64) map[string]int64 {
+	return nil
+}
+
 //type mockRecovery struct {
 //	callbackC chan bool
 //}

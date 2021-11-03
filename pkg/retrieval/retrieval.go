@@ -247,11 +247,32 @@ func (s *Service) RetrieveChunkFromNode(ctx context.Context, targetNode boson.Ad
 	return v.(boson.Chunk), nil
 }
 
-func (s *Service) retrieveChunk(ctx context.Context, route aco.Route, rootAddr, chunkAddr boson.Address) (boson.Chunk, error) {
+func (s *Service) retrieveChunk(ctx context.Context, route aco.Route, rootAddr, chunkAddr boson.Address) (chunk boson.Chunk, err error) {
 	// if !route.LinkNode.Equal(route.TargetNode) {
 	// 	return nil, nil, fmt.Errorf("not direct link, %v,%v(not same)", route.LinkNode.String(), route.TargetNode.String())
 	// }
-	if err := s.routeTab.Connect(ctx, route.LinkNode); err != nil {
+	var (
+		startMs  = time.Now().UnixNano() / 1e6
+		endMs    = int64(0)
+		dataSize = 0
+	)
+	defer func() {
+		if err == nil || (err != nil && (ctx.Err() == nil || !errors.Is(ctx.Err(), context.Canceled))) {
+			endMs = time.Now().UnixNano() / 1e6
+			s.logger.Tracef("link : %s  , from  %d  to %d, chunk size: %d ", route.ToString(), startMs, endMs, dataSize)
+			downloadDetail := aco.DownloadDetail{
+				StartMs: startMs,
+				EndMs:   endMs,
+				Size:    int64(dataSize),
+			}
+			s.acoServer.OnDownloadFinish(route, &downloadDetail)
+		}
+	}()
+
+	s.acoServer.OnDownloadStart(route)
+	defer s.acoServer.OnDownloadEnd(route)
+
+	if err = s.routeTab.Connect(ctx, route.LinkNode); err != nil {
 		s.logger.Errorf("connect failed, peer: %v  err: %s", route.LinkNode.String(), err)
 		return nil, fmt.Errorf("connect failed, peer: %v", route.LinkNode.String())
 	}
@@ -273,7 +294,6 @@ func (s *Service) retrieveChunk(ctx context.Context, route aco.Route, rootAddr, 
 		}
 	}()
 
-	startMs := time.Now().UnixNano() / 1e6
 	w, r := protobuf.NewWriterAndReader(stream)
 	if err := w.WriteMsgWithContext(ctx, &pb.RequestChunk{
 		TargetAddr: route.TargetNode.Bytes(),
@@ -289,17 +309,9 @@ func (s *Service) retrieveChunk(ctx context.Context, route aco.Route, rootAddr, 
 		s.metrics.TotalErrors.Inc()
 		return nil, fmt.Errorf("read delivery: %w route %v,%v", err, route.LinkNode.String(), route.TargetNode.String())
 	}
-	endMs := time.Now().UnixNano() / 1e6
-	dataSize := d.Size()
+	dataSize = d.Size()
 
-	downloadDetail := aco.DownloadDetail{
-		StartMs: startMs,
-		EndMs:   endMs,
-		Size:    int64(dataSize),
-	}
-	s.acoServer.OnDownloadFinish(route, &downloadDetail)
-
-	chunk := boson.NewChunk(chunkAddr, d.Data)
+	chunk = boson.NewChunk(chunkAddr, d.Data)
 	if !cac.Valid(chunk) {
 		if !soc.Valid(chunk) {
 			s.metrics.InvalidChunkRetrieved.Inc()
@@ -319,7 +331,7 @@ func (s *Service) retrieveChunk(ctx context.Context, route aco.Route, rootAddr, 
 		return nil, fmt.Errorf("retrieval: storage put cache:%w", err)
 	}
 
-	return chunk, nil
+	return
 }
 
 func (s *Service) handler(ctx context.Context, p p2p.Peer, stream p2p.Stream) (err error) {
