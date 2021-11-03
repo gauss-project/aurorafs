@@ -49,9 +49,9 @@ const (
 	//optionNamePaymentTolerance          = "payment-tolerance"
 	//optionNamePaymentEarly              = "payment-early"
 	//optionNameResolverEndpoints = "resolver-options"
-	optionNameBootnodeMode      = "bootnode-mode"
-	optionNameFullNode          = "full-node"
-	optionNameGatewayMode       = "gateway-mode"
+	optionNameBootnodeMode = "bootnode-mode"
+	optionNameFullNode     = "full-node"
+	optionNameGatewayMode  = "gateway-mode"
 	//optionNameClefSignerEnable          = "clef-signer-enable"
 	//optionNameClefSignerEndpoint        = "clef-signer-endpoint"
 	//optionNameClefSignerEthereumAddress = "clef-signer-ethereum-address"
@@ -59,8 +59,9 @@ const (
 	//optionNameSwapFactoryAddress        = "swap-factory-address"
 	//optionNameSwapInitialDeposit        = "swap-initial-deposit"
 	//optionNameSwapEnable                = "swap-enable"
-	optionNameBinMaxPeers   = "bin-max-peers"
-	optionNameLightMaxPeers = "light-max-peers"
+	optionNameBinMaxPeers       = "bin-max-peers"
+	optionNameLightMaxPeers     = "light-max-peers"
+	optionNameAllowPrivateCIDRs = "allow-private-cidrs"
 )
 
 func init() {
@@ -191,7 +192,7 @@ func (c *command) setHomeDir() (err error) {
 func (c *command) setAllFlags(cmd *cobra.Command) {
 	cmd.Flags().String(optionNameDataDir, filepath.Join(c.homeDir, ".aurorafs"), "data directory")
 	cmd.Flags().Uint64(optionNameCacheCapacity, 80000, fmt.Sprintf("cache capacity in chunks, multiply by %d to get approximate capacity in bytes", boson.ChunkSize))
-	cmd.Flags().Uint64(optionNameDBOpenFilesLimit, 200, "number of open files allowed by database")
+	cmd.Flags().Uint64(optionNameDBOpenFilesLimit, 1024, "number of open files allowed by database")
 	cmd.Flags().Uint64(optionNameDBBlockCacheCapacity, 32*1024*1024, "size of block cache of the database in bytes")
 	cmd.Flags().Uint64(optionNameDBWriteBufferSize, 32*1024*1024, "size of the database write buffer in bytes")
 	cmd.Flags().Bool(optionNameDBDisableSeeksCompaction, false, "disables db compactions triggered by seeks")
@@ -234,6 +235,7 @@ func (c *command) setAllFlags(cmd *cobra.Command) {
 	cmd.Flags().Bool(optionNameFullNode, true, "full node")
 	cmd.Flags().Int(optionNameLightMaxPeers, 100, "connected light node max limit")
 	cmd.Flags().Int(optionNameBinMaxPeers, 20, "kademlia every k bucket connected peers max limit")
+	cmd.Flags().Bool(optionNameAllowPrivateCIDRs, false, "allow to advertise private CIDRs to the public network")
 }
 
 func newLogger(cmd *cobra.Command, verbosity string) (logging.Logger, error) {

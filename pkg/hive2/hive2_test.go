@@ -3,6 +3,7 @@ package hive2_test
 import (
 	"context"
 	"errors"
+	"fmt"
 	"github.com/gauss-project/aurorafs/pkg/addressbook"
 	"github.com/gauss-project/aurorafs/pkg/aurora"
 	"github.com/gauss-project/aurorafs/pkg/boson"
@@ -23,13 +24,18 @@ import (
 	"time"
 )
 
-const underlayBase = "/ip4/127.0.0.1/tcp/1634/dns/"
-
 var (
-	nonConnectableAddress, _        = ma.NewMultiaddr(underlayBase + "16Uiu2HAkx8ULY8cTXhdVAcMmLcH9AsTKz6uBQ7DPLKRjMLgBVYkA")
-	noopLogger                      = logging.New(io.Discard, logrus.TraceLevel)
-	networkId                uint64 = 0
+	noopLogger        = logging.New(io.Discard, logrus.TraceLevel)
+	networkId  uint64 = 0
 )
+
+func randomUnderlay(port int) string {
+	return fmt.Sprintf("/ip4/127.0.0.1/udp/%d/dns/", port)
+}
+
+func randomUnderlayPublic(port int) string {
+	return fmt.Sprintf("/ip4/1.1.1.1/udp/%d/dns/", port)
+}
 
 type Node struct {
 	overlay boson.Address
@@ -46,9 +52,6 @@ type Node struct {
 func p2pMock(ab addressbook.Interface, overlay boson.Address, signer crypto.Signer) p2p.Service {
 	p2ps := p2pmock.New(
 		p2pmock.WithConnectFunc(func(ctx context.Context, underlay ma.Multiaddr) (*p2p.Peer, error) {
-			if underlay.Equal(nonConnectableAddress) {
-				return nil, errors.New("non reachable node")
-			}
 			addresses, err := ab.Addresses()
 			if err != nil {
 				return nil, errors.New("could not fetch addressBook addresses")
@@ -92,7 +95,7 @@ func p2pMock(ab addressbook.Interface, overlay boson.Address, signer crypto.Sign
 	return p2ps
 }
 
-func newTestNode(t *testing.T, peer boson.Address, po int) *Node {
+func newTestNode(t *testing.T, peer boson.Address, po int, underlay string, allowPrivateCIDRs bool) *Node {
 	t.Helper()
 
 	metricsDB, err := shed.NewDB("", nil)
@@ -105,7 +108,7 @@ func newTestNode(t *testing.T, peer boson.Address, po int) *Node {
 		}
 	})
 
-	base, signer := randomAddress(t, peer, po)
+	base, signer := randomAddress(t, peer, po, underlay)
 	ab := addressbook.New(mockstate.NewStateStore()) // address book
 	p2ps := p2pMock(ab, base.Overlay, signer)
 
@@ -120,8 +123,9 @@ func newTestNode(t *testing.T, peer boson.Address, po int) *Node {
 
 	Hive2.SetAddPeersHandler(kad.AddPeers)
 	Hive2.SetConfig(hive2.Config{
-		Kad:  kad,
-		Base: base.Overlay,
+		Kad:               kad,
+		Base:              base.Overlay,
+		AllowPrivateCIDRs: allowPrivateCIDRs,
 	})
 
 	return &Node{
@@ -137,13 +141,13 @@ func newTestNode(t *testing.T, peer boson.Address, po int) *Node {
 	}
 }
 
-func randomAddress(t *testing.T, base boson.Address, po int) (addr *aurora.Address, signer crypto.Signer) {
+func randomAddress(t *testing.T, base boson.Address, po int, underlay string) (addr *aurora.Address, signer crypto.Signer) {
 	pk, _ := crypto.GenerateSecp256k1Key()
 	signer = crypto.NewDefaultSigner(pk)
 
 	p := test.RandomAddressAt(base, po)
 	//base, _ := crypto.NewOverlayAddress(pk.PublicKey, networkId)
-	mu, err := ma.NewMultiaddr(underlayBase + base.String())
+	mu, err := ma.NewMultiaddr(underlay + base.String())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -168,9 +172,9 @@ func (s *Node) addOne(t *testing.T, peer *aurora.Address, connect bool) {
 	}
 }
 
-func (s *Node) connect(t *testing.T, peer boson.Address) {
+func (s *Node) connect(t *testing.T, peer boson.Address, underlay string) {
 	t.Helper()
-	multiaddr, err := ma.NewMultiaddr(underlayBase + peer.String())
+	multiaddr, err := ma.NewMultiaddr(underlay + peer.String())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -190,10 +194,20 @@ func (s *Node) connect(t *testing.T, peer boson.Address) {
 	}
 }
 
-func (s *Node) connectMore(t *testing.T, base boson.Address, po, count int) (list []boson.Address) {
+func (s *Node) connectMore(t *testing.T, base boson.Address, po, count, port int) (list []boson.Address) {
 	for i := 0; i < count; i++ {
 		p3 := test.RandomAddressAt(base, po)
-		s.connect(t, p3)
+		s.connect(t, p3, randomUnderlay(port+i))
+		list = append(list, p3)
+		//t.Logf("po=%d %s", po, p3.String())
+	}
+	return
+}
+
+func (s *Node) connectMorePublic(t *testing.T, base boson.Address, po, count, port int) (list []boson.Address) {
+	for i := 0; i < count; i++ {
+		p3 := test.RandomAddressAt(base, po)
+		s.connect(t, p3, randomUnderlayPublic(port+i))
 		list = append(list, p3)
 		//t.Logf("po=%d %s", po, p3.String())
 	}
@@ -275,8 +289,8 @@ func checkChan(t *testing.T, ch chan boson.Address, list []boson.Address) (total
 func TestService_DoFindNode(t *testing.T) {
 	ctx := context.Background()
 
-	a := newTestNode(t, test.RandomAddress(), -1)
-	b := newTestNode(t, test.RandomAddress(), -1)
+	a := newTestNode(t, test.RandomAddress(), -1, randomUnderlay(123), false)
+	b := newTestNode(t, test.RandomAddress(), -1, randomUnderlay(124), false)
 
 	a.addOne(t, b.addr, true)
 	b.addOne(t, a.addr, true)
@@ -304,7 +318,7 @@ func TestService_DoFindNode(t *testing.T) {
 	})
 
 	// connected 2
-	p2List := b.connectMore(t, a.overlay, int(pos[0]), 3)
+	p2List := b.connectMore(t, a.overlay, int(pos[0]), 3, 200)
 	t.Run("connected 2", func(t *testing.T) {
 		s0 := a.kad.Snapshot()
 		if s0.Connected != 1 {
@@ -327,11 +341,181 @@ func TestService_DoFindNode(t *testing.T) {
 	})
 }
 
+func TestService_PrivateCIDR_DoFindNode(t *testing.T) {
+	ctx := context.Background()
+
+	a := newTestNode(t, test.RandomAddress(), -1, randomUnderlay(123), false)
+	b := newTestNode(t, test.RandomAddress(), -1, randomUnderlay(124), false)
+
+	a.addOne(t, b.addr, true)
+	b.addOne(t, a.addr, true)
+
+	a.stream.SetProtocols(b.Protocol())
+	b.stream.SetProtocols(a.Protocol())
+
+	err := a.kad.Start(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	pos := hive2.LookupDistances(a.overlay, b.overlay)
+
+	t.Run("skip self", func(t *testing.T) {
+		// skip self
+		res, err := a.DoFindNode(ctx, a.overlay, b.overlay, pos, 2)
+		if err != nil {
+			t.Fatal(err)
+		}
+		total := checkChan(t, res, nil)
+		if total != 0 {
+			t.Fatalf("exp received 0 peer, got %d", total)
+		}
+	})
+
+	// connected 2
+	p2List := b.connectMore(t, a.overlay, int(pos[0]), 3, 200)
+	p3List := b.connectMorePublic(t, a.overlay, int(pos[0]), 3, 200)
+	t.Run("connected 2", func(t *testing.T) {
+		s0 := a.kad.Snapshot()
+		if s0.Connected != 1 {
+			t.Fatalf("connected expected 1 got %d", s0.Connected)
+		}
+
+		res, err := a.DoFindNode(ctx, a.overlay, b.overlay, pos, 10)
+		if err != nil {
+			t.Fatal(err)
+		}
+		p2List = append(p2List, p3List...)
+		total := checkChan(t, res, p2List)
+		if total != 6 {
+			t.Fatalf("exp received 6 peer, got %d", total)
+		}
+		time.Sleep(time.Millisecond * 100)
+		s01 := a.kad.Snapshot()
+		if s01.Connected != 7 {
+			t.Fatalf("connected expected 7 got %d", s01.Connected)
+		}
+	})
+}
+
+func TestService_PublicCIDR_DoFindNode_AllowPrivateCIDRs_false(t *testing.T) {
+	ctx := context.Background()
+
+	a := newTestNode(t, test.RandomAddress(), -1, randomUnderlayPublic(123), false)
+	b := newTestNode(t, test.RandomAddress(), -1, randomUnderlay(124), false)
+
+	a.addOne(t, b.addr, true)
+	b.addOne(t, a.addr, true)
+
+	a.stream.SetProtocols(b.Protocol())
+	b.stream.SetProtocols(a.Protocol())
+
+	err := a.kad.Start(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	pos := hive2.LookupDistances(a.overlay, b.overlay)
+
+	t.Run("skip self", func(t *testing.T) {
+		// skip self
+		res, err := a.DoFindNode(ctx, a.overlay, b.overlay, pos, 2)
+		if err != nil {
+			t.Fatal(err)
+		}
+		total := checkChan(t, res, nil)
+		if total != 0 {
+			t.Fatalf("exp received 0 peer, got %d", total)
+		}
+	})
+
+	// connected 2
+	_ = b.connectMore(t, a.overlay, int(pos[0]), 3, 200)
+	p3List := b.connectMorePublic(t, a.overlay, int(pos[0]), 3, 200)
+	t.Run("connected 2", func(t *testing.T) {
+		s0 := a.kad.Snapshot()
+		if s0.Connected != 1 {
+			t.Fatalf("connected expected 1 got %d", s0.Connected)
+		}
+
+		res, err := a.DoFindNode(ctx, a.overlay, b.overlay, pos, 10)
+		if err != nil {
+			t.Fatal(err)
+		}
+		total := checkChan(t, res, p3List)
+		if total != 3 {
+			t.Fatalf("exp received 3 peer, got %d", total)
+		}
+		time.Sleep(time.Millisecond * 100)
+		s01 := a.kad.Snapshot()
+		if s01.Connected != 4 {
+			t.Fatalf("connected expected 4 got %d", s01.Connected)
+		}
+	})
+}
+
+func TestService_PublicCIDR_DoFindNode_AllowPrivateCIDRs_true(t *testing.T) {
+	ctx := context.Background()
+
+	a := newTestNode(t, test.RandomAddress(), -1, randomUnderlayPublic(123), false)
+	b := newTestNode(t, test.RandomAddress(), -1, randomUnderlay(124), true)
+
+	a.addOne(t, b.addr, true)
+	b.addOne(t, a.addr, true)
+
+	a.stream.SetProtocols(b.Protocol())
+	b.stream.SetProtocols(a.Protocol())
+
+	err := a.kad.Start(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	pos := hive2.LookupDistances(a.overlay, b.overlay)
+
+	t.Run("skip self", func(t *testing.T) {
+		// skip self
+		res, err := a.DoFindNode(ctx, a.overlay, b.overlay, pos, 2)
+		if err != nil {
+			t.Fatal(err)
+		}
+		total := checkChan(t, res, nil)
+		if total != 0 {
+			t.Fatalf("exp received 0 peer, got %d", total)
+		}
+	})
+
+	// connected 2
+	p2List := b.connectMore(t, a.overlay, int(pos[0]), 3, 200)
+	p3List := b.connectMorePublic(t, a.overlay, int(pos[0]), 3, 200)
+	t.Run("connected 2", func(t *testing.T) {
+		s0 := a.kad.Snapshot()
+		if s0.Connected != 1 {
+			t.Fatalf("connected expected 1 got %d", s0.Connected)
+		}
+
+		res, err := a.DoFindNode(ctx, a.overlay, b.overlay, pos, 10)
+		if err != nil {
+			t.Fatal(err)
+		}
+		p2List = append(p2List, p3List...)
+		total := checkChan(t, res, p2List)
+		if total != 6 {
+			t.Fatalf("exp received 6 peer, got %d", total)
+		}
+		time.Sleep(time.Millisecond * 100)
+		s01 := a.kad.Snapshot()
+		if s01.Connected != 7 {
+			t.Fatalf("connected expected 7 got %d", s01.Connected)
+		}
+	})
+}
+
 func TestService_DoFindNodeMax(t *testing.T) {
 	ctx := context.Background()
 
-	a := newTestNode(t, test.RandomAddress(), -1)
-	b := newTestNode(t, test.RandomAddress(), -1)
+	a := newTestNode(t, test.RandomAddress(), -1, randomUnderlay(123), false)
+	b := newTestNode(t, test.RandomAddress(), -1, randomUnderlay(124), false)
 
 	a.addOne(t, b.addr, true)
 	b.addOne(t, a.addr, true)
@@ -347,7 +531,7 @@ func TestService_DoFindNodeMax(t *testing.T) {
 	pos := hive2.LookupDistances(a.overlay, b.overlay)
 
 	// connected max
-	p3List := b.connectMore(t, a.overlay, int(pos[1]), 20)
+	p3List := b.connectMore(t, a.overlay, int(pos[1]), 20, 200)
 	t.Run("connected max", func(t *testing.T) {
 		posReq := []int32{pos[1]}
 		res1, err := a.DoFindNode(ctx, a.overlay, b.overlay, posReq, 16)
@@ -369,9 +553,9 @@ func TestService_DoFindNodeMax(t *testing.T) {
 func TestService_Lookup(t *testing.T) {
 	ctx := context.Background()
 
-	a := newTestNode(t, test.RandomAddress(), -1)
-	b := newTestNode(t, a.overlay, 5)
-	c := newTestNode(t, a.overlay, 5)
+	a := newTestNode(t, test.RandomAddress(), -1, randomUnderlay(123), false)
+	b := newTestNode(t, a.overlay, 5, randomUnderlay(124), false)
+	c := newTestNode(t, a.overlay, 5, randomUnderlay(125), false)
 
 	a.addOne(t, b.addr, true)
 	//b.addOne(t, a.addr, true)
@@ -421,14 +605,17 @@ func TestService_Lookup(t *testing.T) {
 	//b.connectMore(t, a.overlay, int(pos[0]), 2)
 
 	posC := hive2.LookupDistances(a.overlay, c.overlay)
-	c.connectMore(t, a.overlay, int(posC[1]), 3)
+	c.connectMore(t, a.overlay, int(posC[1]), 3, 200)
 
+	if l := a.kad.Snapshot().Connected; l != 1 {
+		t.Fatalf("connected expected 1 got %d", l)
+	}
 	hive2.NewLookup(a.overlay, a.Service).Run()
 
 	// skip saturated po
 	time.Sleep(time.Millisecond * 100)
 	s03 := a.kad.Snapshot()
-	if s03.Connected != 4 {
-		t.Fatalf("connected expected 4 got %d", s03.Connected)
+	if s03.Connected != 5 {
+		t.Fatalf("connected expected 5 got %d", s03.Connected)
 	}
 }
