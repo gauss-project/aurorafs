@@ -65,11 +65,12 @@ func (ci *ChunkInfo) triggerTimeOut() {
 				q := ci.getQueue(rootCid.String())
 				ci.queuesLk.Unlock()
 				if q != nil {
-					ci.syncLk.Lock()
-					if msgChan, ok := ci.syncMsg[rootCid.String()]; ok {
+					ci.syncLk.RLock()
+					msgChan, ok := ci.syncMsg[rootCid.String()]
+					ci.syncLk.RUnlock()
+					if ok {
 						msgChan <- false
 					}
-					ci.syncLk.Unlock()
 					q.popNode(Pulling, overlay.Bytes())
 					q.push(UnPull, overlay.Bytes())
 				} else {
