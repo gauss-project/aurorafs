@@ -6,7 +6,6 @@ import (
 	"crypto/ecdsa"
 	_ "embed"
 	"fmt"
-	"github.com/gauss-project/aurorafs/pkg/aurora"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -15,6 +14,7 @@ import (
 	"time"
 
 	"github.com/gauss-project/aurorafs"
+	"github.com/gauss-project/aurorafs/pkg/aurora"
 	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/crypto"
 	"github.com/gauss-project/aurorafs/pkg/keystore"

@@ -5,23 +5,22 @@ package debugapi
 
 import (
 	"crypto/ecdsa"
-	"github.com/gauss-project/aurorafs/pkg/aurora"
-	"github.com/gauss-project/aurorafs/pkg/chunkinfo"
-	"github.com/gauss-project/aurorafs/pkg/retrieval"
-	"github.com/gauss-project/aurorafs/pkg/routetab"
-	"github.com/gauss-project/aurorafs/pkg/topology/bootnode"
-	"github.com/gauss-project/aurorafs/pkg/topology/lightnode"
 	"net/http"
 	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/gauss-project/aurorafs/pkg/aurora"
 	"github.com/gauss-project/aurorafs/pkg/boson"
+	"github.com/gauss-project/aurorafs/pkg/chunkinfo"
 	"github.com/gauss-project/aurorafs/pkg/logging"
 	"github.com/gauss-project/aurorafs/pkg/p2p"
 	"github.com/gauss-project/aurorafs/pkg/pingpong"
+	"github.com/gauss-project/aurorafs/pkg/retrieval"
+	"github.com/gauss-project/aurorafs/pkg/routetab"
 	"github.com/gauss-project/aurorafs/pkg/storage"
-
 	"github.com/gauss-project/aurorafs/pkg/topology"
+	"github.com/gauss-project/aurorafs/pkg/topology/bootnode"
+	"github.com/gauss-project/aurorafs/pkg/topology/lightnode"
 	"github.com/gauss-project/aurorafs/pkg/tracing"
 	"github.com/prometheus/client_golang/prometheus"
 )
@@ -58,6 +57,7 @@ type Service struct {
 
 type Options struct {
 	PrivateKey     *ecdsa.PrivateKey
+	NetworkID      uint64
 	NATAddr        string
 	EnableWS       bool
 	EnableQUIC     bool
