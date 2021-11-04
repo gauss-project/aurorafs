@@ -417,8 +417,8 @@ func (s *server) auroraListHandler(w http.ResponseWriter, r *http.Request) {
 
 			responseList = append(responseList, auroraListResponse{
 				FileHash:  v,
-				Size:      info.FileSize,
-				FileSize:  info.TreeSize,
+				Size:      info.TreeSize,
+				FileSize:  info.FileSize,
 				PinState:  pinned,
 				BitVector: info.Bitvector,
 			})
