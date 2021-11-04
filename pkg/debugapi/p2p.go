@@ -15,6 +15,7 @@ type addressesResponse struct {
 	Overlay      boson.Address         `json:"overlay"`
 	Underlay     []multiaddr.Multiaddr `json:"underlay"`
 	Ethereum     common.Address        `json:"ethereum"`
+	NetworkID    uint64                `json:"network_id"`
 	PublicKey    string                `json:"public_key"`
 	PSSPublicKey string                `json:"pss_public_key"`
 }
@@ -36,6 +37,7 @@ func (s *Service) addressesHandler(w http.ResponseWriter, r *http.Request) {
 	jsonhttp.OK(w, addressesResponse{
 		Overlay:      s.overlay,
 		Underlay:     underlay,
+		NetworkID:    s.nodeOptions.NetworkID,
 		PublicKey:    hex.EncodeToString(crypto.EncodeSecp256k1PublicKey(&s.publicKey)),
 		PSSPublicKey: hex.EncodeToString(crypto.EncodeSecp256k1PublicKey(&s.pssPublicKey)),
 	})
