@@ -106,7 +106,7 @@ func (c *command) initStartCmd() (err error) {
 				logger.Info("Start node mode light.")
 			}
 
-			b, err := node.NewAurora(c.config.GetString(optionNameP2PAddr), signerConfig.address, *signerConfig.publicKey, signerConfig.signer, c.config.GetUint64(optionNameNetworkID), logger, signerConfig.libp2pPrivateKey, signerConfig.pssPrivateKey, node.Options{
+			b, err := node.NewAurora(c.config.GetString(optionNameP2PAddr), signerConfig.address, *signerConfig.publicKey, signerConfig.signer, c.config.GetUint64(optionNameNetworkID), logger, signerConfig.libp2pPrivateKey, node.Options{
 				DataDir:                  c.config.GetString(optionNameDataDir),
 				CacheCapacity:            c.config.GetUint64(optionNameCacheCapacity),
 				DBOpenFilesLimit:         c.config.GetUint64(optionNameDBOpenFilesLimit),
@@ -238,7 +238,6 @@ type signerConfig struct {
 	address          boson.Address
 	publicKey        *ecdsa.PublicKey
 	libp2pPrivateKey *ecdsa.PrivateKey
-	pssPrivateKey    *ecdsa.PrivateKey
 }
 
 //func waitForClef(logger logging.Logger, maxRetries uint64, endpoint string) (externalSigner *external.ExternalSigner, err error) {
@@ -375,30 +374,10 @@ func (c *command) configureSigner(cmd *cobra.Command, logger logging.Logger) (co
 		logger.Debugf("using existing libp2p key")
 	}
 
-	pssPrivateKey, created, err := keystore.Key("pss", password)
-	if err != nil {
-		return nil, fmt.Errorf("pss key: %w", err)
-	}
-	if created {
-		logger.Debugf("new pss key created")
-	} else {
-		logger.Debugf("using existing pss key")
-	}
-
-	logger.Infof("pss public key %x", crypto.EncodeSecp256k1PublicKey(&pssPrivateKey.PublicKey))
-
-	// postinst and post scripts inside packaging/{deb,rpm} depend and parse on this log output
-	//overlayEthAddress, err := signer.EthereumAddress()
-	//if err != nil {
-	//	return nil, err
-	//}
-	//logger.Infof("using ethereum address %x", overlayEthAddress)
-
 	return &signerConfig{
 		signer:           signer,
 		address:          address,
 		publicKey:        publicKey,
 		libp2pPrivateKey: libp2pPrivateKey,
-		pssPrivateKey:    pssPrivateKey,
 	}, nil
 }

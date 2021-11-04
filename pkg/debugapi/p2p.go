@@ -4,7 +4,6 @@ import (
 	"encoding/hex"
 	"net/http"
 
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/crypto"
 	"github.com/gauss-project/aurorafs/pkg/jsonhttp"
@@ -12,12 +11,10 @@ import (
 )
 
 type addressesResponse struct {
-	Overlay      boson.Address         `json:"overlay"`
-	Underlay     []multiaddr.Multiaddr `json:"underlay"`
-	Ethereum     common.Address        `json:"ethereum"`
-	NetworkID    uint64                `json:"network_id"`
-	PublicKey    string                `json:"public_key"`
-	PSSPublicKey string                `json:"pss_public_key"`
+	Overlay   boson.Address         `json:"overlay"`
+	Underlay  []multiaddr.Multiaddr `json:"underlay"`
+	NetworkID uint64                `json:"network_id"`
+	PublicKey string                `json:"public_key"`
 }
 
 func (s *Service) addressesHandler(w http.ResponseWriter, r *http.Request) {
@@ -35,10 +32,9 @@ func (s *Service) addressesHandler(w http.ResponseWriter, r *http.Request) {
 		underlay = u
 	}
 	jsonhttp.OK(w, addressesResponse{
-		Overlay:      s.overlay,
-		Underlay:     underlay,
-		NetworkID:    s.nodeOptions.NetworkID,
-		PublicKey:    hex.EncodeToString(crypto.EncodeSecp256k1PublicKey(&s.publicKey)),
-		PSSPublicKey: hex.EncodeToString(crypto.EncodeSecp256k1PublicKey(&s.pssPublicKey)),
+		Overlay:   s.overlay,
+		Underlay:  underlay,
+		NetworkID: s.nodeOptions.NetworkID,
+		PublicKey: hex.EncodeToString(crypto.EncodeSecp256k1PublicKey(&s.publicKey)),
 	})
 }
