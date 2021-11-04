@@ -3,8 +3,6 @@ package debugapi_test
 import (
 	"crypto/ecdsa"
 	"encoding/hex"
-	"github.com/gauss-project/aurorafs/pkg/topology/bootnode"
-	"github.com/gauss-project/aurorafs/pkg/topology/lightnode"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -27,6 +25,8 @@ import (
 	chequebookmock "github.com/gauss-project/aurorafs/pkg/settlement/swap/chequebook/mock"
 	swapmock "github.com/gauss-project/aurorafs/pkg/settlement/swap/mock"
 	"github.com/gauss-project/aurorafs/pkg/storage"
+	"github.com/gauss-project/aurorafs/pkg/topology/bootnode"
+	"github.com/gauss-project/aurorafs/pkg/topology/lightnode"
 	topologymock "github.com/gauss-project/aurorafs/pkg/topology/mock"
 	"github.com/multiformats/go-multiaddr"
 	"resenje.org/web"
@@ -154,11 +154,9 @@ func TestServer_Configure(t *testing.T) {
 	)
 	jsonhttptest.Request(t, client, http.MethodGet, "/addresses", http.StatusOK,
 		jsonhttptest.WithExpectedJSONResponse(debugapi.AddressesResponse{
-			Overlay:      o.Overlay,
-			Underlay:     make([]multiaddr.Multiaddr, 0),
-			Ethereum:     o.EthereumAddress,
-			PublicKey:    hex.EncodeToString(crypto.EncodeSecp256k1PublicKey(&o.PublicKey)),
-			PSSPublicKey: hex.EncodeToString(crypto.EncodeSecp256k1PublicKey(&o.PSSPublicKey)),
+			Overlay:   o.Overlay,
+			Underlay:  make([]multiaddr.Multiaddr, 0),
+			PublicKey: hex.EncodeToString(crypto.EncodeSecp256k1PublicKey(&o.PublicKey)),
 		}),
 	)
 
@@ -173,11 +171,9 @@ func TestServer_Configure(t *testing.T) {
 	)
 	jsonhttptest.Request(t, client, http.MethodGet, "/addresses", http.StatusOK,
 		jsonhttptest.WithExpectedJSONResponse(debugapi.AddressesResponse{
-			Overlay:      o.Overlay,
-			Underlay:     addresses,
-			Ethereum:     o.EthereumAddress,
-			PublicKey:    hex.EncodeToString(crypto.EncodeSecp256k1PublicKey(&o.PublicKey)),
-			PSSPublicKey: hex.EncodeToString(crypto.EncodeSecp256k1PublicKey(&o.PSSPublicKey)),
+			Overlay:   o.Overlay,
+			Underlay:  addresses,
+			PublicKey: hex.EncodeToString(crypto.EncodeSecp256k1PublicKey(&o.PublicKey)),
 		}),
 	)
 }

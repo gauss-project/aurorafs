@@ -7,16 +7,6 @@ import (
 	"context"
 	"crypto/ecdsa"
 	"fmt"
-	"github.com/gauss-project/aurorafs/pkg/aurora"
-	"github.com/gauss-project/aurorafs/pkg/chunkinfo"
-	"github.com/gauss-project/aurorafs/pkg/hive2"
-	"github.com/gauss-project/aurorafs/pkg/pinning"
-	"github.com/gauss-project/aurorafs/pkg/routetab"
-	"github.com/gauss-project/aurorafs/pkg/settlement/swap/oracle"
-	"github.com/gauss-project/aurorafs/pkg/shed"
-	"github.com/gauss-project/aurorafs/pkg/topology/bootnode"
-	"github.com/gauss-project/aurorafs/pkg/topology/kademlia"
-	"github.com/gauss-project/aurorafs/pkg/topology/lightnode"
 	"io"
 	"log"
 	"net"
@@ -26,18 +16,27 @@ import (
 
 	"github.com/gauss-project/aurorafs/pkg/addressbook"
 	"github.com/gauss-project/aurorafs/pkg/api"
+	"github.com/gauss-project/aurorafs/pkg/aurora"
+	"github.com/gauss-project/aurorafs/pkg/boson"
+	"github.com/gauss-project/aurorafs/pkg/chunkinfo"
 	"github.com/gauss-project/aurorafs/pkg/crypto"
 	"github.com/gauss-project/aurorafs/pkg/debugapi"
-
-	"github.com/gauss-project/aurorafs/pkg/boson"
+	"github.com/gauss-project/aurorafs/pkg/hive2"
 	"github.com/gauss-project/aurorafs/pkg/localstore"
 	"github.com/gauss-project/aurorafs/pkg/logging"
 	"github.com/gauss-project/aurorafs/pkg/metrics"
 	"github.com/gauss-project/aurorafs/pkg/netstore"
 	"github.com/gauss-project/aurorafs/pkg/p2p/libp2p"
 	"github.com/gauss-project/aurorafs/pkg/pingpong"
+	"github.com/gauss-project/aurorafs/pkg/pinning"
 	"github.com/gauss-project/aurorafs/pkg/resolver/multiresolver"
 	"github.com/gauss-project/aurorafs/pkg/retrieval"
+	"github.com/gauss-project/aurorafs/pkg/routetab"
+	"github.com/gauss-project/aurorafs/pkg/settlement/swap/oracle"
+	"github.com/gauss-project/aurorafs/pkg/shed"
+	"github.com/gauss-project/aurorafs/pkg/topology/bootnode"
+	"github.com/gauss-project/aurorafs/pkg/topology/kademlia"
+	"github.com/gauss-project/aurorafs/pkg/topology/lightnode"
 	"github.com/gauss-project/aurorafs/pkg/tracing"
 	"github.com/gauss-project/aurorafs/pkg/traversal"
 	ma "github.com/multiformats/go-multiaddr"
@@ -103,7 +102,7 @@ type Options struct {
 	AllowPrivateCIDRs bool
 }
 
-func NewAurora(addr string, bosonAddress boson.Address, publicKey ecdsa.PublicKey, signer crypto.Signer, networkID uint64, logger logging.Logger, libp2pPrivateKey, pssPrivateKey *ecdsa.PrivateKey, o Options) (b *Aurora, err error) {
+func NewAurora(addr string, bosonAddress boson.Address, publicKey ecdsa.PublicKey, signer crypto.Signer, networkID uint64, logger logging.Logger, libp2pPrivateKey *ecdsa.PrivateKey, o Options) (b *Aurora, err error) {
 	tracer, tracerCloser, err := tracing.NewTracer(&tracing.Options{
 		Enabled:     o.TracingEnabled,
 		Endpoint:    o.TracingEndpoint,
@@ -131,14 +130,11 @@ func NewAurora(addr string, bosonAddress boson.Address, publicKey ecdsa.PublicKe
 
 	var debugAPIService *debugapi.Service
 	if o.DebugAPIAddr != "" {
-		overlayEthAddress, err := signer.EthereumAddress()
-		if err != nil {
-			return nil, fmt.Errorf("eth address: %w", err)
-		}
 		// set up basic debug api endpoints for debugging and /health endpoint
-		debugAPIService = debugapi.New(bosonAddress, publicKey, pssPrivateKey.PublicKey, overlayEthAddress, logger, tracer, o.CORSAllowedOrigins, debugapi.Options{
+		debugAPIService = debugapi.New(bosonAddress, publicKey, logger, tracer, o.CORSAllowedOrigins, debugapi.Options{
 			PrivateKey:     libp2pPrivateKey,
 			NATAddr:        o.NATAddr,
+			NetworkID:      networkID,
 			EnableWS:       o.EnableWS,
 			EnableQUIC:     o.EnableQUIC,
 			NodeMode:       o.NodeMode,

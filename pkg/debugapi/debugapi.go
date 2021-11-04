@@ -5,44 +5,40 @@ package debugapi
 
 import (
 	"crypto/ecdsa"
-	"github.com/gauss-project/aurorafs/pkg/aurora"
-	"github.com/gauss-project/aurorafs/pkg/chunkinfo"
-	"github.com/gauss-project/aurorafs/pkg/retrieval"
-	"github.com/gauss-project/aurorafs/pkg/routetab"
-	"github.com/gauss-project/aurorafs/pkg/topology/bootnode"
-	"github.com/gauss-project/aurorafs/pkg/topology/lightnode"
 	"net/http"
 	"sync"
 
-	"github.com/ethereum/go-ethereum/common"
+	"github.com/gauss-project/aurorafs/pkg/aurora"
 	"github.com/gauss-project/aurorafs/pkg/boson"
+	"github.com/gauss-project/aurorafs/pkg/chunkinfo"
 	"github.com/gauss-project/aurorafs/pkg/logging"
 	"github.com/gauss-project/aurorafs/pkg/p2p"
 	"github.com/gauss-project/aurorafs/pkg/pingpong"
+	"github.com/gauss-project/aurorafs/pkg/retrieval"
+	"github.com/gauss-project/aurorafs/pkg/routetab"
 	"github.com/gauss-project/aurorafs/pkg/storage"
-
 	"github.com/gauss-project/aurorafs/pkg/topology"
+	"github.com/gauss-project/aurorafs/pkg/topology/bootnode"
+	"github.com/gauss-project/aurorafs/pkg/topology/lightnode"
 	"github.com/gauss-project/aurorafs/pkg/tracing"
 	"github.com/prometheus/client_golang/prometheus"
 )
 
 // Service implements http.Handler interface to be used in HTTP server.
 type Service struct {
-	overlay         boson.Address
-	publicKey       ecdsa.PublicKey
-	pssPublicKey    ecdsa.PublicKey
-	ethereumAddress common.Address
-	p2p             p2p.DebugService
-	pingpong        pingpong.Interface
-	topologyDriver  topology.Driver
-	storer          storage.Storer
-	logger          logging.Logger
-	tracer          *tracing.Tracer
-	lightNodes      *lightnode.Container
-	bootNodes       *bootnode.Container
-	routetab        routetab.RouteTab
-	chunkInfo       chunkinfo.Interface
-	retrieval       retrieval.Interface
+	overlay        boson.Address
+	publicKey      ecdsa.PublicKey
+	p2p            p2p.DebugService
+	pingpong       pingpong.Interface
+	topologyDriver topology.Driver
+	storer         storage.Storer
+	logger         logging.Logger
+	tracer         *tracing.Tracer
+	lightNodes     *lightnode.Container
+	bootNodes      *bootnode.Container
+	routetab       routetab.RouteTab
+	chunkInfo      chunkinfo.Interface
+	retrieval      retrieval.Interface
 	//accounting         accounting.Interface
 	//settlement         settlement.Interface
 	//chequebookEnabled  bool
@@ -58,6 +54,7 @@ type Service struct {
 
 type Options struct {
 	PrivateKey     *ecdsa.PrivateKey
+	NetworkID      uint64
 	NATAddr        string
 	EnableWS       bool
 	EnableQUIC     bool
@@ -71,12 +68,10 @@ type Options struct {
 // to expose /addresses, /health endpoints, Go metrics and pprof. It is useful to expose
 // these endpoints before all dependencies are configured and injected to have
 // access to basic debugging tools and /health endpoint.
-func New(overlay boson.Address, publicKey, pssPublicKey ecdsa.PublicKey, ethereumAddress common.Address, logger logging.Logger, tracer *tracing.Tracer, corsAllowedOrigins []string, o Options) *Service {
+func New(overlay boson.Address, publicKey ecdsa.PublicKey, logger logging.Logger, tracer *tracing.Tracer, corsAllowedOrigins []string, o Options) *Service {
 	s := new(Service)
 	s.overlay = overlay
 	s.publicKey = publicKey
-	s.pssPublicKey = pssPublicKey
-	s.ethereumAddress = ethereumAddress
 	s.logger = logger
 	s.tracer = tracer
 	s.corsAllowedOrigins = corsAllowedOrigins
