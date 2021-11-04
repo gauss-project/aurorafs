@@ -548,15 +548,17 @@ paths:
 
   "/addresses":
     get:
-      summary: Get addresses
+      summary: Get overlay and underlay addresses of the node
       tags:
-        - pprof
+        - Connectivity
       responses:
         "200":
-          description: Ok
+          description: Own node underlay and overlay addresses
           content:
             application/json:
               schema:
-                $ref: "AuroraCommon.yaml#/components/schemas/ReferenceResponse"
+                $ref: "AuroraCommon.yaml#/components/schemas/Addresses"
+        "500":
+          $ref: "AuroraCommon.yaml#/components/responses/500"
         default:
           description: Default response

@@ -26,9 +26,9 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/P2PUnderlay"
+        network_id:
+          type: integer
         public_key:
-          $ref: "#/components/schemas/PublicKey"
-        pss_public_key:
           $ref: "#/components/schemas/PublicKey"
 
     Topology:
