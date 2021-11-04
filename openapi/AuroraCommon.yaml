@@ -1,6 +1,6 @@
 openapi: 3.0.3
 info:
-  version: 1.1.0
+  version: 1.1.3
   title: Common Data Types
   description: |
 
@@ -26,9 +26,9 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/P2PUnderlay"
+        network_id:
+          type: integer
         public_key:
-          $ref: "#/components/schemas/PublicKey"
-        pss_public_key:
           $ref: "#/components/schemas/PublicKey"
 
     Topology:
