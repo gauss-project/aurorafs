@@ -30,6 +30,10 @@ type signerConfig struct {
 	libp2pPrivateKey *ecdsa.PrivateKey
 }
 
+func Version() string {
+	return aufs.Version
+}
+
 func NewNode(o *Options) (*Node, error) {
 	logger, err := newLogger(o.Verbosity)
 	if err != nil {
@@ -41,7 +45,7 @@ func NewNode(o *Options) (*Node, error) {
 		return nil, err
 	}
 
-	logger.Infof("version: %v", aufs.Version)
+	logger.Infof("version: %v", Version())
 
 	if o.EnableFullNode {
 		logger.Info("start node mode full.")
