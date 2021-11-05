@@ -1,4 +1,5 @@
 GO ?= go
+GOMOBILE ?= gomobile
 GOLANGCI_LINT ?= $$($(GO) env GOPATH)/bin/golangci-lint
 GOLANGCI_LINT_VERSION ?= v1.42.1
 GOGOPROTOBUF ?= protoc-gen-gogofaster
@@ -67,6 +68,53 @@ build: export CGO_ENABLED=0
 build: check-version
 build:
 	$(GO) build -trimpath -ldflags "$(LDFLAGS)" ./...
+
+.PHONY: android
+android: check-java
+android: check-mobile-tool
+android: download-vendor
+android:
+	[ -d "build" ] || mkdir build
+	$(GO) mod vendor && echo "create go dependency vendor"
+	GO111MODULE=off $(GOMOBILE) bind -target=android -o=aurora.aar ./mobile || (echo "build failed" && rm -rf build && rm -rf vendor && exit 1)
+	mv aurora.aar build/ && mv aurora-sources.jar build/
+	echo "android sdk build finished."
+	echo "please import build/aurora.aar to android studio!"
+	rm -rf vendor
+
+.PHONY: ios
+ios: check-xcode
+ios: check-mobile-tool
+ios: download-vendor
+ios:
+	[ -d "build" ] || mkdir build
+	$(GO) mod vendor && echo "create go dependency vendor"
+	GO111MODULE=off $(GOMOBILE) bind -target=ios -o=aurora.framework ./mobile || (echo "build failed" && rm -rf build && rm -rf vendor && exit 1)
+	mv aurora.framework build/
+	echo "ios framework build finished."
+	echo "please import build/aurora.framework to xcode!"
+	rm -rf vendor
+
+.PHONY: check-mobile-tool
+check-mobile-tool:
+	type ${GOMOBILE} || (echo "Golang mobile build tool not installed" && exit 1); exit 0
+
+.PHONY: check-java
+check-java:
+	type java || (echo "Not found java on the system" && exit 1); exit 0
+	java -version || (echo "Java check version failed, please check java setup" && exit 1); exit 0
+	[ -z $(ANDROID_HOME) ] && echo "Please set ANDROID_HOME env" && exit 1; exit 0
+	[ -z $(ANDROID_NDK_HOME) ] && echo "Please install android NDK tools, and set ANDROID_NDK_HOME" && exit 1; exit 0
+
+.PHONY: check-xcode
+check-xcode:
+	[ ${GOOS} != "darwin" ] && echo "Must be on the MacOS system" && exit 1
+	xcode-select -p || (echo "Please install command line tool first" && exit 1); exit 0
+	xcodebuild -version || (echo "Please install Xcode" && exit 1); exit 0
+
+.PHONY: download-vendor
+download-vendor:
+	$(GO) get github.com/karalabe/usb
 
 .PHONY: check-version
 check-version:
