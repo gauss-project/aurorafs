@@ -1,6 +1,7 @@
 package mobile
 
 import (
+	"bytes"
 	"fmt"
 	"reflect"
 
@@ -19,7 +20,7 @@ type Options struct {
 	EnableDebugAPI bool
 
 	// p2p setup
-	NetworkID      uint64
+	NetworkID      int64 // default type uint64
 	P2PPort        int
 	WelcomeMessage string
 
@@ -28,10 +29,10 @@ type Options struct {
 	LightMaxPeers int
 
 	// cache size
-	CacheCapacity uint64
+	CacheCapacity int64 // default type uint64
 
 	// node bootstrap
-	BootNodes      []string
+	BootNodes      []byte // default type []string
 	EnableDevNode  bool
 	EnableFullNode bool
 
@@ -45,9 +46,9 @@ type Options struct {
 	DataPath string
 
 	// leveldb opts
-	BlockCacheCapacity     uint64
-	OpenFilesLimit         uint64
-	WriteBufferSize        uint64
+	BlockCacheCapacity     int64 // default type uint64
+	OpenFilesLimit         int64 // default type uint64
+	WriteBufferSize        int64 // default type uint64
 	DisableSeeksCompaction bool
 
 	// misc
@@ -70,24 +71,27 @@ var defaultOptions = &Options{
 	Verbosity:          "info",
 }
 
-const ListenAddress = "localhost"
+const listenAddress = "localhost"
 
 func (o Options) DataDir(c *node.Options) {
 	c.DataDir = o.DataPath
 }
 
 func (o Options) APIAddr(c *node.Options) {
-	c.APIAddr = fmt.Sprintf("%s:%d", ListenAddress, o.APIPort)
+	c.APIAddr = fmt.Sprintf("%s:%d", listenAddress, o.APIPort)
 }
 
 func (o Options) DebugAPIAddr(c *node.Options) {
 	if o.EnableDebugAPI {
-		c.DebugAPIAddr = fmt.Sprintf("%s:%d", ListenAddress, o.DebugAPIPort)
+		c.DebugAPIAddr = fmt.Sprintf("%s:%d", listenAddress, o.DebugAPIPort)
 	}
 }
 
 func (o Options) Bootnodes(c *node.Options) {
-	c.Bootnodes = o.BootNodes
+	bootNodes := bytes.Split(o.BootNodes, []byte{','})
+	for _, bootNode := range bootNodes {
+		c.Bootnodes = append(c.Bootnodes, string(bootNode))
+	}
 }
 
 func (o Options) IsDev(c *node.Options) {
@@ -117,15 +121,15 @@ func (o Options) OracleEndpoint(c *node.Options) {
 }
 
 func (o Options) DBBlockCacheCapacity(c *node.Options) {
-	c.DBBlockCacheCapacity = o.BlockCacheCapacity
+	c.DBBlockCacheCapacity = uint64(o.BlockCacheCapacity)
 }
 
 func (o Options) DBOpenFilesLimit(c *node.Options) {
-	c.DBOpenFilesLimit = o.OpenFilesLimit
+	c.DBOpenFilesLimit = uint64(o.OpenFilesLimit)
 }
 
 func (o Options) DBWriteBufferSize(c *node.Options) {
-	c.DBWriteBufferSize = o.WriteBufferSize
+	c.DBWriteBufferSize = uint64(o.WriteBufferSize)
 }
 
 func (o Options) DBDisableSeeksCompaction(c *node.Options) {
@@ -133,7 +137,7 @@ func (o Options) DBDisableSeeksCompaction(c *node.Options) {
 }
 
 // Export exports Options to node.Options, skipping all other extra fields
-func (o *Options) Export() (c node.Options) {
+func (o *Options) export() (c node.Options) {
 	localVal := reflect.ValueOf(o).Elem()
 	remotePtr := reflect.ValueOf(&c)
 	remoteVal := reflect.ValueOf(&c).Elem()

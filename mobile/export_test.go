@@ -3,7 +3,13 @@ package mobile
 import (
 	"math/rand"
 	"os"
+
+	"github.com/gauss-project/aurorafs/pkg/node"
 )
+
+func ExportOptions(o *Options) node.Options {
+	return o.export()
+}
 
 // export defaultConfig for test
 func ExportDefaultConfig() (o *Options, err error) {
@@ -21,9 +27,6 @@ func ExportDefaultConfig() (o *Options, err error) {
 
 	// put keys into data dir
 	o.KeysPath = o.DataPath
-
-	// put socks into data dir
-	o.SocketPath = o.DataPath
 
 	// dev chain
 	o.ContractAddress = "0x7F578e5ade91A30aC8ABf120d102E282821bd142"

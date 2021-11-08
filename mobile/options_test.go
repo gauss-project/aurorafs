@@ -13,7 +13,7 @@ func TestExport(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	nodeOpts := opts.Export()
+	nodeOpts := mobile.ExportOptions(opts)
 
 	nodeOptsVal := reflect.ValueOf(&nodeOpts).Elem()
 	nodeOptsType := reflect.TypeOf(&nodeOpts).Elem()

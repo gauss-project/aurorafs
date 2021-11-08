@@ -40,7 +40,7 @@ func NewNode(o *Options) (*Node, error) {
 		return nil, err
 	}
 
-	signerConfig, err := configureSigner(o.KeysPath, o.Password, o.NetworkID, logger)
+	signerConfig, err := configureSigner(o.KeysPath, o.Password, uint64(o.NetworkID), logger)
 	if err != nil {
 		return nil, err
 	}
@@ -53,10 +53,10 @@ func NewNode(o *Options) (*Node, error) {
 		logger.Info("start node mode light.")
 	}
 
-	config := o.Export()
-	p2pAddr := fmt.Sprintf("%s:%d", ListenAddress, o.P2PPort)
+	config := o.export()
+	p2pAddr := fmt.Sprintf("%s:%d", listenAddress, o.P2PPort)
 
-	aurora, err := node.NewAurora(p2pAddr, signerConfig.address, *signerConfig.publicKey, signerConfig.signer, o.NetworkID, logger, signerConfig.libp2pPrivateKey, config)
+	aurora, err := node.NewAurora(p2pAddr, signerConfig.address, *signerConfig.publicKey, signerConfig.signer, uint64(o.NetworkID), logger, signerConfig.libp2pPrivateKey, config)
 	if err != nil {
 		return nil, err
 	}
@@ -65,7 +65,7 @@ func NewNode(o *Options) (*Node, error) {
 }
 
 func (n *Node) Stop() error {
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
 	return n.node.Shutdown(ctx)
