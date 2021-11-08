@@ -74,43 +74,41 @@ android: check-java
 android: check-mobile-tool
 android: download-vendor
 android:
-	[ -d "build" ] || mkdir build
+	[ -d "dist" ] || mkdir dist
 	$(GO) mod vendor && echo "create go dependency vendor"
-	GO111MODULE=off $(GOMOBILE) bind -target=android -o=aurora.aar ./mobile || (echo "build failed" && rm -rf build && rm -rf vendor && exit 1)
-	mv aurora.aar build/ && mv aurora-sources.jar build/
+	GO111MODULE=off $(GOMOBILE) bind -target=android -o=aurora.aar ./mobile || (echo "build android sdk failed" && rm -rf vendor && exit 1)
+	mv aurora.aar dist/ && mv aurora-sources.jar dist/ && rm -rf vendor
 	echo "android sdk build finished."
-	echo "please import build/aurora.aar to android studio!"
-	rm -rf vendor
+	echo "please import dist/aurora.aar to android studio!"
 
 .PHONY: ios
 ios: check-xcode
 ios: check-mobile-tool
 ios: download-vendor
 ios:
-	[ -d "build" ] || mkdir build
+	[ -d "dist" ] || mkdir dist
 	$(GO) mod vendor && echo "create go dependency vendor"
-	GO111MODULE=off $(GOMOBILE) bind -target=ios -o=aurora.framework ./mobile || (echo "build failed" && rm -rf build && rm -rf vendor && exit 1)
-	mv aurora.framework build/
+	GO111MODULE=off $(GOMOBILE) bind -target=ios -o=aurora.xcframework ./mobile || (echo "build ios framework failed" && rm -rf vendor && exit 1)
+	mv aurora.xcframework dist/ && rm -rf vendor
 	echo "ios framework build finished."
-	echo "please import build/aurora.framework to xcode!"
-	rm -rf vendor
+	echo "please import dist/aurora.xcframework to xcode!"
 
 .PHONY: check-mobile-tool
 check-mobile-tool:
-	type ${GOMOBILE} || (echo "Golang mobile build tool not installed" && exit 1); exit 0
+	type ${GOMOBILE} || (echo "Golang mobile build tool not installed" && exit 1)
 
 .PHONY: check-java
 check-java:
-	type java || (echo "Not found java on the system" && exit 1); exit 0
-	java -version || (echo "Java check version failed, please check java setup" && exit 1); exit 0
+	type java || (echo "Not found java on the system" && exit 1)
+	java -version || (echo "Java check version failed, please check java setup" && exit 1)
 	[ -z $(ANDROID_HOME) ] && echo "Please set ANDROID_HOME env" && exit 1; exit 0
 	[ -z $(ANDROID_NDK_HOME) ] && echo "Please install android NDK tools, and set ANDROID_NDK_HOME" && exit 1; exit 0
 
 .PHONY: check-xcode
 check-xcode:
-	[ ${GOOS} != "darwin" ] && echo "Must be on the MacOS system" && exit 1
-	xcode-select -p || (echo "Please install command line tool first" && exit 1); exit 0
-	xcodebuild -version || (echo "Please install Xcode" && exit 1); exit 0
+	[ ${GOOS} = "darwin" ] || (echo "Must be on the MacOS system" && exit 1)
+	xcode-select -p || (echo "Please install command line tool first" && exit 1)
+	xcrun xcodebuild -version || (echo "Please install Xcode. If xcode installed, you should exec `sudo xcode-select -s /Applications/Xcode.app/Contents/Developer` in your shell" && exit 1)
 
 .PHONY: download-vendor
 download-vendor:
