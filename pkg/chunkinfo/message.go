@@ -300,7 +300,7 @@ func (ci *ChunkInfo) onChunkPyramidResp(ctx context.Context, authInfo []byte, ro
 		return err
 	}
 	ci.updateChunkPyramid(rootCid, v, pyramid)
-	ci.ct.initNeighborChunkInfo(rootCid)
+	ci.initNeighborChunkInfo(rootCid)
 	return nil
 }
 
