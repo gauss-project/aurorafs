@@ -1,6 +1,6 @@
 openapi: 3.0.3
 info:
-  version: 1.1.3
+  version: 1.1.4
   title: Aurora Debug API
   description: "A list of the currently provided debug interfaces to interact with the aurorafs node"
 
@@ -18,7 +18,7 @@ servers:
         default: "localhost"
         description: Base address of the local aurorafs node debug API
       port:
-        default: 1635
+        default: "1635"
         description: Service port provided in aurorafs node config
 
 paths:
@@ -50,6 +50,23 @@ paths:
             application/json:
               schema:
                 $ref: "AuroraCommon.yaml#/components/schemas/HealthStatus"
+        default:
+          description: Default response
+
+  "/addresses":
+    get:
+      summary: Get overlay and underlay addresses of the node
+      tags:
+        - Connectivity
+      responses:
+        "200":
+          description: Own node underlay and overlay addresses
+          content:
+            application/json:
+              schema:
+                $ref: "AuroraCommon.yaml#/components/schemas/Addresses"
+        "500":
+          $ref: "AuroraCommon.yaml#/components/responses/500"
         default:
           description: Default response
 
@@ -411,154 +428,125 @@ paths:
 
   "/metrics":
     get:
-      summary: Get counter
+      summary: Prometheus metrics gateway
       tags:
         - metrics
       responses:
         "200":
           description: OK
           content:
-            application/json:
+            text/plain:
               schema:
-                $ref: "AuroraCommon.yaml#/components/schemas/Status"
+                type: string
+                example: "# HELP aurora_api_request_count Number of API requests."
         default:
           description: Default response
 
   "/debug/pprof/cmdline":
     get:
-      summary: Get cmdline
+      summary: Responds with the running program's command line, with arguments separated by NUL bytes
       tags:
         - pprof
       responses:
         "200":
           description: Ok
-          headers:
-            "X-Content-Type-Options":
-              $ref: "AuroraCommon.yaml#/components/headers/AuroraReferenceContentType"
-            "Content-Type":
-              $ref: "AuroraCommon.yaml#/components/headers/AuroraReferenceContentType"
           content:
-            application/json:
+            text/plain:
               schema:
-                $ref: "AuroraCommon.yaml#/components/schemas/ReferenceResponse"
+                type: string
         default:
           description: Default response
 
   "/debug/pprof/profile":
     get:
-      summary: Get cmdline
+      summary: Responds with the pprof-formatted cpu profile
       tags:
         - pprof
+      parameters:
+        - in: query
+          name: seconds
+          schema:
+            type: integer
+          required: false
+          description: profiling lasts for duration specified in seconds GET parameter, or for 30 seconds if not specified.
       responses:
         "200":
           description: Ok
-          headers:
-            "X-Content-Type-Options":
-              $ref: "AuroraCommon.yaml#/components/headers/AuroraReferenceContentType"
-            "Content-Type":
-              $ref: "AuroraCommon.yaml#/components/headers/AuroraReferenceContentType"
-            "Content-Disposition":
-              $ref: "AuroraCommon.yaml#/components/headers/AuroraReferenceContentType"
           content:
-            application/json:
+            application/octet-stream:
               schema:
-                $ref: "AuroraCommon.yaml#/components/schemas/ReferenceResponse"
+                format: binary
         default:
           description: Default response
 
   "/debug/pprof/symbol":
-    get:
-      summary: Get symbol
+    post:
+      summary: Looks up the program counters listed in the request, responding with a table mapping program counters to function names
       tags:
         - pprof
+      requestBody:
+        content:
+          text/plain:
+            schema:
+              type: string
       responses:
         "200":
           description: Ok
-          headers:
-            "X-Content-Type-Options":
-              $ref: "AuroraCommon.yaml#/components/headers/AuroraReferenceContentType"
-            "Content-Type":
-              $ref: "AuroraCommon.yaml#/components/headers/AuroraReferenceContentType"
           content:
-            application/json:
+            text/plain:
               schema:
-                $ref: "AuroraCommon.yaml#/components/schemas/ReferenceResponse"
+                type: string
         default:
           description: Default response
 
   "/debug/pprof/trace":
     get:
-      summary: Get trace
+      summary: Responds with the execution trace in binary form
       tags:
         - pprof
+      parameters:
+        - in: query
+          name: seconds
+          schema:
+            type: integer
+          required: false
+          description: tracing lasts for duration specified in seconds GET parameter, or for 1 second if not specified.
       responses:
         "200":
           description: Ok
-          headers:
-            "X-Content-Type-Options":
-              $ref: "AuroraCommon.yaml#/components/headers/AuroraReferenceContentType"
-            "Content-Type":
-              $ref: "AuroraCommon.yaml#/components/headers/AuroraReferenceContentType"
-            "Content-Disposition":
-              $ref: "AuroraCommon.yaml#/components/headers/AuroraReferenceContentType"
           content:
-            application/json:
+            application/octet-stream:
               schema:
-                $ref: "AuroraCommon.yaml#/components/schemas/ReferenceResponse"
+                format: binary
         default:
           description: Default response
 
-  "/debug/pprof/":
+  "/debug/pprof":
     get:
-      summary: Get pprof
+      summary: Responds with the pprof-formatted profile named by the request
       tags:
         - pprof
       responses:
         "200":
           description: Ok
-          headers:
-            "X-Content-Type-Options":
-              $ref: "AuroraCommon.yaml#/components/headers/AuroraReferenceContentType"
-            "Content-Type":
-              $ref: "AuroraCommon.yaml#/components/headers/AuroraReferenceContentType"
           content:
-            application/json:
+            text/html:
               schema:
-                $ref: "AuroraCommon.yaml#/components/schemas/ReferenceResponse"
+                type: string
         default:
           description: Default response
 
   "/debug/vars":
     get:
-      summary: Get vars
+      summary: Exposes os.Args and runtime.Memstats information
       tags:
         - pprof
       responses:
         "200":
           description: Ok
-          headers:
-            "Content-Type":
-              $ref: "AuroraCommon.yaml#/components/headers/AuroraReferenceContentType"
           content:
             application/json:
               schema:
-                $ref: "AuroraCommon.yaml#/components/schemas/ReferenceResponse"
-        default:
-          description: Default response
-
-  "/addresses":
-    get:
-      summary: Get overlay and underlay addresses of the node
-      tags:
-        - Connectivity
-      responses:
-        "200":
-          description: Own node underlay and overlay addresses
-          content:
-            application/json:
-              schema:
-                $ref: "AuroraCommon.yaml#/components/schemas/Addresses"
-        "500":
-          $ref: "AuroraCommon.yaml#/components/responses/500"
+                type: string
         default:
           description: Default response
