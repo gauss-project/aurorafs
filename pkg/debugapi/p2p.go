@@ -3,7 +3,6 @@ package debugapi
 import (
 	"bytes"
 	"encoding/hex"
-	"fmt"
 	"net/http"
 
 	"github.com/gauss-project/aurorafs/pkg/boson"
@@ -60,34 +59,30 @@ func (s *Service) addressesHandler(w http.ResponseWriter, r *http.Request) {
 		ip6Content = new(bytes.Buffer)
 	)
 	ip4Resp, err := http.Get(ip4ServiceUrl)
-	if ip4Resp.StatusCode < 200 || ip4Resp.StatusCode >= 300 {
-		err = fmt.Errorf("service(%s) report http code %s(%d)", ip4ServiceUrl, ip4Resp.Status, ip4Resp.StatusCode)
-	}
 	if err != nil {
 		s.logger.Debugf("debug api: p2p request public ipv4: %v", err)
-		jsonhttp.InternalServerError(w, err)
-		return
-	}
-	_, err = ip4Content.ReadFrom(ip4Resp.Body)
-	if err != nil {
-		s.logger.Debugf("debug api: p2p parse ipv4 service response: %v", err)
-		jsonhttp.InternalServerError(w, err)
-		return
+	} else {
+		if ip4Resp.StatusCode < 200 || ip4Resp.StatusCode >= 300 {
+			s.logger.Debugf("debug api: http service(%s) report http code %s(%d)", ip4ServiceUrl, ip4Resp.Status, ip4Resp.StatusCode)
+		} else {
+			_, err = ip4Content.ReadFrom(ip4Resp.Body)
+			if err != nil {
+				s.logger.Debugf("debug api: p2p parse ipv4 service response: %v", err)
+			}
+		}
 	}
 	ip6Resp, err := http.Get(ip6ServiceUrl)
-	if ip6Resp.StatusCode < 200 || ip6Resp.StatusCode >= 300 {
-		err = fmt.Errorf("service(%s) report http code %s(%d)", ip6ServiceUrl, ip6Resp.Status, ip6Resp.StatusCode)
-	}
 	if err != nil {
 		s.logger.Debugf("debug api: p2p request public ipv6: %v", err)
-		jsonhttp.InternalServerError(w, err)
-		return
-	}
-	_, err = ip6Content.ReadFrom(ip6Resp.Body)
-	if err != nil {
-		s.logger.Debugf("debug api: p2p parse ipv6 service response: %v", err)
-		jsonhttp.InternalServerError(w, err)
-		return
+	} else {
+		if ip6Resp.StatusCode < 200 || ip6Resp.StatusCode >= 300 {
+			s.logger.Debugf("debug api: http service(%s) report http code %s(%d)", ip6ServiceUrl, ip6Resp.Status, ip6Resp.StatusCode)
+		} else {
+			_, err = ip6Content.ReadFrom(ip6Resp.Body)
+			if err != nil {
+				s.logger.Debugf("debug api: p2p parse ipv6 service response: %v", err)
+			}
+		}
 	}
 	jsonhttp.OK(w, addressesResponse{
 		Overlay:   s.overlay,
