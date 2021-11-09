@@ -1,6 +1,6 @@
 openapi: 3.0.3
 info:
-  version: 1.1.3
+  version: 1.1.4
   title: Common Data Types
   description: |
 
@@ -26,10 +26,24 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/P2PUnderlay"
+        nat_route:
+          type: array
+          items:
+            $ref: "#/components/schemas/ListenAddress"
+        public_ip:
+          $ref: "#/components/schemas/PublicIP"
         network_id:
           type: integer
         public_key:
           $ref: "#/components/schemas/PublicKey"
+
+    PublicIP:
+      type: object
+      properties:
+        ipv4:
+          type: string
+        ipv6:
+          type: string
 
     Topology:
       type: object
@@ -125,6 +139,10 @@ components:
     P2PUnderlay:
       type: string
       example: "/ip4/127.0.0.1/tcp/1634/p2p/16Uiu2HAmTm17toLDaPYzRyjKn27iCB76yjKnJ5DjQXneFmifFvaX"
+
+    ListenAddress:
+      type: string
+      example: "172.12.0.111:15346"
 
     Peers:
       type: object
@@ -301,6 +319,11 @@ components:
       description: "The index of the next possible update"
       schema:
         $ref: "#/components/schemas/HexString"
+
+    AuroraRecoveryTargets:
+      description: "The targets provided for recovery"
+      schema:
+        type: string
 
     ETag:
       description: |

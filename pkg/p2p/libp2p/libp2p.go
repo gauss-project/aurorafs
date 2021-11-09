@@ -5,13 +5,12 @@ import (
 	"crypto/ecdsa"
 	"errors"
 	"fmt"
-	au "github.com/gauss-project/aurorafs"
-	"github.com/gauss-project/aurorafs/pkg/topology/bootnode"
 	"net"
 	"runtime"
 	"sync"
 	"time"
 
+	au "github.com/gauss-project/aurorafs"
 	"github.com/gauss-project/aurorafs/pkg/addressbook"
 	"github.com/gauss-project/aurorafs/pkg/aurora"
 	"github.com/gauss-project/aurorafs/pkg/boson"
@@ -22,6 +21,7 @@ import (
 	"github.com/gauss-project/aurorafs/pkg/p2p/libp2p/internal/breaker"
 	"github.com/gauss-project/aurorafs/pkg/p2p/libp2p/internal/handshake"
 	"github.com/gauss-project/aurorafs/pkg/storage"
+	"github.com/gauss-project/aurorafs/pkg/topology/bootnode"
 	"github.com/gauss-project/aurorafs/pkg/topology/lightnode"
 	"github.com/gauss-project/aurorafs/pkg/tracing"
 	"github.com/libp2p/go-libp2p"
@@ -32,6 +32,7 @@ import (
 	libp2ppeer "github.com/libp2p/go-libp2p-core/peer"
 	"github.com/libp2p/go-libp2p-core/peerstore"
 	"github.com/libp2p/go-libp2p-core/protocol"
+	nat "github.com/libp2p/go-libp2p-nat"
 	"github.com/libp2p/go-libp2p-peerstore/pstoremem"
 	libp2pquic "github.com/libp2p/go-libp2p-quic-transport"
 	tptu "github.com/libp2p/go-libp2p-transport-upgrader"
@@ -539,6 +540,50 @@ func (s *Service) Addresses() (addreses []ma.Multiaddr, err error) {
 	}
 
 	return addreses, nil
+}
+
+func (s *Service) NATAddresses() (addresses []net.Addr, err error) {
+	maxDepth := 5
+	// only check nat address nearest the node
+	var natIterFn func(natInst *nat.NAT, depth int) error
+	natIterFn = func(natInst *nat.NAT, depth int) error {
+		if depth == maxDepth {
+			return nil
+		}
+
+		// if nat is closed, instance will be nil
+		if natInst == nil {
+			return nil
+		}
+
+		natMaps := natInst.Mappings()
+
+		for _, natMap := range natMaps {
+			addr, err := natMap.ExternalAddr()
+			if err != nil {
+				if errors.Is(err, nat.ErrNoMapping) {
+					continue
+				}
+				return err
+			}
+
+			addresses = append(addresses, addr)
+
+			if natMap.NAT() != natInst {
+				if err := natIterFn(natMap.NAT(), depth+1); err != nil {
+					return err
+				}
+			}
+		}
+
+		return nil
+	}
+
+	if err := natIterFn(s.natManager.NAT(), 0); err != nil {
+		return nil, err
+	}
+
+	return addresses, nil
 }
 
 func (s *Service) NATManager() basichost.NATManager {
