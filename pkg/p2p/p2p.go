@@ -4,10 +4,11 @@ package p2p
 
 import (
 	"context"
-	"github.com/gauss-project/aurorafs/pkg/aurora"
 	"io"
+	"net"
 	"time"
 
+	"github.com/gauss-project/aurorafs/pkg/aurora"
 	"github.com/gauss-project/aurorafs/pkg/boson"
 	ma "github.com/multiformats/go-multiaddr"
 )
@@ -20,6 +21,7 @@ type Service interface {
 	Peers() []Peer
 	BlocklistedPeers() ([]Peer, error)
 	Addresses() ([]ma.Multiaddr, error)
+	NATAddresses() ([]net.Addr, error)
 	SetPickyNotifier(PickyNotifier)
 	Halter
 }
