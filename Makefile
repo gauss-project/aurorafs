@@ -1,4 +1,5 @@
 GO ?= go
+GOBIND ?= gobind
 GOMOBILE ?= gomobile
 GOLANGCI_LINT ?= $$($(GO) env GOPATH)/bin/golangci-lint
 GOLANGCI_LINT_VERSION ?= v1.42.1
@@ -22,6 +23,8 @@ BINARY_NAME ?= aurora.exe
 else
 BINARY_NAME ?= aurora
 endif
+
+SHELL=bash
 
 .PHONY: all
 all: build lint vet test-race binary
@@ -76,8 +79,8 @@ android: download-vendor
 android:
 	[ -d "dist" ] || mkdir dist
 	$(GO) mod vendor && echo "create go dependency vendor"
-	GO111MODULE=off $(GOMOBILE) bind -target=android -o=aurora.aar ./mobile || (echo "build android sdk failed" && rm -rf vendor && exit 1)
-	mv aurora.aar dist/ && mv aurora-sources.jar dist/ && rm -rf vendor
+	[ -f "dist/aurora.aar" ] || (GO111MODULE=off $(GOMOBILE) bind -target=android -o=aurora.aar ./mobile && mv -n aurora.aar dist/ && mv -n aurora-sources.jar dist/) || (echo "build android sdk failed" && rm -rf vendor && exit 1)
+	rm -rf vendor
 	echo "android sdk build finished."
 	echo "please import dist/aurora.aar to android studio!"
 
@@ -88,14 +91,17 @@ ios: download-vendor
 ios:
 	[ -d "dist" ] || mkdir dist
 	$(GO) mod vendor && echo "create go dependency vendor"
-	GO111MODULE=off $(GOMOBILE) bind -target=ios -o=aurora.xcframework ./mobile || (echo "build ios framework failed" && rm -rf vendor && exit 1)
-	mv aurora.xcframework dist/ && rm -rf vendor
+	[ -d "dist/aurora.xcframework" ] || (GO111MODULE=off $(GOMOBILE) bind -target=ios -o=aurora.xcframework ./mobile && mv -n aurora.xcframework dist/) || (echo "build ios framework failed" && rm -rf vendor && exit 1)
+	rm -rf vendor
 	echo "ios framework build finished."
 	echo "please import dist/aurora.xcframework to xcode!"
 
 .PHONY: check-mobile-tool
+check-mobile-tool: check-version
 check-mobile-tool:
-	type ${GOMOBILE} || (echo "Golang mobile build tool not installed" && exit 1)
+	check_path=false; for line in $(shell $(GO) env GOPATH | tr ':' '\n'); do if [[ $$PWD = $$line* ]]; then check_path=true; fi; done; $$check_path || (echo "Current path does not match your GOPATH, please check" && exit 1)
+	type ${GOMOBILE} || $(GO) install golang.org/x/mobile/cmd/gomobile@latest
+	type ${GOBIND} || $(GO) install golang.org/x/mobile/cmd/gobind@latest
 
 .PHONY: check-java
 check-java:
@@ -112,6 +118,7 @@ check-xcode:
 
 .PHONY: download-vendor
 download-vendor:
+	$(GO) mod download
 	$(GO) get github.com/karalabe/usb
 
 .PHONY: check-version
