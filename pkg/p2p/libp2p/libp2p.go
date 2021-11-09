@@ -551,6 +551,11 @@ func (s *Service) NATAddresses() (addresses []net.Addr, err error) {
 			return nil
 		}
 
+		// if nat is closed, instance will be nil
+		if natInst == nil {
+			return nil
+		}
+
 		natMaps := natInst.Mappings()
 
 		for _, natMap := range natMaps {
