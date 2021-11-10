@@ -45,6 +45,10 @@ type Interface interface {
 	DelDiscover(rootCid boson.Address)
 
 	DelPyramid(rootCid boson.Address) bool
+
+	OnChunkRecordSource(cid, rootCid, sourceOverlay boson.Address) error
+
+	GetChunkInfoSource(rootCid boson.Address) aurora.ChunkInfoSourceApi
 }
 
 // ChunkInfo
@@ -67,6 +71,7 @@ type ChunkInfo struct {
 	cpd          *pendingFinderInfo
 	singleflight singleflight.Group
 	oracleChain  oracle.Resolver
+	cs           *chunkInfoSource
 }
 
 // New
@@ -90,6 +95,7 @@ func New(addr boson.Address, streamer p2p.Streamer, logger logging.Logger, trave
 		logger:      logger,
 		traversal:   traversal,
 		oracleChain: oracleChain,
+		cs:          newChunkSource(storer, logger),
 	}
 	chunkinfo.triggerTimeOut()
 	chunkinfo.cleanDiscoverTrigger()
@@ -121,6 +127,9 @@ func (ci *ChunkInfo) InitChunkInfo() error {
 	if err := ci.initChunkInfoDiscover(); err != nil {
 		return err
 	}
+	if err := ci.cs.initChunkInfoSource(); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -140,9 +149,6 @@ func (ci *ChunkInfo) Init(ctx context.Context, authInfo []byte, rootCid boson.Ad
 		}
 		return ci.FindChunkInfo(context.Background(), authInfo, rootCid, overlays), nil
 	})
-	if v == nil {
-		return false
-	}
 	return v.(bool)
 }
 
@@ -283,6 +289,9 @@ func (ci *ChunkInfo) DelFile(rootCid boson.Address) bool {
 	if !ci.delDiscoverPresence(rootCid) {
 		return false
 	}
+	if !ci.DelChunkInfoSource(rootCid) {
+		return false
+	}
 	return ci.delPresence(rootCid)
 }
 
@@ -292,10 +301,24 @@ func (ci *ChunkInfo) DelDiscover(rootCid boson.Address) {
 	delete(ci.queues, rootCid.String())
 	ci.queuesLk.Unlock()
 	ci.delDiscoverPresence(rootCid)
+	ci.DelChunkInfoSource(rootCid)
 }
 
 func (ci *ChunkInfo) DelPyramid(rootCid boson.Address) bool {
 	return ci.cp.delRootCid(rootCid)
+}
+
+//Record every chunk source.
+func (ci *ChunkInfo) OnChunkRecordSource(cid, rootCid, sourceOverlay boson.Address) error {
+	return ci.UpdateChunkInfoSource(rootCid, sourceOverlay, cid)
+}
+
+func (ci *ChunkInfo) GetChunkInfoSource(rootCid boson.Address) aurora.ChunkInfoSourceApi {
+	return ci.cs.GetChunkInfoSource(rootCid)
+}
+
+func (ci *ChunkInfo) DelChunkInfoSource(rootCid boson.Address) bool {
+	return ci.cs.DelChunkInfoSource(rootCid)
 }
 
 func generateKey(keyPrefix string, rootCid, overlay boson.Address) string {

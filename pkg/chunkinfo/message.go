@@ -104,31 +104,31 @@ func (ci *ChunkInfo) sendData(ctx context.Context, address boson.Address, stream
 	return nil
 }
 
-func (ci *ChunkInfo) sendPyramids(ctx context.Context, address boson.Address, streamName string, msg interface{}) (interface{}, error) {
+func (ci *ChunkInfo) sendPyramids(ctx context.Context, address boson.Address, streamName string, msg interface{}) error {
 
 	topCtx := ctx
 	if err := ci.route.Connect(ctx, address); err != nil {
 		overlays, errs := ci.route.GetTargetNeighbor(ctx, address, totalRouteCount)
 		if errs != nil {
 			ci.logger.Errorf("[pyramid info] connect: %w", errs)
-			return nil, errs
+			return errs
 		}
 		for i, overlay := range overlays {
 			ctx := tracing.WithContext(context.Background(), tracing.FromContext(topCtx))
-			v, err := ci.sendPyramid(ctx, overlay, streamName, msg)
+			_, err := ci.sendPyramid(ctx, overlay, streamName, msg)
 			if err != nil {
 				if i == len(overlays)-1 {
 					ci.metrics.PyramidTotalErrors.Inc()
-					return nil, err
+					return err
 				}
 				continue
 			}
-			return v, nil
+			return nil
 		}
-		return nil, err
+		return err
 	}
-	msg, err := ci.sendPyramid(ctx, address, streamName, msg)
-	return msg, err
+	_, err := ci.sendPyramid(ctx, address, streamName, msg)
+	return err
 }
 
 func (ci *ChunkInfo) sendPyramid(ctx context.Context, address boson.Address, streamName string, msg interface{}) (interface{}, error) {
@@ -163,9 +163,16 @@ func (ci *ChunkInfo) sendPyramid(ctx context.Context, address boson.Address, str
 			return nil, fmt.Errorf("[pyramid info] read message: %w", err)
 		}
 		if resp.Ok {
+			if err = ci.onChunkPyramidResp(ctx, nil, boson.NewAddress(req.RootCid), chunkResps); err != nil {
+				return nil, err
+			}
+			if err = ci.UpdatePyramidSource(ctx, boson.NewAddress(req.GetRootCid()), address); err != nil {
+				return nil, err
+			}
 			return chunkResps, nil
 		}
 		chunkResps = append(chunkResps, resp)
+		ci.metrics.PyramidRespCounter.Inc()
 	}
 }
 
@@ -213,6 +220,7 @@ func (ci *ChunkInfo) handlerChunkInfoResp(ctx context.Context, p p2p.Peer, strea
 
 	if overlay.Equal(ci.addr) {
 		ci.onChunkInfoResp(context.Background(), nil, target, resp)
+		ci.metrics.ChunkInfoRespCounter.Inc()
 	} else {
 		return ci.sendData(ctx, overlay, streamChunkInfoRespName, resp)
 	}
@@ -248,9 +256,6 @@ func (ci *ChunkInfo) handlerPyramid(ctx context.Context, p p2p.Peer, stream p2p.
 			return err
 		}
 		resps = chunkResp.([]pb.ChunkPyramidResp)
-		if err := ci.onChunkPyramidResp(ctx, nil, boson.NewAddress(req.GetRootCid()), resps); err != nil {
-			return err
-		}
 	}
 
 	resps = append(resps, pb.ChunkPyramidResp{Ok: true})

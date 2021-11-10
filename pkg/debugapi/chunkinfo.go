@@ -43,3 +43,14 @@ func (s *Service) chunkInfoInitHandler(w http.ResponseWriter, r *http.Request) {
 		Msg: v,
 	})
 }
+
+func (s *Service) chunkInfoSource(w http.ResponseWriter, r *http.Request) {
+	rootCid, err := boson.ParseHexAddress(mux.Vars(r)["rootCid"])
+	if err != nil {
+		s.logger.Debugf("debug api: parse chunk info rootCid: %v", err)
+		jsonhttp.BadRequest(w, "bad rootCid")
+		return
+	}
+	v := s.chunkInfo.GetChunkInfoSource(rootCid)
+	jsonhttp.OK(w, v)
+}

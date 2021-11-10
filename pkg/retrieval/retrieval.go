@@ -328,7 +328,10 @@ func (s *Service) retrieveChunk(ctx context.Context, route aco.Route, rootAddr, 
 	if err != nil {
 		return nil, fmt.Errorf("retrieval: report chunk transfer: %w", err)
 	}
-
+	err = s.chunkinfo.OnChunkRecordSource(chunkAddr, rootAddr, route.LinkNode)
+	if err != nil {
+		return nil, fmt.Errorf("retrieval: report chunk transfer: %w", err)
+	}
 	_, err = s.storer.Put(sctx.SetRootCID(ctx, rootAddr), storage.ModePutRequest, chunk)
 	if err != nil {
 		return nil, fmt.Errorf("retrieval: storage put cache:%w", err)
