@@ -15,6 +15,8 @@ type metrics struct {
 	PyramidRequestCounter   prometheus.Counter
 	ChunkInfoTotalErrors    prometheus.Counter
 	PyramidTotalErrors      prometheus.Counter
+	ChunkInfoRespCounter    prometheus.Counter
+	PyramidRespCounter      prometheus.Counter
 }
 
 func newMetrics() metrics {
@@ -44,6 +46,18 @@ func newMetrics() metrics {
 			Subsystem: subsystem,
 			Name:      "pyramid_total_errors",
 			Help:      "Total number of errors while pyramid.",
+		}),
+		ChunkInfoRespCounter: prometheus.NewCounter(prometheus.CounterOpts{
+			Namespace: m.Namespace,
+			Subsystem: subsystem,
+			Name:      "chunk_info_resp_counter",
+			Help:      "ChunkInfo successfully returned number.",
+		}),
+		PyramidRespCounter: prometheus.NewCounter(prometheus.CounterOpts{
+			Namespace: m.Namespace,
+			Subsystem: subsystem,
+			Name:      "pyramid_resp_counter",
+			Help:      "Pyramid successfully returned number.",
 		}),
 	}
 }

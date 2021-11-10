@@ -50,6 +50,16 @@ type BitVectorApi struct {
 	B   []byte `json:"b"`
 }
 
+type ChunkSourceApi struct {
+	Overlay  string       `json:"overlay"`
+	ChunkBit BitVectorApi `json:"chunkBit"`
+}
+
+type ChunkInfoSourceApi struct {
+	PyramidSource string           `json:"pyramidSource"`
+	ChunkSource   []ChunkSourceApi `json:"chunkSource"`
+}
+
 func NewAddress(signer crypto.Signer, underlay ma.Multiaddr, overlay boson.Address, networkID uint64) (*Address, error) {
 	underlayBinary, err := underlay.MarshalBinary()
 	if err != nil {

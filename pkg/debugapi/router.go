@@ -5,13 +5,14 @@ import (
 	"net/http"
 	"net/http/pprof"
 
-	"github.com/gauss-project/aurorafs/pkg/jsonhttp"
-	"github.com/gauss-project/aurorafs/pkg/logging/httpaccess"
 	"github.com/gorilla/handlers"
 	"github.com/gorilla/mux"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/sirupsen/logrus"
 	"resenje.org/web"
+
+	"github.com/gauss-project/aurorafs/pkg/jsonhttp"
+	"github.com/gauss-project/aurorafs/pkg/logging/httpaccess"
 )
 
 // newBasicRouter constructs only the routes that do not depend on the injected dependencies:
@@ -117,6 +118,10 @@ func (s *Service) newRouter() *mux.Router {
 
 	router.Handle("/aco/{timestamp}", jsonhttp.MethodHandler{
 		"GET": http.HandlerFunc(s.getRouteScoreHandle),
+	})
+
+	router.Handle("/chunk/source/{rootCid}", jsonhttp.MethodHandler{
+		"GET": http.HandlerFunc(s.chunkInfoSource),
 	})
 	//router.Handle("/balances", jsonhttp.MethodHandler{
 	//	"GET": http.HandlerFunc(s.compensatedBalancesHandler),
