@@ -425,8 +425,9 @@ func (s *server) auroraListHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	zeroAddress := boson.NewAddress([]byte{31: 0})
 	sort.Slice(responseList, func(i, j int) bool {
-		closer, _ := responseList[i].FileHash.Closer(boson.ZeroAddress, responseList[j].FileHash)
+		closer, _ := responseList[i].FileHash.Closer(zeroAddress, responseList[j].FileHash)
 		return closer
 	})
 
