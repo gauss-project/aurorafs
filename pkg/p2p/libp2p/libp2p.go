@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net"
 	"runtime"
+	"strings"
 	"sync"
 	"time"
 
@@ -579,8 +580,17 @@ func (s *Service) NATAddresses() (addresses []net.Addr, err error) {
 		return nil
 	}
 
-	if err := natIterFn(s.natManager.NAT(), 0); err != nil {
-		return nil, err
+	if s.natManager != nil {
+		if err := natIterFn(s.natManager.NAT(), 0); err != nil {
+			return nil, err
+		}
+	} else {
+		proto := strings.Split(s.natAddrResolver.multiProto, "/")
+		addr, err := net.ResolveTCPAddr("tcp", proto[len(proto)-1]+":"+s.natAddrResolver.port)
+		if err != nil {
+			return nil, err
+		}
+		addresses = append(addresses, addr)
 	}
 
 	return addresses, nil
