@@ -154,9 +154,6 @@ func (s *Service) RetrieveChunk(ctx context.Context, rootAddr, chunkAddr boson.A
 						s.logger.Debugf("retrieval: failed to get chunk (%s,%s) from route %s: %v",
 							rootAddr, chunkAddr, retrievalRoute, result.err)
 					} else {
-						//if s.isFullNode {
-						//	s.chunkinfo.OnChunkTransferred(chunkAddr, rootAddr, s.addr, boson.ZeroAddress)
-						//}
 						return result.chunk, nil
 					}
 				case <-ctx.Done():
@@ -248,9 +245,7 @@ func (s *Service) RetrieveChunkFromNode(ctx context.Context, targetNode boson.Ad
 }
 
 func (s *Service) retrieveChunk(ctx context.Context, route aco.Route, rootAddr, chunkAddr boson.Address) (chunk boson.Chunk, err error) {
-	// if !route.LinkNode.Equal(route.TargetNode) {
-	// 	return nil, nil, fmt.Errorf("not direct link, %v,%v(not same)", route.LinkNode.String(), route.TargetNode.String())
-	// }
+
 	var (
 		startMs  = time.Now().UnixNano() / 1e6
 		endMs    = int64(0)

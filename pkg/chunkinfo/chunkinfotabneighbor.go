@@ -113,12 +113,11 @@ func (ci *ChunkInfo) initNeighborChunkInfo(rootCid boson.Address) {
 	over := ci.addr.String()
 	if _, ok := ci.ct.presence[rc]; !ok {
 		ci.ct.presence[rc] = make(map[string]*bitvector.BitVector)
+		ci.ct.overlays[rc] = []boson.Address{ci.addr}
+		b, _ := ci.getChunkSize(context.Background(), rootCid)
+		vb, _ := bitvector.New(b)
+		ci.ct.presence[rc][over] = vb
 	}
-	v := make([]boson.Address, 0)
-	ci.ct.overlays[rc] = v
-	b, _ := ci.getChunkSize(context.Background(), rootCid)
-	vb, _ := bitvector.New(b)
-	ci.ct.presence[rc][over] = vb
 }
 
 func (cn *chunkInfoTabNeighbor) isExists(rootCid, overlay boson.Address) bool {
