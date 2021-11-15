@@ -65,7 +65,6 @@ func (cn *chunkInfoTabNeighbor) putChunkInfoTabNeighbor(rootCid, overlay boson.A
 // updateNeighborChunkInfo
 func (ci *ChunkInfo) updateNeighborChunkInfo(rootCid, cid boson.Address, overlay, target boson.Address) error {
 	ci.ct.Lock()
-	defer ci.ct.Unlock()
 
 	rc := rootCid.String()
 	over := overlay.String()
@@ -96,6 +95,7 @@ func (ci *ChunkInfo) updateNeighborChunkInfo(rootCid, cid boson.Address, overlay
 		ci.ct.Unlock()
 	}
 	ci.ct.Lock()
+	defer ci.ct.Unlock()
 	v := ci.cp.getCidStore(rootCid, cid)
 	if v < 0 {
 		ci.cp.updateCidSort(rootCid, cid, 0)
