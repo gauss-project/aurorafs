@@ -179,6 +179,7 @@ func (ci *ChunkInfo) updateQueue(ctx context.Context, authInfo []byte, rootCid, 
 	}
 
 	if q == nil {
+		ci.queuesLk.Unlock()
 		return
 	}
 	for over := range chunkInfo {
