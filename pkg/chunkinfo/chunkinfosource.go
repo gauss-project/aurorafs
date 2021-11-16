@@ -135,6 +135,9 @@ func (ci *ChunkInfo) UpdateChunkInfoSource(rootCid, sourceOverlay boson.Address,
 
 func (ci *ChunkInfo) UpdatePyramidSource(ctx context.Context, rootCid, sourceOverlay boson.Address) error {
 	size, err := ci.getChunkSize(ctx, rootCid)
+	if err != nil {
+		return err
+	}
 	err = ci.cs.updatePyramidSource(ctx, rootCid, sourceOverlay)
 	if err != nil {
 		return err
