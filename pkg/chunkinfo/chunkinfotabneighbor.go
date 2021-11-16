@@ -106,7 +106,7 @@ func (ci *ChunkInfo) updateNeighborChunkInfo(rootCid, cid boson.Address, overlay
 	return ci.storer.Put(generateKey(keyPrefix, rootCid, overlay), &bitVector{B: vb.Bytes(), Len: vb.Len()})
 }
 
-func (ci *ChunkInfo) initNeighborChunkInfo(rootCid boson.Address) {
+func (ci *ChunkInfo) initNeighborChunkInfo(rootCid, peer boson.Address, cids [][]byte) {
 	ci.ct.Lock()
 	defer ci.ct.Unlock()
 	rc := rootCid.String()
@@ -116,6 +116,12 @@ func (ci *ChunkInfo) initNeighborChunkInfo(rootCid boson.Address) {
 		ci.ct.overlays[rc] = []boson.Address{ci.addr}
 		b, _ := ci.getChunkSize(context.Background(), rootCid)
 		vb, _ := bitvector.New(b)
+		for _, cid := range cids {
+			c := boson.NewAddress(cid)
+			s := ci.cp.getCidStore(rootCid, c)
+			vb.Set(s)
+			ci.UpdateChunkInfoSource(rootCid, peer, c)
+		}
 		ci.ct.presence[rc][over] = vb
 	}
 }
