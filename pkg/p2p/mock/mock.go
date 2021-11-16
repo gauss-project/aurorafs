@@ -3,6 +3,7 @@ package mock
 import (
 	"context"
 	"errors"
+	"net"
 	"time"
 
 	"github.com/gauss-project/aurorafs/pkg/boson"
@@ -101,6 +102,11 @@ func (s *Service) AddProtocol(spec p2p.ProtocolSpec) error {
 		return errors.New("function AddProtocol not configured")
 	}
 	return s.addProtocolFunc(spec)
+}
+
+func (s *Service) NATAddresses() ([]net.Addr, error) {
+	a, err := net.ResolveIPAddr("ip", "1.1.1.1")
+	return []net.Addr{a}, err
 }
 
 func (s *Service) Connect(ctx context.Context, addr ma.Multiaddr) (peer *p2p.Peer, err error) {

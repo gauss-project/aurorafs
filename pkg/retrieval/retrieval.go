@@ -253,7 +253,9 @@ func (s *Service) retrieveChunk(ctx context.Context, route aco.Route, rootAddr, 
 	)
 	defer func() {
 		if err != nil && (ctx.Err() == nil || !errors.Is(ctx.Err(), context.Canceled)) {
-			go s.routeTab.FindRoute(ctx, route.TargetNode)
+			go func() {
+				_, _ = s.routeTab.FindRoute(ctx, route.TargetNode)
+			}()
 		}
 		if err == nil || (err != nil && (ctx.Err() == nil || !errors.Is(ctx.Err(), context.Canceled))) {
 			endMs = time.Now().UnixNano() / 1e6

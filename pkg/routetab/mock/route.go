@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/routetab"
+	"time"
 )
 
 type MockRouteTable struct {
@@ -19,7 +20,7 @@ func NewMockRouteTable() MockRouteTable {
 func (r *MockRouteTable) GetRoute(ctx context.Context, target boson.Address) (routes []*routetab.Path, err error) {
 	return []*routetab.Path{}, nil
 }
-func (r *MockRouteTable) FindRoute(ctx context.Context, target boson.Address) (route []*routetab.Path, err error) {
+func (r *MockRouteTable) FindRoute(ctx context.Context, target boson.Address, timeout ...time.Duration) (route []*routetab.Path, err error) {
 	return []*routetab.Path{}, nil
 }
 func (r *MockRouteTable) Connect(ctx context.Context, target boson.Address) error {

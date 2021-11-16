@@ -7,6 +7,7 @@ import (
 	"github.com/gauss-project/aurorafs/pkg/routetab"
 	"github.com/gorilla/mux"
 	"net/http"
+	"time"
 )
 
 type routeResponse struct {
@@ -26,7 +27,7 @@ func (s *Service) findRouteHandel(w http.ResponseWriter, r *http.Request) {
 		jsonhttp.BadRequest(w, "invalid peer address")
 		return
 	}
-	route, err := s.routetab.FindRoute(ctx, address)
+	route, err := s.routetab.FindRoute(ctx, address, time.Second*5)
 	if err != nil {
 		logger.Debugf("route-api: findroute %s: %v", peerID, err)
 		jsonhttp.BadRequest(w, err)
