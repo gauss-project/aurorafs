@@ -166,7 +166,7 @@ func (ci *ChunkInfo) sendPyramid(ctx context.Context, address boson.Address, str
 			if err = ci.onChunkPyramidResp(ctx, nil, boson.NewAddress(req.RootCid), address, chunkResps); err != nil {
 				return nil, err
 			}
-			if err = ci.UpdatePyramidSource(ctx, boson.NewAddress(req.GetRootCid()), address); err != nil {
+			if err = ci.UpdatePyramidSource(ctx, boson.NewAddress(req.RootCid), address); err != nil {
 				return nil, err
 			}
 			return chunkResps, nil

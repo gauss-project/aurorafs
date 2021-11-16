@@ -108,7 +108,6 @@ func (ci *ChunkInfo) updateNeighborChunkInfo(rootCid, cid boson.Address, overlay
 
 func (ci *ChunkInfo) initNeighborChunkInfo(rootCid, peer boson.Address, cids [][]byte) {
 	ci.ct.Lock()
-	defer ci.ct.Unlock()
 	rc := rootCid.String()
 	over := ci.addr.String()
 	if _, ok := ci.ct.presence[rc]; !ok {
@@ -116,13 +115,19 @@ func (ci *ChunkInfo) initNeighborChunkInfo(rootCid, peer boson.Address, cids [][
 		ci.ct.overlays[rc] = []boson.Address{ci.addr}
 		b, _ := ci.getChunkSize(context.Background(), rootCid)
 		vb, _ := bitvector.New(b)
-		for _, cid := range cids {
-			c := boson.NewAddress(cid)
-			s := ci.cp.getCidStore(rootCid, c)
-			vb.Set(s)
-			ci.UpdateChunkInfoSource(rootCid, peer, c)
-		}
 		ci.ct.presence[rc][over] = vb
+	}
+	ci.ct.Unlock()
+	for _, cid := range cids {
+		c := boson.NewAddress(cid)
+		err := ci.UpdateChunkInfoSource(rootCid, peer, c)
+		if err != nil {
+			return
+		}
+		err = ci.updateNeighborChunkInfo(rootCid, c, ci.addr, boson.ZeroAddress)
+		if err != nil {
+			return
+		}
 	}
 }
 

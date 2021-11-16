@@ -166,7 +166,10 @@ func (cs *chunkInfoSource) updatePyramidSource(ctx context.Context, rootCid, sou
 			PyramidSource: overlay,
 			ChunkSource:   make(map[string]*bitvector.BitVector),
 		}
+	} else {
+		cs.presence[rc].PyramidSource = overlay
 	}
+
 	return cs.storer.Put(generateKey(pyramidKeyPrefix, rootCid, sourceOverlay), overlay)
 }
 
