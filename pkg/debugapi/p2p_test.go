@@ -3,13 +3,12 @@ package debugapi_test
 import (
 	"encoding/hex"
 	"errors"
+	"github.com/gauss-project/aurorafs/pkg/debugapi"
 	"net/http"
 	"testing"
 
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/crypto"
-	"github.com/gauss-project/aurorafs/pkg/debugapi"
 	"github.com/gauss-project/aurorafs/pkg/jsonhttp"
 	"github.com/gauss-project/aurorafs/pkg/jsonhttp/jsonhttptest"
 	"github.com/gauss-project/aurorafs/pkg/p2p/mock"
@@ -21,10 +20,7 @@ func TestAddresses(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	pssPrivateKey, err := crypto.GenerateSecp256k1Key()
-	if err != nil {
-		t.Fatal(err)
-	}
+
 	overlay := boson.MustParseHexAddress("ca1e9f3938cc1425c6061b96ad9eb93e134dfe8734ad490164ef20af9d1cf59c")
 	addresses := []multiaddr.Multiaddr{
 		mustMultiaddr(t, "/ip4/127.0.0.1/tcp/7071/p2p/16Uiu2HAmTBuJT9LvNmBiQiNoTsxE5mtNy6YG3paw79m94CRa9sRb"),
@@ -32,13 +28,9 @@ func TestAddresses(t *testing.T) {
 		mustMultiaddr(t, "/ip4/127.0.0.1/udp/7071/quic/p2p/16Uiu2HAmTBuJT9LvNmBiQiNoTsxE5mtNy6YG3paw79m94CRa9sRb"),
 	}
 
-	ethereumAddress := common.HexToAddress("abcd")
-
 	testServer := newTestServer(t, testServerOptions{
-		PublicKey:       privateKey.PublicKey,
-		PSSPublicKey:    pssPrivateKey.PublicKey,
-		Overlay:         overlay,
-		EthereumAddress: ethereumAddress,
+		PublicKey: privateKey.PublicKey,
+		Overlay:   overlay,
 		P2P: mock.New(mock.WithAddressesFunc(func() ([]multiaddr.Multiaddr, error) {
 			return addresses, nil
 		})),
@@ -47,11 +39,12 @@ func TestAddresses(t *testing.T) {
 	t.Run("ok", func(t *testing.T) {
 		jsonhttptest.Request(t, testServer.Client, http.MethodGet, "/addresses", http.StatusOK,
 			jsonhttptest.WithExpectedJSONResponse(debugapi.AddressesResponse{
-				Overlay:      overlay,
-				Underlay:     addresses,
-				Ethereum:     ethereumAddress,
-				PublicKey:    hex.EncodeToString(crypto.EncodeSecp256k1PublicKey(&privateKey.PublicKey)),
-				PSSPublicKey: hex.EncodeToString(crypto.EncodeSecp256k1PublicKey(&pssPrivateKey.PublicKey)),
+				Overlay:   overlay,
+				Underlay:  addresses,
+				NATRoute:  []string{"1.1.1.1"},
+				PublicIP:  *debugapi.GetPublicIp(logger),
+				NetworkID: 0,
+				PublicKey: hex.EncodeToString(crypto.EncodeSecp256k1PublicKey(&privateKey.PublicKey)),
 			}),
 		)
 	})
