@@ -77,9 +77,9 @@ type Interface interface {
 	HasPrefix(context.Context, string) (bool, error)
 	// Store stores the manifest, returning the resulting address.
 	Store(context.Context, ...StoreSizeFunc) (boson.Address, error)
-	// IterateNodes is used to iterate over directory or file for the
+	// IterateDirectories is used to iterate over directory or file for the
 	// manifest.
-	IterateNodes(context.Context, []byte, int, NodeIterFunc) error
+	IterateDirectories(context.Context, []byte, int, NodeIterFunc) error
 	// IterateAddresses is used to iterate over chunks addresses for
 	// the manifest.
 	IterateAddresses(context.Context, boson.AddressIterFunc) error
