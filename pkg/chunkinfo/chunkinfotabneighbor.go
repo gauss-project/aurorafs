@@ -175,7 +175,7 @@ func (cn *chunkInfoTabNeighbor) createChunkInfoResp(rootCid boson.Address, ctn m
 func (ci *ChunkInfo) delPresence(rootCid boson.Address) bool {
 	ci.ct.Lock()
 	defer ci.ct.Unlock()
-	if err := ci.storer.Iterate(keyPrefix, func(k, v []byte) (bool, error) {
+	if err := ci.storer.Iterate(keyPrefix+"-"+rootCid.String(), func(k, v []byte) (bool, error) {
 		if !strings.HasPrefix(string(k), keyPrefix) {
 			return true, nil
 		}
