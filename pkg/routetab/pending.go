@@ -8,7 +8,7 @@ import (
 )
 
 var (
-	PendingTimeout  = time.Second
+	PendingTimeout  = time.Second * 5
 	pendingInterval = time.Millisecond * 500
 )
 

@@ -692,9 +692,9 @@ func (k *Kad) connectBootNodes(ctx context.Context) {
 
 			k.discovery.NotifyDiscoverWork(peer.Address)
 
-			k.metrics.TotalOutboundConnections.Inc()
-			k.collector.Record(peer.Address, im.PeerLogIn(time.Now(), im.PeerConnectionDirectionOutbound))
 			k.logger.Tracef("connected to bootnode %s", addr)
+			k.Outbound(*peer)
+
 			connected++
 
 			// connect to max 3 bootnodes
