@@ -10,15 +10,15 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"github.com/gauss-project/aurorafs/pkg/file/pipeline"
-	"github.com/gauss-project/aurorafs/pkg/file/pipeline/bmt"
-	"github.com/gauss-project/aurorafs/pkg/sctx"
 	"sync"
 
 	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/file/joiner"
 	"github.com/gauss-project/aurorafs/pkg/file/loadsave"
+	"github.com/gauss-project/aurorafs/pkg/file/pipeline"
+	"github.com/gauss-project/aurorafs/pkg/file/pipeline/bmt"
 	"github.com/gauss-project/aurorafs/pkg/manifest"
+	"github.com/gauss-project/aurorafs/pkg/sctx"
 	"github.com/gauss-project/aurorafs/pkg/storage"
 	"github.com/gauss-project/manifest/mantaray"
 )
@@ -30,7 +30,7 @@ type Traverser interface {
 	// GetPyramid returns pyramid hash and its contains data.
 	GetPyramid(context.Context, boson.Address) (map[string][]byte, error)
 	// GetChunkHashes returns all stored data chunk related to the given reference, if possible.
-	GetChunkHashes(context.Context, boson.Address, map[string][]byte) ([][][]byte, error)
+	GetChunkHashes(context.Context, boson.Address, map[string][]byte) ([][][]byte, [][]byte, error)
 }
 
 type PutGetter interface {
@@ -48,7 +48,7 @@ type service struct {
 	store PutGetter
 }
 
-// traverseAndProcess
+// traverseAndProcess traverses the given reference on a storage and applies processFn on each chunk.
 func (s *service) traverseAndProcess(ctx context.Context, addr boson.Address, processFn boson.AddressIterFunc) error {
 	ls := loadsave.NewReadonly(s.store)
 	switch mf, err := manifest.NewDefaultManifestReference(addr, ls); {
@@ -114,7 +114,7 @@ func (s *service) GetPyramid(ctx context.Context, addr boson.Address) (pyramid m
 		// for one chunk, it should save file chunk for known file size.
 		pyramid[ref.String()] = dataWithSpan(j.GetRootData(), uint64(span))
 		if span > boson.ChunkSize {
-			j.SetSaveIntChunks(pyramid)
+			j.SetSaveEdgeChunks(pyramid)
 			if err := j.IterateChunkAddresses(func(addr boson.Address) error { return nil }); err != nil {
 				return err
 			}
@@ -136,42 +136,30 @@ func (n *noopChainWriter) Sum() ([]byte, error)                       { return n
 var ErrInvalidPyramid = errors.New("traversal: invalid pyramid")
 
 // GetChunkHashes implements Traverser.GetChunkHashes method.
-func (s *service) GetChunkHashes(ctx context.Context, addr boson.Address, pyramid map[string][]byte) (hashes [][][]byte, err error) {
-	if _, exists := pyramid[addr.String()]; !exists {
-		return nil, fmt.Errorf("invalid pyramid without reference %s\n", addr)
+func (s *service) GetChunkHashes(ctx context.Context, addr boson.Address, pyramid map[string][]byte) (hashes [][][]byte, pieces [][]byte, err error) {
+	var (
+		store     PutGetter
+		uploading bool
+	)
+
+	if pyramid == nil {
+		uploading = true
 	}
 
-	// verify each data could be sum up the correct hash.
-	bmtWriter := bmt.NewBmtWriter(&noopChainWriter{})
-	for hash, data := range pyramid {
-		var ref boson.Address
-		args := pipeline.PipeWriteArgs{Data: data}
-		err = bmtWriter.ChainWrite(&args)
-		if err != nil {
-			return
-		}
-		ref, err = boson.ParseHexAddress(hash)
-		if err != nil {
-			return
-		}
-		if !bytes.Equal(args.Ref, ref.Bytes()) {
-			err = ErrInvalidPyramid
-			return
-		}
-	}
-
-	// iterate the given pyramid
-	p := newPyramid(pyramid)
+	// define how to store DATA chunk
 	storeChunkHashes := func(nodeType int, path, prefix, hash []byte, metadata map[string]string) error {
 		switch nodeType {
 		case int(manifest.File):
 			ref := boson.NewAddress(hash)
-			j, _, err := joiner.New(ctx, p, ref)
+			j, span, err := joiner.New(ctx, store, ref)
 			if err != nil {
 				return fmt.Errorf("traversal: joiner error on %q: %w", ref, err)
 			}
+			if !uploading && span <= boson.ChunkSize {
+				pieces = append(pieces, hash)
+			}
 			j.SetSaveDataChunks()
-			if err := j.IterateChunkAddresses(func(addr boson.Address) error {return nil}); err != nil {
+			if err := j.IterateChunkAddresses(func(addr boson.Address) error { return nil }); err != nil {
 				return err
 			}
 			hashes = append(hashes, j.GetDataChunks())
@@ -179,48 +167,93 @@ func (s *service) GetChunkHashes(ctx context.Context, addr boson.Address, pyrami
 		return nil
 	}
 
-	// process as manifest
-	ls := loadsave.NewReadonly(p)
-	switch mf, err := manifest.NewDefaultManifestReference(addr, ls); {
-	case errors.Is(err, manifest.ErrInvalidManifestType):
-		// Non-manifest processing.
-		if err := storeChunkHashes(int(manifest.File), []byte{}, []byte{}, addr.Bytes(), nil); err != nil {
-			return hashes, fmt.Errorf("traversal: unable to process bytes for %q: %w", addr, err)
+	pieces = make([][]byte, 0)
+
+	if !uploading {
+		if _, exists := pyramid[addr.String()]; !exists {
+			return nil, nil, fmt.Errorf("invalid pyramid without reference %s\n", addr)
 		}
-	case err != nil:
-		return hashes, fmt.Errorf("traversal: unable to create manifest reference for %q: %w", addr, err)
-	default:
-		err := mf.IterateNodes(ctx, []byte{}, -1, storeChunkHashes)
-		if errors.Is(err, mantaray.ErrTooShort) || errors.Is(err, mantaray.ErrInvalidVersionHash) {
-			// Based on the returned errors we conclude that it might
-			// not be a manifest, so we try non-manifest processing.
-			if err := storeChunkHashes(int(manifest.File), []byte{}, []byte{}, addr.Bytes(), nil); err != nil {
-				return hashes, fmt.Errorf("traversal: unable to process bytes for %q: %w", addr, err)
+
+		// verify each data could be sum up the correct hash.
+		bmtWriter := bmt.NewBmtWriter(&noopChainWriter{})
+		for hash, data := range pyramid {
+			var ref boson.Address
+			args := pipeline.PipeWriteArgs{Data: data}
+			err = bmtWriter.ChainWrite(&args)
+			if err != nil {
+				return
+			}
+			ref, err = boson.ParseHexAddress(hash)
+			if err != nil {
+				return
+			}
+			if !bytes.Equal(args.Ref, ref.Bytes()) {
+				err = ErrInvalidPyramid
+				return
 			}
 		}
-		if err != nil {
-			return hashes, fmt.Errorf("traversal: unable to process bytes for %q: %w", addr, err)
-		}
+
+		// iterate the given pyramid
+		p := newPyramid(pyramid)
+		store = p
+
+		defer func() {
+			if err != nil {
+				return
+			}
+			// here we can put those data into localstore.
+			rctx := sctx.SetRootCID(ctx, addr)
+			// first we put root chunk
+			_, err = s.store.Put(rctx, storage.ModePutRequest, boson.NewChunk(addr, pyramid[addr.String()]))
+			if err != nil {
+				return
+			}
+			delete(p.seen, addr.String())
+			for k := range p.seen {
+				addr, err = boson.ParseHexAddress(k)
+				if err != nil {
+					return
+				}
+				_, err = s.store.Put(rctx, storage.ModePutRequest, boson.NewChunk(addr, pyramid[k]))
+				if err != nil {
+					return
+				}
+			}
+		}()
+	} else {
+		store = s.store
 	}
 
-	// here we can put those data into localstore.
-	rctx := sctx.SetRootCID(ctx, addr)
-	// first we put root chunk
-	_, err = s.store.Put(rctx, storage.ModePutRequest, boson.NewChunk(addr, pyramid[addr.String()]))
-	if err != nil {
-		return
-	}
-	delete(p.seen, addr.String())
-	for k := range p.seen {
-		addr, err = boson.ParseHexAddress(k)
-		if err != nil {
-			return
+	// process as manifest
+	processNodes := func() error {
+		ls := loadsave.NewReadonly(store)
+		switch mf, err := manifest.NewDefaultManifestReference(addr, ls); {
+		case errors.Is(err, manifest.ErrInvalidManifestType):
+			break
+		case err != nil:
+			return fmt.Errorf("traversal: unable to create manifest reference for %q: %w", addr, err)
+		default:
+			// iterate as hierarchical directory
+			err := mf.IterateDirectories(ctx, []byte{}, -1, storeChunkHashes)
+			if errors.Is(err, mantaray.ErrTooShort) || errors.Is(err, mantaray.ErrInvalidVersionHash) {
+				break
+			}
+			if err != nil {
+				return fmt.Errorf("traversal: unable to process bytes for %q: %w", addr, err)
+			}
+			return nil
 		}
-		_, err = s.store.Put(rctx, storage.ModePutRequest, boson.NewChunk(addr, pyramid[k]))
-		if err != nil {
-			return
+
+		// fallback to OLD FILE iteration
+		if err := storeChunkHashes(int(manifest.File), []byte{}, []byte{}, addr.Bytes(), nil); err != nil {
+			return fmt.Errorf("traversal: unable to process bytes for %q: %w", addr, err)
 		}
+
+		return nil
 	}
+
+	// process as manifest
+	err = processNodes()
 
 	return
 }
@@ -238,7 +271,7 @@ func newPyramid(data map[string][]byte) *pyramid {
 	}
 }
 
-func (p *pyramid) Get(ctx context.Context, mode storage.ModeGet, addr boson.Address) (ch boson.Chunk, err error) {
+func (p *pyramid) Get(ctx context.Context, _ storage.ModeGet, addr boson.Address) (ch boson.Chunk, err error) {
 	select {
 	case <-ctx.Done():
 		err = ctx.Err()
@@ -275,11 +308,11 @@ func (p *pyramid) Set(_ context.Context, _ storage.ModeSet, _ ...boson.Address) 
 	panic("not implemented")
 }
 
-func (p *pyramid) Has(_ context.Context, hasMode storage.ModeHas, _ boson.Address) (bool, error) {
+func (p *pyramid) Has(_ context.Context, _ storage.ModeHas, _ boson.Address) (bool, error) {
 	panic("not implemented")
 }
 
-func (p *pyramid) HasMulti(_ context.Context, hasMode storage.ModeHas, _ ...boson.Address) ([]bool, error) {
+func (p *pyramid) HasMulti(_ context.Context, _ storage.ModeHas, _ ...boson.Address) ([]bool, error) {
 	panic("not implemented")
 }
 

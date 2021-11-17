@@ -123,7 +123,7 @@ func (m *mantarayManifest) Store(ctx context.Context, storeSizeFn ...StoreSizeFu
 	return address, nil
 }
 
-func (m *mantarayManifest) IterateNodes(ctx context.Context, path []byte, level int, fn NodeIterFunc) error {
+func (m *mantarayManifest) IterateDirectories(ctx context.Context, path []byte, level int, fn NodeIterFunc) error {
 	reference := boson.NewAddress(m.trie.Reference())
 
 	if boson.ZeroAddress.Equal(reference) {

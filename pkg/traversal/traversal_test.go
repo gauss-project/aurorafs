@@ -33,17 +33,17 @@ var (
 
 type chunkReader struct {
 	sample []byte
-	limit int
-	count int
-	index int
-	total uint64
+	limit  int
+	count  int
+	index  int
+	total  uint64
 	offset uint64
 }
 
 func newChunkReader(data []byte, perSize int, length uint64) *chunkReader {
 	r := &chunkReader{
 		sample: data,
-		total: length,
+		total:  length,
 	}
 
 	uPerSize := uint64(perSize)
@@ -54,7 +54,7 @@ func newChunkReader(data []byte, perSize int, length uint64) *chunkReader {
 	} else {
 		r.limit = perSize
 		r.count = int(length / uPerSize)
-		if length % uPerSize != 0 {
+		if length%uPerSize != 0 {
 			r.count++
 		}
 	}
@@ -70,7 +70,7 @@ func (r *chunkReader) Read(b []byte) (n int, err error) {
 
 	for n < len(b) {
 		var i int
-		if r.total - r.offset <= uint64(len(r.sample)) {
+		if r.total-r.offset <= uint64(len(r.sample)) {
 			i = copy(b[n:], r.sample[r.index:r.index+int(r.total-r.offset)])
 		} else {
 			i = copy(b[n:], r.sample[r.index:])
@@ -215,7 +215,6 @@ func TestTraversalBytes(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			t.Logf("root addr %s\n", address)
 
 			err = traversal.New(storerMock).Traverse(ctx, address, iter.Next)
 			if err != nil {
@@ -373,7 +372,7 @@ type file struct {
 }
 
 type fileChunks struct {
-	content  []string
+	content []string
 }
 
 func TestTraversalManifest(t *testing.T) {
@@ -750,7 +749,7 @@ func TestGetChunkHashes(t *testing.T) {
 			}
 
 			traversalService = traversal.New(storerMockB)
-			filesHashes, err := traversalService.GetChunkHashes(ctx, address, pyramid)
+			filesHashes, filesChecked, err := traversalService.GetChunkHashes(ctx, address, pyramid)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -766,7 +765,6 @@ func TestGetChunkHashes(t *testing.T) {
 					if err != nil {
 						t.Fatalf("%d chunks: %v\n", j, err)
 					}
-					t.Logf("chunk %s found", ch.Address())
 					data.Write(ch.Data()[8:])
 				}
 
@@ -777,6 +775,18 @@ func TestGetChunkHashes(t *testing.T) {
 					}
 					if len(filesHashes[i]) != cnt {
 						t.Fatalf("expected to find %d chunks, got %d\n", cnt, len(filesHashes[i]))
+					}
+					if len(filesHashes[i]) == 1 {
+						found := false
+						for _, checkedHash := range filesChecked {
+							if bytes.Equal(checkedHash, filesHashes[i][0]) {
+								found = true
+								break
+							}
+						}
+						if !found {
+							t.Fatalf("when file size smaller than default chunk size, it should be shown at checked hashes")
+						}
 					}
 
 					if !bytes.Equal(data.Bytes(), files[i]) {
@@ -867,9 +877,13 @@ func TestGetChunkHashesForLarge(t *testing.T) {
 	}
 
 	traversalService = traversal.New(storerMockB)
-	chunkHashes, err := traversalService.GetChunkHashes(ctx, address, pyramid)
+	chunkHashes, pieces, err := traversalService.GetChunkHashes(ctx, address, pyramid)
 	if err != nil {
 		t.Fatal(err)
+	}
+
+	if len(pieces) > 0 {
+		t.Fatalf("smaller than default chunk size MUST not display in here")
 	}
 
 	// only a file
@@ -880,82 +894,83 @@ func TestGetChunkHashesForLarge(t *testing.T) {
 }
 
 func TestGetChunkHashesForInvalidPyramid(t *testing.T) {
-	testCases := []struct{
-		name string
-		reference string
-		pyramid map[string][]byte
-		expectedError error
+	testCases := []struct {
+		name             string
+		reference        string
+		pyramid          map[string][]byte
+		expectedError    error
 		unexpectedHashes []string
 	}{
 		{
-			name: "invalid pyramid",
+			name:      "invalid pyramid",
 			reference: "aa4a46bfbdff91c8db555edcfa4ba18371a083fdec67120db58d7ef177815ff0",
 			pyramid: map[string][]byte{
-				"aa4a46bfbdff91c8db555edcfa4ba18371a083fdec67120db58d7ef177815ff0": {5,0,0,0,0,0,0,0,26,43,60,77,95}, // span: 5, data: 1a2b3c4d5f
+				"aa4a46bfbdff91c8db555edcfa4ba18371a083fdec67120db58d7ef177815ff0": {5, 0, 0, 0, 0, 0, 0, 0, 26, 43, 60, 77, 95}, // span: 5, data: 1a2b3c4d5f
 			},
 			expectedError: traversal.ErrInvalidPyramid,
 		},
 		{
-			name: "missing chunk",
-			reference: "7ccf77783acd807f7b3a50e4e73368181cc1886fc51d8556557515b9c4065809",
+			name:      "missing chunk",
+			reference: "5101d047d6a5d7252215c33f0d571824063386cb116fada8fc5d5bace4ac0b35",
 			pyramid: map[string][]byte{
-				"7ccf77783acd807f7b3a50e4e73368181cc1886fc51d8556557515b9c4065809": { // root
-					64,0,0,0,0,0,0,0,253,150,250,179,163,216,209,242,94,191,188,56,
-					166,62,223,17,97,127,57,45,218,169,167,108,128,38,81,106,13,149,178,25,
-					151,119,171,248,211,192,94,230,194,234,189,127,198,143,33,77,234,155,127,254,
-					57,118,218,10,206,121,83,255,35,187,105,210,
+				"5101d047d6a5d7252215c33f0d571824063386cb116fada8fc5d5bace4ac0b35": { // root
+					192, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+					0, 87, 104, 179, 182, 167, 219, 86, 210, 29, 26, 191, 244, 13, 65, 206, 191, 200, 52, 72, 254, 216, 215,
+					233, 176, 110, 192, 211, 176, 115, 242, 143, 32, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+					0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+					0, 0, 0, 2, 9, 104, 101, 108, 108, 111, 46, 116, 120, 116, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+					0, 0, 0, 219, 16, 217, 77, 174, 27, 149, 180, 103, 247, 90, 73, 236, 93, 199, 197, 122, 229, 198, 67, 36,
+					178, 131, 164, 137, 63, 108, 130, 244, 197, 252, 226,
 				},
-				"9777abf8d3c05ee6c2eabd7fc68f214dea9b7ffe3976da0ace7953ff23bb69d2": { // metadata
-					118,0,0,0,0,0,0,0,123,34,109,105,109,101,116,121,112,101,34,58,
-					34,116,101,120,116,47,112,108,97,105,110,59,32,99,104,97,114,115,101,116,
-					61,117,116,102,45,56,34,44,34,102,105,108,101,110,97,109,101,34,58,34,
-					102,100,57,54,102,97,98,51,97,51,100,56,100,49,102,50,53,101,98,102,
-					98,99,51,56,97,54,51,101,100,102,49,49,54,49,55,102,51,57,50,100,
-					100,97,97,57,97,55,54,99,56,48,50,54,53,49,54,97,48,100,57,53,
-					98,50,49,57,34,125,
+				"db10d94dae1b95b467f75a49ec5dc7c57ae5c64324b283a4893f6c82f4c5fce2": { // metadata
+					128, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+					0, 0, 87, 104, 179, 182, 167, 219, 86, 210, 29, 26, 191, 244, 13, 65, 206, 191, 200, 52, 72, 254, 216,
+					215, 233, 176, 110, 192, 211, 176, 115, 242, 143, 32, 54, 196, 100, 166, 177, 130, 159, 104, 116,
+					14, 204, 129, 137, 134, 214, 26, 227, 200, 7, 131, 238, 30, 222, 96, 190, 78, 17, 40, 171, 15, 20,
+					26, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
 				},
-				//"fd96fab3a3d8d1f25ebfbc38a63edf11617f392ddaa9a76c8026516a0d95b219": { // file
-				//	1,0,4,0,0,0,0,0,252,238,96,162,3,214,79,152,129,41,101,5,
-				//	197,243,179,120,66,247,251,68,63,10,97,90,183,245,190,104,43,70,144,180,
-				//	223,67,133,91,201,237,85,26,155,83,237,212,188,30,187,0,126,231,91,97,
-				//	179,180,145,225,170,59,67,134,37,96,145,236,
-				//},
-				//"df43855bc9ed551a9b53edd4bc1ebb007ee75b61b3b491e1aa3b4386256091ec": { // chunk 1
-				//	1,0,0,0,0,0,0,0,104,
-				//},
-				// "fcee60a203d64f9881296505c5f3b37842f7fb443f0a615ab7f5be682b4690b4": {} // chunk 2
+				// "36c464a6b1829f68740ecc818986d61ae3c80783ee1ede60be4e1128ab0f141a": { // manifest entry
+				// 	64,0,0,0,0,0,0,0,104,101,108,108,111,32,116,101,115,116,32,119,111,114,108,
+				// 	100,104,101,108,108,111,32,116,101,115,116,32,119,111,114,108,100,104,101,
+				// 	108,108,111,32,116,101,115,116,32,119,111,114,108,100,104,101,108,108,111,
+				// 	32,116,101,115,116,32,119,111,114,108,100,
+				// },
 			},
 			expectedError: storage.ErrNotFound,
 		},
 		{
-			name: "unused chunks",
-			reference: "7ccf77783acd807f7b3a50e4e73368181cc1886fc51d8556557515b9c4065809",
+			name:      "unused chunks",
+			reference: "5101d047d6a5d7252215c33f0d571824063386cb116fada8fc5d5bace4ac0b35",
 			pyramid: map[string][]byte{
-				"7ccf77783acd807f7b3a50e4e73368181cc1886fc51d8556557515b9c4065809": { // root
-					64,0,0,0,0,0,0,0,253,150,250,179,163,216,209,242,94,191,188,56,
-					166,62,223,17,97,127,57,45,218,169,167,108,128,38,81,106,13,149,178,25,
-					151,119,171,248,211,192,94,230,194,234,189,127,198,143,33,77,234,155,127,254,
-					57,118,218,10,206,121,83,255,35,187,105,210,
+				"5101d047d6a5d7252215c33f0d571824063386cb116fada8fc5d5bace4ac0b35": { // root
+					192, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+					0, 87, 104, 179, 182, 167, 219, 86, 210, 29, 26, 191, 244, 13, 65, 206, 191, 200, 52, 72, 254, 216, 215,
+					233, 176, 110, 192, 211, 176, 115, 242, 143, 32, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+					0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+					0, 0, 0, 2, 9, 104, 101, 108, 108, 111, 46, 116, 120, 116, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+					0, 0, 0, 219, 16, 217, 77, 174, 27, 149, 180, 103, 247, 90, 73, 236, 93, 199, 197, 122, 229, 198, 67, 36,
+					178, 131, 164, 137, 63, 108, 130, 244, 197, 252, 226,
 				},
-				"9777abf8d3c05ee6c2eabd7fc68f214dea9b7ffe3976da0ace7953ff23bb69d2": { // metadata
-					118,0,0,0,0,0,0,0,123,34,109,105,109,101,116,121,112,101,34,58,
-					34,116,101,120,116,47,112,108,97,105,110,59,32,99,104,97,114,115,101,116,
-					61,117,116,102,45,56,34,44,34,102,105,108,101,110,97,109,101,34,58,34,
-					102,100,57,54,102,97,98,51,97,51,100,56,100,49,102,50,53,101,98,102,
-					98,99,51,56,97,54,51,101,100,102,49,49,54,49,55,102,51,57,50,100,
-					100,97,97,57,97,55,54,99,56,48,50,54,53,49,54,97,48,100,57,53,
-					98,50,49,57,34,125,
+				"db10d94dae1b95b467f75a49ec5dc7c57ae5c64324b283a4893f6c82f4c5fce2": { // metadata
+					128, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+					0, 0, 87, 104, 179, 182, 167, 219, 86, 210, 29, 26, 191, 244, 13, 65, 206, 191, 200, 52, 72, 254, 216,
+					215, 233, 176, 110, 192, 211, 176, 115, 242, 143, 32, 54, 196, 100, 166, 177, 130, 159, 104, 116,
+					14, 204, 129, 137, 134, 214, 26, 227, 200, 7, 131, 238, 30, 222, 96, 190, 78, 17, 40, 171, 15, 20,
+					26, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
 				},
-				"fd96fab3a3d8d1f25ebfbc38a63edf11617f392ddaa9a76c8026516a0d95b219": { // file
-					1,0,4,0,0,0,0,0,252,238,96,162,3,214,79,152,129,41,101,5,
-					197,243,179,120,66,247,251,68,63,10,97,90,183,245,190,104,43,70,144,180,
-					223,67,133,91,201,237,85,26,155,83,237,212,188,30,187,0,126,231,91,97,
-					179,180,145,225,170,59,67,134,37,96,145,236,
+				"36c464a6b1829f68740ecc818986d61ae3c80783ee1ede60be4e1128ab0f141a": { // manifest entry
+					64, 0, 0, 0, 0, 0, 0, 0, 104, 101, 108, 108, 111, 32, 116, 101, 115, 116, 32, 119, 111, 114, 108,
+					100, 104, 101, 108, 108, 111, 32, 116, 101, 115, 116, 32, 119, 111, 114, 108, 100, 104, 101,
+					108, 108, 111, 32, 116, 101, 115, 116, 32, 119, 111, 114, 108, 100, 104, 101, 108, 108, 111,
+					32, 116, 101, 115, 116, 32, 119, 111, 114, 108, 100,
 				},
-				"9b645cc6aaae3b68a95904cc8e293545a5ed70c6aff4e9d983bf8dc0e28d3447": {5,0,0,0,0,0,0,0,209,9,26,188,222}, // wrong data
+				"4beb27ee12758751f44db53a88f7928819c49d6cda980305561db595534eb904": { // wrong data
+					32, 0, 0, 0, 0, 0, 0, 0, 104, 101, 108, 108, 111, 32, 116, 101, 115, 116, 32, 119, 111, 114, 108, 100, 104,
+					101, 108, 108, 111, 32, 116, 101, 115, 116, 32, 119, 111, 114, 108, 100,
+				},
 			},
 			unexpectedHashes: []string{
-				"9b645cc6aaae3b68a95904cc8e293545a5ed70c6aff4e9d983bf8dc0e28d3447",
+				"4beb27ee12758751f44db53a88f7928819c49d6cda980305561db595534eb904",
 			},
 		},
 	}
@@ -969,7 +984,7 @@ func TestGetChunkHashesForInvalidPyramid(t *testing.T) {
 			mockStore := mock.NewStorer()
 
 			traversalService := traversal.New(mockStore)
-			_, err := traversalService.GetChunkHashes(ctx, addr, tc.pyramid)
+			_, _, err := traversalService.GetChunkHashes(ctx, addr, tc.pyramid)
 
 			if !errors.Is(err, tc.expectedError) {
 				t.Fatalf("expected to handle error: %v\n\tgot error: %v", tc.expectedError, err)

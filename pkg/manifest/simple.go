@@ -108,7 +108,7 @@ func (m *simpleManifest) Store(ctx context.Context, storeSizeFn ...StoreSizeFunc
 	return m.reference, nil
 }
 
-func (m *simpleManifest) IterateNodes(ctx context.Context, path []byte, level int, fn NodeIterFunc) error {
+func (m *simpleManifest) IterateDirectories(ctx context.Context, path []byte, level int, fn NodeIterFunc) error {
 	return nil
 }
 

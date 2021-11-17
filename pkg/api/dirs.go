@@ -80,15 +80,7 @@ func (s *server) dirUploadHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	pyramid, err := s.traversal.GetPyramid(ctx, reference)
-	if err != nil {
-		logger.Debugf("aurora upload dir: get pyramid err: %v", err)
-		logger.Errorf("aurora upload dir: get pyramid err")
-		jsonhttp.InternalServerError(w, "could not get pyramid")
-		return
-	}
-
-	dataChunks, _ := s.traversal.GetChunkHashes(ctx, reference, pyramid)
+	dataChunks, _, err := s.traversal.GetChunkHashes(ctx, reference, nil)
 	if err != nil {
 		logger.Debugf("aurora upload dir: get chunk hashes err: %v", err)
 		logger.Errorf("aurora upload dir: get chunk hashes err")

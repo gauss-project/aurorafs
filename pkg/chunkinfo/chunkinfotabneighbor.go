@@ -2,6 +2,7 @@ package chunkinfo
 
 import (
 	"context"
+	"fmt"
 	"github.com/gauss-project/aurorafs/pkg/aurora"
 	"github.com/gauss-project/aurorafs/pkg/bitvector"
 	"github.com/gauss-project/aurorafs/pkg/boson"
@@ -106,9 +107,8 @@ func (ci *ChunkInfo) updateNeighborChunkInfo(rootCid, cid boson.Address, overlay
 	return ci.storer.Put(generateKey(keyPrefix, rootCid, overlay), &bitVector{B: vb.Bytes(), Len: vb.Len()})
 }
 
-func (ci *ChunkInfo) initNeighborChunkInfo(rootCid boson.Address) {
+func (ci *ChunkInfo) initNeighborChunkInfo(rootCid, peer boson.Address, cids [][]byte) {
 	ci.ct.Lock()
-	defer ci.ct.Unlock()
 	rc := rootCid.String()
 	over := ci.addr.String()
 	if _, ok := ci.ct.presence[rc]; !ok {
@@ -117,6 +117,18 @@ func (ci *ChunkInfo) initNeighborChunkInfo(rootCid boson.Address) {
 		b, _ := ci.getChunkSize(context.Background(), rootCid)
 		vb, _ := bitvector.New(b)
 		ci.ct.presence[rc][over] = vb
+	}
+	ci.ct.Unlock()
+	for _, cid := range cids {
+		c := boson.NewAddress(cid)
+		err := ci.UpdateChunkInfoSource(rootCid, peer, c)
+		if err != nil {
+			return
+		}
+		err = ci.updateNeighborChunkInfo(rootCid, c, ci.addr, boson.ZeroAddress)
+		if err != nil {
+			return
+		}
 	}
 }
 
@@ -164,7 +176,8 @@ func (cn *chunkInfoTabNeighbor) createChunkInfoResp(rootCid boson.Address, ctn m
 func (ci *ChunkInfo) delPresence(rootCid boson.Address) bool {
 	ci.ct.Lock()
 	defer ci.ct.Unlock()
-	if err := ci.storer.Iterate(keyPrefix, func(k, v []byte) (bool, error) {
+	key := fmt.Sprintf("%s%s", keyPrefix, rootCid.String())
+	if err := ci.storer.Iterate(key, func(k, v []byte) (bool, error) {
 		if !strings.HasPrefix(string(k), keyPrefix) {
 			return true, nil
 		}

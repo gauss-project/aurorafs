@@ -163,10 +163,10 @@ func (ci *ChunkInfo) sendPyramid(ctx context.Context, address boson.Address, str
 			return nil, fmt.Errorf("[pyramid info] read message: %w", err)
 		}
 		if resp.Ok {
-			if err = ci.onChunkPyramidResp(ctx, nil, boson.NewAddress(req.RootCid), chunkResps); err != nil {
+			if err = ci.onChunkPyramidResp(ctx, nil, boson.NewAddress(req.RootCid), address, chunkResps); err != nil {
 				return nil, err
 			}
-			if err = ci.UpdatePyramidSource(ctx, boson.NewAddress(req.GetRootCid()), address); err != nil {
+			if err = ci.UpdatePyramidSource(ctx, boson.NewAddress(req.RootCid), address); err != nil {
 				return nil, err
 			}
 			return chunkResps, nil
@@ -294,7 +294,7 @@ func (ci *ChunkInfo) onChunkPyramidHashReq(ctx context.Context, authInfo []byte,
 }
 
 // onChunkPyramidResp
-func (ci *ChunkInfo) onChunkPyramidResp(ctx context.Context, authInfo []byte, rootCid boson.Address, resps []pb.ChunkPyramidResp) error {
+func (ci *ChunkInfo) onChunkPyramidResp(ctx context.Context, authInfo []byte, rootCid, peer boson.Address, resps []pb.ChunkPyramidResp) error {
 	_, ok := ci.cp.pyramid[rootCid.String()]
 	if ok {
 		return nil
@@ -305,13 +305,13 @@ func (ci *ChunkInfo) onChunkPyramidResp(ctx context.Context, authInfo []byte, ro
 		pyramid[boson.NewAddress(resp.Hash).String()] = resp.Chunk
 	}
 
-	v, err := ci.traversal.GetChunkHashes(ctx, rootCid, pyramid)
+	v, cids, err := ci.traversal.GetChunkHashes(ctx, rootCid, pyramid)
 	if err != nil {
 		ci.logger.Errorf("chunk pyramid: check pyramid error")
 		return err
 	}
 	ci.updateChunkPyramid(rootCid, v, pyramid)
-	ci.initNeighborChunkInfo(rootCid)
+	ci.initNeighborChunkInfo(rootCid, peer, cids)
 	return nil
 }
 
