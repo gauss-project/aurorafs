@@ -203,7 +203,8 @@ func (cs *chunkInfoSource) GetChunkInfoSource(rootCid boson.Address) (sourceResp
 func (cs *chunkInfoSource) DelChunkInfoSource(rootCid boson.Address) bool {
 	cs.Lock()
 	defer cs.Unlock()
-	if err := cs.storer.Iterate(chunkSourceKeyPrefix+"-"+rootCid.String(), func(k, value []byte) (stop bool, err error) {
+	key := fmt.Sprintf("%s%s", chunkSourceKeyPrefix, rootCid.String())
+	if err := cs.storer.Iterate(key, func(k, value []byte) (stop bool, err error) {
 		key := string(k)
 		if !strings.HasPrefix(key, chunkSourceKeyPrefix) {
 			return true, nil
@@ -217,8 +218,8 @@ func (cs *chunkInfoSource) DelChunkInfoSource(rootCid boson.Address) bool {
 		cs.logger.Errorf("chunk source: del rootCid chunk source error:%w", err)
 		return false
 	}
-
-	if err := cs.storer.Iterate(pyramidKeyPrefix+"-"+rootCid.String(), func(k, value []byte) (stop bool, err error) {
+	key = fmt.Sprintf("%s%s", pyramidKeyPrefix, rootCid.String())
+	if err := cs.storer.Iterate(key, func(k, value []byte) (stop bool, err error) {
 		key := string(k)
 		if !strings.HasPrefix(key, pyramidKeyPrefix) {
 			return true, nil

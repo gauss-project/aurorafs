@@ -2,6 +2,7 @@ package chunkinfo
 
 import (
 	"context"
+	"fmt"
 	"github.com/gauss-project/aurorafs/pkg/aurora"
 	"github.com/gauss-project/aurorafs/pkg/bitvector"
 	"github.com/gauss-project/aurorafs/pkg/boson"
@@ -175,7 +176,8 @@ func (cn *chunkInfoTabNeighbor) createChunkInfoResp(rootCid boson.Address, ctn m
 func (ci *ChunkInfo) delPresence(rootCid boson.Address) bool {
 	ci.ct.Lock()
 	defer ci.ct.Unlock()
-	if err := ci.storer.Iterate(keyPrefix+"-"+rootCid.String(), func(k, v []byte) (bool, error) {
+	key := fmt.Sprintf("%s%s", keyPrefix, rootCid.String())
+	if err := ci.storer.Iterate(key, func(k, v []byte) (bool, error) {
 		if !strings.HasPrefix(string(k), keyPrefix) {
 			return true, nil
 		}
