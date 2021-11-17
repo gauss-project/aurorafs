@@ -73,8 +73,8 @@ func (q *queue) popNode(pull Pull, overlay []byte) {
 	q.Lock()
 	defer q.Unlock()
 	qu := q.getPull(pull)
-	for i, n := range qu {
-		f := *n
+	for i := 0; i < len(qu); i++ {
+		f := *qu[i]
 		if bytes.Equal(f, overlay) {
 			qu = append(qu[:i], qu[i+1:]...)
 		}
@@ -179,6 +179,7 @@ func (ci *ChunkInfo) updateQueue(ctx context.Context, authInfo []byte, rootCid, 
 	}
 
 	if q == nil {
+		ci.queuesLk.Unlock()
 		return
 	}
 	for over := range chunkInfo {

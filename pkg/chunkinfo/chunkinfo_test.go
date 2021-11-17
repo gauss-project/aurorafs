@@ -187,7 +187,7 @@ func TestHandlerChunkInfoResp(t *testing.T) {
 
 	//resp  b ->a
 	tree, _ := bOverlay.getChunkPyramid(ctx, rootCid)
-	pram, _ := bOverlay.traversal.GetChunkHashes(ctx, rootCid, tree)
+	pram, _, _ := bOverlay.traversal.GetChunkHashes(ctx, rootCid, tree)
 	if err := bOverlay.OnChunkTransferred(boson.NewAddress(pram[0][0]), rootCid, bAddress, boson.ZeroAddress); err != nil {
 		t.Fatal(err)
 	}
@@ -311,7 +311,7 @@ func TestHandlerPyramid(t *testing.T) {
 	)
 	server := mockChunkInfo(s, targetRecorder, serverAddress)
 	tree, _ := server.getChunkPyramid(ctx, rootCid)
-	pram, _ := server.traversal.GetChunkHashes(ctx, rootCid, tree)
+	pram, _, _ := server.traversal.GetChunkHashes(ctx, rootCid, tree)
 	if err := target.OnChunkTransferred(boson.NewAddress(pram[0][1]), rootCid, targetAddress, boson.ZeroAddress); err != nil {
 		t.Fatal(err)
 	}

@@ -38,11 +38,12 @@ var (
 	DefaultNeighborAlpha int32 = 2
 	gcTime                     = time.Minute * 10
 	gcInterval                 = time.Minute
+	findTimeOut                = time.Second * 2 // find route timeout
 )
 
 type RouteTab interface {
 	GetRoute(ctx context.Context, dest boson.Address) (paths []*Path, err error)
-	FindRoute(ctx context.Context, dest boson.Address) (paths []*Path, err error)
+	FindRoute(ctx context.Context, dest boson.Address, timeout ...time.Duration) (paths []*Path, err error)
 	DelRoute(ctx context.Context, dest boson.Address) (err error)
 	Connect(ctx context.Context, dest boson.Address) error
 	GetTargetNeighbor(ctx context.Context, dest boson.Address, limit int) (addresses []boson.Address, err error)
@@ -374,14 +375,17 @@ func (s *Service) GetRoute(_ context.Context, dest boson.Address) ([]*Path, erro
 	return s.routeTable.Get(dest)
 }
 
-func (s *Service) FindRoute(ctx context.Context, target boson.Address) (paths []*Path, err error) {
+func (s *Service) FindRoute(ctx context.Context, target boson.Address, timeout ...time.Duration) (paths []*Path, err error) {
 	if s.self.Equal(target) {
 		err = fmt.Errorf("target=%s is self", target.String())
 		return
 	}
 	forward := s.getNeighbor(target, DefaultNeighborAlpha, target)
 	if len(forward) > 0 {
-		ct, cancel := context.WithTimeout(ctx, PendingTimeout)
+		if len(timeout) > 0 {
+			findTimeOut = timeout[0]
+		}
+		ct, cancel := context.WithTimeout(ctx, findTimeOut)
 		defer cancel()
 		resCh := make(chan struct{}, len(forward))
 		s.doRouteReq(ct, forward, s.self, target, nil, resCh)
@@ -393,7 +397,7 @@ func (s *Service) FindRoute(ctx context.Context, target boson.Address) (paths []
 		select {
 		case <-ct.Done():
 			remove()
-			err = fmt.Errorf("route: FindRoute dest %s timeout %.0fs", target.String(), PendingTimeout.Seconds())
+			err = fmt.Errorf("route: FindRoute dest %s timeout %.0fs", target.String(), findTimeOut.Seconds())
 			s.logger.Debugf(err.Error())
 		case <-ctx.Done():
 			remove()

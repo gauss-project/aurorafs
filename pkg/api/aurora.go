@@ -156,15 +156,7 @@ func (s *server) fileUploadHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	logger.Debugf("Manifest Reference: %s", manifestReference.String())
 
-	pyramid, err := s.traversal.GetPyramid(ctx, manifestReference)
-	if err != nil {
-		logger.Debugf("aurora upload file: get pyramid of file %q: %v", fileName, err)
-		logger.Errorf("aurora upload file: get pyramid of file %q", fileName)
-		jsonhttp.InternalServerError(w, "could not get pyramid")
-		return
-	}
-
-	dataChunks, err := s.traversal.GetChunkHashes(ctx, manifestReference, pyramid)
+	dataChunks, _, err := s.traversal.GetChunkHashes(ctx, manifestReference, nil)
 	if err != nil {
 		logger.Debugf("aurora upload file: get chunk hashes of file %q: %v", fileName, err)
 		logger.Errorf("aurora upload file: get chunk hashes of file %q", fileName)
@@ -329,7 +321,7 @@ func (s *server) auroraDownloadHandler(w http.ResponseWriter, r *http.Request) {
 func (s *server) serveManifestEntry(
 	w http.ResponseWriter,
 	r *http.Request,
-	address boson.Address,
+	_ boson.Address,
 	manifestEntry manifest.Entry,
 	etag bool,
 ) {
@@ -401,7 +393,7 @@ type auroraListResponse struct {
 }
 
 // auroraListHandler
-func (s *server) auroraListHandler(w http.ResponseWriter, r *http.Request) {
+func (s *server) auroraListHandler(w http.ResponseWriter, _ *http.Request) {
 	responseList := make([]auroraListResponse, 0)
 	fileListInfo, addressList := s.chunkInfo.GetFileList(s.overlay)
 
@@ -425,8 +417,9 @@ func (s *server) auroraListHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	zeroAddress := boson.NewAddress([]byte{31: 0})
 	sort.Slice(responseList, func(i, j int) bool {
-		closer, _ := responseList[i].FileHash.Closer(boson.ZeroAddress, responseList[j].FileHash)
+		closer, _ := responseList[i].FileHash.Closer(zeroAddress, responseList[j].FileHash)
 		return closer
 	})
 
@@ -572,7 +565,7 @@ func (s *server) manifestViewHandler(w http.ResponseWriter, r *http.Request) {
 			pathVar += "/"
 		}
 
-		if err := m.IterateNodes(ctx, []byte(pathVar), depth, fn); err != nil {
+		if err := m.IterateDirectories(ctx, []byte(pathVar), depth, fn); err != nil {
 			jsonhttp.InternalServerError(w, err)
 			return
 		}

@@ -21,14 +21,14 @@ type Joiner interface {
 	// Size returns the span of the hash trie represented by the joiner's root hash.
 	Size() int64
 
+	// GetRootData returns root chunk of the given reference.
 	GetRootData() []byte
-	// GetDataChunks order by the file data chunks of reference.
+	// GetDataChunks returns saved data chunk when iteration has ended.
 	GetDataChunks() [][]byte
-	// SetSaveDataChunks
+	// SetSaveDataChunks allows to obtain all chunks lying at bottom.
 	SetSaveDataChunks()
-
-	// SetSaveIntChunks
-	SetSaveIntChunks(data map[string][]byte)
+	// SetSaveEdgeChunks allows to obtain all chunks that not belongs to data.
+	SetSaveEdgeChunks(map[string][]byte)
 }
 
 // Splitter starts a new file splitting job.
