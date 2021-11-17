@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 
 	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/file"
@@ -130,7 +131,12 @@ func (m *mantarayManifest) IterateDirectories(ctx context.Context, path []byte, 
 		return ErrMissingReference
 	}
 
-	uLevel := uint(level)
+	var uLevel uint
+	if level > 0 && level < math.MaxInt32 {
+		uLevel = uint(level)
+	} else {
+		uLevel = mantaray.MaxLevel
+	}
 
 	err := m.trie.WalkLevel(ctx, path, m.ls, uLevel, mantaray.WalkLevelFunc(fn))
 	if err != nil {
