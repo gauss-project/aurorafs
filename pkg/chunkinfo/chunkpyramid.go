@@ -126,7 +126,7 @@ func (ci *ChunkInfo) getChunkSize(cxt context.Context, rootCid boson.Address) (i
 		ci.updateChunkPyramid(rootCid, trie, v)
 	}
 
-	return len(ci.cp.pyramid[rootCid.String()]) - 1, nil
+	return len(ci.cp.pyramid[rootCid.String()]), nil
 }
 
 func (ci *ChunkInfo) getChunkPyramidHash(cxt context.Context, rootCid boson.Address) (map[string][]byte, error) {
