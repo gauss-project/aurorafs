@@ -400,12 +400,5 @@ func (s *server) auroraDeleteHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	ok = s.chunkInfo.DelPyramid(hash)
-	if !ok {
-		s.logger.Errorf("aurora delete: chunk info report delete %s related pyramid failed", hash)
-		jsonhttp.InternalServerError(w, "aurora deleting occur error")
-		return
-	}
-
 	jsonhttp.OK(w, nil)
 }
