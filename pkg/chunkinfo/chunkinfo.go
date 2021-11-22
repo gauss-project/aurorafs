@@ -44,8 +44,6 @@ type Interface interface {
 
 	DelDiscover(rootCid boson.Address)
 
-	DelPyramid(rootCid boson.Address) bool
-
 	OnChunkRetrieved(cid, rootCid, sourceOverlay boson.Address) error
 
 	GetChunkInfoSource(rootCid boson.Address) aurora.ChunkInfoSourceApi
@@ -291,6 +289,9 @@ func (ci *ChunkInfo) DelFile(rootCid boson.Address) bool {
 	if !ci.DelChunkInfoSource(rootCid) {
 		return false
 	}
+	if !ci.cp.delRootCid(rootCid) {
+		return false
+	}
 	return ci.delPresence(rootCid)
 }
 
@@ -302,13 +303,6 @@ func (ci *ChunkInfo) DelDiscover(rootCid boson.Address) {
 	delete(ci.queues, rootCid.String())
 	ci.queuesLk.Unlock()
 	ci.delDiscoverPresence(rootCid)
-	ci.DelChunkInfoSource(rootCid)
-}
-
-func (ci *ChunkInfo) DelPyramid(rootCid boson.Address) bool {
-	ci.syncLk.Lock()
-	defer ci.syncLk.Unlock()
-	return ci.cp.delRootCid(rootCid)
 }
 
 //Record every chunk source.
