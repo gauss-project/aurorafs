@@ -189,31 +189,40 @@ func (db *DB) collectGarbage() (collectedCount uint64, done bool, err error) {
 		// delete excepted root chunk
 		for _, chunk := range chunkHashes {
 			i := addressToItem(chunk.Cid)
-			pin, err := db.pinIndex.Has(i)
+			pinItem, err := db.pinIndex.Get(i)
 			if err != nil {
-				db.metrics.ModeHasFailure.Inc()
-				db.logger.Errorf("localstore: recycle garbage: check pin failure: %v", err)
-				continue
-			}
-			if !pin {
-				exist, err := db.retrievalDataIndex.Has(i)
-				if err != nil {
-					db.metrics.ModeHasFailure.Inc()
-					db.logger.Errorf("localstore: recycle garbage: check pin failure: %v", err)
-					continue
+				if !errors.Is(err, leveldb.ErrNotFound) {
+					db.logger.Errorf("localstore: collect garbage: get pin state failure: %v", err)
+					break
 				}
-				if exist {
-					err = db.retrievalDataIndex.DeleteInBatch(batch, i)
+				if pinItem.PinCounter > uint64(chunk.Number) {
+					pinItem.PinCounter -= uint64(chunk.Number)
+					err = db.pinIndex.Put(pinItem)
 					if err != nil {
-						db.logger.Errorf("localstore: recycle garbage: delete chunk data: %v", err)
+						db.logger.Errorf("localstore: collect garbage: update pin state failure: %v", err)
 						break
 					}
-					gcCount++
-					db.logger.Tracef("localstore: recycle garbage: chunk %s has deleted", chunk.Cid)
+					continue
+				}
+				err = db.pinIndex.DeleteInBatch(batch, pinItem)
+				if err != nil {
+					db.logger.Errorf("localstore: collect garbage: delete chunk pin: %v", err)
+					break
 				}
 			}
+			err = db.retrievalDataIndex.DeleteInBatch(batch, i)
+			if err != nil {
+				db.logger.Errorf("localstore: collect garbage: delete chunk data: %v", err)
+				break
+			}
+			gcCount++
+			db.logger.Tracef("localstore: collect garbage: chunk %s has deleted", chunk.Cid)
 		}
 		// delete from retrieve, gc
+		err = db.retrievalDataIndex.DeleteInBatch(batch, item)
+		if err != nil {
+			return 0, false, err
+		}
 		err = db.retrievalAccessIndex.DeleteInBatch(batch, item)
 		if err != nil {
 			return 0, false, err
@@ -222,6 +231,7 @@ func (db *DB) collectGarbage() (collectedCount uint64, done bool, err error) {
 		if err != nil {
 			return 0, false, err
 		}
+		gcCount++
 
 		currentCollectedCount += gcCount
 		db.logger.Tracef("localstore: collect garbage: hash %s will be clean at soon", addr)

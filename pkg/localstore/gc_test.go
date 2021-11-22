@@ -292,8 +292,6 @@ func TestDB_collectGarbageWorker_withRequests(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		ci.PutChunkPyramid(ch.Address(), ch.Address(), 0)
-
 		addrs = append(addrs, ch.Address())
 	}
 
@@ -722,7 +720,9 @@ func addRandomFile(t *testing.T, count int, db *DB, ci *chunkinfo.ChunkInfo, pin
 		t.Fatal(err)
 	}
 	for i, chunk := range chunkHashes {
-		ci.PutChunkPyramid(reference, chunk, i)
+		if !chunk.Equal(reference) {
+			ci.PutChunkPyramid(reference, chunk, i)
+		}
 	}
 	if !pin {
 		addGc = func(t2 *testing.T) {
@@ -831,8 +831,6 @@ func TestGC_NoEvictDirty(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		ci.PutChunkPyramid(ch.Address(), ch.Address(), 0)
-
 		mtx.Lock()
 		addrs = append(addrs, ch.Address())
 		mtx.Unlock()
@@ -927,10 +925,6 @@ func TestPinAndUnpinChunk(t *testing.T) {
 	// upload random file
 	reference, chunks, addGc := addRandomFile(t, chunkCount, db, ci, false)
 
-	for i, chunk := range chunks {
-		ci.PutChunkPyramid(reference, chunk, i)
-	}
-
 	rctx := sctx.SetRootCID(context.Background(), reference)
 	addGc(t)
 
@@ -944,9 +938,6 @@ func TestPinAndUnpinChunk(t *testing.T) {
 
 	chunkCount = 16
 	reference1, chunks1, addGc1 := addRandomFile(t, chunkCount, db, ci, false)
-	for i, chunk := range chunks1 {
-		ci.PutChunkPyramid(reference1, chunk, i)
-	}
 
 	rctx = sctx.SetRootCID(context.Background(), reference1)
 	for _, v := range chunks1 {
