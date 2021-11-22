@@ -90,7 +90,7 @@ func (s *server) dirUploadHandler(w http.ResponseWriter, r *http.Request) {
 
 	for _, li := range dataChunks {
 		for _, b := range li {
-			err := s.chunkInfo.OnChunkTransferred(boson.NewAddress(b), reference, s.overlay, boson.ZeroAddress)
+			err := s.chunkInfo.OnChunkRetrieved(boson.NewAddress(b), reference, s.overlay)
 			if err != nil {
 				logger.Errorf("aurora upload dir: chunk transfer data err: %v", err)
 				logger.Errorf("aurora upload dir: chunk transfer data err")
