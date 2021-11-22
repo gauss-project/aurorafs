@@ -138,6 +138,9 @@ func (ci *ChunkInfo) Init(ctx context.Context, authInfo []byte, rootCid boson.Ad
 		if ci.cd.isExists(rootCid) {
 			return true, nil
 		}
+		if ci.ct.isDownload(rootCid, ci.addr) {
+			return true, nil
+		}
 		overlays := ci.oracleChain.GetNodesFromCid(rootCid.Bytes())
 		if len(overlays) <= 0 {
 			return false, nil
