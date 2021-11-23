@@ -236,12 +236,18 @@ func (db *DB) collectGarbage() (collectedCount uint64, done bool, err error) {
 		currentCollectedCount += gcCount
 		db.logger.Tracef("localstore: collect garbage: hash %s will be clean at soon", addr)
 	}
-	if gcSize-currentCollectedCount > target {
+
+	currentSize := uint64(0)
+	if currentCollectedCount <= gcSize {
+		currentSize = gcSize - currentCollectedCount
+	}
+
+	if currentSize > target {
 		done = false
 	}
 
 	db.metrics.GCCommittedCounter.Add(float64(currentCollectedCount))
-	db.gcSize.PutInBatch(batch, gcSize-currentCollectedCount)
+	db.gcSize.PutInBatch(batch, currentSize)
 
 	err = db.shed.WriteBatch(batch)
 	if err != nil {
