@@ -172,7 +172,6 @@ func (db *DB) collectGarbage() (collectedCount uint64, done bool, err error) {
 
 		db.metrics.GCStoreTimeStamps.Set(float64(item.StoreTimestamp))
 		db.metrics.GCStoreAccessTimeStamps.Set(float64(item.AccessTimestamp))
-		db.metrics.GCWaitRemove.Inc()
 
 		pyramid := db.discover.GetChunkPyramid(addr)
 		chunkHashes := make([]chunkinfo.PyramidCidNum, len(pyramid))
