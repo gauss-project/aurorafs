@@ -12,7 +12,7 @@ import (
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethersphere/bee/pkg/settlement/swap/transaction"
+	"github.com/gauss-project/aurorafs/pkg/settlement/chain/transaction"
 )
 
 type backendMock struct {
@@ -26,6 +26,10 @@ type backendMock struct {
 	blockNumber        func(ctx context.Context) (uint64, error)
 	headerByNumber     func(ctx context.Context, number *big.Int) (*types.Header, error)
 	balanceAt          func(ctx context.Context, address common.Address, block *big.Int) (*big.Int, error)
+}
+
+func (m *backendMock) SuggestGasTipCap(ctx context.Context) (*big.Int, error) {
+	panic("implement me")
 }
 
 func (m *backendMock) CodeAt(ctx context.Context, contract common.Address, blockNumber *big.Int) ([]byte, error) {

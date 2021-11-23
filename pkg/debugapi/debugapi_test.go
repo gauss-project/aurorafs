@@ -21,8 +21,6 @@ import (
 	p2pmock "github.com/gauss-project/aurorafs/pkg/p2p/mock"
 	"github.com/gauss-project/aurorafs/pkg/pingpong"
 	"github.com/gauss-project/aurorafs/pkg/resolver"
-	chequebookmock "github.com/gauss-project/aurorafs/pkg/settlement/swap/chequebook/mock"
-	swapmock "github.com/gauss-project/aurorafs/pkg/settlement/swap/mock"
 	"github.com/gauss-project/aurorafs/pkg/storage"
 	"github.com/gauss-project/aurorafs/pkg/topology/bootnode"
 	"github.com/gauss-project/aurorafs/pkg/topology/lightnode"
@@ -41,9 +39,6 @@ type testServerOptions struct {
 	Resolver           resolver.Interface
 	TopologyOpts       []topologymock.Option
 	AccountingOpts     []accountingmock.Option
-	SettlementOpts     []swapmock.Option
-	ChequebookOpts     []chequebookmock.Option
-	SwapOpts           []swapmock.Option
 }
 
 type testServer struct {
