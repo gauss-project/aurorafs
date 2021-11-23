@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/gauss-project/aurorafs/pkg/retrieval/aco"
-	"github.com/gauss-project/aurorafs/pkg/settlement/swap/oracle"
+	"github.com/gauss-project/aurorafs/pkg/settlement/chain"
 	"resenje.org/singleflight"
 	"strings"
 	"sync"
@@ -70,12 +70,12 @@ type ChunkInfo struct {
 	cp           *chunkPyramid
 	cpd          *pendingFinderInfo
 	singleflight singleflight.Group
-	oracleChain  oracle.Resolver
+	oracleChain  chain.Resolver
 	cs           *chunkInfoSource
 }
 
 // New
-func New(addr boson.Address, streamer p2p.Streamer, logger logging.Logger, traversal traversal.Traverser, storer storage.StateStorer, route routetab.RouteTab, oracleChain oracle.Resolver) *ChunkInfo {
+func New(addr boson.Address, streamer p2p.Streamer, logger logging.Logger, traversal traversal.Traverser, storer storage.StateStorer, route routetab.RouteTab, oracleChain chain.Resolver) *ChunkInfo {
 	queues := make(map[string]*queue)
 	syncMsg := make(map[string]chan bool)
 

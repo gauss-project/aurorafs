@@ -7,6 +7,7 @@ import (
 	"context"
 	"crypto/ecdsa"
 	"fmt"
+	"github.com/gauss-project/aurorafs/pkg/settlement/chain/oracle"
 	"io"
 	"log"
 	"net"
@@ -32,7 +33,6 @@ import (
 	"github.com/gauss-project/aurorafs/pkg/resolver/multiresolver"
 	"github.com/gauss-project/aurorafs/pkg/retrieval"
 	"github.com/gauss-project/aurorafs/pkg/routetab"
-	"github.com/gauss-project/aurorafs/pkg/settlement/swap/oracle"
 	"github.com/gauss-project/aurorafs/pkg/shed"
 	"github.com/gauss-project/aurorafs/pkg/topology/bootnode"
 	"github.com/gauss-project/aurorafs/pkg/topology/kademlia"
@@ -92,14 +92,12 @@ type Options struct {
 	//PaymentEarly             string
 	ResolverConnectionCfgs []multiresolver.ConnectionConfig
 	GatewayMode            bool
-	//SwapEndpoint             string
-	//SwapFactoryAddress       string
-	//SwapInitialDeposit       string
-	//SwapEnable               bool
-	NodeMode          aurora.Model
-	KadBinMaxPeers    int
-	LightNodeMaxPeers int
-	AllowPrivateCIDRs bool
+	TrafficEnable          bool
+	TrafficContractAddr    string
+	NodeMode               aurora.Model
+	KadBinMaxPeers         int
+	LightNodeMaxPeers      int
+	AllowPrivateCIDRs      bool
 }
 
 func NewAurora(addr string, bosonAddress boson.Address, publicKey ecdsa.PublicKey, signer crypto.Signer, networkID uint64, logger logging.Logger, libp2pPrivateKey *ecdsa.PrivateKey, o Options) (b *Aurora, err error) {

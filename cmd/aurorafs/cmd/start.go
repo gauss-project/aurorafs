@@ -137,13 +137,11 @@ func (c *command) initStartCmd() (err error) {
 				//PaymentEarly:             c.config.GetString(optionNamePaymentEarly),
 				ResolverConnectionCfgs: resolverCfgs,
 				GatewayMode:            c.config.GetBool(optionNameGatewayMode),
-				//SwapEndpoint:             c.config.GetString(optionNameSwapEndpoint),
-				//SwapFactoryAddress:       c.config.GetString(optionNameSwapFactoryAddress),
-				//SwapInitialDeposit:       c.config.GetString(optionNameSwapInitialDeposit),
-				//SwapEnable:               c.config.GetBool(optionNameSwapEnable),
-				KadBinMaxPeers:    c.config.GetInt(optionNameBinMaxPeers),
-				LightNodeMaxPeers: c.config.GetInt(optionNameLightMaxPeers),
-				AllowPrivateCIDRs: c.config.GetBool(optionNameAllowPrivateCIDRs),
+				TrafficEnable:          c.config.GetBool(optionNameTrafficEnable),
+				TrafficContractAddr:    c.config.GetString(optionNameTrafficContractAddr),
+				KadBinMaxPeers:         c.config.GetInt(optionNameBinMaxPeers),
+				LightNodeMaxPeers:      c.config.GetInt(optionNameLightMaxPeers),
+				AllowPrivateCIDRs:      c.config.GetBool(optionNameAllowPrivateCIDRs),
 			})
 			if err != nil {
 				return err
