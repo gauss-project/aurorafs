@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/gauss-project/aurorafs/pkg/boson"
+	"github.com/gauss-project/aurorafs/pkg/chunkinfo"
 	"github.com/gauss-project/aurorafs/pkg/shed"
 	"github.com/syndtr/goleveldb/leveldb"
 )
@@ -61,11 +62,6 @@ func (db *DB) collectGarbageWorker() {
 			// check if another gc run is needed
 			if !done {
 				db.triggerGarbageCollection()
-			}
-
-			// start clean chunks
-			if collectedCount > 0 {
-				db.triggerGarbageRecycling()
 			}
 
 			if testHookCollectGarbage != nil {
@@ -178,13 +174,49 @@ func (db *DB) collectGarbage() (collectedCount uint64, done bool, err error) {
 		db.metrics.GCStoreAccessTimeStamps.Set(float64(item.AccessTimestamp))
 		db.metrics.GCWaitRemove.Inc()
 
-		err = db.gcQueueIndex.PutInBatch(batch, item)
-		if err != nil {
-			return 0, false, err
+		pyramid := db.discover.GetChunkPyramid(addr)
+		chunkHashes := make([]chunkinfo.PyramidCidNum, len(pyramid))
+		for i, chunk := range pyramid {
+			chunkHashes[i] = *chunk
 		}
+
+		gcCount := uint64(0)
+
 		del := db.discover.DelFile(boson.NewAddress(item.Address))
 		if !del {
 			return 0, false, fmt.Errorf("chunkinfo report delete %s failed", addr)
+		}
+		// delete excepted root chunk
+		for _, chunk := range chunkHashes {
+			i := addressToItem(chunk.Cid)
+			pinItem, err := db.pinIndex.Get(i)
+			if err != nil {
+				if !errors.Is(err, leveldb.ErrNotFound) {
+					db.logger.Errorf("localstore: collect garbage: get pin state failure: %v", err)
+					break
+				}
+				if pinItem.PinCounter > uint64(chunk.Number) {
+					pinItem.PinCounter -= uint64(chunk.Number)
+					err = db.pinIndex.Put(pinItem)
+					if err != nil {
+						db.logger.Errorf("localstore: collect garbage: update pin state failure: %v", err)
+						break
+					}
+					continue
+				}
+				err = db.pinIndex.DeleteInBatch(batch, pinItem)
+				if err != nil {
+					db.logger.Errorf("localstore: collect garbage: delete chunk pin: %v", err)
+					break
+				}
+			}
+			err = db.retrievalDataIndex.DeleteInBatch(batch, i)
+			if err != nil {
+				db.logger.Errorf("localstore: collect garbage: delete chunk data: %v", err)
+				break
+			}
+			gcCount++
+			db.logger.Tracef("localstore: collect garbage: chunk %s has deleted", chunk.Cid)
 		}
 		// delete from retrieve, gc
 		err = db.retrievalDataIndex.DeleteInBatch(batch, item)
@@ -199,8 +231,9 @@ func (db *DB) collectGarbage() (collectedCount uint64, done bool, err error) {
 		if err != nil {
 			return 0, false, err
 		}
+		gcCount++
 
-		currentCollectedCount += item.GCounter
+		currentCollectedCount += gcCount
 		db.logger.Tracef("localstore: collect garbage: hash %s will be clean at soon", addr)
 	}
 	if gcSize-currentCollectedCount > target {
@@ -219,130 +252,6 @@ func (db *DB) collectGarbage() (collectedCount uint64, done bool, err error) {
 	return currentCollectedCount, done, nil
 }
 
-// recycleGarbageWorker really remove chunks in db, triggered when
-// garbage recycling is completed. This function only log a error. If
-// db report serious error, we check db.close is terminated.
-func (db *DB) recycleGarbageWorker() {
-	var (
-		recycleCount uint64
-		removeChunks uint64
-		closed       bool
-	)
-
-	defer close(db.recycleGarbageWorkerDone)
-
-	// if commit batch size large than gcBatchSize, done will be false.
-	done := true
-
-	for {
-		batch := new(leveldb.Batch)
-		candidates := make([]shed.Item, 0)
-
-		// iterate from large to small
-		err := db.gcQueueIndex.Iterate(func(item shed.Item) (stop bool, err error) {
-			candidates = append(candidates, item)
-
-			return false, nil
-		}, &shed.IterateOptions{Reverse: true})
-		if err != nil {
-			db.logger.Errorf("localstore: recycle garbage: iterate gc queue: %v", err)
-			goto next
-		}
-
-		recycleCount = 0
-		removeChunks = 0
-
-		if len(candidates) > 0 {
-			for _, item := range candidates {
-				addr := boson.NewAddress(item.Address)
-				chunks := db.discover.GetChunkPyramid(addr)
-				for _, chunk := range chunks {
-					i := addressToItem(chunk.Cid)
-					pin, err := db.pinIndex.Has(i)
-					if err != nil {
-						db.metrics.ModeHasFailure.Inc()
-						db.logger.Errorf("localstore: recycle garbage: check pin failure: %v", err)
-						continue
-					}
-					if !pin {
-						exist, err := db.retrievalDataIndex.Has(i)
-						if err != nil {
-							db.metrics.ModeHasFailure.Inc()
-							db.logger.Errorf("localstore: recycle garbage: check pin failure: %v", err)
-							continue
-						}
-						if exist {
-							err = db.retrievalDataIndex.DeleteInBatch(batch, i)
-							if err != nil {
-								db.logger.Errorf("localstore: recycle garbage: delete chunk data: %v", err)
-								break
-							}
-							db.logger.Tracef("localstore: recycle garbage: chunk %s has deleted", chunk.Cid)
-							removeChunks++
-						}
-					}
-
-					// skip and write to db
-					if removeChunks >= gcBatchSize {
-						done = false
-						break
-					}
-				}
-
-				if done {
-					err = db.gcQueueIndex.DeleteInBatch(batch, item)
-					if err != nil {
-						db.logger.Errorf("localstore: recycle garbage: gc queue delete: %v", err)
-						db.metrics.GCErrorCounter.Inc()
-						recycleCount--
-					} else {
-						db.logger.Tracef("localstore: recycle garbage: pyramid under hash %s has deleted", addr)
-						db.discover.DelPyramid(addr)
-					}
-				}
-
-				select {
-				case <-db.close:
-					db.logger.Warningf("localstore: recycle garbage: stops in advance due to db closing")
-					closed = true
-					goto writeBatch
-				default:
-				}
-			}
-
-		writeBatch:
-			err = db.shed.WriteBatch(batch)
-			if err != nil {
-				db.metrics.GCErrorCounter.Inc()
-				db.logger.Errorf("localstore: recycle garbage: %v", err)
-			} else {
-				db.metrics.GCWaitRemove.Sub(float64(recycleCount))
-				db.metrics.GCRemovedCounter.Add(float64(removeChunks))
-			}
-
-			if testHookRecycleGarbage != nil {
-				testHookRecycleGarbage(removeChunks)
-			}
-
-			if closed {
-				return
-			}
-		}
-
-	next:
-		if !done {
-			db.triggerGarbageRecycling()
-			done = true
-		}
-
-		select {
-		case <-db.recycleGarbageTrigger:
-		case <-db.close:
-			return
-		}
-	}
-}
-
 // gcTrigger retruns the absolute value for garbage collection
 // target value, calculated from db.capacity and gcTargetRatio.
 func (db *DB) gcTarget() (target uint64) {
@@ -354,16 +263,6 @@ func (db *DB) gcTarget() (target uint64) {
 func (db *DB) triggerGarbageCollection() {
 	select {
 	case db.collectGarbageTrigger <- struct{}{}:
-	case <-db.close:
-	default:
-	}
-}
-
-// triggerGarbageRecycling signals recycleGarbageWorker
-// to call recycleGarbage
-func (db *DB) triggerGarbageRecycling() {
-	select {
-	case db.recycleGarbageTrigger <- struct{}{}:
 	case <-db.close:
 	default:
 	}
@@ -408,11 +307,6 @@ func (db *DB) incGCSizeInBatch(batch *leveldb.Batch, change int64) (err error) {
 // information when a garbage collection run is done
 // and how many items it removed.
 var testHookCollectGarbage func(collectedCount uint64)
-
-// testHookCollectGarbage is a hook that can provide
-// information when a garbage recycling run is done
-// and how many items it removed.
-var testHookRecycleGarbage func(recycledCount uint64)
 
 // testHookGCIteratorDone is a hook which is called
 // when the GC is done collecting candidate items for

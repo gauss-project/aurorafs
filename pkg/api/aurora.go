@@ -166,7 +166,7 @@ func (s *server) fileUploadHandler(w http.ResponseWriter, r *http.Request) {
 
 	for _, li := range dataChunks {
 		for _, b := range li {
-			err := s.chunkInfo.OnChunkTransferred(boson.NewAddress(b), manifestReference, s.overlay, boson.ZeroAddress)
+			err := s.chunkInfo.OnChunkRetrieved(boson.NewAddress(b), manifestReference, s.overlay)
 			if err != nil {
 				logger.Debugf("aurora upload file: chunk transfer data err: %v", err)
 				logger.Errorf("aurora upload file: chunk transfer data err")

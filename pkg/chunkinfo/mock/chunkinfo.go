@@ -163,11 +163,7 @@ func (ci *ChunkInfo) DelDiscover(rootCid boson.Address) {
 
 }
 
-func (ci *ChunkInfo) DelPyramid(rootCid boson.Address) bool {
-	return ci.cp.delRootCid(rootCid)
-}
-
-func (ci *ChunkInfo) OnChunkRecordSource(cid, rootCid, sourceOverlay boson.Address) error {
+func (ci *ChunkInfo) OnChunkRetrieved(cid, rootCid, sourceOverlay boson.Address) error {
 	return nil
 }
 

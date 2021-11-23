@@ -115,14 +115,14 @@ func (ci *ChunkInfo) UpdateChunkInfoSource(rootCid, sourceOverlay boson.Address,
 	rc := rootCid.String()
 	over := sourceOverlay.String()
 	if _, ok := ci.cs.presence[rc]; !ok {
-		ci.cs.presence[rc] = &sourceInfo{
-			PyramidSource: "",
-			ChunkSource:   make(map[string]*bitvector.BitVector),
-		}
+		return fmt.Errorf("chunk info : source is not exists")
 	}
 	vb, ok := ci.cs.presence[rc].ChunkSource[over]
 	if !ok {
-		v, _ := ci.getChunkSize(context.Background(), rootCid)
+		v, err := ci.getChunkSize(context.Background(), rootCid)
+		if err != nil {
+			return err
+		}
 		vb, _ = bitvector.New(v)
 		ci.cs.presence[rc].ChunkSource[over] = vb
 	}
@@ -138,7 +138,7 @@ func (ci *ChunkInfo) UpdatePyramidSource(ctx context.Context, rootCid, sourceOve
 	if err != nil {
 		return err
 	}
-	err = ci.cs.updatePyramidSource(ctx, rootCid, sourceOverlay)
+	err = ci.cs.updatePyramidSource(rootCid, sourceOverlay)
 	if err != nil {
 		return err
 	}
@@ -159,7 +159,7 @@ func (ci *ChunkInfo) UpdatePyramidSource(ctx context.Context, rootCid, sourceOve
 	return nil
 }
 
-func (cs *chunkInfoSource) updatePyramidSource(ctx context.Context, rootCid, sourceOverlay boson.Address) error {
+func (cs *chunkInfoSource) updatePyramidSource(rootCid, sourceOverlay boson.Address) error {
 	cs.Lock()
 	defer cs.Unlock()
 	rc := rootCid.String()
@@ -169,8 +169,10 @@ func (cs *chunkInfoSource) updatePyramidSource(ctx context.Context, rootCid, sou
 			PyramidSource: overlay,
 			ChunkSource:   make(map[string]*bitvector.BitVector),
 		}
-	} else {
+	} else if cs.presence[rc].PyramidSource == "" {
 		cs.presence[rc].PyramidSource = overlay
+	} else {
+		return nil
 	}
 
 	return cs.storer.Put(generateKey(pyramidKeyPrefix, rootCid, sourceOverlay), overlay)
@@ -181,9 +183,6 @@ func (cs *chunkInfoSource) GetChunkInfoSource(rootCid boson.Address) (sourceResp
 	defer cs.RUnlock()
 	rc := rootCid.String()
 	if _, ok := cs.presence[rc]; !ok {
-		return
-	}
-	if len(cs.presence[rc].ChunkSource) == 0 {
 		return
 	}
 
@@ -206,34 +205,34 @@ func (cs *chunkInfoSource) GetChunkInfoSource(rootCid boson.Address) (sourceResp
 func (cs *chunkInfoSource) DelChunkInfoSource(rootCid boson.Address) bool {
 	cs.Lock()
 	defer cs.Unlock()
-	key := fmt.Sprintf("%s%s", chunkSourceKeyPrefix, rootCid.String())
-	if err := cs.storer.Iterate(key, func(k, value []byte) (stop bool, err error) {
+	delKey := fmt.Sprintf("%s%s", chunkSourceKeyPrefix, rootCid.String())
+	if err := cs.storer.Iterate(delKey, func(k, value []byte) (stop bool, err error) {
 		key := string(k)
-		if !strings.HasPrefix(key, chunkSourceKeyPrefix) {
-			return true, nil
+		if !strings.HasPrefix(key, delKey) {
+			return false, nil
 		}
 		err = cs.storer.Delete(key)
 		if err != nil {
-			return true, nil
+			return true, fmt.Errorf("del rootCid: %s : chunk %v", rootCid.String(), err)
 		}
 		return false, nil
 	}); err != nil {
-		cs.logger.Errorf("chunk source: del rootCid chunk source error:%w", err)
+		cs.logger.Errorf("chunk source: del rootCid chunk source error:%v", err)
 		return false
 	}
-	key = fmt.Sprintf("%s%s", pyramidKeyPrefix, rootCid.String())
-	if err := cs.storer.Iterate(key, func(k, value []byte) (stop bool, err error) {
+	delKey = fmt.Sprintf("%s%s", pyramidKeyPrefix, rootCid.String())
+	if err := cs.storer.Iterate(delKey, func(k, value []byte) (stop bool, err error) {
 		key := string(k)
-		if !strings.HasPrefix(key, pyramidKeyPrefix) {
-			return true, nil
+		if !strings.HasPrefix(key, delKey) {
+			return false, nil
 		}
 		err = cs.storer.Delete(key)
 		if err != nil {
-			return true, nil
+			return true, fmt.Errorf("del rootCid: %s : source %v", rootCid.String(), err)
 		}
 		return false, nil
 	}); err != nil {
-		cs.logger.Errorf("chunk source: del rootCid pyramid source error:%w", err)
+		cs.logger.Errorf("chunk source: del rootCid pyramid source error:%v", err)
 		return false
 	}
 
