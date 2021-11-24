@@ -1,7 +1,10 @@
 package chain
 
 import (
+	"github.com/ethereum/go-ethereum/accounts/abi/bind"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/gauss-project/aurorafs/pkg/boson"
+	"math/big"
 )
 
 type ChainResult struct {
@@ -28,4 +31,13 @@ type Resolver interface {
 }
 
 type Traffic interface {
+
+	// 	TransferredAddress opts todo
+	TransferredAddress(opts *bind.CallOpts, address common.Address, arg1 *big.Int) (common.Address, error)
+
+	RetrievedAddress(opts *bind.CallOpts, address common.Address, arg1 *big.Int) (common.Address, error)
+
+	BalanceOf(opts *bind.CallOpts, account common.Address) (*big.Int, error)
+
+	RetrievedTotal(opts *bind.CallOpts, arg0 common.Address) (*big.Int, error)
 }
