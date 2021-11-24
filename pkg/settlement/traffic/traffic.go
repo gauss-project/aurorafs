@@ -31,13 +31,35 @@ type TrafficPeer struct {
 	totalPaidOut *big.Int
 }
 
+type TrafficCheque struct {
+	Peer               boson.Address
+	OutstandingTraffic *big.Int
+	SendTraffic        *big.Int
+	ReceivedTraffic    *big.Int
+	Total              *big.Int
+	Uncashed           *big.Int
+}
+
+type TrafficInfo struct {
+	Balance          *big.Int
+	AvailableBalance *big.Int
+	TotalSendTraffic *big.Int
+	ReceivedTraffic  *big.Int
+}
+
 type Interface interface {
 	// LastSentCheque returns the last sent cheque for the peer
-	LastSentCheque(peer common.Address) (*cheque.SignedCheque, error)
+	LastSentCheque(chainAddress common.Address) (*cheque.Cheque, error)
 	// LastReceivedCheques returns the list of last received cheques for all peers
-	LastReceivedCheques() (map[common.Address]*cheque.SignedCheque, error)
+	LastReceivedCheque(chainAddress common.Address) (*cheque.SignedCheque, error)
 	// CashCheque sends a cashing transaction for the last cheque of the peer
 	CashCheque(ctx context.Context, peer common.Address) (common.Hash, error)
+
+	TrafficCheques() ([]*TrafficCheque, error)
+
+	Address() common.Address
+
+	TrafficInfo() (*TrafficInfo, error)
 }
 
 type Service struct {
@@ -111,16 +133,56 @@ func (s *Service) maxBigint(a *big.Int, b *big.Int) *big.Int {
 }
 
 // LastSentCheque returns the last sent cheque for the peer
-func (s *Service) LastSentCheque(peer common.Address) (*cheque.SignedCheque, error) {
-	return s.chequeStore.LastSentCheque(peer)
+func (s *Service) LastSentCheque(chainAddress common.Address) (*cheque.Cheque, error) {
+	return s.chequeStore.LastSendCheque(chainAddress)
 }
 
-// LastReceivedCheques returns the list of last received cheques for all peers
-func (s *Service) LastReceivedCheques() (map[common.Address]*cheque.SignedCheque, error) {
-	return s.chequeStore.LastCheques()
+func (s *Service) LastReceivedCheque(chainAddress common.Address) (*cheque.SignedCheque, error) {
+	return s.chequeStore.LastReceivedCheque(chainAddress)
 }
 
 // CashCheque sends a cashing transaction for the last cheque of the peer
 func (s *Service) CashCheque(ctx context.Context, peer common.Address) (common.Hash, error) {
+	return common.Hash{}, nil
+}
+
+func (s *Service) Address() common.Address {
+	return common.Address{}
+}
+
+func (s *Service) TrafficInfo() (*TrafficInfo, error) {
 	return nil, nil
+}
+
+func (s *Service) TrafficCheques() ([]*TrafficCheque, error) {
+	return nil, nil
+}
+
+func (s *Service) Pay(ctx context.Context, peer boson.Address, amount *big.Int) error {
+	return nil
+}
+
+// TotalSent returns the total amount sent to a peer
+func (s *Service) TotalSent(peer boson.Address) (totalSent *big.Int, err error) {
+	return nil, nil
+}
+
+// TotalReceived returns the total amount received from a peer
+func (s *Service) TotalReceived(peer boson.Address) (totalSent *big.Int, err error) {
+	return nil, nil
+}
+
+// SettlementsSent returns sent settlements for each individual known peer
+func (s *Service) SettlementsSent() (map[string]*big.Int, error) {
+	return nil, nil
+}
+
+// SettlementsReceived returns received settlements for each individual known peer
+func (s *Service) SettlementsReceived() (map[string]*big.Int, error) {
+	return nil, nil
+}
+
+// SetNotifyPaymentFunc sets the NotifyPaymentFunc to notify
+func (s *Service) SetNotifyPaymentFunc(notifyPaymentFunc settlement.NotifyPaymentFunc) {
+
 }
