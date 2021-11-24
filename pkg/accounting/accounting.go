@@ -6,13 +6,16 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/logging"
+	"github.com/gauss-project/aurorafs/pkg/p2p"
 	"github.com/gauss-project/aurorafs/pkg/settlement"
 	"github.com/gauss-project/aurorafs/pkg/storage"
 	"math/big"
 	"strings"
 	"sync"
+	"time"
 )
 
 var (
@@ -28,11 +31,11 @@ type Interface interface {
 	//
 	// This has to be called (always in combination with Release) before a
 	// Credit action to prevent overspending in case of concurrent requests.
-	Reserve(ctx context.Context, peer boson.Address, traffic uint64) error
+	Reserve(ctx context.Context, peer boson.Address, address common.Address, traffic uint64) error
 	// Credit increases the balance the peer has with us (we "pay" the peer).
-	Credit(peer boson.Address, traffic uint64) error
+	Credit(peer boson.Address, address common.Address, traffic uint64) error
 	// Debit increases the balance we have with the peer (we get "paid" back).
-	Debit(peer boson.Address, traffic uint64) error
+	Debit(peer boson.Address, address common.Address, traffic uint64) error
 
 	RetrievedTraffic(peer boson.Address) (*big.Int, error)
 
@@ -53,16 +56,8 @@ type Accounting struct {
 }
 
 var (
-	// ErrOverdraft denotes the expected debt in Reserve would exceed the payment thresholds.
-	ErrOverdraft = errors.New("attempted overdraft")
 	// ErrDisconnectThresholdExceeded denotes a peer has exceeded the disconnect threshold.
 	ErrDisconnectThresholdExceeded = errors.New("disconnect threshold exceeded")
-	// ErrPeerNoBalance is the error returned if no balance in store exists for a peer
-	ErrPeerNoBalance = errors.New("no balance for peer")
-	// ErrOverflow denotes an arithmetic operation overflowed.
-	ErrOverflow = errors.New("overflow error")
-	// ErrInvalidValue denotes an invalid value read from store
-	ErrInvalidValue = errors.New("invalid value")
 )
 
 // NewAccounting creates a new Accounting instance with the provided options.
@@ -85,15 +80,15 @@ func NewAccounting(
 }
 
 // Reserve reserves a portion of the balance for peer and attempts settlements if necessary.
-func (a *Accounting) Reserve(ctx context.Context, peer boson.Address, traffic uint64) error {
+func (a *Accounting) Reserve(ctx context.Context, peer boson.Address, chainAddress common.Address, traffic uint64) error {
 	accountingPeer, err := a.getAccountingPeer(peer)
 	if err != nil {
 		return err
 	}
-	balance, err := a.settlement.RetrieveTraffic(peer)
+	balance, err := a.settlement.RetrieveTraffic(chainAddress)
 	balance = balance.Add(balance, new(big.Int).SetUint64(traffic))
 	if balance.Cmp(accountingPeer) < 0 {
-		err := a.settle(ctx, peer, balance)
+		err := a.settle(ctx, chainAddress, balance)
 		if err != nil {
 			return fmt.Errorf("failed to settle with peer %v: %v", peer, err)
 		}
@@ -101,25 +96,22 @@ func (a *Accounting) Reserve(ctx context.Context, peer boson.Address, traffic ui
 	return nil
 }
 
-// Release releases reserved funds.
-func (a *Accounting) Release(peer boson.Address, traffic uint64) {
-	if err := a.settlement.PutRetrieveTraffic(peer, new(big.Int).SetUint64(traffic)); err != nil {
-		a.logger.Errorf("")
-		return
-	}
-}
-
 // Credit increases the amount of credit we have with the given peer
 // (and decreases existing debt).
-func (a *Accounting) Credit(peer boson.Address, traffic uint64) error {
+func (a *Accounting) Credit(peer boson.Address, address common.Address, traffic uint64) error {
+
+	if err := a.settlement.PutRetrieveTraffic(address, new(big.Int).SetUint64(traffic)); err != nil {
+		a.logger.Errorf("failed to modify retrieve traffic")
+		return err
+	}
 
 	return nil
 }
 
 // Settle all debt with a peer. The lock on the accountingPeer must be held when
 // called.
-func (a *Accounting) settle(ctx context.Context, peer boson.Address, balance *big.Int) error {
-	if err := a.settlement.Pay(ctx, peer, balance); err != nil {
+func (a *Accounting) settle(ctx context.Context, address common.Address, balance *big.Int) error {
+	if err := a.settlement.Pay(ctx, address, balance); err != nil {
 		return err
 	}
 	return nil
@@ -127,8 +119,21 @@ func (a *Accounting) settle(ctx context.Context, peer boson.Address, balance *bi
 
 // Debit increases the amount of debt we have with the given peer (and decreases
 // existing credit).
-func (a *Accounting) Debit(peer boson.Address, traffic uint64) error {
+func (a *Accounting) Debit(peer boson.Address, address common.Address, traffic uint64) error {
 
+	tolerance := a.paymentTolerance
+	traff, err := a.settlement.TransferTraffic(address)
+	if err != nil {
+		return err
+	}
+	if tolerance.Cmp(traff) >= 0 {
+		a.metrics.AccountingDisconnectsCount.Inc()
+		return p2p.NewBlockPeerError(10000*time.Hour, ErrDisconnectThresholdExceeded)
+	}
+
+	if err := a.settlement.PutTransferTraffic(address, new(big.Int).SetUint64(traffic)); err != nil {
+		return err
+	}
 	return nil
 }
 
