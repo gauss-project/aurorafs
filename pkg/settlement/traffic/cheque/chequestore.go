@@ -23,9 +23,9 @@ var (
 	// ErrWrongBeneficiary is the error returned if the cheque has the wrong beneficiary.
 	ErrWrongBeneficiary = errors.New("wrong beneficiary")
 	// ErrBouncingCheque is the error returned if the chainAddress is demonstrably illiquid.
-	ErrBouncingCheque                  = errors.New("bouncing cheque")
-	lastTransferredTrafficChequePrefix = "transferred_traffic_cheque_"
-	lastRetrievedTrafficChequePrefix   = "retrieved_traffic_cheque_"
+	ErrBouncingCheque        = errors.New("bouncing cheque")
+	lastReceivedChequePrefix = "traffic_last_received_cheque_"
+	lastSendChequePrefix     = "traffic_last_send_cheque_"
 )
 
 // ChequeStore handles the verification and storage of received cheques
@@ -33,15 +33,18 @@ type ChequeStore interface {
 	// ReceiveCheque verifies and stores a cheque. It returns the totam amount earned.
 	ReceiveCheque(ctx context.Context, cheque *SignedCheque) (*big.Int, error)
 	// LastCheque returns the last cheque we received from a specific chainAddress.
-	LastCheque(chainAddress common.Address) (*SignedCheque, error)
+	LastReceivedCheque(chainAddress common.Address) (*SignedCheque, error)
 	// LastCheques returns the last received cheques from every known chainAddress.
-	LastCheques() (map[common.Address]*SignedCheque, error)
+	LastReceivedCheques() (map[common.Address]*SignedCheque, error)
+
+	LastSendCheque(chainAddress common.Address) (*Cheque, error)
+
+	LastSendCheques(chainAddress common.Address) (*Cheque, error)
 }
 
 type chequeStore struct {
 	lock              sync.Mutex
 	store             storage.StateStorer
-	chaindID          int64
 	beneficiary       common.Address // the beneficiary we expect in cheques sent to us
 	recoverChequeFunc RecoverChequeFunc
 }
@@ -51,30 +54,28 @@ type RecoverChequeFunc func(cheque *SignedCheque, chainID int64) (common.Address
 // NewChequeStore creates new ChequeStore
 func NewChequeStore(
 	store storage.StateStorer,
-	chainID int64,
 	beneficiary common.Address,
 	recoverChequeFunc RecoverChequeFunc) ChequeStore {
 	return &chequeStore{
 		store:             store,
-		chaindID:          chainID,
 		beneficiary:       beneficiary,
 		recoverChequeFunc: recoverChequeFunc,
 	}
 }
 
 // lastTransferredTrafficChequeKey computes the key where to store the last cheque received from a chainAddress.
-func lastTransferredTrafficChequeKey(chainAddress common.Address) string {
-	return fmt.Sprintf("%s_%x", lastTransferredTrafficChequePrefix, chainAddress)
+func lastReceivedChequeKey(chainAddress common.Address) string {
+	return fmt.Sprintf("%s_%x", lastReceivedChequePrefix, chainAddress)
 }
 
-func lastRetrievedTrafficChequeKey(chainAddress common.Address) string {
-	return fmt.Sprintf("%s_%x", lastRetrievedTrafficChequePrefix, chainAddress)
+func lastSendChequeKey(chainAddress common.Address) string {
+	return fmt.Sprintf("%s_%x", lastSendChequePrefix, chainAddress)
 }
 
 // LastCheque returns the last cheque we received from a specific chainAddress.
 func (s *chequeStore) LastCheque(chainAddress common.Address) (*SignedCheque, error) {
 	var cheque *SignedCheque
-	err := s.store.Get(lastTransferredTrafficChequeKey(chainAddress), &cheque)
+	err := s.store.Get(lastReceivedChequeKey(chainAddress), &cheque)
 	if err != nil {
 		if err != storage.ErrNotFound {
 			return nil, err
@@ -100,7 +101,7 @@ func (s *chequeStore) ReceiveCheque(ctx context.Context, cheque *SignedCheque) (
 	// load the lastCumulativePayout for the cheques chainAddress
 	var lastCumulativePayout *big.Int
 	var lastReceivedCheque *SignedCheque
-	err := s.store.Get(lastRetrievedTrafficChequeKey(cheque.Beneficiary), &lastReceivedCheque)
+	err := s.store.Get(lastReceivedChequeKey(cheque.Beneficiary), &lastReceivedCheque)
 	if err != nil {
 		if err != storage.ErrNotFound {
 			return nil, err
@@ -121,7 +122,7 @@ func (s *chequeStore) ReceiveCheque(ctx context.Context, cheque *SignedCheque) (
 	// blockchain calls below
 
 	// store the accepted cheque
-	err = s.store.Put(lastRetrievedTrafficChequeKey(cheque.Beneficiary), cheque)
+	err = s.store.Put(lastReceivedChequeKey(cheque.Beneficiary), cheque)
 	if err != nil {
 		return nil, err
 	}
@@ -162,8 +163,8 @@ func keyChainAddress(key []byte, prefix string) (chainAddress common.Address, er
 // LastCheques returns the last received cheques from every known chainAddress.
 func (s *chequeStore) LastCheques() (map[common.Address]*SignedCheque, error) {
 	result := make(map[common.Address]*SignedCheque)
-	err := s.store.Iterate(lastTransferredTrafficChequePrefix, func(key, val []byte) (stop bool, err error) {
-		addr, err := keyChainAddress(key, lastTransferredTrafficChequePrefix+"_")
+	err := s.store.Iterate(lastReceivedChequePrefix, func(key, val []byte) (stop bool, err error) {
+		addr, err := keyChainAddress(key, lastReceivedChequePrefix+"_")
 		if err != nil {
 			return false, fmt.Errorf("parse address from key: %s: %w", string(key), err)
 		}
