@@ -2,6 +2,7 @@ package traffic
 
 import (
 	"context"
+	"errors"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/logging"
@@ -141,11 +142,25 @@ func (s *Service) LastReceivedCheque(chainAddress common.Address) (*cheque.Signe
 
 // CashCheque sends a cashing transaction for the last cheque of the peer
 func (s *Service) CashCheque(ctx context.Context, chainAddress common.Address) (common.Hash, error) {
-	return common.Hash{}, nil
+	sign, err := s.chequeStore.LastReceivedCheque(chainAddress)
+
+	if err != nil {
+		return common.Hash{}, err
+	}
+
+	if chainAddress != sign.Recipient {
+		return common.Hash{}, errors.New("exchange failed")
+	}
+
+	c, err := s.cashout.CashCheque(ctx, chainAddress, sign.Recipient)
+	if err != nil {
+		return common.Hash{}, err
+	}
+	return c, err
 }
 
 func (s *Service) Address() common.Address {
-	return common.Address{}
+	return s.chainAddress
 }
 
 func (s *Service) TrafficInfo() (*TrafficInfo, error) {
@@ -244,10 +259,33 @@ func (s *Service) SetNotifyPaymentFunc(notifyPaymentFunc settlement.NotifyPaymen
 }
 
 func (s *Service) TransferTraffic(chainAddress common.Address) (traffic *big.Int, err error) {
-	return new(big.Int).SetInt64(0), nil
+
+	var transferTraffic, transferChequeTraffic *big.Int
+	tra, ok := s.trafficPeers.trafficPeers.Load(chainAddress)
+
+	if ok {
+		transferTraffic = tra.(Traffic).transferTraffic
+		transferChequeTraffic = tra.(Traffic).transferChequeTraffic
+	} else {
+		transferTraffic = big.NewInt(0)
+		transferChequeTraffic = big.NewInt(0)
+	}
+
+	return new(big.Int).Sub(transferTraffic, transferChequeTraffic), nil
 }
 func (s *Service) RetrieveTraffic(chainAddress common.Address) (traffic *big.Int, err error) {
-	return new(big.Int).SetInt64(0), nil
+	var retrieveTraffic, retrieveChequeTraffic *big.Int
+	tra, ok := s.trafficPeers.trafficPeers.Load(chainAddress)
+
+	if ok {
+		retrieveTraffic = tra.(Traffic).retrieveTraffic
+		retrieveChequeTraffic = tra.(Traffic).retrieveChequeTraffic
+	} else {
+		retrieveTraffic = big.NewInt(0)
+		retrieveChequeTraffic = big.NewInt(0)
+	}
+
+	return new(big.Int).Sub(retrieveTraffic, retrieveChequeTraffic), nil
 }
 
 func (s *Service) PutRetrieveTraffic(chainAddress common.Address, traffic *big.Int) error {
