@@ -16,8 +16,8 @@ func (pend *pendCallResTab) ReqLogRange(f func(key, value interface{}) bool) {
 }
 
 func (t *Table) TableClean() {
-	t.items = make(map[common.Hash]Route)
-	t.signed = sync.Map{}
+	t.routes = make(map[common.Hash][]TargetRoute)
+	t.paths = sync.Map{}
 }
 
 func (s *Service) SetStreamer(recorder *streamtest.Recorder) {

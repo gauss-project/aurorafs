@@ -1,7 +1,6 @@
 package routetab
 
 import (
-	"bytes"
 	"encoding/json"
 	"errors"
 	"github.com/ethereum/go-ethereum/common"
@@ -9,194 +8,153 @@ import (
 	"github.com/gauss-project/aurorafs/pkg/crypto/bls"
 	"github.com/gauss-project/aurorafs/pkg/routetab/pb"
 	"github.com/gauss-project/aurorafs/pkg/storage"
+	"github.com/gogf/gf/util/gconv"
 	"strings"
 	"sync"
 	"time"
 )
 
 const (
-	routePrefix  = "route_index_"
-	signedPrefix = "route_signed_"
+	routePrefix = "route_index_"
+	pathPrefix  = "route_pathKey_"
 )
 
 var (
 	ErrNotFound = errors.New("route: not found")
 )
 
-type Route struct {
-	Index []Index
-}
-
-type Index struct {
-	NextHop boson.Address
-	Sign    []byte
+type TargetRoute struct {
+	Neighbor boson.Address // nextHop
+	PathKey  common.Hash
 }
 
 type Path struct {
-	CreateTime int64           `json:"createTime"`
 	Sign       []byte          `json:"sign"`
-	Item       []boson.Address `json:"item"`
+	Bodys      [][]byte        `json:"bodys"`
+	Items      []boson.Address `json:"items"`
+	CreateTime time.Time       `json:"createTime"`
 	UsedTime   time.Time       `json:"usedTime"`
 }
 
 type Table struct {
 	self   boson.Address
-	items  map[common.Hash]Route
-	signed sync.Map
-
-	mu    sync.RWMutex
-	store storage.StateStorer
+	paths  sync.Map                      // key=sha256sum(path.items), value=*Path
+	routes map[common.Hash][]TargetRoute // key=target
+	mu     sync.RWMutex
+	store  storage.StateStorer
 }
 
 func newRouteTable(self boson.Address, store storage.StateStorer) *Table {
 	return &Table{
 		self:   self,
-		items:  make(map[common.Hash]Route),
-		mu:     sync.RWMutex{},
+		routes: make(map[common.Hash][]TargetRoute),
 		store:  store,
 	}
 }
 
-func (t *Table) ReqToResp(req *pb.RouteReq, paths []*Path) *pb.RouteResp {
-	np := make([]*pb.Path, 0)
-	if paths != nil {
-		for _, path := range paths {
-			item := make([][]byte, len(path.Item))
-			for k, v := range path.Item {
-				item[k] = v.Bytes()
-			}
-			newPath := make([][]byte, len(req.Path.Item)+len(path.Item))
-			copy(newPath, req.Path.Item)
-			copy(newPath[len(req.Path.Item):], item)
-
-			np = append(np, &pb.Path{
-				Sign: bls.Sign(path.Sign), // todo
-				Item: newPath,
-			})
-		}
-	} else {
-		np = append(np, &pb.Path{
-			Sign: bls.Sign(req.Path.Sign), // todo
-			Item: append(req.Path.Item, t.self.Bytes()),
+func (t *Table) convertPathsToPbPaths(path []*Path) []*pb.Path {
+	body := gconv.Bytes(time.Now().Unix())
+	out := make([]*pb.Path, 0)
+	for _, v := range path {
+		out = append(out, &pb.Path{
+			Sign:  bls.Sign(body, v.Sign),
+			Bodys: append(v.Bodys, body),
+			Items: append(convItemsToBytes(v.Items), t.self.Bytes()),
 		})
 	}
-
-	resp := &pb.RouteResp{
-		Dest:  req.Dest,
-		Paths: np,
-	}
-
-	return resp
+	return out
 }
 
-func (t *Table) ReqToSave(req *pb.RouteReq) error {
-	items := make([][]byte, 0)
-	items = append(items, t.self.Bytes())
-	for i := len(req.Path.Item) - 1; i >= 0; i-- {
-		items = append(items, req.Path.Item[i])
+func (t *Table) generatePaths(paths []*pb.Path) (out []*pb.Path) {
+	body := gconv.Bytes(time.Now().Unix())
+	if len(paths) == 0 {
+		out = append(out, &pb.Path{
+			Sign:  bls.Sign(body),
+			Bodys: [][]byte{body},
+			Items: [][]byte{t.self.Bytes()},
+		})
+	} else {
+		for _, v := range paths {
+			out = append(out, &pb.Path{
+				Sign:  bls.Sign(body, v.Sign),
+				Bodys: append(v.Bodys, body),
+				Items: append(v.Items, t.self.Bytes()),
+			})
+		}
 	}
-	path := &pb.Path{
-		Sign: bls.Sign(req.Path.Sign), // todo
-		Item: items,
-	}
-	return t.RespToSaveOne(path)
+	return out
 }
 
-func (t *Table) RespToSave(resp *pb.RouteResp) error {
-	for _, v := range resp.Paths {
-		err := t.RespToSaveOne(v)
-		if err != nil {
-			return err
-		}
+func (t *Table) SavePaths(paths []*pb.Path) {
+	for _, path := range paths {
+		t.SavePath(path)
 	}
-	return nil
 }
 
-func (t *Table) RespToSaveOne(p *pb.Path) error {
-	items := make([]boson.Address, 0)
-	start := false
-	for _, v := range p.Item {
-		if bytes.Equal(v, t.self.Bytes()) {
-			start = true
-		}
-		if start {
-			items = append(items, boson.NewAddress(v))
-			if !bls.Verify(p.Sign) {
-				return errors.New("sign verify failed")
-			}
-		}
+func (t *Table) SavePath(p *pb.Path) {
+	if !verifyPath(p) {
+		return
 	}
-	signKey := common.BytesToHash(p.Sign)
-
-	t.mu.Lock()
-	defer t.mu.Unlock()
-
+	if len(p.Items) < 2 {
+		return
+	}
+	// save path
+	pathKey, items := generatePathItems(p.Items)
 	path := Path{
-		CreateTime: time.Now().Unix(),
 		Sign:       p.Sign,
-		Item:       items,
+		Bodys:      p.Bodys,
+		Items:      items,
+		CreateTime: time.Now(),
 		UsedTime:   time.Now(),
 	}
-	t.signed.Store(signKey, &path)
-	_ = t.store.Put(signedPrefix+signKey.String(), path)
+	t.paths.Store(pathKey, &path)
+	_ = t.store.Put(pathPrefix+pathKey.String(), path)
 
-	for i := 2; i < len(path.Item); i++ {
-		destKey := common.BytesToHash(path.Item[i].Bytes())
-		idx := Index{
-			NextHop: path.Item[1],
-			Sign:    path.Sign,
-		}
-		route, ok := t.items[destKey]
+	// parse route from path
+	route := TargetRoute{Neighbor: items[len(items)-1], PathKey: pathKey}
+	t.IterateTarget(items, func(target boson.Address) {
+		targetKey := getRouteTargetKey(target)
+		t.mu.Lock()
+		routes, ok := t.routes[targetKey]
 		if ok {
-			has := false
-			for _, v := range route.Index {
-				if v.NextHop.Equal(idx.NextHop) && string(v.Sign) == string(idx.Sign) {
-					has = true
-					break
-				}
+			old := routes
+			if existRoute(route, old) {
+				return
 			}
-			if !has {
-				route.Index = append(route.Index, idx)
-			}
+			routes = append(old, route)
+
 		} else {
-			route = Route{Index: []Index{idx}}
+			routes = []TargetRoute{route}
 		}
-		t.items[destKey] = route
-		_ = t.store.Put(routePrefix+destKey.String(), route)
-	}
-	return nil
+		t.routes[targetKey] = routes
+		_ = t.store.Put(routePrefix+target.String(), routes)
+		t.mu.Unlock()
+	})
 }
 
-func (t *Table) Get(dest boson.Address) ([]*Path, error) {
-	mKey := common.BytesToHash(dest.Bytes())
-
-	t.mu.RLock()
-	route, ok := t.items[mKey]
-	if !ok {
-		t.mu.RUnlock()
-		return nil, ErrNotFound
-	}
-	needUpdate := false
-	newIndex := make([]Index, 0)
-	paths := make([]*Path, 0)
-	for _, v := range route.Index {
-		signKey := common.BytesToHash(v.Sign)
-		path, has := t.signed.Load(signKey)
-		if has {
-			paths = append(paths, path.(*Path))
-			newIndex = append(newIndex, v)
-		} else {
-			needUpdate = true
+func (t *Table) IterateTarget(items []boson.Address, fn func(target boson.Address)) {
+	length := len(items)
+	for k, target := range items {
+		if k <= length-2 {
+			fn(target)
 		}
 	}
-	t.mu.RUnlock()
+}
 
-	if needUpdate {
-		t.mu.Lock()
-		route.Index = newIndex
-		t.items[mKey] = route
-		_ = t.store.Put(routePrefix+mKey.String(), route)
-		t.mu.Unlock()
+func (t *Table) Get(target boson.Address) ([]*Path, error) {
+	targetKey := getRouteTargetKey(target)
+	t.mu.RLock()
+	routes, ok := t.routes[targetKey]
+	t.mu.RUnlock()
+	if !ok {
+		return nil, ErrNotFound
+	}
+	paths := make([]*Path, 0)
+	for _, v := range routes {
+		path, has := t.paths.Load(v.PathKey)
+		if has {
+			paths = append(paths, path.(*Path))
+		}
 	}
 	if len(paths) == 0 {
 		return nil, ErrNotFound
@@ -204,40 +162,42 @@ func (t *Table) Get(dest boson.Address) ([]*Path, error) {
 	return paths, nil
 }
 
-func (t *Table) GetNextHop(dest boson.Address, sign []byte) (next boson.Address) {
-	mKey := common.BytesToHash(dest.Bytes())
+func (t *Table) updateUsedTime(target, neighbor boson.Address) {
+	targetKey := getRouteTargetKey(target)
 	t.mu.RLock()
-	route := t.items[mKey]
-	delKey := -1
-	for k, v := range route.Index {
-		if bytes.Equal(v.Sign, sign) {
-			signKey := common.BytesToHash(v.Sign)
-			_, ok := t.signed.Load(signKey)
-			if ok {
-				next = v.NextHop
-			} else {
-				// update route index
-				delKey = k
+	routes, ok := t.routes[targetKey]
+	t.mu.RUnlock()
+	if ok {
+		for _, v := range routes {
+			if !v.Neighbor.Equal(neighbor) {
+				continue
 			}
-			break
+			path, has := t.paths.Load(v.PathKey)
+			if has {
+				p := path.(*Path)
+				if time.Since(p.UsedTime) > 0 {
+					p.UsedTime = time.Now()
+				}
+			}
 		}
 	}
-	t.mu.RUnlock()
+}
 
-	if delKey >= 0 {
-		newIndex := make([]Index, len(route.Index)-1)
-		copy(newIndex, route.Index[:delKey])
-		copy(newIndex[delKey:], route.Index[delKey:])
-		route.Index = newIndex
-		t.mu.Lock()
-		t.items[mKey] = route
-		t.mu.Unlock()
+func (t *Table) GetNextHop(target boson.Address) (next []boson.Address) {
+	targetKey := getRouteTargetKey(target)
+	t.mu.RLock()
+	routes, ok := t.routes[targetKey]
+	t.mu.RUnlock()
+	if ok {
+		for _, v := range routes {
+			next = append(next, v.Neighbor)
+		}
 	}
 	return
 }
 
 func (t *Table) Gc(expire time.Duration) {
-	t.signed.Range(func(key, value interface{}) bool {
+	t.paths.Range(func(key, value interface{}) bool {
 		path := value.(*Path)
 		if time.Since(path.UsedTime).Milliseconds() > expire.Milliseconds() {
 			t.Delete(path)
@@ -247,39 +207,62 @@ func (t *Table) Gc(expire time.Duration) {
 }
 
 func (t *Table) Delete(path *Path) {
-	signKey := common.BytesToHash(path.Sign)
-	t.signed.Delete(signKey)
-	_ = t.store.Delete(signedPrefix + signKey.String())
+	pathKey, _ := generatePathItems(convItemsToBytes(path.Items))
+	// delete path
+	t.paths.Delete(pathKey)
+	_ = t.store.Delete(pathPrefix + pathKey.String())
+	// delete routes
+	t.IterateTarget(path.Items, func(target boson.Address) {
+		targetKey := getRouteTargetKey(target)
+		t.mu.Lock()
+		routes, ok := t.routes[targetKey]
+		if ok {
+			routesNow := make([]TargetRoute, 0)
+			for _, v := range routes {
+				if v.PathKey != pathKey {
+					routesNow = append(routesNow, v)
+				}
+			}
+			if len(routesNow) < len(routes) {
+				t.routes[targetKey] = routesNow
+			}
+		}
+		t.mu.Unlock()
+	})
 }
 
-func (t *Table) ResumeSigned() {
-	_ = t.store.Iterate(signedPrefix, func(key, value []byte) (stop bool, err error) {
-		hex := strings.TrimPrefix(string(key), signedPrefix)
-		signKey := common.HexToHash(hex)
+func (t *Table) ResumePaths() {
+	_ = t.store.Iterate(pathPrefix, func(key, value []byte) (stop bool, err error) {
+		hex := strings.TrimPrefix(string(key), pathPrefix)
+		pathKey := common.HexToHash(hex)
 		path := &Path{}
 		err = json.Unmarshal(value, path)
 		if err != nil {
-			_ = t.store.Delete(signedPrefix + hex)
+			_ = t.store.Delete(string(key))
 		} else {
-			t.signed.Store(signKey, path)
+			t.paths.Store(pathKey, path)
 		}
 		return false, nil
 	})
 }
 
-func (t *Table) ResumeRoute() {
+func (t *Table) ResumeRoutes() {
 	_ = t.store.Iterate(routePrefix, func(key, value []byte) (stop bool, err error) {
 		hex := strings.TrimPrefix(string(key), routePrefix)
-		mKey := common.HexToHash(hex)
-		route := Route{}
+		targetKey := common.HexToHash(hex)
+		var route []TargetRoute
 		err = json.Unmarshal(value, &route)
 		if err != nil {
 			_ = t.store.Delete(routePrefix + hex)
 		} else {
 			t.mu.Lock()
-			t.items[mKey] = route
+			t.routes[targetKey] = route
 			t.mu.Unlock()
 		}
 		return false, nil
 	})
+}
+
+func getRouteTargetKey(target boson.Address) common.Hash {
+	return common.BytesToHash(target.Bytes())
 }

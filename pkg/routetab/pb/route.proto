@@ -1,5 +1,3 @@
-
-
 syntax = "proto3";
 
 package routetab;
@@ -7,28 +5,37 @@ package routetab;
 option go_package = "pb";
 
 message UnderlayResp {
-    bytes Dest = 1;
-    bytes Underlay = 2;
-    bytes Signature = 3;
+  bytes Dest = 1;
+  bytes Underlay = 2;
+  bytes Signature = 3;
 }
 
 message UnderlayReq {
-    bytes Dest = 1;
-    bytes Sign = 2;
+  bytes Dest = 1;
 }
 
 message RouteResp {
-    bytes Dest = 1;
-    repeated Path Paths = 2;
+  bytes Dest = 1;
+  repeated Path Paths = 2;
 }
 
 message RouteReq {
-    bytes Dest = 1;
-    int32 Alpha = 2;
-    Path Path = 3;
+  bytes Dest = 1;
+  int32 Alpha = 2;
+  repeated Path Paths = 3;
 }
 
 message Path {
-    bytes Sign = 1;
-    repeated bytes Item = 2;
+  bytes Sign = 1;
+  repeated bytes Bodys = 2;
+  repeated bytes Items = 3;
+}
+
+message RouteRelayData {
+  bytes Src = 1;
+  bytes Dest = 2;
+  bytes ProtocolName = 3;
+  bytes ProtocolVersion = 4;
+  bytes StreamName = 5;
+  bytes Data = 6;
 }

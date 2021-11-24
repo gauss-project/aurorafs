@@ -7,7 +7,6 @@ import (
 	"github.com/gauss-project/aurorafs/pkg/addressbook"
 	"github.com/gauss-project/aurorafs/pkg/aurora"
 	"github.com/gauss-project/aurorafs/pkg/boson"
-	"github.com/gauss-project/aurorafs/pkg/crypto/bls"
 	"github.com/gauss-project/aurorafs/pkg/logging"
 	"github.com/gauss-project/aurorafs/pkg/p2p"
 	"github.com/gauss-project/aurorafs/pkg/p2p/protobuf"
@@ -15,6 +14,7 @@ import (
 	"github.com/gauss-project/aurorafs/pkg/storage"
 	"github.com/gauss-project/aurorafs/pkg/topology/kademlia"
 	"github.com/gauss-project/aurorafs/pkg/topology/lightnode"
+	"math/rand"
 	"resenje.org/singleflight"
 	"sync"
 	"time"
@@ -40,15 +40,6 @@ var (
 	gcInterval                 = time.Minute
 	findTimeOut                = time.Second * 2 // find route timeout
 )
-
-type RouteTab interface {
-	GetRoute(ctx context.Context, dest boson.Address) (paths []*Path, err error)
-	FindRoute(ctx context.Context, dest boson.Address, timeout ...time.Duration) (paths []*Path, err error)
-	DelRoute(ctx context.Context, dest boson.Address) (err error)
-	Connect(ctx context.Context, dest boson.Address) error
-	GetTargetNeighbor(ctx context.Context, dest boson.Address, limit int) (addresses []boson.Address, err error)
-	IsNeighbor(dest boson.Address) (has bool)
-}
 
 type Service struct {
 	self         boson.Address
@@ -84,9 +75,7 @@ func New(self boson.Address, ctx context.Context, p2ps p2p.Service, kad *kademli
 		metrics:      met,
 	}
 	// start route service
-	go func() {
-		service.start(ctx)
-	}()
+	service.start(ctx)
 	return service
 }
 
@@ -101,11 +90,14 @@ func (s *Service) Close() error {
 }
 
 func (s *Service) start(ctx context.Context) {
-	s.routeTable.ResumeSigned()
-	s.routeTable.ResumeRoute()
+	ti := time.Now()
+	s.logger.Infof("loading routes...")
+	s.routeTable.ResumeRoutes()
+	s.routeTable.ResumePaths()
+	s.routeTable.Gc(gcTime)
+	s.logger.Infof("loading routes completed, expend %s", time.Since(ti).String())
 
 	go func() {
-		s.routeTable.Gc(gcTime)
 		ticker := time.NewTicker(gcInterval)
 		for {
 			select {
@@ -184,24 +176,25 @@ func (s *Service) onRouteReq(ctx context.Context, p p2p.Peer, stream p2p.Stream)
 
 	s.metrics.FindRouteReqReceivedCount.Inc()
 	// passive route save
-	err := s.routeTable.ReqToSave(&req)
-	if err != nil {
-		s.logger.Errorf("route: target=%s reqToSave %s", target.String(), err.Error())
+	s.routeTable.SavePaths(req.Paths)
+
+	for _, v := range req.Paths {
+		items := v.Items // request path only one
+		if len(items) > int(MaxTTL) {
+			// discard
+			s.logger.Tracef("route:%s handlerFindRouteReq target=%s discard, ttl=%d", s.self.String(), target.String(), len(items))
+			return nil
+		}
+		if inPath(s.self.Bytes(), items) {
+			// discard
+			s.logger.Tracef("route:%s handlerFindRouteReq target=%s discard, received path contains self.", s.self.String(), target.String())
+			return nil
+		}
 	}
 
-	if len(req.Path.Item) > int(MaxTTL) {
-		// discard
-		s.logger.Tracef("route:%s handlerFindRouteReq target=%s discard, ttl=%d", s.self.String(), target.String(), len(req.Path.Item))
-		return nil
-	}
-	if inPath(s.self.Bytes(), req.Path.Item) {
-		// discard
-		s.logger.Tracef("route:%s handlerFindRouteReq target=%s discard, received path contains self.", s.self.String(), target.String())
-		return nil
-	}
 	if s.self.Equal(target) {
 		// resp
-		s.doRouteResp(ctx, p.Address, s.routeTable.ReqToResp(&req, nil))
+		s.doRouteResp(ctx, p.Address, target, nil)
 		return nil
 	}
 	if s.IsNeighbor(target) {
@@ -215,14 +208,20 @@ func (s *Service) onRouteReq(ctx context.Context, p p2p.Peer, stream p2p.Stream)
 	if err == nil {
 		// have route resp
 		s.logger.Tracef("route:%s handlerFindRouteReq target=%s in route table", s.self.String(), target.String())
-		s.doRouteResp(ctx, p.Address, s.routeTable.ReqToResp(&req, paths))
+		s.doRouteResp(ctx, p.Address, target, &pb.RouteResp{
+			Dest:  target.Bytes(),
+			Paths: s.routeTable.convertPathsToPbPaths(paths),
+		})
 		return nil
 	}
 
 	// forward
 	skip := make([]boson.Address, 0)
-	for _, v := range req.Path.Item {
-		skip = append(skip, boson.NewAddress(v))
+	for _, v := range req.Paths {
+		for _, addr := range v.Items {
+			skip = append(skip, boson.NewAddress(addr))
+
+		}
 	}
 	forward := s.getNeighbor(target, req.Alpha, skip...)
 	s.doRouteReq(ctx, forward, p.Address, target, &req, nil)
@@ -251,11 +250,8 @@ func (s *Service) onRouteResp(ctx context.Context, peer p2p.Peer, stream p2p.Str
 
 	s.metrics.FindRouteRespReceivedCount.Inc()
 
-	err := s.routeTable.RespToSave(&resp)
-	if err != nil {
-		s.logger.Errorf("route: target=%s respToSave %s", target.String(), err.Error())
-		return err
-	}
+	s.routeTable.SavePaths(resp.Paths)
+
 	// doing forward resp
 	s.respForward(ctx, target, peer.Address, &resp)
 	return nil
@@ -263,13 +259,14 @@ func (s *Service) onRouteResp(ctx context.Context, peer p2p.Peer, stream p2p.Str
 
 func (s *Service) respForward(ctx context.Context, target, next boson.Address, resp *pb.RouteResp) {
 	res := s.pendingCalls.Get(target, next)
-	if res == nil {
-		return
-	}
+	skip := make([]boson.Address, 0)
 	for _, v := range res {
 		if !v.Src.Equal(s.self) {
-			// forward
-			s.doRouteResp(ctx, v.Src, resp)
+			if !v.Src.MemberOf(skip) {
+				// forward
+				s.doRouteResp(ctx, v.Src, target, resp)
+				skip = append(skip, v.Src)
+			}
 		} else if v.ResCh != nil {
 			// sync return
 			v.ResCh <- struct{}{}
@@ -280,16 +277,12 @@ func (s *Service) respForward(ctx context.Context, target, next boson.Address, r
 func (s *Service) doRouteReq(ctx context.Context, next []boson.Address, src, target boson.Address, req *pb.RouteReq, ch chan struct{}) {
 	if req != nil {
 		// forward add sign
-		req.Path.Sign = bls.Sign(s.self.Bytes()) // todo
-		req.Path.Item = append(req.Path.Item, s.self.Bytes())
+		req.Paths = s.routeTable.generatePaths(req.Paths)
 	} else {
 		req = &pb.RouteReq{
 			Dest:  target.Bytes(),
 			Alpha: DefaultNeighborAlpha,
-			Path: &pb.Path{
-				Sign: bls.Sign(s.self.Bytes()), // todo
-				Item: [][]byte{s.self.Bytes()},
-			},
+			Paths: s.routeTable.generatePaths(nil),
 		}
 	}
 	for _, v := range next {
@@ -301,8 +294,16 @@ func (s *Service) doRouteReq(ctx context.Context, next []boson.Address, src, tar
 	}
 }
 
-func (s *Service) doRouteResp(ctx context.Context, peer boson.Address, resp *pb.RouteResp) {
-	s.sendDataToNode(ctx, peer, streamOnRouteResp, resp)
+func (s *Service) doRouteResp(ctx context.Context, src, target boson.Address, resp *pb.RouteResp) {
+	if resp != nil {
+		resp.Paths = s.routeTable.generatePaths(resp.Paths)
+	} else {
+		resp = &pb.RouteResp{
+			Dest:  target.Bytes(),
+			Paths: s.routeTable.generatePaths(nil),
+		}
+	}
+	s.sendDataToNode(ctx, src, streamOnRouteResp, resp)
 	s.metrics.FindRouteRespSentCount.Inc()
 }
 
@@ -462,16 +463,17 @@ func (s *Service) GetTargetNeighbor(ctx context.Context, target boson.Address, l
 func (s *Service) getClosestNeighborLimit(target boson.Address, routes []*Path, limit int) (out []boson.Address) {
 	has := make(map[string]bool)
 	for _, path := range routes {
-		if !s.IsNeighbor(path.Item[1]) {
+		length := len(path.Items)
+		if !s.IsNeighbor(path.Items[length-1]) {
 			continue
 		}
-		for k, v := range path.Item {
+		for k, v := range path.Items {
 			if v.Equal(target) {
-				if k-1 > 0 {
-					has[path.Item[k-1].String()] = true
+				if k-1 >= 0 {
+					has[path.Items[k-1].String()] = true
 				}
-				if k+1 < len(path.Item) {
-					has[path.Item[k+1].String()] = true
+				if k+1 < length {
+					has[path.Items[k+1].String()] = true
 				}
 				break
 			}
@@ -619,10 +621,9 @@ func (s *Service) onFindUnderlay(ctx context.Context, p p2p.Peer, stream p2p.Str
 		return nil
 	}
 	// get route
-	next := s.routeTable.GetNextHop(target, req.Sign)
-	if next.IsZero() {
-		err = errors.New("route expired")
-		return
+	next, err := s.GetNextHopRandomOrFind(ctx, target)
+	if err != nil {
+		return err
 	}
 	stream2, err := s.config.Stream.NewStream(ctx, next, nil, protocolName, protocolVersion, streamOnFindUnderlay)
 	if err != nil {
@@ -642,14 +643,14 @@ func (s *Service) onFindUnderlay(ctx context.Context, p p2p.Peer, stream p2p.Str
 	if err != nil {
 		return err
 	}
-	s.logger.Tracef("find underlay dest %s forward: to %s", target.String(), next.String())
+	s.logger.Tracef("find underlay dest %s forward: to %s", target, next)
 	resp := &pb.UnderlayResp{}
 	if err = r2.ReadMsgWithContext(ctx, resp); err != nil {
 		content := fmt.Sprintf("route: onFindUnderlay read resp msg: %s", err.Error())
 		s.logger.Errorf(content)
 		return fmt.Errorf(content)
 	}
-	s.logger.Tracef("find underlay dest %s receive2: from %s", target.String(), next.String())
+	s.logger.Tracef("find underlay dest %s receive2: from %s", target, next)
 
 	address, err = aurora.ParseAddress(resp.Underlay, resp.Dest, resp.Signature, s.config.NetworkID)
 	if err != nil {
@@ -674,35 +675,11 @@ func (s *Service) getOrFindRoute(ctx context.Context, target boson.Address) (pat
 }
 
 func (s *Service) findUnderlay(ctx context.Context, target boson.Address) (addr *aurora.Address, err error) {
-	var paths []*Path
-	paths, err = s.getOrFindRoute(ctx, target)
+	next, err := s.GetNextHopRandomOrFind(ctx, target)
 	if err != nil {
 		return nil, err
 	}
-	addr, err = s.tryReadStream(ctx, target, paths)
-	if err != nil {
-		// All paths are blocked
-		paths, err = s.FindRoute(ctx, target)
-		if err != nil {
-			return nil, err
-		}
-		return s.tryReadStream(ctx, target, paths)
-	}
-	return
-}
-
-func (s *Service) tryReadStream(ctx context.Context, target boson.Address, paths []*Path) (*aurora.Address, error) {
-	for _, path := range paths {
-		addr, err := s.readStream(ctx, target, path)
-		if err == nil {
-			return addr, nil
-		}
-	}
-	return nil, errors.New("all paths are blocked")
-}
-
-func (s *Service) readStream(ctx context.Context, target boson.Address, path *Path) (*aurora.Address, error) {
-	stream, err := s.config.Stream.NewStream(ctx, path.Item[1], nil, protocolName, protocolVersion, streamOnFindUnderlay)
+	stream, err := s.config.Stream.NewStream(ctx, next, nil, protocolName, protocolVersion, streamOnFindUnderlay)
 	if err != nil {
 		return nil, err
 	}
@@ -711,7 +688,6 @@ func (s *Service) readStream(ctx context.Context, target boson.Address, path *Pa
 		if err != nil {
 			_ = stream.Reset()
 		} else {
-			path.UsedTime = time.Now()
 			go stream.FullClose()
 		}
 	}()
@@ -719,22 +695,23 @@ func (s *Service) readStream(ctx context.Context, target boson.Address, path *Pa
 	w, r := protobuf.NewWriterAndReader(stream)
 	req := pb.UnderlayReq{
 		Dest: target.Bytes(),
-		Sign: path.Sign,
 	}
 	if err = w.WriteMsgWithContext(ctx, &req); err != nil {
 		s.logger.Errorf("find underlay dest %s req err %s", target.String(), err.Error())
 		return nil, err
 	}
-	s.logger.Tracef("find underlay dest %s req to %s", target.String(), path.Item[1].String())
+
+	s.routeTable.updateUsedTime(target, next)
+
+	s.logger.Tracef("find underlay dest %s send to %s", target, next)
 
 	resp := &pb.UnderlayResp{}
 	if err = r.ReadMsgWithContext(ctx, resp); err != nil {
-		s.logger.Errorf("find underlay dest %s read msg: %s", target.String(), err.Error())
+		s.logger.Errorf("find underlay dest %s read msg: %s", target, err.Error())
 		return nil, err
 	}
-	s.logger.Tracef("find underlay dest %s receive: from %s", target.String(), path.Item[1].String())
+	s.logger.Tracef("find underlay dest %s receive: from %s", target, next)
 
-	var addr *aurora.Address
 	addr, err = aurora.ParseAddress(resp.Underlay, resp.Dest, resp.Signature, s.config.NetworkID)
 	if err != nil {
 		s.logger.Errorf("find underlay dest %s parse err %s", target.String(), err.Error())
@@ -745,4 +722,39 @@ func (s *Service) readStream(ctx context.Context, target boson.Address, path *Pa
 		return nil, err
 	}
 	return addr, nil
+}
+
+func (s *Service) GetNextHopRandomOrFind(ctx context.Context, target boson.Address) (next boson.Address, err error) {
+	next = s.getNextHopRandom(target)
+	if next.IsZero() {
+		_, err = s.FindRoute(ctx, target)
+		if err != nil {
+			return
+		}
+		next = s.getNextHopRandom(target)
+		if next.IsZero() {
+			err = fmt.Errorf("nexthop not found")
+			return
+		}
+	}
+	return
+}
+
+func (s *Service) getNextHopRandom(target boson.Address) (next boson.Address) {
+	list := s.getNextHopEffective(target)
+	if len(list) > 0 {
+		k := rand.Intn(len(list))
+		return list[k]
+	}
+	return boson.ZeroAddress
+}
+
+func (s *Service) getNextHopEffective(target boson.Address) (next []boson.Address) {
+	list := s.routeTable.GetNextHop(target)
+	for _, v := range list {
+		if s.IsNeighbor(v) {
+			next = append(next, v)
+		}
+	}
+	return next
 }

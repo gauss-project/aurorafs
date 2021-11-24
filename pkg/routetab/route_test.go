@@ -360,8 +360,8 @@ func TestService_FindRouteTargetIsNeighbor(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	exp := []boson.Address{nodes[0].overlay, nodes[3].overlay, nodes[2].overlay, nodes[1].overlay}
-	for k, v := range r[0].Item {
+	exp := []boson.Address{nodes[1].overlay, nodes[2].overlay, nodes[3].overlay}
+	for k, v := range r[0].Items {
 		if !v.Equal(exp[k]) {
 			t.Fatalf("expect item %s,got %s", exp[k], v)
 		}
