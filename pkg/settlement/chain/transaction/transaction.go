@@ -7,6 +7,7 @@ package transaction
 import (
 	"errors"
 	"fmt"
+	"github.com/gauss-project/aurorafs/pkg/settlement/chain"
 	"math/big"
 	"sync"
 	"time"
@@ -39,17 +40,6 @@ type TxRequest struct {
 	Value    *big.Int        // amount of wei to send
 }
 
-// Service is the service to send transactions. It takes care of gas price, gas
-// limit and nonce management.
-type Service interface {
-	// Send creates a transaction based on the request and sends it.
-	Send(ctx context.Context, request *TxRequest) (txHash common.Hash, err error)
-	// Call simulate a transaction based on the request.
-	Call(ctx context.Context, request *TxRequest) (result []byte, err error)
-	// WaitForReceipt waits until either the transaction with the given hash has been mined or the context is cancelled.
-	WaitForReceipt(ctx context.Context, txHash common.Hash) (receipt *types.Receipt, err error)
-}
-
 type transactionService struct {
 	lock sync.Mutex
 
@@ -62,7 +52,7 @@ type transactionService struct {
 }
 
 // NewService creates a new transaction service.
-func NewService(logger logging.Logger, backend Backend, signer crypto.Signer, store storage.StateStorer, chainID *big.Int) (Service, error) {
+func NewService(logger logging.Logger, backend Backend, signer crypto.Signer, store storage.StateStorer, chainID *big.Int) (chain.Transaction, error) {
 	senderAddress, err := signer.EthereumAddress()
 	if err != nil {
 		return nil, err

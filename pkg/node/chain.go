@@ -6,6 +6,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/gauss-project/aurorafs/pkg/p2p"
+	"github.com/gauss-project/aurorafs/pkg/settlement"
 	chequePkg "github.com/gauss-project/aurorafs/pkg/settlement/traffic/cheque"
 
 	"github.com/gauss-project/aurorafs/pkg/crypto"
@@ -31,61 +32,49 @@ func InitChain(
 	trafficContractAddr string,
 	beneficiary common.Address,
 	p2pService p2p.Service,
-	cheque chequePkg.Cheque,
-
-) (chain.Resolver, error) {
+) (chain.Resolver, settlement.Interface, error) {
 
 	backend, err := ethclient.Dial(endpoint)
 	if err != nil {
-		return nil, fmt.Errorf("dial eth client: %w", err)
+		return nil, nil, fmt.Errorf("dial eth client: %w", err)
 	}
 
 	chainID, err := backend.ChainID(ctx)
 	if err != nil {
 		logger.Infof("could not connect to backend at %v. In a swap-enabled network a working blockchain node (for goerli network in production) is required. Check your node or specify another node using --swap-endpoint.", endpoint)
-		return nil, fmt.Errorf("get chain id: %w", err)
+		return nil, nil, fmt.Errorf("get chain id: %w", err)
 	}
 	if oracleContractAddress == "" {
-		return nil, fmt.Errorf("oracle contract address is empty")
+		return nil, nil, fmt.Errorf("oracle contract address is empty")
 	}
 	oracleServer, err := oracle.NewServer(logger, backend, oracleContractAddress)
 	if err != nil {
-		return nil, fmt.Errorf("new oracle service: %w", err)
+		return nil, nil, fmt.Errorf("new oracle service: %w", err)
 	}
 
 	if !trafficEnable {
-		// todo
+		// todo pseudosettle
 	}
 
-	_, err = chainTraffic.NewServer(logger, backend, oracleContractAddress)
+	trafficChainService, err := chainTraffic.NewServer(logger, backend, trafficContractAddr)
 	if err != nil {
-		return nil, fmt.Errorf("new traffic service: %w", err)
+		return nil, nil, fmt.Errorf("new traffic service: %w", err)
 	}
 
 	transactionService, err := transaction.NewService(logger, backend, signer, stateStore, chainID)
 	if err != nil {
-		return nil, fmt.Errorf("new transaction service: %w", err)
+		return nil, nil, fmt.Errorf("new transaction service: %w", err)
 	}
 
-	InitTraffic(stateStore, chainID.Int64(), beneficiary, transactionService, logger, cheque, p2pService)
+	trafficService := InitTraffic(stateStore, beneficiary, trafficChainService, transactionService, logger, p2pService)
 
-	return oracleServer, nil
+	return oracleServer, trafficService, nil
 }
 
-func InitTraffic(store storage.StateStorer, chainID int64, beneficiary common.Address, transactionService transaction.Service, logger logging.Logger, cheque chequePkg.Cheque, p2pService p2p.Service) *traffic.Service {
-	chequeStore := chequePkg.NewChequeStore(
-		store,
-		beneficiary,
-		chequePkg.RecoverCheque,
-	)
-
-	cashOut := chequePkg.NewCashoutService(
-		store,
-		transactionService,
-		chequeStore,
-	)
-
-	trafficService := traffic.New(logger, beneficiary, store, chequeStore, cheque, cashOut, p2pService)
-
+func InitTraffic(store storage.StateStorer, beneficiary common.Address, trafficChainService chain.Traffic,
+	transactionService chain.Transaction, logger logging.Logger, p2pService p2p.Service) *traffic.Service {
+	chequeStore := chequePkg.NewChequeStore(store, beneficiary, chequePkg.RecoverCheque)
+	cashOut := chequePkg.NewCashoutService(store, transactionService, chequeStore)
+	trafficService := traffic.New(logger, beneficiary, store, trafficChainService, chequeStore, cashOut, p2pService)
 	return trafficService
 }

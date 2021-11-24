@@ -8,7 +8,6 @@ import (
 	"github.com/gauss-project/aurorafs/pkg/p2p"
 	"github.com/gauss-project/aurorafs/pkg/settlement"
 	"github.com/gauss-project/aurorafs/pkg/settlement/chain"
-	"github.com/gauss-project/aurorafs/pkg/settlement/chain/transaction"
 	"github.com/gauss-project/aurorafs/pkg/settlement/traffic/cheque"
 	"github.com/gauss-project/aurorafs/pkg/storage"
 
@@ -69,24 +68,22 @@ type Service struct {
 	notifyPaymentFunc   settlement.NotifyPaymentFunc
 	metrics             metrics
 	chequeStore         cheque.ChequeStore
-	cheque              cheque.Cheque
 	cashout             cheque.CashoutService
 	trafficChainService chain.Traffic
-	transactionService  transaction.Service
 	p2pService          p2p.Service
 	trafficPeers        TrafficPeer
 }
 
-func New(logger logging.Logger, chainAddress common.Address, store storage.StateStorer, chequeStore cheque.ChequeStore, cheque cheque.Cheque, cashout cheque.CashoutService, p2pService p2p.Service) *Service {
+func New(logger logging.Logger, chainAddress common.Address, store storage.StateStorer, trafficChainService chain.Traffic, chequeStore cheque.ChequeStore, cashout cheque.CashoutService, p2pService p2p.Service) *Service {
 	return &Service{
-		logger:       logger,
-		store:        store,
-		chainAddress: chainAddress,
-		metrics:      newMetrics(),
-		chequeStore:  chequeStore,
-		cashout:      cashout,
-		cheque:       cheque,
-		p2pService:   p2pService,
+		logger:              logger,
+		store:               store,
+		chainAddress:        chainAddress,
+		trafficChainService: trafficChainService,
+		metrics:             newMetrics(),
+		chequeStore:         chequeStore,
+		cashout:             cashout,
+		p2pService:          p2pService,
 	}
 }
 

@@ -2,6 +2,7 @@ package cheque
 
 import (
 	"context"
+	"github.com/gauss-project/aurorafs/pkg/settlement/chain"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -18,14 +19,14 @@ type CashoutService interface {
 
 type cashoutService struct {
 	store              storage.StateStorer
-	transactionService transaction.Service
+	transactionService chain.Transaction
 	chequeStore        ChequeStore
 }
 
 // NewCashoutService creates a new CashoutService
 func NewCashoutService(
 	store storage.StateStorer,
-	transactionService transaction.Service,
+	transactionService chain.Transaction,
 	chequeStore ChequeStore,
 ) CashoutService {
 	return &cashoutService{
