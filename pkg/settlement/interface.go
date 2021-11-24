@@ -3,6 +3,7 @@ package settlement
 import (
 	"context"
 	"errors"
+	"github.com/ethereum/go-ethereum/common"
 	"math/big"
 
 	"github.com/gauss-project/aurorafs/pkg/boson"
@@ -16,11 +17,15 @@ var (
 type Interface interface {
 	// Pay initiates a payment to the given peer
 	// It should return without error it is likely that the payment worked
-	Pay(ctx context.Context, peer boson.Address, amount *big.Int) error
+	Pay(ctx context.Context, chainAddress common.Address, traffic *big.Int) error
+	TransferTraffic(chainAddress common.Address) (traffic *big.Int, err error)
+	RetrieveTraffic(chainAddress common.Address) (traffic *big.Int, err error)
+	PutRetrieveTraffic(chainAddress common.Address, traffic *big.Int) error
+	PutTransferTraffic(chainAddress common.Address, traffic *big.Int) error
 	// TotalSent returns the total amount sent to a peer
-	TotalSent(peer boson.Address) (totalSent *big.Int, err error)
+	TotalSent(chainAddress common.Address) (totalSent *big.Int, err error)
 	// TotalReceived returns the total amount received from a peer
-	TotalReceived(peer boson.Address) (totalSent *big.Int, err error)
+	TotalReceived(chainAddress common.Address) (totalReceived *big.Int, err error)
 	// SettlementsSent returns sent settlements for each individual known peer
 	SettlementsSent() (map[string]*big.Int, error)
 	// SettlementsReceived returns received settlements for each individual known peer

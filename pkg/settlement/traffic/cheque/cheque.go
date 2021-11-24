@@ -14,9 +14,7 @@ import (
 )
 
 var (
-	trafficAbi             = transaction.ParseABIUnchecked(simpleswapfactory.ERC20SimpleSwapABI)
-	chequeCashedEventType  = trafficAbi.Events["ChequeCashed"]
-	chequeBouncedEventType = trafficAbi.Events["ChequeBounced"]
+	trafficAbi = transaction.ParseABIUnchecked(simpleswapfactory.ERC20SimpleSwapABI)
 )
 
 // Cheque represents a cheque for a SimpleSwap chequebook

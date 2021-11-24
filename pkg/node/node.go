@@ -7,9 +7,10 @@ import (
 	"context"
 	"crypto/ecdsa"
 	"fmt"
-	"github.com/gauss-project/aurorafs/pkg/settlement/chain/oracle"
+	"github.com/gauss-project/aurorafs/pkg/accounting"
 	"io"
 	"log"
+	"math/big"
 	"net"
 	"net/http"
 	"path/filepath"
@@ -175,69 +176,6 @@ func NewAurora(addr string, bosonAddress boson.Address, publicKey ecdsa.PublicKe
 		return nil, err
 	}
 
-	var oracleChain *oracle.ChainOracle
-	_, oracleChain, err = InitChain(
-		p2pCtx,
-		logger,
-		o.OracleEndpoint,
-		o.OracleContractAddress,
-	)
-	if err != nil {
-		return nil, err
-	}
-	//var overlayEthAddress common.Address
-	//var chainID int64
-	//var transactionService transaction.Service
-	//var chequebookFactory chequebook.Factory
-	//var chequebookService chequebook.Service
-	//var chequeStore chequebook.ChequeStore
-	//var cashoutService chequebook.CashoutService
-
-	//if o.SwapEnable {
-
-	//	b.ethClientCloser = swapBackend.Close
-	//
-	//	chequebookFactory, err = InitChequebookFactory(
-	//		logger,
-	//		swapBackend,
-	//		chainID,
-	//		transactionService,
-	//		o.SwapFactoryAddress,
-	//	)
-	//	if err != nil {
-	//		return nil, err
-	//	}
-	//
-	//	if err = chequebookFactory.VerifyBytecode(p2pCtx); err != nil {
-	//		return nil, fmt.Errorf("factory fail: %w", err)
-	//	}
-	//
-	//	chequebookService, err = InitChequebookService(
-	//		p2pCtx,
-	//		logger,
-	//		stateStore,
-	//		signer,
-	//		chainID,
-	//		swapBackend,
-	//		overlayEthAddress,
-	//		transactionService,
-	//		chequebookFactory,
-	//		o.SwapInitialDeposit,
-	//	)
-	//	if err != nil {
-	//		return nil, err
-	//	}
-	//
-	//	chequeStore, cashoutService = initChequeStoreCashout(
-	//		stateStore,
-	//		swapBackend,
-	//		chequebookFactory,
-	//		chainID,
-	//		overlayEthAddress,
-	//		transactionService,
-	//	)
-	//}
-
 	addressBook := addressbook.New(stateStore)
 	lightNodes := lightnode.NewContainer(bosonAddress)
 	bootNodes := bootnode.NewContainer(bosonAddress)
@@ -251,8 +189,23 @@ func NewAurora(addr string, bosonAddress boson.Address, publicKey ecdsa.PublicKe
 		NodeMode:       o.NodeMode,
 		LightNodeLimit: o.LightNodeMaxPeers,
 	})
+
 	if err != nil {
 		return nil, fmt.Errorf("p2p service: %w", err)
+	}
+
+	oracleChain, settlement, err := InitChain(
+		p2pCtx,
+		logger,
+		o.OracleEndpoint,
+		o.OracleContractAddress,
+		stateStore,
+		signer,
+		o.TrafficEnable,
+		o.TrafficContractAddr,
+		p2ps)
+	if err != nil {
+		return nil, err
 	}
 	b.p2pService = p2ps
 
@@ -295,64 +248,17 @@ func NewAurora(addr string, bosonAddress boson.Address, publicKey ecdsa.PublicKe
 		}
 	}
 
-	//var settlement settlement.Interface
-	//var swapService *swap.Service
+	paymentThreshold := new(big.Int).SetUint64(256 * 1024)
+	paymentTolerance := paymentThreshold.Mul(paymentThreshold, new(big.Int).SetUint64(5))
 
-	//if o.SwapEnable {
-	//	swapService, err = InitSwap(
-	//		p2ps,
-	//		logger,
-	//		stateStore,
-	//		networkID,
-	//		overlayEthAddress,
-	//		chequebookService,
-	//		chequeStore,
-	//		cashoutService,
-	//	)
-	//	if err != nil {
-	//		return nil, err
-	//	}
-	//	settlement = swapService
-	//} else {
-	//	pseudosettleService := pseudosettle.New(p2ps, logger, stateStore)
-	//	if err = p2ps.AddProtocol(pseudosettleService.Protocol()); err != nil {
-	//		return nil, fmt.Errorf("pseudosettle service: %w", err)
-	//	}
-	//	settlement = pseudosettleService
-	//}
-
-	//paymentThreshold, ok := new(big.Int).SetString(o.PaymentThreshold, 10)
-	//if !ok {
-	//	return nil, fmt.Errorf("invalid payment threshold: %s", paymentThreshold)
-	//}
-	//pricing := pricing.New(p2ps, logger, paymentThreshold)
-	//if err = p2ps.AddProtocol(pricing.Protocol()); err != nil {
-	//	return nil, fmt.Errorf("pricing service: %w", err)
-	//}
-
-	//paymentTolerance, ok := new(big.Int).SetString(o.PaymentTolerance, 10)
-	//if !ok {
-	//	return nil, fmt.Errorf("invalid payment tolerance: %s", paymentTolerance)
-	//}
-	//paymentEarly, ok := new(big.Int).SetString(o.PaymentEarly, 10)
-	//if !ok {
-	//	return nil, fmt.Errorf("invalid payment early: %s", paymentEarly)
-	//}
-	//acc, err := accounting.NewAccounting(
-	//	paymentThreshold,
-	//	paymentTolerance,
-	//	paymentEarly,
-	//	logger,
-	//	stateStore,
-	//	settlement,
-	//	pricing,
-	//)
-	//if err != nil {
-	//	return nil, fmt.Errorf("accounting: %w", err)
-	//}
-
-	//settlement.SetNotifyPaymentFunc(acc.AsyncNotifyPayment)
-	//pricing.SetPaymentThresholdObserver(acc)
+	acc := accounting.NewAccounting(
+		paymentThreshold,
+		paymentTolerance,
+		logger,
+		stateStore,
+		settlement,
+	)
+	settlement.SetNotifyPaymentFunc(acc.AsyncNotifyPayment)
 
 	metricsDB, err := shed.NewDBWrap(stateStore.DB())
 	if err != nil {
