@@ -1,4 +1,4 @@
-package chequebook
+package cheque
 
 import (
 	"context"
@@ -103,7 +103,7 @@ func (s *chequeStore) ReceiveCheque(ctx context.Context, cheque *SignedCheque) (
 	// load the lastCumulativePayout for the cheques chequebook
 	var lastCumulativePayout *big.Int
 	var lastReceivedCheque *SignedCheque
-	err := s.store.Get(lastReceivedChequeKey(cheque.Chequebook), &lastReceivedCheque)
+	err := s.store.Get(lastReceivedChequeKey(cheque.Beneficiary), &lastReceivedCheque)
 	if err != nil {
 		if err != storage.ErrNotFound {
 			return nil, err
@@ -123,7 +123,7 @@ func (s *chequeStore) ReceiveCheque(ctx context.Context, cheque *SignedCheque) (
 
 	// blockchain calls below
 
-	binding, err := s.simpleSwapBindingFunc(cheque.Chequebook, s.backend)
+	binding, err := s.simpleSwapBindingFunc(cheque.Beneficiary, s.backend)
 	if err != nil {
 		return nil, err
 	}
@@ -167,7 +167,7 @@ func (s *chequeStore) ReceiveCheque(ctx context.Context, cheque *SignedCheque) (
 	}
 
 	// store the accepted cheque
-	err = s.store.Put(lastReceivedChequeKey(cheque.Chequebook), cheque)
+	err = s.store.Put(lastReceivedChequeKey(cheque.Beneficiary), cheque)
 	if err != nil {
 		return nil, err
 	}

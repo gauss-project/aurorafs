@@ -1,4 +1,4 @@
-package chequebook
+package cheque
 
 import (
 	"bytes"
@@ -21,7 +21,7 @@ var (
 
 // Cheque represents a cheque for a SimpleSwap chequebook
 type Cheque struct {
-	Chequebook       common.Address
+	Recipient        common.Address
 	Beneficiary      common.Address
 	CumulativePayout *big.Int
 }
@@ -45,10 +45,6 @@ func chequebookDomain(chainID int64) eip712.TypedDataDomain {
 var ChequeTypes = eip712.Types{
 	"EIP712Domain": eip712.EIP712DomainType,
 	"Cheque": []eip712.Type{
-		{
-			Name: "chequebook",
-			Type: "address",
-		},
 		{
 			Name: "beneficiary",
 			Type: "address",
@@ -85,7 +81,6 @@ func eip712DataForCheque(cheque *Cheque, chainID int64) *eip712.TypedData {
 		Domain: chequebookDomain(chainID),
 		Types:  ChequeTypes,
 		Message: eip712.TypedDataMessage{
-			"chequebook":       cheque.Chequebook.Hex(),
 			"beneficiary":      cheque.Beneficiary.Hex(),
 			"cumulativePayout": cheque.CumulativePayout.String(),
 		},
@@ -99,7 +94,7 @@ func (s *chequeSigner) Sign(cheque *Cheque) ([]byte, error) {
 }
 
 func (cheque *Cheque) String() string {
-	return fmt.Sprintf("Contract: %x Beneficiary: %x CumulativePayout: %v", cheque.Chequebook, cheque.Beneficiary, cheque.CumulativePayout)
+	return fmt.Sprintf("Contract: %x Beneficiary: %x CumulativePayout: %v", cheque.Beneficiary, cheque.CumulativePayout)
 }
 
 func (cheque *Cheque) Equal(other *Cheque) bool {
@@ -109,7 +104,7 @@ func (cheque *Cheque) Equal(other *Cheque) bool {
 	if cheque.CumulativePayout.Cmp(other.CumulativePayout) != 0 {
 		return false
 	}
-	return cheque.Chequebook == other.Chequebook
+	return true
 }
 
 func (cheque *SignedCheque) Equal(other *SignedCheque) bool {
