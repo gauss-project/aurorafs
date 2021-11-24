@@ -32,6 +32,10 @@ type Interface interface {
 	SettlementsReceived() (map[string]*big.Int, error)
 	// SetNotifyPaymentFunc sets the NotifyPaymentFunc to notify
 	SetNotifyPaymentFunc(notifyPaymentFunc NotifyPaymentFunc)
+	// Balance Get chain balance
+	Balance(ctx context.Context) (*big.Int, error)
+	// AvailableBalance Get actual available balance
+	AvailableBalance(ctx context.Context) (*big.Int, error)
 }
 
 // NotifyPaymentFunc is called when a payment from peer was successfully received

@@ -26,8 +26,8 @@ var (
 	ErrBouncingCheque        = errors.New("bouncing cheque")
 	lastReceivedChequePrefix = "traffic_last_received_cheque_"
 	lastSendChequePrefix     = "traffic_last_send_cheque_"
-	retrievedTraffic         = "retrieved_traffic_"
-	transferredTraffic_      = "transferred_traffic_"
+	retrievedTrafficPrefix   = "retrieved_traffic_"
+	transferredTrafficPrefix = "transferred_traffic_"
 )
 
 // ChequeStore handles the verification and storage of received cheques
@@ -78,6 +78,14 @@ func lastReceivedChequeKey(chainAddress common.Address) string {
 
 func lastSendChequeKey(chainAddress common.Address) string {
 	return fmt.Sprintf("%s_%x", lastSendChequePrefix, chainAddress)
+}
+
+func retrievedTraffic(chainAddress common.Address) string {
+	return fmt.Sprintf("%s_%x", retrievedTrafficPrefix, chainAddress)
+}
+
+func transferredTraffic(chainAddress common.Address) string {
+	return fmt.Sprintf("%s_%x", transferredTrafficPrefix, chainAddress)
 }
 
 // LastReceivedCheque returns the last cheque we received from a specific chainAddress.
@@ -239,9 +247,9 @@ func (s *chequeStore) LastSendCheques() (map[common.Address]*Cheque, error) {
 }
 
 func (s *chequeStore) PutRetrieveTraffic(chainAddress common.Address, traffic *big.Int) error {
-	return nil
+	return s.store.Put(retrievedTraffic(chainAddress), traffic)
 }
 
 func (s *chequeStore) PutTransferTraffic(chainAddress common.Address, traffic *big.Int) error {
-	return nil
+	return s.store.Put(transferredTraffic(chainAddress), traffic)
 }
