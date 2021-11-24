@@ -90,12 +90,9 @@ func (a *Accounting) Reserve(ctx context.Context, peer boson.Address, traffic ui
 	if err != nil {
 		return err
 	}
-	// 获取未开支票流量
 	balance, err := a.settlement.RetrieveTraffic(peer)
-	// 未开支票 + 将获取的流量 是否大于门限
 	balance = balance.Add(balance, new(big.Int).SetUint64(traffic))
 	if balance.Cmp(accountingPeer) < 0 {
-		// 发送支票
 		err := a.settle(ctx, peer, balance)
 		if err != nil {
 			return fmt.Errorf("failed to settle with peer %v: %v", peer, err)
@@ -106,8 +103,10 @@ func (a *Accounting) Reserve(ctx context.Context, peer boson.Address, traffic ui
 
 // Release releases reserved funds.
 func (a *Accounting) Release(peer boson.Address, traffic uint64) {
-	// 收到流量
-
+	if err := a.settlement.PutRetrieveTraffic(peer, new(big.Int).SetUint64(traffic)); err != nil {
+		a.logger.Errorf("")
+		return
+	}
 }
 
 // Credit increases the amount of credit we have with the given peer
