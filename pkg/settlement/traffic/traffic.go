@@ -42,6 +42,7 @@ type Interface interface {
 
 type Service struct {
 	logger              logging.Logger
+	chainAddress        common.Address
 	store               storage.StateStorer
 	notifyPaymentFunc   settlement.NotifyPaymentFunc
 	metrics             metrics
@@ -53,14 +54,15 @@ type Service struct {
 	p2pService          p2p.Service
 }
 
-func New(logger logging.Logger, store storage.StateStorer, chequeStore cheque.ChequeStore, cheque cheque.Cheque, cashout cheque.CashoutService, p2pService p2p.Service) *Service {
+func New(logger logging.Logger, chainAddress common.Address, store storage.StateStorer, chequeStore cheque.ChequeStore, cheque cheque.Cheque, cashout cheque.CashoutService, p2pService p2p.Service) *Service {
 	return &Service{
-		logger:      logger,
-		store:       store,
-		metrics:     newMetrics(),
-		chequeStore: chequeStore,
-		cashout:     cashout,
-		cheque:      cheque,
-		p2pService:  p2pService,
+		logger:       logger,
+		store:        store,
+		chainAddress: chainAddress,
+		metrics:      newMetrics(),
+		chequeStore:  chequeStore,
+		cashout:      cashout,
+		cheque:       cheque,
+		p2pService:   p2pService,
 	}
 }
