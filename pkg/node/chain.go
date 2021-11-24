@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethclient"
-	"github.com/gauss-project/aurorafs/pkg/p2p"
+	"github.com/gauss-project/aurorafs/pkg/p2p/libp2p"
 	"github.com/gauss-project/aurorafs/pkg/settlement"
 	chequePkg "github.com/gauss-project/aurorafs/pkg/settlement/traffic/cheque"
 
@@ -25,14 +25,12 @@ func InitChain(
 	ctx context.Context,
 	logger logging.Logger,
 	endpoint string,
+	oracleContractAddress string,
 	stateStore storage.StateStorer,
 	signer crypto.Signer,
-	oracleContractAddress string,
 	trafficEnable bool,
 	trafficContractAddr string,
-	beneficiary common.Address,
-	p2pService p2p.Service,
-) (chain.Resolver, settlement.Interface, error) {
+	p2pService *libp2p.Service) (chain.Resolver, settlement.Interface, error) {
 
 	backend, err := ethclient.Dial(endpoint)
 	if err != nil {
@@ -55,7 +53,10 @@ func InitChain(
 	if !trafficEnable {
 		// todo pseudosettle
 	}
-
+	beneficiary, err := signer.EthereumAddress()
+	if err != nil {
+		return nil, nil, fmt.Errorf("chain address: %w", err)
+	}
 	trafficChainService, err := chainTraffic.NewServer(logger, backend, trafficContractAddr)
 	if err != nil {
 		return nil, nil, fmt.Errorf("new traffic service: %w", err)
@@ -72,7 +73,7 @@ func InitChain(
 }
 
 func InitTraffic(store storage.StateStorer, beneficiary common.Address, trafficChainService chain.Traffic,
-	transactionService chain.Transaction, logger logging.Logger, p2pService p2p.Service) *traffic.Service {
+	transactionService chain.Transaction, logger logging.Logger, p2pService *libp2p.Service) *traffic.Service {
 	chequeStore := chequePkg.NewChequeStore(store, beneficiary, chequePkg.RecoverCheque)
 	cashOut := chequePkg.NewCashoutService(store, transactionService, chequeStore)
 	trafficService := traffic.New(logger, beneficiary, store, trafficChainService, chequeStore, cashOut, p2pService)
