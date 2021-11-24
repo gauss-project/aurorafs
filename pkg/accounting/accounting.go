@@ -47,7 +47,7 @@ type Accounting struct {
 	logger            logging.Logger
 	store             storage.StateStorer
 	paymentTolerance  *big.Int
-	earlyPayment      *big.Int
+	paymentThreshold  *big.Int
 	settlement        settlement.Interface
 	metrics           metrics
 }
@@ -67,30 +67,46 @@ var (
 
 // NewAccounting creates a new Accounting instance with the provided options.
 func NewAccounting(
-	PaymentTolerance,
-	EarlyPayment *big.Int,
-	Logger logging.Logger,
-	Store storage.StateStorer,
-	Settlement settlement.Interface,
-) (*Accounting, error) {
+	paymentTolerance,
+	paymentThreshold *big.Int,
+	logger logging.Logger,
+	store storage.StateStorer,
+	settlement settlement.Interface,
+) *Accounting {
 	return &Accounting{
 		accountingPeers:  make(map[string]*big.Int),
-		paymentTolerance: new(big.Int).Set(PaymentTolerance),
-		earlyPayment:     new(big.Int).Set(EarlyPayment),
-		logger:           Logger,
-		store:            Store,
-		settlement:       Settlement,
+		paymentTolerance: new(big.Int).Set(paymentTolerance),
+		paymentThreshold: new(big.Int).Set(paymentThreshold),
+		logger:           logger,
+		store:            store,
+		settlement:       settlement,
 		metrics:          newMetrics(),
-	}, nil
+	}
 }
 
 // Reserve reserves a portion of the balance for peer and attempts settlements if necessary.
 func (a *Accounting) Reserve(ctx context.Context, peer boson.Address, traffic uint64) error {
+	accountingPeer, err := a.getAccountingPeer(peer)
+	if err != nil {
+		return err
+	}
+	// 获取未开支票流量
+	balance, err := a.settlement.RetrieveTraffic(peer)
+	// 未开支票 + 将获取的流量 是否大于门限
+	balance = balance.Add(balance, new(big.Int).SetUint64(traffic))
+	if balance.Cmp(accountingPeer) < 0 {
+		// 发送支票
+		err := a.settle(ctx, peer, balance)
+		if err != nil {
+			return fmt.Errorf("failed to settle with peer %v: %v", peer, err)
+		}
+	}
 	return nil
 }
 
 // Release releases reserved funds.
 func (a *Accounting) Release(peer boson.Address, traffic uint64) {
+	// 收到流量
 
 }
 
@@ -104,13 +120,16 @@ func (a *Accounting) Credit(peer boson.Address, traffic uint64) error {
 // Settle all debt with a peer. The lock on the accountingPeer must be held when
 // called.
 func (a *Accounting) settle(ctx context.Context, peer boson.Address, balance *big.Int) error {
-
+	if err := a.settlement.Pay(ctx, peer, balance); err != nil {
+		return err
+	}
 	return nil
 }
 
 // Debit increases the amount of debt we have with the given peer (and decreases
 // existing credit).
 func (a *Accounting) Debit(peer boson.Address, traffic uint64) error {
+
 	return nil
 }
 
@@ -132,7 +151,10 @@ func peerBalanceKey(peer boson.Address) string {
 func (a *Accounting) getAccountingPeer(peer boson.Address) (*big.Int, error) {
 	a.accountingPeersMu.Lock()
 	defer a.accountingPeersMu.Unlock()
-	peerData := a.accountingPeers[peer.String()]
+	peerData, ok := a.accountingPeers[peer.String()]
+	if !ok {
+		a.accountingPeers[peer.String()] = a.paymentThreshold
+	}
 	return peerData, nil
 }
 

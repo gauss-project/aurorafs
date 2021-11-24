@@ -16,7 +16,11 @@ var (
 type Interface interface {
 	// Pay initiates a payment to the given peer
 	// It should return without error it is likely that the payment worked
-	Pay(ctx context.Context, peer boson.Address, amount *big.Int) error
+	Pay(ctx context.Context, peer boson.Address, traffic *big.Int) error
+	TransferTraffic(peer boson.Address) (traffic *big.Int, err error)
+	RetrieveTraffic(peer boson.Address) (traffic *big.Int, err error)
+	PutRetrieveTraffic(peer boson.Address, traffic *big.Int) error
+	PutTransferTraffic(peer boson.Address, traffic *big.Int) error
 	// TotalSent returns the total amount sent to a peer
 	TotalSent(peer boson.Address) (totalSent *big.Int, err error)
 	// TotalReceived returns the total amount received from a peer
