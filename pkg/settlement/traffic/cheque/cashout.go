@@ -26,7 +26,6 @@ type CashoutService interface {
 
 type cashoutService struct {
 	store              storage.StateStorer
-	backend            transaction.Backend
 	transactionService transaction.Service
 	chequeStore        ChequeStore
 }
@@ -67,13 +66,11 @@ type chequeCashedEvent struct {
 // NewCashoutService creates a new CashoutService
 func NewCashoutService(
 	store storage.StateStorer,
-	backend transaction.Backend,
 	transactionService transaction.Service,
 	chequeStore ChequeStore,
 ) CashoutService {
 	return &cashoutService{
 		store:              store,
-		backend:            backend,
 		transactionService: transactionService,
 		chequeStore:        chequeStore,
 	}
