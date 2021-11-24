@@ -9,10 +9,11 @@ import (
 var (
 	NewPendCallResTab = newPendCallResTab
 	NewRouteTable     = newRouteTable
+	GetPendingReqKey  = getPendingReqKey
 )
 
 func (pend *pendCallResTab) ReqLogRange(f func(key, value interface{}) bool) {
-	pend.reqLog.Range(f)
+	pend.reqList.Range(f)
 }
 
 func (t *Table) TableClean() {

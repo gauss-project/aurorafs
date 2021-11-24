@@ -27,7 +27,7 @@ func TestPendCallResTab(t *testing.T) {
 		cnt := 0
 		p.ReqLogRange(func(key, value interface{}) bool {
 			cnt++
-			if dest.ByteString()+next.ByteString() != key.(string) {
+			if routetab.GetPendingReqKey(dest, next) != key.(string) {
 				t.Fatalf("expect relog equal dest")
 			}
 			return true

@@ -56,3 +56,11 @@ func convItemsToBytes(items []boson.Address) (paths [][]byte) {
 func verifyPath(path *pb.Path) bool {
 	return true
 }
+
+func getTargetKey(target boson.Address) common.Hash {
+	return common.BytesToHash(target.Bytes())
+}
+
+func getPendingReqKey(target, next boson.Address) string {
+	return target.String() + next.String()
+}

@@ -113,8 +113,9 @@ func (t *Table) SavePath(p *pb.Path) {
 	// parse route from path
 	route := TargetRoute{Neighbor: items[len(items)-1], PathKey: pathKey}
 	t.IterateTarget(items, func(target boson.Address) {
-		targetKey := getRouteTargetKey(target)
+		targetKey := getTargetKey(target)
 		t.mu.Lock()
+		defer t.mu.Unlock()
 		routes, ok := t.routes[targetKey]
 		if ok {
 			old := routes
@@ -128,7 +129,6 @@ func (t *Table) SavePath(p *pb.Path) {
 		}
 		t.routes[targetKey] = routes
 		_ = t.store.Put(routePrefix+target.String(), routes)
-		t.mu.Unlock()
 	})
 }
 
@@ -142,7 +142,7 @@ func (t *Table) IterateTarget(items []boson.Address, fn func(target boson.Addres
 }
 
 func (t *Table) Get(target boson.Address) ([]*Path, error) {
-	targetKey := getRouteTargetKey(target)
+	targetKey := getTargetKey(target)
 	t.mu.RLock()
 	routes, ok := t.routes[targetKey]
 	t.mu.RUnlock()
@@ -163,7 +163,7 @@ func (t *Table) Get(target boson.Address) ([]*Path, error) {
 }
 
 func (t *Table) updateUsedTime(target, neighbor boson.Address) {
-	targetKey := getRouteTargetKey(target)
+	targetKey := getTargetKey(target)
 	t.mu.RLock()
 	routes, ok := t.routes[targetKey]
 	t.mu.RUnlock()
@@ -184,7 +184,7 @@ func (t *Table) updateUsedTime(target, neighbor boson.Address) {
 }
 
 func (t *Table) GetNextHop(target boson.Address) (next []boson.Address) {
-	targetKey := getRouteTargetKey(target)
+	targetKey := getTargetKey(target)
 	t.mu.RLock()
 	routes, ok := t.routes[targetKey]
 	t.mu.RUnlock()
@@ -213,8 +213,9 @@ func (t *Table) Delete(path *Path) {
 	_ = t.store.Delete(pathPrefix + pathKey.String())
 	// delete routes
 	t.IterateTarget(path.Items, func(target boson.Address) {
-		targetKey := getRouteTargetKey(target)
+		targetKey := getTargetKey(target)
 		t.mu.Lock()
+		defer t.mu.Unlock()
 		routes, ok := t.routes[targetKey]
 		if ok {
 			routesNow := make([]TargetRoute, 0)
@@ -227,7 +228,6 @@ func (t *Table) Delete(path *Path) {
 				t.routes[targetKey] = routesNow
 			}
 		}
-		t.mu.Unlock()
 	})
 }
 
@@ -263,6 +263,4 @@ func (t *Table) ResumeRoutes() {
 	})
 }
 
-func getRouteTargetKey(target boson.Address) common.Hash {
-	return common.BytesToHash(target.Bytes())
-}
+
