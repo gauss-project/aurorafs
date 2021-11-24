@@ -7,6 +7,8 @@ import (
 	"github.com/gauss-project/aurorafs/pkg/logging"
 	"github.com/gauss-project/aurorafs/pkg/p2p"
 	"github.com/gauss-project/aurorafs/pkg/settlement"
+	"github.com/gauss-project/aurorafs/pkg/settlement/chain"
+	"github.com/gauss-project/aurorafs/pkg/settlement/chain/transaction"
 	"github.com/gauss-project/aurorafs/pkg/settlement/traffic/cheque"
 	"github.com/gauss-project/aurorafs/pkg/storage"
 
@@ -39,14 +41,16 @@ type Interface interface {
 }
 
 type Service struct {
-	logger            logging.Logger
-	store             storage.StateStorer
-	notifyPaymentFunc settlement.NotifyPaymentFunc
-	metrics           metrics
-	chequeStore       cheque.ChequeStore
-	cheque            cheque.Cheque
-	cashout           cheque.CashoutService
-	p2pService        p2p.Service
+	logger              logging.Logger
+	store               storage.StateStorer
+	notifyPaymentFunc   settlement.NotifyPaymentFunc
+	metrics             metrics
+	chequeStore         cheque.ChequeStore
+	cheque              cheque.Cheque
+	cashout             cheque.CashoutService
+	trafficChainService chain.Traffic
+	transactionService  transaction.Service
+	p2pService          p2p.Service
 }
 
 func New(logger logging.Logger, store storage.StateStorer, chequeStore cheque.ChequeStore, cheque cheque.Cheque, cashout cheque.CashoutService, p2pService p2p.Service) *Service {

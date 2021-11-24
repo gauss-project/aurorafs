@@ -4,6 +4,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/gauss-project/aurorafs/pkg/logging"
+	"github.com/gauss-project/aurorafs/pkg/settlement/chain"
 )
 
 type ChainTraffic struct {
@@ -11,7 +12,7 @@ type ChainTraffic struct {
 	traffic *Traffic
 }
 
-func NewServer(logger logging.Logger, backend *ethclient.Client, address string) (*ChainTraffic, error) {
+func NewServer(logger logging.Logger, backend *ethclient.Client, address string) (chain.Traffic, error) {
 
 	traffic, err := NewTraffic(common.HexToAddress(address), backend)
 	if err != nil {
