@@ -249,7 +249,7 @@ func (s *Service) TrafficInfo() (*TrafficInfo, error) {
 		traffic := v.(Traffic)
 		cashed = new(big.Int).Add(cashed, traffic.transferChainTraffic)
 		transfer = new(big.Int).Add(transfer, traffic.transferTraffic)
-		totalSent = new(big.Int).Add(totalSent, traffic.retrieveChequeTraffic)
+		respTraffic.TotalSendTraffic = traffic.retrieveChequeTraffic
 		totalReceived = new(big.Int).Add(totalReceived, traffic.transferChequeTraffic)
 		return true
 	})
@@ -311,7 +311,7 @@ func (s *Service) Pay(ctx context.Context, peer boson.Address, traffic *big.Int)
 	return nil
 }
 
-func (s *Service) Issue(ctx context.Context, peer boson.Address, beneficiary, recipient common.Address, traffic *big.Int) error {
+func (s *Service) Issue(ctx context.Context, peer boson.Address, recipient, beneficiary common.Address, traffic *big.Int) error {
 	available, err := s.AvailableBalance(ctx)
 	if err != nil {
 		return err

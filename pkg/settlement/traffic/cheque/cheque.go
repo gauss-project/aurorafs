@@ -31,9 +31,9 @@ type SignedCheque struct {
 }
 
 // chequebookDomain computes chainId-dependant EIP712 domain
-func chequebookDomain(chainID int64) eip712.TypedDataDomain {
+func chequeDomain(chainID int64) eip712.TypedDataDomain {
 	return eip712.TypedDataDomain{
-		Name:    "Chequebook",
+		Name:    "Cheque",
 		Version: "1.0",
 		ChainId: math.NewHexOrDecimal256(chainID),
 	}
@@ -43,6 +43,10 @@ func chequebookDomain(chainID int64) eip712.TypedDataDomain {
 var ChequeTypes = eip712.Types{
 	"EIP712Domain": eip712.EIP712DomainType,
 	"Cheque": []eip712.Type{
+		{
+			Name: "recipient",
+			Type: "address",
+		},
 		{
 			Name: "beneficiary",
 			Type: "address",
@@ -76,9 +80,10 @@ func NewChequeSigner(signer crypto.Signer, chainID int64) ChequeSigner {
 // eip712DataForCheque converts a cheque into the correct TypedData structure.
 func eip712DataForCheque(cheque *Cheque, chainID int64) *eip712.TypedData {
 	return &eip712.TypedData{
-		Domain: chequebookDomain(chainID),
+		Domain: chequeDomain(chainID),
 		Types:  ChequeTypes,
 		Message: eip712.TypedDataMessage{
+			"recipient":        cheque.Recipient.Hex(),
 			"beneficiary":      cheque.Beneficiary.Hex(),
 			"cumulativePayout": cheque.CumulativePayout.String(),
 		},
