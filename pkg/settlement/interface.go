@@ -3,6 +3,7 @@ package settlement
 import (
 	"context"
 	"errors"
+	"github.com/ethereum/go-ethereum/common"
 	"math/big"
 
 	"github.com/gauss-project/aurorafs/pkg/boson"
@@ -33,6 +34,8 @@ type Interface interface {
 	Balance(ctx context.Context) (*big.Int, error)
 	// AvailableBalance Get actual available balance
 	AvailableBalance(ctx context.Context) (*big.Int, error)
+	// UpdatePeerBalance update peer balance
+	UpdatePeerBalance(peer common.Address) error
 }
 
 // NotifyPaymentFunc is called when a payment from peer was successfully received

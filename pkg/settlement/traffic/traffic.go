@@ -514,19 +514,6 @@ func (s *Service) AvailableBalance(ctx context.Context) (*big.Int, error) {
 	return new(big.Int).Add(s.trafficPeers.balance, new(big.Int).Sub(cashed, transfer)), nil
 }
 
-func (s *Service) ReceiveCheque(ctx context.Context, peer boson.Address, cheque *cheque.SignedCheque) error {
-	amount, err := s.chequeStore.ReceiveCheque(ctx, cheque)
-	if err != nil {
-		s.metrics.ChequesRejected.Inc()
-		return fmt.Errorf("rejecting cheque: %w", err)
-	}
-
-	s.metrics.TotalReceived.Add(float64(amount.Uint64()))
-	s.metrics.ChequesReceived.Inc()
-
-	return nil
-}
-
 func (s *Service) Handshake(peer boson.Address, beneficiary common.Address, cheque *cheque.SignedCheque) error {
 	singCheque, err := s.chequeStore.LastReceivedCheque(beneficiary)
 
