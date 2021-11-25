@@ -1,0 +1,19 @@
+
+
+syntax = "proto3";
+
+package traffic;
+
+option go_package = "pb";
+
+message SignedCheque {
+  repeated Cheque cheque = 1;
+  bytes Signature = 2;
+}
+
+message Cheque {
+bytes Recipient = 1;
+bytes Beneficiary = 2;
+uint64 CumulativePayout = 3;
+}
+
