@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/gauss-project/aurorafs/pkg/accounting"
 	"time"
 
 	"github.com/gauss-project/aurorafs/pkg/boson"
@@ -48,6 +49,7 @@ type Service struct {
 	chunkinfo    chunkinfo.Interface
 	acoServer    *aco.AcoServer
 	routeTab     routetab.RouteTab
+	accounting   accounting.Interface
 	singleflight singleflight.Group
 	isFullNode   bool
 }
@@ -63,7 +65,8 @@ const (
 	totalRouteCount               = 5
 )
 
-func New(addr boson.Address, streamer p2p.Streamer, routeTable routetab.RouteTab, storer storage.Storer, isFullNode bool, logger logging.Logger, tracer *tracing.Tracer) *Service {
+func New(addr boson.Address, streamer p2p.Streamer, routeTable routetab.RouteTab, storer storage.Storer,
+	isFullNode bool, logger logging.Logger, tracer *tracing.Tracer, accounting accounting.Interface) *Service {
 	acoServer := aco.NewAcoServer()
 	return &Service{
 		addr:       addr,
@@ -74,6 +77,7 @@ func New(addr boson.Address, streamer p2p.Streamer, routeTable routetab.RouteTab
 		tracer:     tracer,
 		acoServer:  acoServer,
 		routeTab:   routeTable,
+		accounting: accounting,
 		isFullNode: isFullNode,
 	}
 }
@@ -277,6 +281,10 @@ func (s *Service) retrieveChunk(ctx context.Context, route aco.Route, rootAddr, 
 		return nil, fmt.Errorf("connect failed, peer: %v", route.LinkNode.String())
 	}
 
+	if err := s.accounting.Reserve(ctx, route.LinkNode, 256*1024*8); err != nil {
+		return nil, err
+	}
+
 	ctx, cancel := context.WithTimeout(ctx, retrieveChunkTimeout)
 	defer cancel()
 	stream, err := s.streamer.NewStream(ctx, route.LinkNode, nil, protocolName, protocolVersion, streamName)
@@ -318,6 +326,9 @@ func (s *Service) retrieveChunk(ctx context.Context, route aco.Route, rootAddr, 
 			s.metrics.TotalErrors.Inc()
 			return nil, boson.ErrInvalidChunk
 		}
+	}
+	if err := s.accounting.Credit(route.LinkNode, uint64(dataSize*8)); err != nil {
+		return nil, err
 	}
 
 	s.logger.Tracef("retrieval: chunk %s is received", chunkAddr)
@@ -383,6 +394,9 @@ func (s *Service) handler(ctx context.Context, p p2p.Peer, stream p2p.Stream) (e
 		}
 	}
 
+	if err := s.accounting.Debit(p.Address, 256*1024*8); err != nil {
+		return nil
+	}
 	if err := w.WriteMsgWithContext(ctx, &pb.Delivery{
 		Data: chunk.Data(),
 	}); err != nil {

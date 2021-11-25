@@ -35,10 +35,6 @@ type Interface interface {
 	Credit(peer boson.Address, traffic uint64) error
 	// Debit increases the balance we have with the peer (we get "paid" back).
 	Debit(peer boson.Address, traffic uint64) error
-
-	RetrievedTraffic(peer boson.Address) (*big.Int, error)
-
-	TransferredTraffic(peer boson.Address) (*big.Int, error)
 }
 
 // Accounting is the main implementation of the accounting interface.
@@ -136,14 +132,6 @@ func (a *Accounting) Debit(peer boson.Address, traffic uint64) error {
 	return nil
 }
 
-func (a *Accounting) RetrievedTraffic(peer boson.Address) (*big.Int, error) {
-	return new(big.Int).SetInt64(0), nil
-}
-
-func (a *Accounting) TransferredTraffic(peer boson.Address) (*big.Int, error) {
-	return new(big.Int).SetInt64(0), nil
-}
-
 // peerBalanceKey returns the balance storage key for the given peer.
 func peerBalanceKey(peer boson.Address) string {
 	return fmt.Sprintf("%s%s", balancesPrefix, peer.String())
@@ -192,21 +180,4 @@ func surplusBalanceKeyPeer(key []byte) (boson.Address, error) {
 	}
 
 	return addr, nil
-}
-
-// NotifyPayment is called by Settlement when we receive a payment.
-func (a *Accounting) NotifyPayment(peer boson.Address, amount *big.Int) error {
-	return nil
-}
-
-// AsyncNotifyPayment calls notify payment in a go routine.
-// This is needed when accounting needs to be notified but the accounting lock is already held.
-func (a *Accounting) AsyncNotifyPayment(peer boson.Address, amount *big.Int) error {
-	go func() {
-		err := a.NotifyPayment(peer, amount)
-		if err != nil {
-			a.logger.Errorf("failed to notify accounting of payment: %v", err)
-		}
-	}()
-	return nil
 }

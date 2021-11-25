@@ -7,7 +7,6 @@ import (
 	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/logging"
 	"github.com/gauss-project/aurorafs/pkg/p2p"
-	"github.com/gauss-project/aurorafs/pkg/settlement"
 	"github.com/gauss-project/aurorafs/pkg/settlement/chain"
 	"github.com/gauss-project/aurorafs/pkg/settlement/traffic/cheque"
 	"github.com/gauss-project/aurorafs/pkg/settlement/traffic/trafficprotocol"
@@ -74,7 +73,6 @@ type Service struct {
 	logger              logging.Logger
 	chainAddress        common.Address
 	store               storage.StateStorer
-	notifyPaymentFunc   settlement.NotifyPaymentFunc
 	metrics             metrics
 	chequeStore         cheque.ChequeStore
 	cashout             cheque.CashoutService
@@ -381,11 +379,6 @@ func (s *Service) SettlementsReceived() (map[string]*big.Int, error) {
 		return true
 	})
 	return respReceived, nil
-}
-
-// SetNotifyPaymentFunc sets the NotifyPaymentFunc to notify
-func (s *Service) SetNotifyPaymentFunc(notifyPaymentFunc settlement.NotifyPaymentFunc) {
-	s.notifyPaymentFunc = notifyPaymentFunc
 }
 
 func (s *Service) TransferTraffic(peer boson.Address) (traffic *big.Int, err error) {

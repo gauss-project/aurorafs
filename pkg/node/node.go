@@ -258,7 +258,6 @@ func NewAurora(addr string, bosonAddress boson.Address, publicKey ecdsa.PublicKe
 		stateStore,
 		settlement,
 	)
-	settlement.SetNotifyPaymentFunc(acc.AsyncNotifyPayment)
 
 	metricsDB, err := shed.NewDBWrap(stateStore.DB())
 	if err != nil {
@@ -321,7 +320,7 @@ func NewAurora(addr string, bosonAddress boson.Address, publicKey ecdsa.PublicKe
 	}
 	b.localstoreCloser = storer
 
-	retrieve := retrieval.New(bosonAddress, p2ps, route, storer, o.NodeMode.IsFull(), logger, tracer)
+	retrieve := retrieval.New(bosonAddress, p2ps, route, storer, o.NodeMode.IsFull(), logger, tracer, acc)
 	if err = p2ps.AddProtocol(retrieve.Protocol()); err != nil {
 		return nil, fmt.Errorf("retrieval service: %w", err)
 	}

@@ -29,8 +29,6 @@ type Interface interface {
 	SettlementsSent() (map[string]*big.Int, error)
 	// SettlementsReceived returns received settlements for each individual known peer
 	SettlementsReceived() (map[string]*big.Int, error)
-	// SetNotifyPaymentFunc sets the NotifyPaymentFunc to notify
-	SetNotifyPaymentFunc(notifyPaymentFunc NotifyPaymentFunc)
 	// Balance Get chain balance
 	Balance(ctx context.Context) (*big.Int, error)
 	// AvailableBalance Get actual available balance
