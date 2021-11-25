@@ -68,7 +68,10 @@ func InitChain(
 	}
 
 	trafficService := InitTraffic(stateStore, beneficiary, trafficChainService, transactionService, logger, p2pService, signer, chainID.Int64())
-
+	err = trafficService.InitChain()
+	if err != nil {
+		return nil, nil, fmt.Errorf("InitChain: %w", err)
+	}
 	return oracleServer, trafficService, nil
 }
 

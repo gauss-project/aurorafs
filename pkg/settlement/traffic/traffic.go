@@ -3,6 +3,7 @@ package traffic
 import (
 	"context"
 	"errors"
+	"fmt"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/logging"
@@ -103,8 +104,6 @@ func New(logger logging.Logger, chainAddress common.Address, store storage.State
 }
 
 func (s *Service) InitChain() error {
-	var chainData map[common.Address]Traffic
-
 	s.trafficPeers = TrafficPeer{}
 
 	lastCheques, err := s.chequeStore.LastSendCheques()
@@ -113,35 +112,65 @@ func (s *Service) InitChain() error {
 		return err
 	}
 
-	//GetChain := func() (map[common.Address]Traffic,error) {
-	//	chanResp := make(map[common.Address]Traffic)
-	//	chainList,err := s.trafficChainService.RetrievedAddress(nil, s.chainAddress)
-	//	if err != nil {
-	//		return chanResp,err
-	//	}
-	//
-	//
-	//	return nil
-	//}
+	GetChainAddressList := func() (map[common.Address]Traffic, error) {
+		chanResp := make(map[common.Address]Traffic)
+		retrieveList, err := s.trafficChainService.RetrievedAddress(s.chainAddress)
+		if err != nil {
+			return chanResp, err
+		}
+		for _, v := range retrieveList {
+			if _, ok := chanResp[v]; !ok {
+				chanResp[v] = Traffic{}
+			}
+		}
+		transferList, err := s.trafficChainService.TransferredAddress(s.chainAddress)
+		if err != nil {
+			return chanResp, err
+		}
+		for _, v := range transferList {
+			if _, ok := chanResp[v]; !ok {
+				chanResp[v] = Traffic{}
+			}
+		}
+		return chanResp, nil
+	}
 
-	for k, v := range chainData {
+	chainAddressList, err := GetChainAddressList()
+	if err != nil {
+		return fmt.Errorf("traffic: Failed to get chain node information ")
+	}
+	s.trafficPeers.totalPaidOut = new(big.Int).SetInt64(0)
+	for k, v := range chainAddressList {
+		retrievedTotal, err := s.trafficChainService.RetrievedTotal(k)
+		if err != nil {
+			return nil
+		}
+		transferTotal, err := s.trafficChainService.TransferredTotal(k)
+		if err != nil {
+			return nil
+		}
+
 		traffic := Traffic{
-			retrieveChainTraffic:  v.retrieveChainTraffic,
-			transferChainTraffic:  v.transferChainTraffic,
-			transferChequeTraffic: v.transferChequeTraffic,
-			transferTraffic:       v.transferTraffic,
-			retrieveChequeTraffic: v.retrieveChequeTraffic,
-			retrieveTraffic:       v.retrieveTraffic,
+			retrieveChainTraffic:  retrievedTotal,
+			transferChainTraffic:  transferTotal,
+			transferChequeTraffic: transferTotal,
+			transferTraffic:       transferTotal,
+			retrieveChequeTraffic: retrievedTotal,
+			retrieveTraffic:       retrievedTotal,
 		}
 		if cq, ok := lastCheques[k]; !ok {
 			traffic.retrieveTraffic = s.maxBigint(v.retrieveTraffic, cq.CumulativePayout)
 			traffic.retrieveChequeTraffic = s.maxBigint(v.retrieveChequeTraffic, cq.CumulativePayout)
 		}
 
-		s.trafficPeers.trafficPeers.Store(k, Traffic{})
+		s.trafficPeers.trafficPeers.Store(k, traffic)
+		s.trafficPeers.totalPaidOut = new(big.Int).Add(s.trafficPeers.totalPaidOut, transferTotal)
 	}
-	s.trafficPeers.balance = new(big.Int).SetInt64(0)
-	s.trafficPeers.totalPaidOut = new(big.Int).SetInt64(0)
+	balance, err := s.trafficChainService.BalanceOf(s.chainAddress)
+	if err != nil {
+		return fmt.Errorf("failed to get the chain balance")
+	}
+	s.trafficPeers.balance = balance
 
 	return nil
 }
@@ -485,9 +514,27 @@ func (s *Service) AvailableBalance(ctx context.Context) (*big.Int, error) {
 }
 
 func (s *Service) ReceiveCheque(ctx context.Context, peer boson.Address, cheque *cheque.SignedCheque) error {
+	amount, err := s.chequeStore.ReceiveCheque(ctx, cheque)
+	if err != nil {
+		s.metrics.ChequesRejected.Inc()
+		return fmt.Errorf("rejecting cheque: %w", err)
+	}
+
+	s.metrics.TotalReceived.Add(float64(amount.Uint64()))
+	s.metrics.ChequesReceived.Inc()
+
 	return nil
 }
 
 func (s *Service) Handshake(peer boson.Address, beneficiary common.Address, cheque *cheque.SignedCheque) error {
-	return nil
+	singCheque, err := s.chequeStore.LastReceivedCheque(beneficiary)
+
+	if err != nil {
+		return err
+	}
+	if cheque.CumulativePayout.Cmp(singCheque.CumulativePayout) > 0 {
+		return s.chequeStore.PutSendCheque(context.Background(), &cheque.Cheque, beneficiary)
+	} else {
+		return nil
+	}
 }

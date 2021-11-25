@@ -1,7 +1,6 @@
 package traffic
 
 import (
-	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/gauss-project/aurorafs/pkg/logging"
@@ -27,27 +26,27 @@ func NewServer(logger logging.Logger, backend *ethclient.Client, address string)
 	}, nil
 }
 
-func (chainTraffic *ChainTraffic) TransferredAddress(opts *bind.CallOpts, address common.Address) ([]common.Address, error) {
-	out0, err := chainTraffic.traffic.GetTransferredAddress(opts, address)
+func (chainTraffic *ChainTraffic) TransferredAddress(address common.Address) ([]common.Address, error) {
+	out0, err := chainTraffic.traffic.GetTransferredAddress(nil, address)
 	return out0, err
 }
 
-func (chainTraffic *ChainTraffic) RetrievedAddress(opts *bind.CallOpts, address common.Address) ([]common.Address, error) {
-	out0, err := chainTraffic.traffic.GetRetrievedAddress(opts, address)
+func (chainTraffic *ChainTraffic) RetrievedAddress(address common.Address) ([]common.Address, error) {
+	out0, err := chainTraffic.traffic.GetRetrievedAddress(nil, address)
 	return out0, err
 }
 
-func (chainTraffic *ChainTraffic) BalanceOf(opts *bind.CallOpts, account common.Address) (*big.Int, error) {
-	out0, err := chainTraffic.traffic.BalanceOf(opts, account)
+func (chainTraffic *ChainTraffic) BalanceOf(account common.Address) (*big.Int, error) {
+	out0, err := chainTraffic.traffic.BalanceOf(nil, account)
 	return out0, err
 }
 
-func (chainTraffic *ChainTraffic) RetrievedTotal(opts *bind.CallOpts, arg0 common.Address) (*big.Int, error) {
-	out0, err := chainTraffic.traffic.RetrievedTotal(opts, arg0)
+func (chainTraffic *ChainTraffic) RetrievedTotal(arg0 common.Address) (*big.Int, error) {
+	out0, err := chainTraffic.traffic.RetrievedTotal(nil, arg0)
 	return out0, err
 }
 
-func (chainTraffic *ChainTraffic) TransferredTotal(opts *bind.CallOpts, arg0 common.Address) (*big.Int, error) {
-	out0, err := chainTraffic.traffic.TransferredTotal(opts, arg0)
+func (chainTraffic *ChainTraffic) TransferredTotal(arg0 common.Address) (*big.Int, error) {
+	out0, err := chainTraffic.traffic.TransferredTotal(nil, arg0)
 	return out0, err
 }

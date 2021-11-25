@@ -2,7 +2,6 @@ package chain
 
 import (
 	"context"
-	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/gauss-project/aurorafs/pkg/boson"
@@ -36,15 +35,15 @@ type Resolver interface {
 type Traffic interface {
 
 	// 	TransferredAddress opts todo
-	TransferredAddress(opts *bind.CallOpts, address common.Address) ([]common.Address, error)
+	TransferredAddress(address common.Address) ([]common.Address, error)
 
-	RetrievedAddress(opts *bind.CallOpts, address common.Address) ([]common.Address, error)
+	RetrievedAddress(address common.Address) ([]common.Address, error)
 
-	BalanceOf(opts *bind.CallOpts, account common.Address) (*big.Int, error)
+	BalanceOf(account common.Address) (*big.Int, error)
 
-	RetrievedTotal(opts *bind.CallOpts, arg0 common.Address) (*big.Int, error)
+	RetrievedTotal(rg0 common.Address) (*big.Int, error)
 
-	TransferredTotal(opts *bind.CallOpts, arg0 common.Address) (*big.Int, error)
+	TransferredTotal(arg0 common.Address) (*big.Int, error)
 }
 
 // Service is the service to send transactions. It takes care of gas price, gas
