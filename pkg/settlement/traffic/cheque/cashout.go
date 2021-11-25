@@ -24,11 +24,7 @@ type cashoutService struct {
 }
 
 // NewCashoutService creates a new CashoutService
-func NewCashoutService(
-	store storage.StateStorer,
-	transactionService chain.Transaction,
-	chequeStore ChequeStore,
-) CashoutService {
+func NewCashoutService(store storage.StateStorer, transactionService chain.Transaction, chequeStore ChequeStore) CashoutService {
 	return &cashoutService{
 		store:              store,
 		transactionService: transactionService,

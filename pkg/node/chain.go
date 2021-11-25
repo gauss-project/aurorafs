@@ -8,6 +8,7 @@ import (
 	"github.com/gauss-project/aurorafs/pkg/p2p/libp2p"
 	"github.com/gauss-project/aurorafs/pkg/settlement"
 	chequePkg "github.com/gauss-project/aurorafs/pkg/settlement/traffic/cheque"
+	"github.com/gauss-project/aurorafs/pkg/settlement/traffic/trafficprotocol"
 
 	"github.com/gauss-project/aurorafs/pkg/crypto"
 	"github.com/gauss-project/aurorafs/pkg/logging"
@@ -77,5 +78,6 @@ func InitTraffic(store storage.StateStorer, beneficiary common.Address, trafficC
 	chequeStore := chequePkg.NewChequeStore(store, beneficiary, chequePkg.RecoverCheque)
 	cashOut := chequePkg.NewCashoutService(store, transactionService, chequeStore)
 	trafficService := traffic.New(logger, beneficiary, store, trafficChainService, chequeStore, cashOut, p2pService)
+	trafficprotocol.New(p2pService, logger, trafficService)
 	return trafficService
 }
