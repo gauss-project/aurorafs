@@ -25,6 +25,7 @@ var (
 type SendChequeFunc func(cheque *cheque.SignedCheque) error
 
 type Traffic struct {
+	trafficPeerBalance    *big.Int
 	retrieveChainTraffic  *big.Int
 	transferChainTraffic  *big.Int
 	retrieveChequeTraffic *big.Int
@@ -537,4 +538,49 @@ func (s *Service) Handshake(peer boson.Address, beneficiary common.Address, cheq
 	} else {
 		return nil
 	}
+}
+
+func (s *Service) UpdatePeerBalance(peer common.Address) error {
+
+	balance, err := s.trafficChainService.BalanceOf(peer)
+	if err != nil {
+		return err
+	}
+
+	var localTraffic Traffic
+	chainTraffic, ok := s.trafficPeers.trafficPeers.Load(peer)
+
+	updateTraffice := chainTraffic.(Traffic)
+	if ok {
+		localTraffic.transferTraffic = updateTraffice.transferTraffic
+		localTraffic.retrieveTraffic = updateTraffice.retrieveTraffic
+		localTraffic.transferChequeTraffic = updateTraffice.transferChequeTraffic
+		localTraffic.retrieveChainTraffic = updateTraffice.retrieveChainTraffic
+		localTraffic.transferChainTraffic = updateTraffice.transferChainTraffic
+		localTraffic.retrieveChequeTraffic = updateTraffice.retrieveChequeTraffic
+	}
+	localTraffic.trafficPeerBalance = balance
+
+	s.trafficPeers.trafficPeers.Store(peer, localTraffic)
+
+	return nil
+}
+
+func (s *Service) ReceiveCheque(ctx context.Context, peer boson.Address, cheque *cheque.SignedCheque) error {
+
+	if cheque.Beneficiary != s.Address() {
+		return errors.New("account information error ")
+	}
+
+	chainTraffic, ok := s.trafficPeers.trafficPeers.Load(peer)
+
+	uncollectedCheque := new(big.Int).Sub(cheque.CumulativePayout, chainTraffic.(Traffic).retrieveChainTraffic)
+
+	if !ok || chainTraffic.(Traffic).trafficPeerBalance.Cmp(uncollectedCheque) == -1 {
+		return errors.New("The recipient is unable to pay ")
+	}
+
+	_, err := s.chequeStore.ReceiveCheque(ctx, cheque)
+
+	return err
 }
