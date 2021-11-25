@@ -7,7 +7,7 @@ package traffic;
 option go_package = "pb";
 
 message SignedCheque {
-  repeated Cheque cheque = 1;
+  Cheque cheque = 1;
   bytes Signature = 2;
 }
 
