@@ -38,7 +38,7 @@ func (s *cashoutService) CashCheque(ctx context.Context, chequebook, recipient c
 	if err != nil {
 		return common.Hash{}, err
 	}
-
+	// todo
 	callData, err := trafficAbi.Pack("cashChequeBeneficiary", recipient, cheque.CumulativePayout, cheque.Signature)
 	if err != nil {
 		return common.Hash{}, err

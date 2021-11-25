@@ -10,11 +10,19 @@ import (
 	"github.com/gauss-project/aurorafs/pkg/settlement"
 	"github.com/gauss-project/aurorafs/pkg/settlement/chain"
 	"github.com/gauss-project/aurorafs/pkg/settlement/traffic/cheque"
+	"github.com/gauss-project/aurorafs/pkg/settlement/traffic/trafficprotocol"
 	"github.com/gauss-project/aurorafs/pkg/storage"
 
 	"math/big"
 	"sync"
 )
+
+var (
+	ErrUnknownBeneficary = errors.New("unknown beneficiary for peer")
+	ErrInsufficientFunds = errors.New("insufficient token balance")
+)
+
+type SendChequeFunc func(cheque *cheque.SignedCheque) error
 
 type Traffic struct {
 	retrieveChainTraffic  *big.Int
@@ -74,10 +82,13 @@ type Service struct {
 	p2pService          p2p.Service
 	trafficPeers        TrafficPeer
 	addressBook         Addressbook
+	chequeSigner        cheque.ChequeSigner
+	protocol            trafficprotocol.Interface
 }
 
-func New(logger logging.Logger, chainAddress common.Address, store storage.StateStorer, trafficChainService chain.Traffic, chequeStore cheque.ChequeStore, cashout cheque.CashoutService, p2pService p2p.Service,
-	addressBook Addressbook) *Service {
+func New(logger logging.Logger, chainAddress common.Address, store storage.StateStorer, trafficChainService chain.Traffic,
+	chequeStore cheque.ChequeStore, cashout cheque.CashoutService, p2pService p2p.Service, addressBook Addressbook,
+	chequeSigner cheque.ChequeSigner, protocol trafficprotocol.Interface) *Service {
 	return &Service{
 		logger:              logger,
 		store:               store,
@@ -88,6 +99,8 @@ func New(logger logging.Logger, chainAddress common.Address, store storage.State
 		cashout:             cashout,
 		p2pService:          p2pService,
 		addressBook:         addressBook,
+		chequeSigner:        chequeSigner,
+		protocol:            protocol,
 	}
 }
 
@@ -252,6 +265,62 @@ func (s *Service) TrafficCheques() ([]*TrafficCheque, error) {
 }
 
 func (s *Service) Pay(ctx context.Context, peer boson.Address, traffic *big.Int) error {
+	recipient, known, err := s.addressBook.Beneficiary(peer)
+	if err != nil {
+		return err
+	}
+	if !known {
+		s.logger.Warningf("disconnecting non-traffic peer %v", peer)
+		err = s.p2pService.Disconnect(peer, "no recipient found")
+		if err != nil {
+			return err
+		}
+		return ErrUnknownBeneficary
+	}
+	if err := s.Issue(ctx, peer, recipient, s.chainAddress, traffic); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (s *Service) Issue(ctx context.Context, peer boson.Address, beneficiary, recipient common.Address, traffic *big.Int) error {
+	available, err := s.AvailableBalance(ctx)
+	if err != nil {
+		return err
+	}
+	if available.Cmp(traffic) < 0 {
+		return ErrInsufficientFunds
+	}
+
+	var cumulativePayout *big.Int
+	lastCheque, err := s.LastSentCheque(peer)
+	if err != nil {
+		if err != cheque.ErrNoCheque {
+			return err
+		}
+		cumulativePayout = big.NewInt(0)
+	} else {
+		cumulativePayout = lastCheque.CumulativePayout
+	}
+	// increase cumulativePayout by amount
+	cumulativePayout = cumulativePayout.Add(cumulativePayout, traffic)
+	// create and sign the new cheque
+	c := cheque.Cheque{
+		Recipient:        recipient,
+		Beneficiary:      beneficiary,
+		CumulativePayout: cumulativePayout,
+	}
+	sin, err := s.chequeSigner.Sign(&c)
+	if err != nil {
+		return err
+	}
+	signedCheque := &cheque.SignedCheque{
+		Cheque:    c,
+		Signature: sin,
+	}
+	if err := s.protocol.EmitCheque(ctx, peer, signedCheque); err != nil {
+		return err
+	}
 	return nil
 }
 

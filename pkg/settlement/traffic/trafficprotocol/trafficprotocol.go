@@ -16,6 +16,11 @@ const (
 	initStreamName  = "init"    // stream for handshake
 )
 
+type Interface interface {
+	// EmitCheque sends a signed cheque to a peer.
+	EmitCheque(ctx context.Context, peer boson.Address, cheque *cheque.SignedCheque) error
+}
+
 type Traffic interface {
 	ReceiveCheque(ctx context.Context, peer boson.Address, cheque *cheque.SignedCheque) error
 
@@ -30,8 +35,12 @@ type Service struct {
 	traffic  Traffic
 }
 
-func New(streamer p2p.Streamer, logging logging.Logger, traffic Traffic) *Service {
-	return &Service{streamer: streamer, logging: logging, traffic: traffic}
+func New(streamer p2p.Streamer, logging logging.Logger) *Service {
+	return &Service{streamer: streamer, logging: logging}
+}
+
+func (s *Service) SetTraffic(traffic Traffic) {
+	s.traffic = traffic
 }
 
 func (s *Service) Protocol() p2p.ProtocolSpec {
@@ -60,5 +69,9 @@ func (s *Service) init(ctx context.Context, p p2p.Peer) error {
 }
 
 func (s *Service) handler(ctx context.Context, p p2p.Peer, stream p2p.Stream) (err error) {
+	return nil
+}
+
+func (s *Service) EmitCheque(ctx context.Context, peer boson.Address, cheque *cheque.SignedCheque) error {
 	return nil
 }

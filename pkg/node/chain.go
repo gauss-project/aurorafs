@@ -5,18 +5,17 @@ import (
 	"fmt"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethclient"
-	"github.com/gauss-project/aurorafs/pkg/p2p/libp2p"
-	"github.com/gauss-project/aurorafs/pkg/settlement"
-	chequePkg "github.com/gauss-project/aurorafs/pkg/settlement/traffic/cheque"
-	"github.com/gauss-project/aurorafs/pkg/settlement/traffic/trafficprotocol"
-
 	"github.com/gauss-project/aurorafs/pkg/crypto"
 	"github.com/gauss-project/aurorafs/pkg/logging"
+	"github.com/gauss-project/aurorafs/pkg/p2p/libp2p"
+	"github.com/gauss-project/aurorafs/pkg/settlement"
 	"github.com/gauss-project/aurorafs/pkg/settlement/chain"
 	"github.com/gauss-project/aurorafs/pkg/settlement/chain/oracle"
 	chainTraffic "github.com/gauss-project/aurorafs/pkg/settlement/chain/traffic"
 	"github.com/gauss-project/aurorafs/pkg/settlement/chain/transaction"
 	"github.com/gauss-project/aurorafs/pkg/settlement/traffic"
+	chequePkg "github.com/gauss-project/aurorafs/pkg/settlement/traffic/cheque"
+	"github.com/gauss-project/aurorafs/pkg/settlement/traffic/trafficprotocol"
 	"github.com/gauss-project/aurorafs/pkg/storage"
 )
 
@@ -68,17 +67,19 @@ func InitChain(
 		return nil, nil, fmt.Errorf("new transaction service: %w", err)
 	}
 
-	trafficService := InitTraffic(stateStore, beneficiary, trafficChainService, transactionService, logger, p2pService)
+	trafficService := InitTraffic(stateStore, beneficiary, trafficChainService, transactionService, logger, p2pService, signer, chainID.Int64())
 
 	return oracleServer, trafficService, nil
 }
 
 func InitTraffic(store storage.StateStorer, beneficiary common.Address, trafficChainService chain.Traffic,
-	transactionService chain.Transaction, logger logging.Logger, p2pService *libp2p.Service) *traffic.Service {
+	transactionService chain.Transaction, logger logging.Logger, p2pService *libp2p.Service, signer crypto.Signer, chainID int64) *traffic.Service {
 	chequeStore := chequePkg.NewChequeStore(store, beneficiary, chequePkg.RecoverCheque)
 	cashOut := chequePkg.NewCashoutService(store, transactionService, chequeStore)
 	addressBook := traffic.NewAddressbook(store)
-	trafficService := traffic.New(logger, beneficiary, store, trafficChainService, chequeStore, cashOut, p2pService, addressBook)
-	trafficprotocol.New(p2pService, logger, trafficService)
+	protocol := trafficprotocol.New(p2pService, logger)
+	chequeSigner := chequePkg.NewChequeSigner(signer, chainID)
+	trafficService := traffic.New(logger, beneficiary, store, trafficChainService, chequeStore, cashOut, p2pService, addressBook, chequeSigner, protocol)
+	protocol.SetTraffic(trafficService)
 	return trafficService
 }
