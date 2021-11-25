@@ -77,7 +77,8 @@ func InitTraffic(store storage.StateStorer, beneficiary common.Address, trafficC
 	transactionService chain.Transaction, logger logging.Logger, p2pService *libp2p.Service) *traffic.Service {
 	chequeStore := chequePkg.NewChequeStore(store, beneficiary, chequePkg.RecoverCheque)
 	cashOut := chequePkg.NewCashoutService(store, transactionService, chequeStore)
-	trafficService := traffic.New(logger, beneficiary, store, trafficChainService, chequeStore, cashOut, p2pService)
+	addressBook := traffic.NewAddressbook(store)
+	trafficService := traffic.New(logger, beneficiary, store, trafficChainService, chequeStore, cashOut, p2pService, addressBook)
 	trafficprotocol.New(p2pService, logger, trafficService)
 	return trafficService
 }

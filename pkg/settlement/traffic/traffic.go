@@ -49,11 +49,11 @@ type TrafficInfo struct {
 
 type Interface interface {
 	// LastSentCheque returns the last sent cheque for the peer
-	LastSentCheque(chainAddress common.Address) (*cheque.Cheque, error)
+	LastSentCheque(peer boson.Address) (*cheque.Cheque, error)
 	// LastReceivedCheques returns the list of last received cheques for all peers
-	LastReceivedCheque(chainAddress common.Address) (*cheque.SignedCheque, error)
+	LastReceivedCheque(peer boson.Address) (*cheque.SignedCheque, error)
 	// CashCheque sends a cashing transaction for the last cheque of the peer
-	CashCheque(ctx context.Context, chainAddress common.Address) (common.Hash, error)
+	CashCheque(ctx context.Context, peer boson.Address) (common.Hash, error)
 
 	TrafficCheques() ([]*TrafficCheque, error)
 
@@ -73,9 +73,11 @@ type Service struct {
 	trafficChainService chain.Traffic
 	p2pService          p2p.Service
 	trafficPeers        TrafficPeer
+	addressBook         Addressbook
 }
 
-func New(logger logging.Logger, chainAddress common.Address, store storage.StateStorer, trafficChainService chain.Traffic, chequeStore cheque.ChequeStore, cashout cheque.CashoutService, p2pService p2p.Service) *Service {
+func New(logger logging.Logger, chainAddress common.Address, store storage.StateStorer, trafficChainService chain.Traffic, chequeStore cheque.ChequeStore, cashout cheque.CashoutService, p2pService p2p.Service,
+	addressBook Addressbook) *Service {
 	return &Service{
 		logger:              logger,
 		store:               store,
@@ -85,6 +87,7 @@ func New(logger logging.Logger, chainAddress common.Address, store storage.State
 		chequeStore:         chequeStore,
 		cashout:             cashout,
 		p2pService:          p2pService,
+		addressBook:         addressBook,
 	}
 }
 
@@ -98,6 +101,17 @@ func (s *Service) InitChain() error {
 		s.logger.Errorf("Traffic failed to obtain local check information. ")
 		return err
 	}
+
+	//GetChain := func() (map[common.Address]Traffic,error) {
+	//	chanResp := make(map[common.Address]Traffic)
+	//	chainList,err := s.trafficChainService.RetrievedAddress(nil, s.chainAddress)
+	//	if err != nil {
+	//		return chanResp,err
+	//	}
+	//
+	//
+	//	return nil
+	//}
 
 	for k, v := range chainData {
 		traffic := Traffic{
@@ -131,17 +145,38 @@ func (s *Service) maxBigint(a *big.Int, b *big.Int) *big.Int {
 }
 
 // LastSentCheque returns the last sent cheque for the peer
-func (s *Service) LastSentCheque(chainAddress common.Address) (*cheque.Cheque, error) {
+func (s *Service) LastSentCheque(peer boson.Address) (*cheque.Cheque, error) {
+	chainAddress, known, err := s.addressBook.Beneficiary(peer)
+	if err != nil {
+		return nil, err
+	}
+	if !known {
+		return nil, cheque.ErrNoCheque
+	}
 	return s.chequeStore.LastSendCheque(chainAddress)
 }
 
-// LastReceivedCheques returns the list of last received cheques for all peers
-func (s *Service) LastReceivedCheque(chainAddress common.Address) (*cheque.SignedCheque, error) {
+// LastReceivedCheque returns the list of last received cheques for all peers
+func (s *Service) LastReceivedCheque(peer boson.Address) (*cheque.SignedCheque, error) {
+	chainAddress, known, err := s.addressBook.Beneficiary(peer)
+	if err != nil {
+		return nil, err
+	}
+	if !known {
+		return nil, cheque.ErrNoCheque
+	}
 	return s.chequeStore.LastReceivedCheque(chainAddress)
 }
 
 // CashCheque sends a cashing transaction for the last cheque of the peer
-func (s *Service) CashCheque(ctx context.Context, chainAddress common.Address) (common.Hash, error) {
+func (s *Service) CashCheque(ctx context.Context, peer boson.Address) (common.Hash, error) {
+	chainAddress, known, err := s.addressBook.Beneficiary(peer)
+	if err != nil {
+		return common.Hash{}, err
+	}
+	if !known {
+		return common.Hash{}, cheque.ErrNoCheque
+	}
 	sign, err := s.chequeStore.LastReceivedCheque(chainAddress)
 
 	if err != nil {
@@ -189,28 +224,47 @@ func (s *Service) TrafficInfo() (*TrafficInfo, error) {
 func (s *Service) TrafficCheques() ([]*TrafficCheque, error) {
 	var trafficCheques []*TrafficCheque
 	s.trafficPeers.trafficPeers.Range(func(chainAddress, v interface{}) bool {
-		traffic := v.(Traffic)
-		trafficCheque := &TrafficCheque{
-			Peer:               boson.NewAddress(chainAddress.(common.Address).Bytes()),
-			OutstandingTraffic: new(big.Int).Sub(traffic.transferChequeTraffic, traffic.retrieveChequeTraffic),
-			SendTraffic:        traffic.retrieveChequeTraffic,
-			ReceivedTraffic:    traffic.transferChequeTraffic,
-			Total:              new(big.Int).Add(traffic.retrieveTraffic, traffic.transferTraffic),
-			Uncashed:           new(big.Int).Sub(traffic.transferChequeTraffic, traffic.transferChainTraffic),
+
+		peer, known, err := s.addressBook.BeneficiaryPeer(chainAddress.(common.Address))
+		if err == nil && known {
+			traffic := v.(Traffic)
+			trafficCheque := &TrafficCheque{
+				Peer:               peer,
+				OutstandingTraffic: new(big.Int).Sub(traffic.transferChequeTraffic, traffic.retrieveChequeTraffic),
+				SendTraffic:        traffic.retrieveChequeTraffic,
+				ReceivedTraffic:    traffic.transferChequeTraffic,
+				Total:              new(big.Int).Add(traffic.retrieveTraffic, traffic.transferTraffic),
+				Uncashed:           new(big.Int).Sub(traffic.transferChequeTraffic, traffic.transferChainTraffic),
+			}
+			trafficCheques = append(trafficCheques, trafficCheque)
+		} else {
+			if !known {
+				s.logger.Errorf("traffic: The method TrafficCheques failed to ChainAddress has no corresponding peer address.")
+			} else {
+				s.logger.Errorf("traffic: The method TrafficCheques failed to get the peer address,%v", err.Error())
+			}
+
 		}
-		trafficCheques = append(trafficCheques, trafficCheque)
 		return true
 	})
 
 	return trafficCheques, nil
 }
 
-func (s *Service) Pay(ctx context.Context, chainAddress common.Address, traffic *big.Int) error {
+func (s *Service) Pay(ctx context.Context, peer boson.Address, traffic *big.Int) error {
 	return nil
 }
 
 // TotalSent returns the total amount sent to a peer
-func (s *Service) TotalSent(chainAddress common.Address) (totalSent *big.Int, err error) {
+func (s *Service) TotalSent(peer boson.Address) (totalSent *big.Int, err error) {
+	chainAddress, known, err := s.addressBook.Beneficiary(peer)
+	if err != nil {
+		return new(big.Int).SetInt64(0), err
+	}
+	if !known {
+		return new(big.Int).SetInt64(0), cheque.ErrNoCheque
+	}
+
 	totalSent = new(big.Int).SetInt64(0)
 
 	if v, ok := s.trafficPeers.trafficPeers.Load(chainAddress.String()); !ok {
@@ -220,7 +274,14 @@ func (s *Service) TotalSent(chainAddress common.Address) (totalSent *big.Int, er
 }
 
 // TotalReceived returns the total amount received from a peer
-func (s *Service) TotalReceived(chainAddress common.Address) (totalReceived *big.Int, err error) {
+func (s *Service) TotalReceived(peer boson.Address) (totalReceived *big.Int, err error) {
+	chainAddress, known, err := s.addressBook.Beneficiary(peer)
+	if err != nil {
+		return new(big.Int).SetInt64(0), err
+	}
+	if !known {
+		return new(big.Int).SetInt64(0), cheque.ErrNoCheque
+	}
 	totalReceived = new(big.Int).SetInt64(0)
 
 	if v, ok := s.trafficPeers.trafficPeers.Load(chainAddress.String()); !ok {
@@ -258,8 +319,14 @@ func (s *Service) SetNotifyPaymentFunc(notifyPaymentFunc settlement.NotifyPaymen
 	s.notifyPaymentFunc = notifyPaymentFunc
 }
 
-func (s *Service) TransferTraffic(chainAddress common.Address) (traffic *big.Int, err error) {
-
+func (s *Service) TransferTraffic(peer boson.Address) (traffic *big.Int, err error) {
+	chainAddress, known, err := s.addressBook.Beneficiary(peer)
+	if err != nil {
+		return new(big.Int).SetInt64(0), err
+	}
+	if !known {
+		return new(big.Int).SetInt64(0), cheque.ErrNoCheque
+	}
 	var transferTraffic, transferChequeTraffic *big.Int
 	tra, ok := s.trafficPeers.trafficPeers.Load(chainAddress)
 
@@ -273,7 +340,14 @@ func (s *Service) TransferTraffic(chainAddress common.Address) (traffic *big.Int
 
 	return new(big.Int).Sub(transferTraffic, transferChequeTraffic), nil
 }
-func (s *Service) RetrieveTraffic(chainAddress common.Address) (traffic *big.Int, err error) {
+func (s *Service) RetrieveTraffic(peer boson.Address) (traffic *big.Int, err error) {
+	chainAddress, known, err := s.addressBook.Beneficiary(peer)
+	if err != nil {
+		return new(big.Int).SetInt64(0), err
+	}
+	if !known {
+		return new(big.Int).SetInt64(0), cheque.ErrNoCheque
+	}
 	var retrieveTraffic, retrieveChequeTraffic *big.Int
 	tra, ok := s.trafficPeers.trafficPeers.Load(chainAddress)
 
@@ -288,8 +362,15 @@ func (s *Service) RetrieveTraffic(chainAddress common.Address) (traffic *big.Int
 	return new(big.Int).Sub(retrieveTraffic, retrieveChequeTraffic), nil
 }
 
-func (s *Service) PutRetrieveTraffic(chainAddress common.Address, traffic *big.Int) error {
+func (s *Service) PutRetrieveTraffic(peer boson.Address, traffic *big.Int) error {
 	var localTraffic Traffic
+	chainAddress, known, err := s.addressBook.Beneficiary(peer)
+	if err != nil {
+		return err
+	}
+	if !known {
+		return cheque.ErrNoCheque
+	}
 	chainTraffic, ok := s.trafficPeers.trafficPeers.Load(chainAddress.String())
 	if !ok {
 		localTraffic.retrieveTraffic = traffic
@@ -301,8 +382,15 @@ func (s *Service) PutRetrieveTraffic(chainAddress common.Address, traffic *big.I
 	return s.chequeStore.PutRetrieveTraffic(chainAddress, traffic)
 }
 
-func (s *Service) PutTransferTraffic(chainAddress common.Address, traffic *big.Int) error {
+func (s *Service) PutTransferTraffic(peer boson.Address, traffic *big.Int) error {
 	var localTraffic Traffic
+	chainAddress, known, err := s.addressBook.Beneficiary(peer)
+	if err != nil {
+		return err
+	}
+	if !known {
+		return cheque.ErrNoCheque
+	}
 	chainTraffic, ok := s.trafficPeers.trafficPeers.Load(chainAddress.String())
 	if !ok {
 		localTraffic.transferTraffic = traffic

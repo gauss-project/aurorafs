@@ -21,7 +21,7 @@ type Traffic interface {
 
 	Handshake(peer boson.Address, beneficiary common.Address, cheque *cheque.SignedCheque) error
 
-	LastReceivedCheque(chainAddress common.Address) (*cheque.SignedCheque, error)
+	LastReceivedCheque(peer boson.Address) (*cheque.SignedCheque, error)
 }
 
 type Service struct {

@@ -36,13 +36,15 @@ type Resolver interface {
 type Traffic interface {
 
 	// 	TransferredAddress opts todo
-	TransferredAddress(opts *bind.CallOpts, address common.Address, arg1 *big.Int) (common.Address, error)
+	TransferredAddress(opts *bind.CallOpts, address common.Address) ([]common.Address, error)
 
-	RetrievedAddress(opts *bind.CallOpts, address common.Address, arg1 *big.Int) (common.Address, error)
+	RetrievedAddress(opts *bind.CallOpts, address common.Address) ([]common.Address, error)
 
 	BalanceOf(opts *bind.CallOpts, account common.Address) (*big.Int, error)
 
 	RetrievedTotal(opts *bind.CallOpts, arg0 common.Address) (*big.Int, error)
+
+	TransferredTotal(opts *bind.CallOpts, arg0 common.Address) (*big.Int, error)
 }
 
 // Service is the service to send transactions. It takes care of gas price, gas

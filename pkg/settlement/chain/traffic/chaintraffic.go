@@ -27,13 +27,13 @@ func NewServer(logger logging.Logger, backend *ethclient.Client, address string)
 	}, nil
 }
 
-func (chainTraffic *ChainTraffic) TransferredAddress(opts *bind.CallOpts, address common.Address, arg1 *big.Int) (common.Address, error) {
-	out0, err := chainTraffic.traffic.TransferredAddress(opts, address, arg1)
+func (chainTraffic *ChainTraffic) TransferredAddress(opts *bind.CallOpts, address common.Address) ([]common.Address, error) {
+	out0, err := chainTraffic.traffic.GetTransferredAddress(opts, address)
 	return out0, err
 }
 
-func (chainTraffic *ChainTraffic) RetrievedAddress(opts *bind.CallOpts, address common.Address, arg1 *big.Int) (common.Address, error) {
-	out0, err := chainTraffic.traffic.RetrievedAddress(opts, address, arg1)
+func (chainTraffic *ChainTraffic) RetrievedAddress(opts *bind.CallOpts, address common.Address) ([]common.Address, error) {
+	out0, err := chainTraffic.traffic.GetRetrievedAddress(opts, address)
 	return out0, err
 }
 
@@ -44,5 +44,10 @@ func (chainTraffic *ChainTraffic) BalanceOf(opts *bind.CallOpts, account common.
 
 func (chainTraffic *ChainTraffic) RetrievedTotal(opts *bind.CallOpts, arg0 common.Address) (*big.Int, error) {
 	out0, err := chainTraffic.traffic.RetrievedTotal(opts, arg0)
+	return out0, err
+}
+
+func (chainTraffic *ChainTraffic) TransferredTotal(opts *bind.CallOpts, arg0 common.Address) (*big.Int, error) {
+	out0, err := chainTraffic.traffic.TransferredTotal(opts, arg0)
 	return out0, err
 }
