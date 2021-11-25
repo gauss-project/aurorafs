@@ -333,3 +333,11 @@ func (s *Service) AvailableBalance(ctx context.Context) (*big.Int, error) {
 
 	return new(big.Int).Add(s.trafficPeers.balance, new(big.Int).Sub(cashed, transfer)), nil
 }
+
+func (s *Service) ReceiveCheque(ctx context.Context, peer boson.Address, cheque *cheque.SignedCheque) error {
+	return nil
+}
+
+func (s *Service) Handshake(peer boson.Address, beneficiary common.Address, cheque *cheque.SignedCheque) error {
+	return nil
+}
