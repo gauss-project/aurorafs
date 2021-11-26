@@ -12,7 +12,6 @@ import (
 	"github.com/gauss-project/aurorafs/pkg/settlement"
 	"github.com/gauss-project/aurorafs/pkg/storage"
 	"math/big"
-	"strings"
 	"sync"
 	"time"
 )
@@ -21,18 +20,16 @@ var (
 	_                     Interface = (*Accounting)(nil)
 	balancesPrefix        string    = "accounting_balance_"
 	balancesSurplusPrefix string    = "accounting_surplusbalance_"
+
+	// ErrDisconnectThresholdExceeded denotes a peer has exceeded the disconnect threshold.
+	ErrDisconnectThresholdExceeded = errors.New("disconnect threshold exceeded")
 )
 
 // Interface is the Accounting interface.
 type Interface interface {
-	// Reserve reserves a portion of the balance for peer and attempts settlements if necessary.
-	// Returns an error if the operation risks exceeding the disconnect threshold or an attempted settlement failed.
-	//
-	// This has to be called (always in combination with Release) before a
-	// Credit action to prevent overspending in case of concurrent requests.
 	Reserve(ctx context.Context, peer boson.Address, traffic uint64) error
 	// Credit increases the balance the peer has with us (we "pay" the peer).
-	Credit(peer boson.Address, traffic uint64) error
+	Credit(ctx context.Context, peer boson.Address, traffic uint64) error
 	// Debit increases the balance we have with the peer (we get "paid" back).
 	Debit(peer boson.Address, traffic uint64) error
 }
@@ -41,7 +38,7 @@ type Interface interface {
 type Accounting struct {
 	// Mutex for accessing the accountingPeers map.
 	accountingPeersMu sync.Mutex
-	accountingPeers   map[string]*big.Int
+	accountingPeers   map[string]*accountingPeer
 	logger            logging.Logger
 	store             storage.StateStorer
 	paymentTolerance  *big.Int
@@ -50,10 +47,11 @@ type Accounting struct {
 	metrics           metrics
 }
 
-var (
-	// ErrDisconnectThresholdExceeded denotes a peer has exceeded the disconnect threshold.
-	ErrDisconnectThresholdExceeded = errors.New("disconnect threshold exceeded")
-)
+type accountingPeer struct {
+	lock             sync.Mutex
+	paymentThreshold *big.Int
+	unPayTraffic     *big.Int
+}
 
 // NewAccounting creates a new Accounting instance with the provided options.
 func NewAccounting(
@@ -64,7 +62,7 @@ func NewAccounting(
 	settlement settlement.Interface,
 ) *Accounting {
 	return &Accounting{
-		accountingPeers:  make(map[string]*big.Int),
+		accountingPeers:  make(map[string]*accountingPeer),
 		paymentTolerance: new(big.Int).Set(paymentTolerance),
 		paymentThreshold: new(big.Int).Set(paymentThreshold),
 		logger:           logger,
@@ -76,28 +74,63 @@ func NewAccounting(
 
 // Reserve reserves a portion of the balance for peer and attempts settlements if necessary.
 func (a *Accounting) Reserve(ctx context.Context, peer boson.Address, traffic uint64) error {
+
+Loop:
 	accountingPeer, err := a.getAccountingPeer(peer)
 	if err != nil {
 		return err
 	}
-	balance, err := a.settlement.RetrieveTraffic(peer)
-	balance = balance.Add(balance, new(big.Int).SetUint64(traffic))
-	if balance.Cmp(accountingPeer) < 0 {
-		err := a.settle(ctx, peer, balance)
+	accountingPeer.lock.Lock()
+	defer accountingPeer.lock.Unlock()
+	retrieve := accountingPeer.unPayTraffic
+
+	if retrieve.Cmp(big.NewInt(0)) == 0 {
+		retrieve, err = a.settlement.RetrieveTraffic(peer)
 		if err != nil {
-			return fmt.Errorf("failed to settle with peer %v: %v", peer, err)
+			return err
 		}
 	}
+
+	retrieve = retrieve.Add(retrieve, new(big.Int).SetUint64(traffic))
+	available, err := a.settlement.AvailableBalance(ctx)
+	if err != nil {
+		return err
+	}
+
+	if available.Cmp(retrieve) > 0 {
+		return fmt.Errorf("low available balance")
+	}
+
+	if retrieve.Cmp(a.paymentTolerance) >= 0 {
+		// todo prevent frequent loop logic
+		goto Loop
+	}
+	accountingPeer.unPayTraffic = retrieve
+
 	return nil
 }
 
 // Credit increases the amount of credit we have with the given peer
 // (and decreases existing debt).
-func (a *Accounting) Credit(peer boson.Address, traffic uint64) error {
+func (a *Accounting) Credit(ctx context.Context, peer boson.Address, traffic uint64) error {
 
+	accountingPeer, err := a.getAccountingPeer(peer)
+	if err != nil {
+		return err
+	}
+	accountingPeer.lock.Lock()
+	defer accountingPeer.lock.Unlock()
 	if err := a.settlement.PutRetrieveTraffic(peer, new(big.Int).SetUint64(traffic)); err != nil {
 		a.logger.Errorf("failed to modify retrieve traffic")
 		return err
+	}
+	balance, err := a.settlement.RetrieveTraffic(peer)
+	balance = balance.Add(balance, new(big.Int).SetUint64(traffic))
+	if balance.Cmp(accountingPeer.paymentThreshold) >= 0 {
+		err := a.settle(ctx, peer, balance, accountingPeer.paymentThreshold)
+		if err != nil {
+			return fmt.Errorf("failed to settle with peer %v: %v", peer, err)
+		}
 	}
 
 	return nil
@@ -105,8 +138,10 @@ func (a *Accounting) Credit(peer boson.Address, traffic uint64) error {
 
 // Settle all debt with a peer. The lock on the accountingPeer must be held when
 // called.
-func (a *Accounting) settle(ctx context.Context, peer boson.Address, balance *big.Int) error {
-	if err := a.settlement.Pay(ctx, peer, balance); err != nil {
+func (a *Accounting) settle(ctx context.Context, peer boson.Address, balance, paymentThreshold *big.Int) error {
+
+	// todo
+	if err := a.settlement.Pay(ctx, peer, balance, paymentThreshold); err != nil {
 		return err
 	}
 	return nil
@@ -139,45 +174,44 @@ func peerBalanceKey(peer boson.Address) string {
 
 // getAccountingPeer returns the accountingPeer for a given boson address.
 // If not found in memory it will initialize it.
-func (a *Accounting) getAccountingPeer(peer boson.Address) (*big.Int, error) {
+func (a *Accounting) getAccountingPeer(peer boson.Address) (*accountingPeer, error) {
 	a.accountingPeersMu.Lock()
 	defer a.accountingPeersMu.Unlock()
 	peerData, ok := a.accountingPeers[peer.String()]
 	if !ok {
-		a.accountingPeers[peer.String()] = a.paymentThreshold
+		a.accountingPeers[peer.String()] = &accountingPeer{
+			paymentThreshold: a.paymentThreshold,
+			unPayTraffic:     big.NewInt(0),
+		}
 	}
 	return peerData, nil
 }
 
-// balanceKeyPeer returns the embedded peer from the balance storage key.
-func balanceKeyPeer(key []byte) (boson.Address, error) {
-	k := string(key)
-
-	split := strings.SplitAfter(k, balancesPrefix)
-	if len(split) != 2 {
-		return boson.ZeroAddress, errors.New("no peer in key")
-	}
-
-	addr, err := boson.ParseHexAddress(split[1])
+func (a *Accounting) NotifyPayment(peer boson.Address, traffic *big.Int) error {
+	accountingPeer, err := a.getAccountingPeer(peer)
 	if err != nil {
-		return boson.ZeroAddress, err
+		return err
 	}
 
-	return addr, nil
+	accountingPeer.lock.Lock()
+	defer accountingPeer.lock.Unlock()
+	unPay := accountingPeer.unPayTraffic
+	if unPay.Cmp(big.NewInt(0)) <= 0 {
+		return nil
+	}
+	if unPay.Cmp(traffic) < 0 {
+		return fmt.Errorf("unpaid traffic is less than paid traffic")
+	}
+	accountingPeer.unPayTraffic = unPay.Sub(unPay, traffic)
+	return nil
 }
 
-func surplusBalanceKeyPeer(key []byte) (boson.Address, error) {
-	k := string(key)
-
-	split := strings.SplitAfter(k, balancesSurplusPrefix)
-	if len(split) != 2 {
-		return boson.ZeroAddress, errors.New("no peer in key")
-	}
-
-	addr, err := boson.ParseHexAddress(split[1])
-	if err != nil {
-		return boson.ZeroAddress, err
-	}
-
-	return addr, nil
+func (a *Accounting) AsyncNotifyPayment(peer boson.Address, traffic *big.Int) error {
+	go func() {
+		err := a.NotifyPayment(peer, traffic)
+		if err != nil {
+			a.logger.Errorf("failed to notify accounting of payment: %v", err)
+		}
+	}()
+	return nil
 }
