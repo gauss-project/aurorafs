@@ -3,6 +3,7 @@ package mock
 import (
 	"context"
 	"fmt"
+	"github.com/gauss-project/aurorafs/pkg/aurora"
 	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/routetab"
 	"time"
@@ -41,4 +42,8 @@ func (r *MockRouteTable) IsNeighbor(dest boson.Address) (has bool) {
 
 func (r *MockRouteTable) DelRoute(ctx context.Context, dest boson.Address) (err error) {
 	return nil
+}
+
+func (r *MockRouteTable) FindUnderlay(ctx context.Context, target boson.Address) (addr *aurora.Address, err error) {
+	return nil, err
 }

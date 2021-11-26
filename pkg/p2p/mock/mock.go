@@ -3,6 +3,7 @@ package mock
 import (
 	"context"
 	"errors"
+	"github.com/gauss-project/aurorafs/pkg/routetab/pb"
 	"net"
 	"time"
 
@@ -180,6 +181,10 @@ func (s *Service) SetPickyNotifier(f p2p.PickyNotifier) {
 
 func (s *Service) SetConnectFunc(f func(ctx context.Context, addr ma.Multiaddr) (peer *p2p.Peer, err error)) {
 	s.connectFunc = f
+}
+
+func (s *Service) CallHandler(ctx context.Context, relayData *pb.RouteRelayReq, reallyDataChan chan []byte, last p2p.Peer, stream p2p.Stream) (err error) {
+	return nil
 }
 
 type Option interface {

@@ -4,6 +4,7 @@ package p2p
 
 import (
 	"context"
+	"github.com/gauss-project/aurorafs/pkg/routetab/pb"
 	"io"
 	"net"
 	"time"
@@ -15,6 +16,7 @@ import (
 
 // Service provides methods to handle p2p Peers and Protocols.
 type Service interface {
+	CallHandler(ctx context.Context, relayData *pb.RouteRelayReq, reallyDataChan chan []byte, last Peer, stream Stream) (err error)
 	AddProtocol(ProtocolSpec) error
 	Connect
 	Disconnecter
@@ -70,6 +72,7 @@ type DebugService interface {
 // Streamer is able to create a new Stream.
 type Streamer interface {
 	NewStream(ctx context.Context, address boson.Address, h Headers, protocol, version, stream string) (Stream, error)
+	NewRelayStream(ctx context.Context, address boson.Address, h Headers, protocol, version, stream string) (Stream, error)
 }
 
 type StreamerDisconnecter interface {

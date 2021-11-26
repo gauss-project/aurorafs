@@ -31,11 +31,16 @@ message Path {
   repeated bytes Items = 3;
 }
 
-message RouteRelayData {
+message RouteRelayReq {
   bytes Src = 1;
-  bytes Dest = 2;
-  bytes ProtocolName = 3;
-  bytes ProtocolVersion = 4;
-  bytes StreamName = 5;
-  bytes Data = 6;
+  bytes SrcMode = 2;
+  bytes Dest = 3;
+  bytes ProtocolName = 4;
+  bytes ProtocolVersion = 5;
+  bytes StreamName = 6;
+  bytes Data = 7;
+}
+
+message RouteRelayResp {
+  bytes Data = 1;
 }

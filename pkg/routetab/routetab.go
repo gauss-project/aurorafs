@@ -2,6 +2,7 @@ package routetab
 
 import (
 	"context"
+	"github.com/gauss-project/aurorafs/pkg/aurora"
 	"github.com/gauss-project/aurorafs/pkg/boson"
 	"time"
 )
@@ -13,13 +14,9 @@ type RouteTab interface {
 	Connect(ctx context.Context, dest boson.Address) error
 	GetTargetNeighbor(ctx context.Context, dest boson.Address, limit int) (addresses []boson.Address, err error)
 	IsNeighbor(dest boson.Address) (has bool)
+	FindUnderlay(ctx context.Context, target boson.Address) (addr *aurora.Address, err error)
 }
 
-type RouteRelayData struct {
-	Src             []byte
-	Dest            []byte
-	ProtocolName    []byte
-	ProtocolVersion []byte
-	StreamName      []byte
-	Data            []byte
+type GetNextHop interface {
+	GetNextHopRandomOrFind(ctx context.Context, target boson.Address) (next boson.Address, err error)
 }

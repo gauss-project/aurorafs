@@ -399,6 +399,8 @@ func NewAurora(addr string, bosonAddress boson.Address, publicKey ecdsa.PublicKe
 		Stream:      p2ps,
 	})
 
+	p2ps.ApplyRoute(bosonAddress, route, o.NodeMode)
+
 	var path string
 
 	if o.DataDir != "" {

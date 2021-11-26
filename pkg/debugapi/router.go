@@ -94,6 +94,9 @@ func (s *Service) newRouter() *mux.Router {
 		"POST":   http.HandlerFunc(s.findRouteHandel),
 		"DELETE": http.HandlerFunc(s.delRouteHandel),
 	})
+	router.Handle("/route/findunderlay/{peer-id}", jsonhttp.MethodHandler{
+		"GET":    http.HandlerFunc(s.findUnderlayHandel),
+	})
 	router.Handle("/welcome-message", jsonhttp.MethodHandler{
 		"GET": http.HandlerFunc(s.getWelcomeMessageHandler),
 		"POST": web.ChainHandlers(
