@@ -32,6 +32,8 @@ type Traffic interface {
 	Handshake(peer boson.Address, beneficiary common.Address, cheque *cheque.SignedCheque) error
 
 	LastReceivedCheque(peer boson.Address) (*cheque.SignedCheque, error)
+
+	UpdatePeerBalance(peer boson.Address) error
 }
 
 type Service struct {
@@ -79,6 +81,11 @@ func (s *Service) initHandler(ctx context.Context, p p2p.Peer, stream p2p.Stream
 		return fmt.Errorf("read request from peer %v: %w", p.Address, err)
 	}
 
+	err = s.traffic.UpdatePeerBalance(p.Address)
+	if err != nil {
+		return err
+	}
+
 	receiveCheque, err := s.traffic.LastReceivedCheque(p.Address)
 	if err != nil {
 		return fmt.Errorf("failed to get the last cheque")
@@ -120,6 +127,11 @@ func (s *Service) init(ctx context.Context, p p2p.Peer) error {
 			_ = stream.FullClose() // wait for confirmation
 		}
 	}()
+
+	err = s.traffic.UpdatePeerBalance(p.Address)
+	if err != nil {
+		return err
+	}
 
 	receiveCheque, err := s.traffic.LastReceivedCheque(p.Address)
 	if err != nil {

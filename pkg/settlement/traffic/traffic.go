@@ -109,14 +109,8 @@ func New(logger logging.Logger, chainAddress common.Address, store storage.State
 func (s *Service) InitChain() error {
 	s.trafficPeers = TrafficPeer{}
 
-	lastCheques, err := s.chequeStore.LastSendCheques()
-	if err != nil {
-		s.logger.Errorf("Traffic failed to obtain local check information. ")
-		return err
-	}
-
+	chanResp := make(map[common.Address]Traffic)
 	GetChainAddressList := func() (map[common.Address]Traffic, error) {
-		chanResp := make(map[common.Address]Traffic)
 		retrieveList, err := s.trafficChainService.RetrievedAddress(s.chainAddress)
 		if err != nil {
 			return chanResp, err
@@ -138,17 +132,41 @@ func (s *Service) InitChain() error {
 		return chanResp, nil
 	}
 
+	lastCheques, err := s.chequeStore.LastSendCheques()
+	if err != nil {
+		s.logger.Errorf("Traffic failed to obtain local check information. ")
+		return err
+	}
+
+	lastTransCheques, err := s.chequeStore.LastReceivedCheques()
+	if err != nil {
+		s.logger.Errorf("Traffic failed to obtain local check information. ")
+		return err
+	}
+
+	for k, _ := range lastCheques {
+		if _, ok := chanResp[k]; !ok {
+			chanResp[k] = Traffic{}
+		}
+	}
+
+	for k, _ := range lastTransCheques {
+		if _, ok := chanResp[k]; !ok {
+			chanResp[k] = Traffic{}
+		}
+	}
+
 	chainAddressList, err := GetChainAddressList()
 	if err != nil {
 		return fmt.Errorf("traffic: Failed to get chain node information ")
 	}
 	s.trafficPeers.totalPaidOut = new(big.Int).SetInt64(0)
 	for k, v := range chainAddressList {
-		retrievedTotal, err := s.trafficChainService.RetrievedTotal(k)
+		retrievedTotal, err := s.trafficChainService.FilterTransfer(k, s.chainAddress)
 		if err != nil {
 			return nil
 		}
-		transferTotal, err := s.trafficChainService.TransferredTotal(k)
+		transferTotal, err := s.trafficChainService.FilterTransfer(s.chainAddress, k)
 		if err != nil {
 			return nil
 		}
@@ -166,9 +184,15 @@ func (s *Service) InitChain() error {
 			traffic.retrieveChequeTraffic = s.maxBigint(v.retrieveChequeTraffic, cq.CumulativePayout)
 		}
 
+		if cq, ok := lastTransCheques[k]; !ok {
+			traffic.transferTraffic = s.maxBigint(v.transferTraffic, cq.CumulativePayout)
+			traffic.transferChequeTraffic = s.maxBigint(v.retrieveChequeTraffic, cq.CumulativePayout)
+		}
+
 		s.trafficPeers.trafficPeers.Store(k, traffic)
-		s.trafficPeers.totalPaidOut = new(big.Int).Add(s.trafficPeers.totalPaidOut, transferTotal)
+		//s.trafficPeers.totalPaidOut = new(big.Int).Add(s.trafficPeers.totalPaidOut, transferTotal)
 	}
+	//transferTotal, err := s.trafficChainService.TransferredTotal(k)
 	balance, err := s.trafficChainService.BalanceOf(s.chainAddress)
 	if err != nil {
 		return fmt.Errorf("failed to get the chain balance")
@@ -245,21 +269,17 @@ func (s *Service) TrafficInfo() (*TrafficInfo, error) {
 	var respTraffic TrafficInfo
 	cashed := big.NewInt(0)
 	transfer := big.NewInt(0)
-	totalSent := big.NewInt(0)
-	totalReceived := big.NewInt(0)
 	s.trafficPeers.trafficPeers.Range(func(chainAddress, v interface{}) bool {
 		traffic := v.(Traffic)
 		cashed = new(big.Int).Add(cashed, traffic.transferChainTraffic)
 		transfer = new(big.Int).Add(transfer, traffic.transferTraffic)
-		respTraffic.TotalSendTraffic = traffic.retrieveChequeTraffic
-		totalReceived = new(big.Int).Add(totalReceived, traffic.transferChequeTraffic)
+		respTraffic.TotalSendTraffic = new(big.Int).Add(respTraffic.TotalSendTraffic, traffic.retrieveChequeTraffic)
+		respTraffic.ReceivedTraffic = new(big.Int).Add(respTraffic.ReceivedTraffic, traffic.transferChequeTraffic)
 		return true
 	})
 
 	respTraffic.Balance = s.trafficPeers.balance
 	respTraffic.AvailableBalance = new(big.Int).Add(respTraffic.Balance, new(big.Int).Sub(cashed, transfer))
-	respTraffic.TotalSendTraffic = totalSent
-	respTraffic.ReceivedTraffic = totalReceived
 
 	return &respTraffic, nil
 }
@@ -531,20 +551,39 @@ func (s *Service) Handshake(peer boson.Address, beneficiary common.Address, cheq
 	}
 	if cheque.CumulativePayout.Cmp(singCheque.CumulativePayout) > 0 {
 		return s.chequeStore.PutSendCheque(context.Background(), &cheque.Cheque, beneficiary)
-	} else {
-		return nil
 	}
+
+	storedBeneficiary, known, err := s.addressBook.Beneficiary(peer)
+	if err != nil {
+		return err
+	}
+	if !known {
+		s.logger.Tracef("initial swap handshake peer: %v beneficiary: %x", peer, beneficiary)
+		return s.addressBook.PutBeneficiary(peer, beneficiary)
+	}
+	if storedBeneficiary != beneficiary {
+		return fmt.Errorf("wrong beneficiary")
+	}
+	return nil
 }
 
-func (s *Service) UpdatePeerBalance(peer common.Address) error {
+func (s *Service) UpdatePeerBalance(peer boson.Address) error {
 
-	balance, err := s.trafficChainService.BalanceOf(peer)
+	chainAddress, known, err := s.addressBook.Beneficiary(peer)
+	if err != nil {
+		return err
+	}
+	if !known {
+		return cheque.ErrNoCheque
+	}
+
+	balance, err := s.trafficChainService.BalanceOf(chainAddress)
 	if err != nil {
 		return err
 	}
 
 	var localTraffic Traffic
-	chainTraffic, ok := s.trafficPeers.trafficPeers.Load(peer)
+	chainTraffic, ok := s.trafficPeers.trafficPeers.Load(chainAddress)
 
 	updateTraffice := chainTraffic.(Traffic)
 	if ok {
@@ -557,7 +596,7 @@ func (s *Service) UpdatePeerBalance(peer common.Address) error {
 	}
 	localTraffic.trafficPeerBalance = balance
 
-	s.trafficPeers.trafficPeers.Store(peer, localTraffic)
+	s.trafficPeers.trafficPeers.Store(chainAddress, localTraffic)
 
 	return nil
 }
