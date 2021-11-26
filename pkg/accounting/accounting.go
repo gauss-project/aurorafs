@@ -45,6 +45,12 @@ type Accounting struct {
 	paymentThreshold  *big.Int
 	settlement        settlement.Interface
 	metrics           metrics
+	payChan           chan payChan
+}
+
+type payChan struct {
+	peer                      boson.Address
+	balance, paymentThreshold *big.Int
 }
 
 type accountingPeer struct {
@@ -61,15 +67,18 @@ func NewAccounting(
 	store storage.StateStorer,
 	settlement settlement.Interface,
 ) *Accounting {
-	return &Accounting{
+	acc := &Accounting{
 		accountingPeers:  make(map[string]*accountingPeer),
 		paymentTolerance: new(big.Int).Set(paymentTolerance),
 		paymentThreshold: new(big.Int).Set(paymentThreshold),
 		logger:           logger,
 		store:            store,
 		settlement:       settlement,
+		payChan:          make(chan payChan, 4),
 		metrics:          newMetrics(),
 	}
+	go acc.settle()
+	return acc
 }
 
 // Reserve reserves a portion of the balance for peer and attempts settlements if necessary.
@@ -127,9 +136,10 @@ func (a *Accounting) Credit(ctx context.Context, peer boson.Address, traffic uin
 	balance, err := a.settlement.RetrieveTraffic(peer)
 	balance = balance.Add(balance, new(big.Int).SetUint64(traffic))
 	if balance.Cmp(accountingPeer.paymentThreshold) >= 0 {
-		err := a.settle(ctx, peer, balance, accountingPeer.paymentThreshold)
-		if err != nil {
-			return fmt.Errorf("failed to settle with peer %v: %v", peer, err)
+		a.payChan <- payChan{
+			peer:             peer,
+			balance:          balance,
+			paymentThreshold: accountingPeer.paymentThreshold,
 		}
 	}
 
@@ -138,13 +148,14 @@ func (a *Accounting) Credit(ctx context.Context, peer boson.Address, traffic uin
 
 // Settle all debt with a peer. The lock on the accountingPeer must be held when
 // called.
-func (a *Accounting) settle(ctx context.Context, peer boson.Address, balance, paymentThreshold *big.Int) error {
+func (a *Accounting) settle() {
 
-	// todo
-	if err := a.settlement.Pay(ctx, peer, balance, paymentThreshold); err != nil {
-		return err
+	for {
+		pay := <-a.payChan
+		if err := a.settlement.Pay(context.Background(), pay.peer, pay.balance, pay.paymentThreshold); err != nil {
+			a.logger.Errorf("generating check errors %v", err)
+		}
 	}
-	return nil
 }
 
 // Debit increases the amount of debt we have with the given peer (and decreases
@@ -165,11 +176,6 @@ func (a *Accounting) Debit(peer boson.Address, traffic uint64) error {
 		return err
 	}
 	return nil
-}
-
-// peerBalanceKey returns the balance storage key for the given peer.
-func peerBalanceKey(peer boson.Address) string {
-	return fmt.Sprintf("%s%s", balancesPrefix, peer.String())
 }
 
 // getAccountingPeer returns the accountingPeer for a given boson address.
