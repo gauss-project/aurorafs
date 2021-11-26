@@ -77,9 +77,9 @@ func InitChain(
 
 func InitTraffic(store storage.StateStorer, beneficiary common.Address, trafficChainService chain.Traffic,
 	transactionService chain.Transaction, logger logging.Logger, p2pService *libp2p.Service, signer crypto.Signer, chainID int64) *traffic.Service {
-	chequeStore := chequePkg.NewChequeStore(store, beneficiary, chequePkg.RecoverCheque)
+	chequeStore := chequePkg.NewChequeStore(store, beneficiary, chequePkg.RecoverCheque, chainID)
 	cashOut := chequePkg.NewCashoutService(store, transactionService, chequeStore)
-	addressBook := traffic.NewAddressbook(store)
+	addressBook := traffic.NewAddressBook(store)
 	protocol := trafficprotocol.New(p2pService, logger)
 	chequeSigner := chequePkg.NewChequeSigner(signer, chainID)
 	trafficService := traffic.New(logger, beneficiary, store, trafficChainService, chequeStore, cashOut, p2pService, addressBook, chequeSigner, protocol)

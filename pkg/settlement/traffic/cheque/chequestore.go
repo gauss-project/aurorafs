@@ -57,6 +57,7 @@ type chequeStore struct {
 	store             storage.StateStorer
 	beneficiary       common.Address // the beneficiary we expect in cheques sent to us
 	recoverChequeFunc RecoverChequeFunc
+	chainID           int64
 }
 
 type RecoverChequeFunc func(cheque *SignedCheque, chainID int64) (common.Address, error)
@@ -65,11 +66,13 @@ type RecoverChequeFunc func(cheque *SignedCheque, chainID int64) (common.Address
 func NewChequeStore(
 	store storage.StateStorer,
 	beneficiary common.Address,
-	recoverChequeFunc RecoverChequeFunc) ChequeStore {
+	recoverChequeFunc RecoverChequeFunc,
+	chainID int64) ChequeStore {
 	return &chequeStore{
 		store:             store,
 		beneficiary:       beneficiary,
 		recoverChequeFunc: recoverChequeFunc,
+		chainID:           chainID,
 	}
 }
 
@@ -111,6 +114,16 @@ func (s *chequeStore) ReceiveCheque(ctx context.Context, cheque *SignedCheque) (
 		return nil, ErrWrongBeneficiary
 	}
 
+	// verify the cheque signature
+	issuer, err := s.recoverChequeFunc(cheque, s.chainID)
+	if err != nil {
+		return nil, err
+	}
+
+	if issuer != cheque.Beneficiary {
+		return nil, ErrChequeInvalid
+	}
+
 	// don't allow concurrent processing of cheques
 	// this would be sufficient on a per chainAddress basis
 	s.lock.Lock()
@@ -119,7 +132,7 @@ func (s *chequeStore) ReceiveCheque(ctx context.Context, cheque *SignedCheque) (
 	// load the lastCumulativePayout for the cheques chainAddress
 	var lastCumulativePayout *big.Int
 	var lastReceivedCheque *SignedCheque
-	err := s.store.Get(lastReceivedChequeKey(cheque.Beneficiary), &lastReceivedCheque)
+	err = s.store.Get(lastReceivedChequeKey(cheque.Beneficiary), &lastReceivedCheque)
 	if err != nil {
 		if err != storage.ErrNotFound {
 			return nil, err
@@ -136,8 +149,6 @@ func (s *chequeStore) ReceiveCheque(ctx context.Context, cheque *SignedCheque) (
 	if amount.Cmp(big.NewInt(0)) <= 0 {
 		return nil, ErrChequeNotIncreasing
 	}
-
-	// blockchain calls below
 
 	// store the accepted cheque
 	err = s.store.Put(lastReceivedChequeKey(cheque.Beneficiary), cheque)
@@ -258,4 +269,23 @@ func (s *chequeStore) PutTransferTraffic(chainAddress common.Address, traffic *b
 
 func (s *chequeStore) PutReceivedCheques(chainAddress common.Address, cheque SignedCheque) error {
 	return s.store.Put(lastReceivedChequeKey(chainAddress), cheque)
+}
+
+// RecoverCheque recovers the issuer ethereum address from a signed cheque
+func (s *chequeStore) RecoverCheque(cheque *SignedCheque, chaindID int64) (common.Address, error) {
+	eip712Data := eip712DataForCheque(&cheque.Cheque, chaindID)
+
+	pubkey, err := crypto.RecoverEIP712(cheque.Signature, eip712Data)
+	if err != nil {
+		return common.Address{}, err
+	}
+
+	ethAddr, err := crypto.NewEthereumAddress(*pubkey)
+	if err != nil {
+		return common.Address{}, err
+	}
+
+	var issuer common.Address
+	copy(issuer[:], ethAddr)
+	return issuer, nil
 }
