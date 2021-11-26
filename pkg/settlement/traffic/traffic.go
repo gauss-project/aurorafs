@@ -349,20 +349,22 @@ func (s *Service) Issue(ctx context.Context, peer boson.Address, recipient, bene
 	if err := s.protocol.EmitCheque(ctx, peer, signedCheque); err != nil {
 		return err
 	}
+	if err := s.chequeStore.PutSendCheque(ctx, &c, recipient); err != nil {
+		return err
+	}
 	return nil
 }
 
 // TotalSent returns the total amount sent to a peer
 func (s *Service) TotalSent(peer boson.Address) (totalSent *big.Int, err error) {
 	chainAddress, known, err := s.addressBook.Beneficiary(peer)
+	totalSent = big.NewInt(0)
 	if err != nil {
-		return new(big.Int).SetInt64(0), err
+		return totalSent, err
 	}
 	if !known {
-		return new(big.Int).SetInt64(0), cheque.ErrNoCheque
+		return totalSent, cheque.ErrNoCheque
 	}
-
-	totalSent = new(big.Int).SetInt64(0)
 
 	if v, ok := s.trafficPeers.trafficPeers.Load(chainAddress.String()); !ok {
 		totalSent = v.(Traffic).transferTraffic
@@ -373,13 +375,13 @@ func (s *Service) TotalSent(peer boson.Address) (totalSent *big.Int, err error) 
 // TotalReceived returns the total amount received from a peer
 func (s *Service) TotalReceived(peer boson.Address) (totalReceived *big.Int, err error) {
 	chainAddress, known, err := s.addressBook.Beneficiary(peer)
+	totalReceived = new(big.Int).SetInt64(0)
 	if err != nil {
-		return new(big.Int).SetInt64(0), err
+		return totalReceived, err
 	}
 	if !known {
-		return new(big.Int).SetInt64(0), cheque.ErrNoCheque
+		return totalReceived, cheque.ErrNoCheque
 	}
-	totalReceived = new(big.Int).SetInt64(0)
 
 	if v, ok := s.trafficPeers.trafficPeers.Load(chainAddress.String()); !ok {
 		totalReceived = v.(Traffic).retrieveTraffic

@@ -6,14 +6,8 @@ package traffic;
 
 option go_package = "pb";
 
-message SignedCheque {
-  Cheque cheque = 1;
-  bytes Signature = 2;
+message EmitCheque {
+  bytes SignedCheque = 1;
 }
 
-message Cheque {
-bytes Recipient = 1;
-bytes Beneficiary = 2;
-uint64 CumulativePayout = 3;
-}
 

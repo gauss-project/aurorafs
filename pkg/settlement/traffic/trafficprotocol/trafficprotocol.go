@@ -2,6 +2,7 @@ package trafficprotocol
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/gauss-project/aurorafs/pkg/boson"
@@ -10,7 +11,6 @@ import (
 	"github.com/gauss-project/aurorafs/pkg/p2p/protobuf"
 	"github.com/gauss-project/aurorafs/pkg/settlement/traffic/cheque"
 	"github.com/gauss-project/aurorafs/pkg/settlement/traffic/trafficprotocol/pb"
-	"math/big"
 	"time"
 )
 
@@ -74,7 +74,7 @@ func (s *Service) initHandler(ctx context.Context, p p2p.Peer, stream p2p.Stream
 			_ = stream.FullClose()
 		}
 	}()
-	var req pb.SignedCheque
+	var req pb.EmitCheque
 	if err := r.ReadMsgWithContext(ctx, &req); err != nil {
 		return fmt.Errorf("read request from peer %v: %w", p.Address, err)
 	}
@@ -84,31 +84,24 @@ func (s *Service) initHandler(ctx context.Context, p p2p.Peer, stream p2p.Stream
 		return fmt.Errorf("failed to get the last cheque")
 	}
 
-	sendSignedCheque := &pb.SignedCheque{
-		Cheque: &pb.Cheque{
-			Recipient:        receiveCheque.Recipient.Bytes(),
-			Beneficiary:      receiveCheque.Beneficiary.Bytes(),
-			CumulativePayout: receiveCheque.CumulativePayout.Uint64(),
-		},
-		Signature: receiveCheque.Signature,
-	}
-
-	err = w.WriteMsgWithContext(ctx, sendSignedCheque)
+	signedCheque, err := json.Marshal(receiveCheque)
 	if err != nil {
 		return err
 	}
 
-	beneficiary := common.BytesToAddress(req.Cheque.Beneficiary)
-	resCheque := cheque.Cheque{
-		Beneficiary:      common.BytesToAddress(req.Cheque.Beneficiary),
-		Recipient:        common.BytesToAddress(req.Cheque.Recipient),
-		CumulativePayout: new(big.Int).SetUint64(req.Cheque.CumulativePayout),
+	err = w.WriteMsgWithContext(ctx, &pb.EmitCheque{
+		SignedCheque: signedCheque,
+	})
+	if err != nil {
+		return err
 	}
-	signedCheque := &cheque.SignedCheque{
-		Cheque:    resCheque,
-		Signature: req.Signature,
+
+	var cheque *cheque.SignedCheque
+	err = json.Unmarshal(req.SignedCheque, &signedCheque)
+	if err != nil {
+		return err
 	}
-	return s.traffic.Handshake(p.Address, beneficiary, signedCheque)
+	return s.traffic.Handshake(p.Address, common.Address{}, cheque)
 
 }
 
@@ -134,36 +127,29 @@ func (s *Service) init(ctx context.Context, p p2p.Peer) error {
 	}
 
 	w, r := protobuf.NewWriterAndReader(stream)
-	sendSignedCheque := &pb.SignedCheque{
-		Cheque: &pb.Cheque{
-			Recipient:        receiveCheque.Recipient.Bytes(),
-			Beneficiary:      receiveCheque.Beneficiary.Bytes(),
-			CumulativePayout: receiveCheque.CumulativePayout.Uint64(),
-		},
-		Signature: receiveCheque.Signature,
-	}
-
-	err = w.WriteMsgWithContext(ctx, sendSignedCheque)
+	signedCheque, err := json.Marshal(receiveCheque)
 	if err != nil {
 		return err
 	}
 
-	var req pb.SignedCheque
+	err = w.WriteMsgWithContext(ctx, &pb.EmitCheque{
+		SignedCheque: signedCheque,
+	})
+	if err != nil {
+		return err
+	}
+
+	var req pb.EmitCheque
 	if err := r.ReadMsgWithContext(ctx, &req); err != nil {
 		return fmt.Errorf("read request from peer %v: %w", p.Address, err)
 	}
 
-	beneficiary := common.BytesToAddress(req.Cheque.Beneficiary)
-	resCheque := cheque.Cheque{
-		Beneficiary:      common.BytesToAddress(req.Cheque.Beneficiary),
-		Recipient:        common.BytesToAddress(req.Cheque.Recipient),
-		CumulativePayout: new(big.Int).SetUint64(req.Cheque.CumulativePayout),
+	var cheque *cheque.SignedCheque
+	err = json.Unmarshal(req.SignedCheque, &signedCheque)
+	if err != nil {
+		return err
 	}
-	signedCheque := &cheque.SignedCheque{
-		Cheque:    resCheque,
-		Signature: req.Signature,
-	}
-	return s.traffic.Handshake(p.Address, beneficiary, signedCheque)
+	return s.traffic.Handshake(p.Address, common.Address{}, cheque)
 }
 
 func (s *Service) handler(ctx context.Context, p p2p.Peer, stream p2p.Stream) (err error) {
@@ -175,16 +161,16 @@ func (s *Service) handler(ctx context.Context, p p2p.Peer, stream p2p.Stream) (e
 			_ = stream.FullClose()
 		}
 	}()
-	var req pb.SignedCheque
+	var req pb.EmitCheque
 	if err := r.ReadMsgWithContext(ctx, &req); err != nil {
 		return fmt.Errorf("read request from peer %v: %w", p.Address, err)
 	}
 
 	var signedCheque *cheque.SignedCheque
-	signedCheque.Cheque.Beneficiary = common.BytesToAddress(req.Cheque.Beneficiary)
-	signedCheque.Cheque.Recipient = common.BytesToAddress(req.Cheque.Recipient)
-	signedCheque.Cheque.CumulativePayout = new(big.Int).SetUint64(req.Cheque.CumulativePayout)
-	signedCheque.Signature = req.Signature
+	err = json.Unmarshal(req.SignedCheque, &signedCheque)
+	if err != nil {
+		return err
+	}
 
 	return s.traffic.ReceiveCheque(ctx, p.Address, signedCheque)
 }
@@ -207,15 +193,13 @@ func (s *Service) EmitCheque(ctx context.Context, peer boson.Address, cheque *ch
 
 	s.logging.Tracef("sending cheque message to peer %v (%v)", peer, cheque)
 
-	emitCheque := &pb.SignedCheque{
-		Cheque: &pb.Cheque{
-			Beneficiary:      cheque.Cheque.Beneficiary.Bytes(),
-			Recipient:        cheque.Cheque.Recipient.Bytes(),
-			CumulativePayout: cheque.Cheque.CumulativePayout.Uint64(),
-		},
-		Signature: cheque.Signature,
+	signedCheque, err := json.Marshal(cheque)
+	if err != nil {
+		return err
 	}
 
 	w := protobuf.NewWriter(stream)
-	return w.WriteMsgWithContext(ctx, emitCheque)
+	return w.WriteMsgWithContext(ctx, &pb.EmitCheque{
+		SignedCheque: signedCheque,
+	})
 }
