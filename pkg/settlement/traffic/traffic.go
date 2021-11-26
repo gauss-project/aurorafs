@@ -104,31 +104,8 @@ func New(logger logging.Logger, chainAddress common.Address, store storage.State
 	}
 }
 
-func (s *Service) InitChain() error {
+func (s *Service) InitTraffic() error {
 	s.trafficPeers = TrafficPeer{}
-
-	chanResp := make(map[common.Address]Traffic)
-	GetChainAddressList := func() (map[common.Address]Traffic, error) {
-		retrieveList, err := s.trafficChainService.RetrievedAddress(s.chainAddress)
-		if err != nil {
-			return chanResp, err
-		}
-		for _, v := range retrieveList {
-			if _, ok := chanResp[v]; !ok {
-				chanResp[v] = Traffic{}
-			}
-		}
-		transferList, err := s.trafficChainService.TransferredAddress(s.chainAddress)
-		if err != nil {
-			return chanResp, err
-		}
-		for _, v := range transferList {
-			if _, ok := chanResp[v]; !ok {
-				chanResp[v] = Traffic{}
-			}
-		}
-		return chanResp, nil
-	}
 
 	lastCheques, err := s.chequeStore.LastSendCheques()
 	if err != nil {
@@ -140,6 +117,54 @@ func (s *Service) InitChain() error {
 	if err != nil {
 		s.logger.Errorf("Traffic failed to obtain local check information. ")
 		return err
+	}
+
+	addressList, err := s.getAllAddress(lastCheques, lastTransCheques)
+	if err != nil {
+		return fmt.Errorf("traffic: Failed to get chain node information ")
+	}
+
+	err = s.replaceTraffic(addressList, lastCheques, lastTransCheques)
+	if err != nil {
+		return fmt.Errorf("traffic: Update of local traffic data failed. ")
+	}
+
+	//transferTotal, err := s.trafficChainService.TransferredTotal(k)
+	balance, err := s.trafficChainService.BalanceOf(s.chainAddress)
+	if err != nil {
+		return fmt.Errorf("failed to get the chain balance")
+	}
+	s.trafficPeers.balance = balance
+
+	paiOut, err := s.trafficChainService.TransferredTotal(s.chainAddress)
+	if err != nil {
+		return fmt.Errorf("failed to get the chain totalPaidOut")
+	}
+	s.trafficPeers.totalPaidOut = paiOut
+
+	return s.addressBook.InitAddressBook()
+}
+
+func (s *Service) getAllAddress(lastCheques map[common.Address]*cheque.Cheque, lastTransCheques map[common.Address]*cheque.SignedCheque) (map[common.Address]Traffic, error) {
+	chanResp := make(map[common.Address]Traffic)
+
+	retrieveList, err := s.trafficChainService.RetrievedAddress(s.chainAddress)
+	if err != nil {
+		return chanResp, err
+	}
+	for _, v := range retrieveList {
+		if _, ok := chanResp[v]; !ok {
+			chanResp[v] = Traffic{}
+		}
+	}
+	transferList, err := s.trafficChainService.TransferredAddress(s.chainAddress)
+	if err != nil {
+		return chanResp, err
+	}
+	for _, v := range transferList {
+		if _, ok := chanResp[v]; !ok {
+			chanResp[v] = Traffic{}
+		}
 	}
 
 	for k, _ := range lastCheques {
@@ -154,17 +179,17 @@ func (s *Service) InitChain() error {
 		}
 	}
 
-	chainAddressList, err := GetChainAddressList()
-	if err != nil {
-		return fmt.Errorf("traffic: Failed to get chain node information ")
-	}
+	return chanResp, err
+}
+
+func (s *Service) replaceTraffic(addressList map[common.Address]Traffic, lastCheques map[common.Address]*cheque.Cheque, lastTransCheques map[common.Address]*cheque.SignedCheque) error {
 	s.trafficPeers.totalPaidOut = new(big.Int).SetInt64(0)
-	for k, v := range chainAddressList {
-		retrievedTotal, err := s.trafficChainService.FilterTransfer(k, s.chainAddress)
+	for k, _ := range addressList {
+		retrievedTotal, err := s.trafficChainService.TransAmount(k, s.chainAddress)
 		if err != nil {
 			return nil
 		}
-		transferTotal, err := s.trafficChainService.FilterTransfer(s.chainAddress, k)
+		transferTotal, err := s.trafficChainService.TransAmount(s.chainAddress, k)
 		if err != nil {
 			return nil
 		}
@@ -178,25 +203,17 @@ func (s *Service) InitChain() error {
 			retrieveTraffic:       retrievedTotal,
 		}
 		if cq, ok := lastCheques[k]; !ok {
-			traffic.retrieveTraffic = s.maxBigint(v.retrieveTraffic, cq.CumulativePayout)
-			traffic.retrieveChequeTraffic = s.maxBigint(v.retrieveChequeTraffic, cq.CumulativePayout)
+			traffic.retrieveTraffic = s.maxBigint(traffic.retrieveTraffic, cq.CumulativePayout)
+			traffic.retrieveChequeTraffic = s.maxBigint(traffic.retrieveChequeTraffic, cq.CumulativePayout)
 		}
 
 		if cq, ok := lastTransCheques[k]; !ok {
-			traffic.transferTraffic = s.maxBigint(v.transferTraffic, cq.CumulativePayout)
-			traffic.transferChequeTraffic = s.maxBigint(v.retrieveChequeTraffic, cq.CumulativePayout)
+			traffic.transferTraffic = s.maxBigint(traffic.transferTraffic, cq.CumulativePayout)
+			traffic.transferChequeTraffic = s.maxBigint(traffic.retrieveChequeTraffic, cq.CumulativePayout)
 		}
 
 		s.trafficPeers.trafficPeers.Store(k, traffic)
-		//s.trafficPeers.totalPaidOut = new(big.Int).Add(s.trafficPeers.totalPaidOut, transferTotal)
 	}
-	//transferTotal, err := s.trafficChainService.TransferredTotal(k)
-	balance, err := s.trafficChainService.BalanceOf(s.chainAddress)
-	if err != nil {
-		return fmt.Errorf("failed to get the chain balance")
-	}
-	s.trafficPeers.balance = balance
-
 	return nil
 }
 

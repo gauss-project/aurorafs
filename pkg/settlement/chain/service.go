@@ -45,7 +45,7 @@ type Traffic interface {
 
 	TransferredTotal(arg0 common.Address) (*big.Int, error)
 
-	FilterTransfer(from common.Address, to common.Address) (*big.Int, error)
+	TransAmount(from common.Address, to common.Address) (*big.Int, error)
 }
 
 // Service is the service to send transactions. It takes care of gas price, gas

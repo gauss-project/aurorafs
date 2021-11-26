@@ -51,6 +51,6 @@ func (chainTraffic *ChainTraffic) TransferredTotal(arg0 common.Address) (*big.In
 	return out0, err
 }
 
-func (chainTraffic *ChainTraffic) FilterTransfer(from common.Address, to common.Address) (*big.Int, error) {
+func (chainTraffic *ChainTraffic) TransAmount(from common.Address, to common.Address) (*big.Int, error) {
 	return chainTraffic.traffic.TransAmount(nil, from, to)
 }
