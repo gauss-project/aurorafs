@@ -17,7 +17,7 @@ var (
 type Interface interface {
 	// Pay initiates a payment to the given peer
 	// It should return without error it is likely that the payment worked
-	Pay(ctx context.Context, peer boson.Address, traffic *big.Int) error
+	Pay(ctx context.Context, peer boson.Address, traffic, paymentThreshold *big.Int) error
 	TransferTraffic(peer boson.Address) (traffic *big.Int, err error)
 	RetrieveTraffic(peer boson.Address) (traffic *big.Int, err error)
 	PutRetrieveTraffic(peer boson.Address, traffic *big.Int) error
@@ -36,6 +36,8 @@ type Interface interface {
 	AvailableBalance(ctx context.Context) (*big.Int, error)
 	// UpdatePeerBalance update peer balance
 	UpdatePeerBalance(peer common.Address) error
+	// SetNotifyPaymentFunc sets the NotifyPaymentFunc to notify
+	SetNotifyPaymentFunc(notifyPaymentFunc NotifyPaymentFunc)
 }
 
 // NotifyPaymentFunc is called when a payment from peer was successfully received

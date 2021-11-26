@@ -8,6 +8,7 @@ import (
 	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/logging"
 	"github.com/gauss-project/aurorafs/pkg/p2p"
+	"github.com/gauss-project/aurorafs/pkg/settlement"
 	"github.com/gauss-project/aurorafs/pkg/settlement/chain"
 	"github.com/gauss-project/aurorafs/pkg/settlement/traffic/cheque"
 	"github.com/gauss-project/aurorafs/pkg/settlement/traffic/trafficprotocol"
@@ -84,6 +85,7 @@ type Service struct {
 	addressBook         Addressbook
 	chequeSigner        cheque.ChequeSigner
 	protocol            trafficprotocol.Interface
+	notifyPaymentFunc   settlement.NotifyPaymentFunc
 }
 
 func New(logger logging.Logger, chainAddress common.Address, store storage.StateStorer, trafficChainService chain.Traffic,
@@ -292,7 +294,7 @@ func (s *Service) TrafficCheques() ([]*TrafficCheque, error) {
 	return trafficCheques, nil
 }
 
-func (s *Service) Pay(ctx context.Context, peer boson.Address, traffic *big.Int) error {
+func (s *Service) Pay(ctx context.Context, peer boson.Address, traffic, paymentThreshold *big.Int) error {
 	recipient, known, err := s.addressBook.Beneficiary(peer)
 	if err != nil {
 		return err
@@ -305,9 +307,14 @@ func (s *Service) Pay(ctx context.Context, peer boson.Address, traffic *big.Int)
 		}
 		return ErrUnknownBeneficary
 	}
-	if err := s.Issue(ctx, peer, recipient, s.chainAddress, traffic); err != nil {
-		return err
+	balance, err := s.RetrieveTraffic(peer)
+	balance = balance.Add(balance, traffic)
+	if balance.Cmp(paymentThreshold) >= 0 {
+		if err := s.Issue(ctx, peer, recipient, s.chainAddress, traffic); err != nil {
+			return err
+		}
 	}
+
 	return nil
 }
 
@@ -316,6 +323,7 @@ func (s *Service) Issue(ctx context.Context, peer boson.Address, recipient, bene
 	if err != nil {
 		return err
 	}
+
 	if available.Cmp(traffic) < 0 {
 		return ErrInsufficientFunds
 	}
@@ -352,7 +360,7 @@ func (s *Service) Issue(ctx context.Context, peer boson.Address, recipient, bene
 	if err := s.chequeStore.PutSendCheque(ctx, &c, recipient); err != nil {
 		return err
 	}
-	return nil
+	return s.notifyPaymentFunc(peer, traffic)
 }
 
 // TotalSent returns the total amount sent to a peer
@@ -449,8 +457,7 @@ func (s *Service) RetrieveTraffic(peer boson.Address) (traffic *big.Int, err err
 		retrieveTraffic = tra.(Traffic).retrieveTraffic
 		retrieveChequeTraffic = tra.(Traffic).retrieveChequeTraffic
 	} else {
-		retrieveTraffic = big.NewInt(0)
-		retrieveChequeTraffic = big.NewInt(0)
+		return big.NewInt(0), nil
 	}
 
 	return new(big.Int).Sub(retrieveTraffic, retrieveChequeTraffic), nil
@@ -572,4 +579,8 @@ func (s *Service) ReceiveCheque(ctx context.Context, peer boson.Address, cheque 
 	_, err := s.chequeStore.ReceiveCheque(ctx, cheque)
 
 	return err
+}
+
+func (s *Service) SetNotifyPaymentFunc(notifyPaymentFunc settlement.NotifyPaymentFunc) {
+	s.notifyPaymentFunc = notifyPaymentFunc
 }

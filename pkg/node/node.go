@@ -258,6 +258,7 @@ func NewAurora(addr string, bosonAddress boson.Address, publicKey ecdsa.PublicKe
 		stateStore,
 		settlement,
 	)
+	settlement.SetNotifyPaymentFunc(acc.AsyncNotifyPayment)
 
 	metricsDB, err := shed.NewDBWrap(stateStore.DB())
 	if err != nil {
