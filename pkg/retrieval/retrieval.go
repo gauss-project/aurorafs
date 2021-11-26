@@ -327,7 +327,7 @@ func (s *Service) retrieveChunk(ctx context.Context, route aco.Route, rootAddr, 
 			return nil, boson.ErrInvalidChunk
 		}
 	}
-	if err := s.accounting.Credit(route.LinkNode, uint64(dataSize*8)); err != nil {
+	if err := s.accounting.Credit(ctx, route.LinkNode, uint64(dataSize*8)); err != nil {
 		return nil, err
 	}
 

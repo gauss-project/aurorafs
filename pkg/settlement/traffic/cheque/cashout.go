@@ -7,7 +7,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/gauss-project/aurorafs/pkg/sctx"
-	"github.com/gauss-project/aurorafs/pkg/settlement/chain/transaction"
 	"github.com/gauss-project/aurorafs/pkg/storage"
 )
 
@@ -48,7 +47,7 @@ func (s *cashoutService) CashCheque(ctx context.Context, chequebook, recipient c
 		// fix for out of gas errors
 		lim = 300000
 	}
-	request := &transaction.TxRequest{
+	request := &chain.TxRequest{
 		To:       &chequebook,
 		Data:     callData,
 		GasPrice: sctx.GetGasPrice(ctx),

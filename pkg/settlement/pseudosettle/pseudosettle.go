@@ -227,3 +227,16 @@ func (s *Service) SettlementsReceived() (map[string]*big.Int, error) {
 	}
 	return received, nil
 }
+
+func (s *Service) TransferTraffic(peer boson.Address) (traffic *big.Int, err error) {
+	return new(big.Int).SetUint64(0), nil
+}
+func (s *Service) RetrieveTraffic(peer boson.Address) (traffic *big.Int, err error) {
+	return new(big.Int).SetUint64(0), nil
+}
+func (s *Service) PutRetrieveTraffic(peer boson.Address, traffic *big.Int) error {
+	return nil
+}
+func (s *Service) PutTransferTraffic(peer boson.Address, traffic *big.Int) error {
+	return nil
+}

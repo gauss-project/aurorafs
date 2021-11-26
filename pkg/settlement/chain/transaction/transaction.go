@@ -31,15 +31,6 @@ var (
 	ErrTransactionReverted = errors.New("transaction reverted")
 )
 
-// TxRequest describes a request for a transaction that can be executed.
-type TxRequest struct {
-	To       *common.Address // recipient of the transaction
-	Data     []byte          // transaction data
-	GasPrice *big.Int        // gas price or nil if suggested gas price should be used
-	GasLimit uint64          // gas limit or 0 if it should be estimated
-	Value    *big.Int        // amount of wei to send
-}
-
 type transactionService struct {
 	lock sync.Mutex
 
@@ -69,7 +60,7 @@ func NewService(logger logging.Logger, backend Backend, signer crypto.Signer, st
 }
 
 // Send creates and signs a transaction based on the request and sends it.
-func (t *transactionService) Send(ctx context.Context, request *TxRequest) (txHash common.Hash, err error) {
+func (t *transactionService) Send(ctx context.Context, request *chain.TxRequest) (txHash common.Hash, err error) {
 	t.lock.Lock()
 	defer t.lock.Unlock()
 
@@ -103,7 +94,7 @@ func (t *transactionService) Send(ctx context.Context, request *TxRequest) (txHa
 	return signedTx.Hash(), nil
 }
 
-func (t *transactionService) Call(ctx context.Context, request *TxRequest) ([]byte, error) {
+func (t *transactionService) Call(ctx context.Context, request *chain.TxRequest) ([]byte, error) {
 	msg := ethereum.CallMsg{
 		From:     t.sender,
 		To:       request.To,
@@ -145,7 +136,7 @@ func (t *transactionService) WaitForReceipt(ctx context.Context, txHash common.H
 }
 
 // prepareTransaction creates a signable transaction based on a request.
-func prepareTransaction(ctx context.Context, request *TxRequest, from common.Address, backend Backend, nonce uint64) (tx *types.Transaction, err error) {
+func prepareTransaction(ctx context.Context, request *chain.TxRequest, from common.Address, backend Backend, nonce uint64) (tx *types.Transaction, err error) {
 	var gasLimit uint64
 	if request.GasLimit == 0 {
 		gasLimit, err = backend.EstimateGas(ctx, ethereum.CallMsg{

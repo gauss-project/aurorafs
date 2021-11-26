@@ -82,7 +82,7 @@ func InitTraffic(store storage.StateStorer, beneficiary common.Address, trafficC
 	addressBook := traffic.NewAddressBook(store)
 	protocol := trafficprotocol.New(p2pService, logger)
 	chequeSigner := chequePkg.NewChequeSigner(signer, chainID)
-	trafficService := traffic.New(logger, beneficiary, store, trafficChainService, chequeStore, cashOut, p2pService, addressBook, chequeSigner, protocol)
+	trafficService := traffic.New(logger, beneficiary, store, trafficChainService, chequeStore, cashOut, p2pService, addressBook, chequeSigner, protocol, chainID)
 	protocol.SetTraffic(trafficService)
 	return trafficService
 }
