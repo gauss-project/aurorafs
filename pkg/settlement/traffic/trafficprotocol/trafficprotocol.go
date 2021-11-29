@@ -82,11 +82,6 @@ func (s *Service) initHandler(ctx context.Context, p p2p.Peer, stream p2p.Stream
 		return fmt.Errorf("read request from peer %v: %w", p.Address, err)
 	}
 
-	err = s.traffic.UpdatePeerBalance(p.Address)
-	if err != nil {
-		return err
-	}
-
 	receiveCheque, err := s.traffic.LastReceivedCheque(p.Address)
 	if err != nil {
 		return fmt.Errorf("failed to get the last cheque")

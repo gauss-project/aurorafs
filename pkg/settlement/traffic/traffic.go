@@ -171,13 +171,13 @@ func (s *Service) getAllAddress(lastCheques map[common.Address]*chequePkg.Cheque
 		}
 	}
 
-	for k, _ := range lastCheques {
+	for k := range lastCheques {
 		if _, ok := chanResp[k]; !ok {
 			chanResp[k] = Traffic{}
 		}
 	}
 
-	for k, _ := range lastTransCheques {
+	for k := range lastTransCheques {
 		if _, ok := chanResp[k]; !ok {
 			chanResp[k] = Traffic{}
 		}
@@ -188,7 +188,7 @@ func (s *Service) getAllAddress(lastCheques map[common.Address]*chequePkg.Cheque
 
 func (s *Service) replaceTraffic(addressList map[common.Address]Traffic, lastCheques map[common.Address]*chequePkg.Cheque, lastTransCheques map[common.Address]*chequePkg.SignedCheque) error {
 	s.trafficPeers.totalPaidOut = new(big.Int).SetInt64(0)
-	for k, _ := range addressList {
+	for k := range addressList {
 		retrievedTotal, err := s.trafficChainService.TransAmount(k, s.chainAddress)
 		if err != nil {
 			return nil
@@ -304,9 +304,9 @@ func (s *Service) TrafficCheques() ([]*TrafficCheque, error) {
 			trafficCheque := &TrafficCheque{
 				Peer:               peer,
 				OutstandingTraffic: new(big.Int).Sub(traffic.transferChequeTraffic, traffic.retrieveChequeTraffic),
-				SendTraffic:        traffic.retrieveChequeTraffic,
-				ReceivedTraffic:    traffic.transferChequeTraffic,
-				Total:              new(big.Int).Add(traffic.retrieveTraffic, traffic.transferTraffic),
+				SendTraffic:        traffic.transferChequeTraffic,
+				ReceivedTraffic:    traffic.retrieveChequeTraffic,
+				Total:              new(big.Int).Sub(traffic.transferTraffic, traffic.retrieveTraffic),
 				Uncashed:           new(big.Int).Sub(traffic.transferChequeTraffic, traffic.transferChainTraffic),
 			}
 			trafficCheques = append(trafficCheques, trafficCheque)
@@ -338,6 +338,9 @@ func (s *Service) Pay(ctx context.Context, peer boson.Address, traffic, paymentT
 		return ErrUnknownBeneficary
 	}
 	balance, err := s.RetrieveTraffic(peer)
+	if err != nil {
+		return err
+	}
 	balance = balance.Add(balance, traffic)
 	if balance.Cmp(paymentThreshold) >= 0 {
 		if err := s.Issue(ctx, peer, recipient, s.chainAddress, traffic); err != nil {
@@ -573,19 +576,26 @@ func (s *Service) Handshake(peer boson.Address, beneficiary common.Address, cheq
 		}
 	}
 	storedBeneficiary, known, err := s.addressBook.Beneficiary(peer)
-	if err != nil {
+	if err != nil && err != storage.ErrNotFound {
 		return err
 	}
+
+	if err != storage.ErrNotFound && storedBeneficiary != beneficiary {
+		return fmt.Errorf("wrong beneficiary")
+	}
+
 	if !known {
 		s.logger.Tracef("initial swap handshake peer: %v beneficiary: %x", peer, beneficiary)
 		return s.addressBook.PutBeneficiary(peer, beneficiary)
 	}
-	if storedBeneficiary != beneficiary {
-		return fmt.Errorf("wrong beneficiary")
-	}
 
 	if cheque.CumulativePayout.Cmp(singCheque.CumulativePayout) > 0 {
 		return s.chequeStore.PutSendCheque(context.Background(), &cheque.Cheque, beneficiary)
+	}
+
+	err = s.UpdatePeerBalance(peer)
+	if err != nil {
+		return err
 	}
 
 	return nil
@@ -627,7 +637,7 @@ func (s *Service) UpdatePeerBalance(peer boson.Address) error {
 
 func (s *Service) ReceiveCheque(ctx context.Context, peer boson.Address, cheque *chequePkg.SignedCheque) error {
 
-	if cheque.Beneficiary != s.Address() {
+	if cheque.Recipient != s.Address() {
 		return errors.New("account information error ")
 	}
 

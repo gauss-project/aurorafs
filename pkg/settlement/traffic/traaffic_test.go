@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"crypto/ecdsa"
+	"fmt"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/gauss-project/aurorafs/pkg/addressbook"
 	"github.com/gauss-project/aurorafs/pkg/aurora"
@@ -25,6 +26,7 @@ import (
 	"io"
 	"io/ioutil"
 	"math/big"
+	"strings"
 	"testing"
 )
 
@@ -88,10 +90,9 @@ func TestHandSake(t *testing.T) {
 	store := mock.NewStateStore()
 	chainID := int64(1)
 	peerAddress := boson.MustParseHexAddress("03")
-	//chainAddress := common.HexToAddress("0x123")
-	chueBeneficiary := common.HexToAddress("0xab")
-	Recipient := common.HexToAddress("03")
-	sig := common.Hex2Bytes(chueBeneficiary.String())
+	chainAddress := common.HexToAddress("0xab")
+	Recipient := common.HexToAddress("0xcd")
+	sig := common.Hex2Bytes(Recipient.String())
 	p2pStream := streamtest.New(
 		streamtest.WithProtocols(
 			newTestProtocol(func(ctx context.Context, peer p2p.Peer, stream p2p.Stream) error {
@@ -116,16 +117,19 @@ func TestHandSake(t *testing.T) {
 	}
 	chequestore := chequePkg.NewChequeStore(
 		store,
-		chueBeneficiary,
+		chainAddress,
 		func(cheque *chequePkg.SignedCheque, chaindID int64) (common.Address, error) {
-			return chueBeneficiary, nil
+			return Recipient, nil
 		},
 		chainID)
 
 	cashOut := cashOutMock{}           //chequePkg.NewCashoutService(store, transactionService, chequeStore)
 	traddressBook := addressBookMock{} //NewAddressBook(store)
+	traddressBook.putBeneficiary = func(peer boson.Address, beneficiary common.Address) error {
+		return nil
+	}
 	traddressBook.beneficiary = func(peer boson.Address) (beneficiary common.Address, known bool, err error) {
-		return chueBeneficiary, true, nil
+		return common.Address{}, false, storage.ErrNotFound
 	}
 	chequeSigner := chequeSignerMock{}
 	chequeSigner.sign = func(cheque *chequePkg.Cheque) ([]byte, error) {
@@ -134,7 +138,7 @@ func TestHandSake(t *testing.T) {
 
 	c := chequePkg.Cheque{
 		Recipient:        Recipient,
-		Beneficiary:      chueBeneficiary,
+		Beneficiary:      chainAddress,
 		CumulativePayout: big.NewInt(10),
 	}
 	sin, err := chequeSigner.Sign(&c)
@@ -146,16 +150,143 @@ func TestHandSake(t *testing.T) {
 		Signature: sin,
 	}
 
-	trafficService := newTraaffic(t, store, logger, p2pStream, chueBeneficiary, chueBeneficiary, transactionService, chequestore, &cashOut, &traddressBook, &chequeSigner, chainID)
+	trafficService := newTraaffic(t, store, logger, p2pStream, Recipient, transactionService, chequestore, &cashOut, &traddressBook, &chequeSigner, chainID)
 
-	err = trafficService.Handshake(peerAddress, chueBeneficiary, signedCheque)
+	err = trafficService.Handshake(peerAddress, Recipient, signedCheque)
 	if err != nil {
+		t.Fatal(err)
+	}
+
+	fmt.Println("TestHandSake - Success")
+
+}
+
+func TestPayUnknownBeneficiary(t *testing.T) {
+	store := mock.NewStateStore()
+	chainID := int64(1)
+	peerAddress := boson.MustParseHexAddress("03")
+	chainAddress := common.HexToAddress("05")
+	Recipient := common.HexToAddress("0xab")
+	sig := common.Hex2Bytes(Recipient.String())
+	p2pStream := streamtest.New(
+		streamtest.WithProtocols(
+			newTestProtocol(func(ctx context.Context, peer p2p.Peer, stream p2p.Stream) error {
+				if _, err := bufio.NewReader(stream).ReadString('\n'); err != nil {
+					return err
+				}
+				var g errgroup.Group
+				g.Go(stream.Close)
+				g.Go(stream.FullClose)
+
+				if err := g.Wait(); err != nil {
+					return err
+				}
+				return stream.FullClose()
+			}, protocolName, protocolVersion, streamName)),
+	)
+
+	logger := logging.New(ioutil.Discard, 0)
+	transactionService, err := chainTraffic.NewServer(logger, nil, "") //transaction.NewService(logger, nil, Signer, nil, new(big.Int).SetInt64(10))
+	if err != nil {
+		t.Fatal(err)
+	}
+	chequestore := chequePkg.NewChequeStore(
+		store,
+		chainAddress,
+		func(cheque *chequePkg.SignedCheque, chaindID int64) (common.Address, error) {
+			return Recipient, nil
+		},
+		chainID)
+
+	cashOut := cashOutMock{}           //chequePkg.NewCashoutService(store, transactionService, chequeStore)
+	traddressBook := addressBookMock{} //NewAddressBook(store)
+	traddressBook.beneficiary = func(peer boson.Address) (beneficiary common.Address, known bool, err error) {
+		return Recipient, true, nil
+	}
+	chequeSigner := chequeSignerMock{}
+	chequeSigner.sign = func(cheque *chequePkg.Cheque) ([]byte, error) {
+		return sig, nil
+	}
+
+	c := chequePkg.Cheque{
+		Recipient:        Recipient,
+		Beneficiary:      Recipient,
+		CumulativePayout: big.NewInt(10),
+	}
+	sin, err := chequeSigner.Sign(&c)
+	if err != nil {
+		t.Fatal(err)
+	}
+	signedCheque := &chequePkg.SignedCheque{
+		Cheque:    c,
+		Signature: sin,
+	}
+
+	trafficService := newTraaffic(t, store, logger, p2pStream, chainAddress, transactionService, chequestore, &cashOut, &traddressBook, &chequeSigner, chainID)
+
+	err = trafficService.ReceiveCheque(context.Background(), peerAddress, signedCheque)
+	if !strings.Contains(err.Error(), "account information error") {
 		t.Fatal(err)
 	}
 
 }
 
-func TestPayUnknownBeneficiary(t *testing.T) {
+func TestPay(t *testing.T) {
+	store := mock.NewStateStore()
+	chainID := int64(1)
+	peerAddress := boson.MustParseHexAddress("03")
+	chainAddress := common.HexToAddress("0xab")
+	Recipient := common.HexToAddress("0xcd")
+	sig := common.Hex2Bytes(Recipient.String())
+	p2pStream := streamtest.New(
+		streamtest.WithProtocols(
+			newTestProtocol(func(ctx context.Context, peer p2p.Peer, stream p2p.Stream) error {
+				if _, err := bufio.NewReader(stream).ReadString('\n'); err != nil {
+					return err
+				}
+				var g errgroup.Group
+				g.Go(stream.Close)
+				g.Go(stream.FullClose)
+
+				if err := g.Wait(); err != nil {
+					return err
+				}
+				return stream.FullClose()
+			}, protocolName, protocolVersion, streamName)),
+	)
+
+	logger := logging.New(ioutil.Discard, 0)
+	transactionService, err := chainTraffic.NewServer(logger, nil, "") //transaction.NewService(logger, nil, Signer, nil, new(big.Int).SetInt64(10))
+	if err != nil {
+		t.Fatal(err)
+	}
+	chequestore := chequePkg.NewChequeStore(
+		store,
+		chainAddress,
+		func(cheque *chequePkg.SignedCheque, chaindID int64) (common.Address, error) {
+			return Recipient, nil
+		},
+		chainID)
+
+	cashOut := cashOutMock{}         //chequePkg.NewCashoutService(store, transactionService, chequeStore)
+	addressBook := addressBookMock{} //NewAddressBook(store)
+	addressBook.beneficiary = func(peer boson.Address) (beneficiary common.Address, known bool, err error) {
+		return Recipient, true, nil
+	}
+	chequeSigner := chequeSignerMock{}
+	chequeSigner.sign = func(cheque *chequePkg.Cheque) ([]byte, error) {
+		return sig, nil
+	}
+
+	trafficService := newTraaffic(t, store, logger, p2pStream, chainAddress, transactionService, chequestore, &cashOut, &addressBook, &chequeSigner, chainID)
+	trafficService.trafficPeers.balance = new(big.Int).SetInt64(120)
+	err = trafficService.Pay(context.Background(), peerAddress, new(big.Int).SetInt64(100), new(big.Int).SetInt64(80))
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestPayIssueError(t *testing.T) {
 
 }
 
@@ -172,7 +303,7 @@ func newTestProtocol(h p2p.HandlerFunc, protocolName, protocolVersion, streamNam
 	}
 }
 
-func newTraaffic(t *testing.T, store storage.StateStorer, logger logging.Logger, streamer p2p.Streamer, chainAddress common.Address, beneficiary common.Address,
+func newTraaffic(t *testing.T, store storage.StateStorer, logger logging.Logger, streamer p2p.Streamer, chainAddress common.Address,
 	trafficChainService chain.Traffic, chequeStore chequePkg.ChequeStore, cashout chequePkg.CashoutService,
 	addressBook Addressbook, chequeSigner chequePkg.ChequeSigner, chainID int64) *Service {
 
