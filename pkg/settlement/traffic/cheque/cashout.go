@@ -13,7 +13,7 @@ import (
 // CashoutService is the service responsible for managing cashout actions
 type CashoutService interface {
 	// CashCheque
-	CashCheque(ctx context.Context, chequebook common.Address, recipient common.Address) (common.Hash, error)
+	CashCheque(ctx context.Context, beneficiary common.Address, recipient common.Address) (common.Hash, error)
 }
 
 type cashoutService struct {
@@ -32,13 +32,13 @@ func NewCashoutService(store storage.StateStorer, transactionService chain.Trans
 }
 
 // CashCheque
-func (s *cashoutService) CashCheque(ctx context.Context, chequebook, recipient common.Address) (common.Hash, error) {
-	cheque, err := s.chequeStore.LastReceivedCheque(chequebook)
+func (s *cashoutService) CashCheque(ctx context.Context, beneficiary, recipient common.Address) (common.Hash, error) {
+	cheque, err := s.chequeStore.LastReceivedCheque(recipient)
 	if err != nil {
 		return common.Hash{}, err
 	}
 	// todo
-	callData, err := trafficAbi.Pack("cashChequeBeneficiary", recipient, cheque.CumulativePayout, cheque.Signature)
+	callData, err := trafficAbi.Pack("cashChequeBeneficiary", beneficiary, cheque.CumulativePayout, cheque.Signature)
 	if err != nil {
 		return common.Hash{}, err
 	}
@@ -48,7 +48,7 @@ func (s *cashoutService) CashCheque(ctx context.Context, chequebook, recipient c
 		lim = 300000
 	}
 	request := &chain.TxRequest{
-		To:       &chequebook,
+		To:       &recipient,
 		Data:     callData,
 		GasPrice: sctx.GetGasPrice(ctx),
 		GasLimit: lim,

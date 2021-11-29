@@ -29,7 +29,7 @@ var (
 type Interface interface {
 	Reserve(ctx context.Context, peer boson.Address, traffic uint64) error
 	// Credit increases the balance the peer has with us (we "pay" the peer).
-	Credit(ctx context.Context, peer boson.Address, traffic uint64) error
+	Credit(peer boson.Address, traffic uint64) error
 	// Debit increases the balance we have with the peer (we get "paid" back).
 	Debit(peer boson.Address, traffic uint64) error
 }
@@ -74,7 +74,7 @@ func NewAccounting(
 		logger:           logger,
 		store:            store,
 		settlement:       settlement,
-		payChan:          make(chan payChan, 4),
+		payChan:          make(chan payChan, 100),
 		metrics:          newMetrics(),
 	}
 	go acc.settle()
@@ -121,7 +121,7 @@ Loop:
 
 // Credit increases the amount of credit we have with the given peer
 // (and decreases existing debt).
-func (a *Accounting) Credit(ctx context.Context, peer boson.Address, traffic uint64) error {
+func (a *Accounting) Credit(peer boson.Address, traffic uint64) error {
 
 	accountingPeer, err := a.getAccountingPeer(peer)
 	if err != nil {
@@ -171,6 +171,8 @@ func (a *Accounting) Debit(peer boson.Address, traffic uint64) error {
 		a.metrics.AccountingDisconnectsCount.Inc()
 		return p2p.NewBlockPeerError(10000*time.Hour, ErrDisconnectThresholdExceeded)
 	}
+
+	// todo
 
 	if err := a.settlement.PutTransferTraffic(peer, new(big.Int).SetUint64(traffic)); err != nil {
 		return err
