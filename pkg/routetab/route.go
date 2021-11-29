@@ -749,7 +749,7 @@ func (s *Service) getNextHopRandom(target boson.Address) (next boson.Address) {
 	list := s.getNextHopEffective(target)
 	if len(list) > 0 {
 		k := rand.Intn(len(list))
-		go s.routeTable.updateUsedTime(target, list[k])
+		s.routeTable.updateUsedTime(target, list[k])
 		return list[k]
 	}
 	return boson.ZeroAddress
