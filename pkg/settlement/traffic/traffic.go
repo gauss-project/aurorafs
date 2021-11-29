@@ -18,10 +18,6 @@ import (
 	"sync"
 )
 
-const (
-	AccountConversion = 1024 * 1024 * 1024
-)
-
 var (
 	ErrUnknownBeneficary = errors.New("unknown beneficiary for peer")
 	ErrInsufficientFunds = errors.New("insufficient token balance")
@@ -142,7 +138,7 @@ func (s *Service) InitTraffic() error {
 	if err != nil {
 		return fmt.Errorf("failed to get the chain balance")
 	}
-	s.trafficPeers.balance = new(big.Int).Mul(balance, new(big.Int).SetUint64(AccountConversion))
+	s.trafficPeers.balance = balance
 
 	paiOut, err := s.trafficChainService.TransferredTotal(s.chainAddress)
 	if err != nil {
@@ -557,7 +553,7 @@ func (s *Service) AvailableBalance() (*big.Int, error) {
 }
 
 func (s *Service) Handshake(peer boson.Address, beneficiary common.Address, cheque *chequePkg.SignedCheque) error {
-	issuser, err := chequePkg.RecoverCheque(cheque, s.chainID)
+	issuser, err := s.chequeStore.VerifyCheque(cheque, s.chainID) //chequePkg.RecoverCheque(cheque, s.chainID)
 	if err != nil {
 		return err
 	}
@@ -566,8 +562,15 @@ func (s *Service) Handshake(peer boson.Address, beneficiary common.Address, cheq
 	}
 
 	singCheque, err := s.chequeStore.LastReceivedCheque(beneficiary)
-	if err != nil {
+	if err != nil && err != chequePkg.ErrNoCheque {
 		return err
+	}
+	if err == chequePkg.ErrNoCheque {
+		singCheque = &chequePkg.SignedCheque{
+			Cheque: chequePkg.Cheque{
+				CumulativePayout: new(big.Int).SetInt64(0),
+			},
+		}
 	}
 	storedBeneficiary, known, err := s.addressBook.Beneficiary(peer)
 	if err != nil {

@@ -5,22 +5,20 @@ import (
 	"context"
 	"crypto/ecdsa"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/gauss-project/aurorafs/pkg/addressbook"
 	"github.com/gauss-project/aurorafs/pkg/aurora"
 	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/crypto"
-	"github.com/gauss-project/aurorafs/pkg/crypto/eip712"
-	signermock "github.com/gauss-project/aurorafs/pkg/crypto/mock"
 	"github.com/gauss-project/aurorafs/pkg/logging"
 	"github.com/gauss-project/aurorafs/pkg/p2p"
 	"github.com/gauss-project/aurorafs/pkg/p2p/libp2p"
 	"github.com/gauss-project/aurorafs/pkg/p2p/streamtest"
+	"github.com/gauss-project/aurorafs/pkg/settlement/chain"
 	chainTraffic "github.com/gauss-project/aurorafs/pkg/settlement/chain/traffic"
-	"github.com/gauss-project/aurorafs/pkg/settlement/chain/transaction"
 	chequePkg "github.com/gauss-project/aurorafs/pkg/settlement/traffic/cheque"
 	"github.com/gauss-project/aurorafs/pkg/settlement/traffic/trafficprotocol"
 	"github.com/gauss-project/aurorafs/pkg/statestore/mock"
+	"github.com/gauss-project/aurorafs/pkg/storage"
 	"github.com/gauss-project/aurorafs/pkg/topology/bootnode"
 	"github.com/gauss-project/aurorafs/pkg/topology/lightnode"
 	"golang.org/x/sync/errgroup"
@@ -47,11 +45,53 @@ type libp2pServiceOpts struct {
 	bootNodes   *bootnode.Container
 }
 
+type cashOutMock struct {
+	cashCheque func(ctx context.Context, chequebook common.Address, recipient common.Address) (common.Hash, error)
+}
+
+func (m *cashOutMock) CashCheque(ctx context.Context, chequebook common.Address, recipient common.Address) (common.Hash, error) {
+	return m.cashCheque(ctx, chequebook, recipient)
+}
+
+type chequeSignerMock struct {
+	sign func(cheque *chequePkg.Cheque) ([]byte, error)
+}
+
+func (m *chequeSignerMock) Sign(cheque *chequePkg.Cheque) ([]byte, error) {
+	return m.sign(cheque)
+}
+
+type addressBookMock struct {
+	beneficiary     func(peer boson.Address) (beneficiary common.Address, known bool, err error)
+	beneficiaryPeer func(beneficiary common.Address) (peer boson.Address, known bool, err error)
+	putBeneficiary  func(peer boson.Address, beneficiary common.Address) error
+	initAddressBook func() error
+}
+
+func (m *addressBookMock) Beneficiary(peer boson.Address) (beneficiary common.Address, known bool, err error) {
+	return m.beneficiary(peer)
+}
+
+func (m *addressBookMock) BeneficiaryPeer(beneficiary common.Address) (peer boson.Address, known bool, err error) {
+	return m.beneficiaryPeer(beneficiary)
+}
+
+func (m *addressBookMock) PutBeneficiary(peer boson.Address, beneficiary common.Address) error {
+	return m.putBeneficiary(peer, beneficiary)
+}
+
+func (m *addressBookMock) InitAddressBook() error {
+	return nil
+}
+
 func TestHandSake(t *testing.T) {
+	store := mock.NewStateStore()
+	chainID := int64(1)
 	peerAddress := boson.MustParseHexAddress("03")
-	chainAddress := common.HexToAddress("0123")
-	beneficiary := common.HexToAddress("0xab")
+	//chainAddress := common.HexToAddress("0x123")
+	chueBeneficiary := common.HexToAddress("0xab")
 	Recipient := common.HexToAddress("03")
+	sig := common.Hex2Bytes(chueBeneficiary.String())
 	p2pStream := streamtest.New(
 		streamtest.WithProtocols(
 			newTestProtocol(func(ctx context.Context, peer p2p.Peer, stream p2p.Stream) error {
@@ -69,14 +109,35 @@ func TestHandSake(t *testing.T) {
 			}, protocolName, protocolVersion, streamName)),
 	)
 
-	trafficService := newTraaffic(t, p2pStream, chainAddress, beneficiary)
+	logger := logging.New(ioutil.Discard, 0)
+	transactionService, err := chainTraffic.NewServer(logger, nil, "") //transaction.NewService(logger, nil, Signer, nil, new(big.Int).SetInt64(10))
+	if err != nil {
+		t.Fatal(err)
+	}
+	chequestore := chequePkg.NewChequeStore(
+		store,
+		chueBeneficiary,
+		func(cheque *chequePkg.SignedCheque, chaindID int64) (common.Address, error) {
+			return chueBeneficiary, nil
+		},
+		chainID)
+
+	cashOut := cashOutMock{}           //chequePkg.NewCashoutService(store, transactionService, chequeStore)
+	traddressBook := addressBookMock{} //NewAddressBook(store)
+	traddressBook.beneficiary = func(peer boson.Address) (beneficiary common.Address, known bool, err error) {
+		return chueBeneficiary, true, nil
+	}
+	chequeSigner := chequeSignerMock{}
+	chequeSigner.sign = func(cheque *chequePkg.Cheque) ([]byte, error) {
+		return sig, nil
+	}
 
 	c := chequePkg.Cheque{
 		Recipient:        Recipient,
-		Beneficiary:      beneficiary,
+		Beneficiary:      chueBeneficiary,
 		CumulativePayout: big.NewInt(10),
 	}
-	sin, err := trafficService.chequeSigner.Sign(&c)
+	sin, err := chequeSigner.Sign(&c)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -85,10 +146,16 @@ func TestHandSake(t *testing.T) {
 		Signature: sin,
 	}
 
-	err = trafficService.Handshake(peerAddress, beneficiary, signedCheque)
+	trafficService := newTraaffic(t, store, logger, p2pStream, chueBeneficiary, chueBeneficiary, transactionService, chequestore, &cashOut, &traddressBook, &chequeSigner, chainID)
+
+	err = trafficService.Handshake(peerAddress, chueBeneficiary, signedCheque)
 	if err != nil {
 		t.Fatal(err)
 	}
+
+}
+
+func TestPayUnknownBeneficiary(t *testing.T) {
 
 }
 
@@ -105,34 +172,11 @@ func newTestProtocol(h p2p.HandlerFunc, protocolName, protocolVersion, streamNam
 	}
 }
 
-func newTraaffic(t *testing.T, streamer p2p.Streamer, chainAddress common.Address, beneficiary common.Address) *Service {
-	logger := logging.New(ioutil.Discard, 0)
-	store := mock.NewStateStore()
-	backend, err := ethclient.Dial("https://data-seed-prebsc-1-s1.binance.org:8545/")
-	chainID := int64(1)
-	trafficChainService, err := chainTraffic.NewServer(logger, backend, "123456789")
-	signature := common.Hex2Bytes("abc")
-	signer := signermock.New(
-		signermock.WithSignTypedDataFunc(func(data *eip712.TypedData) ([]byte, error) {
+func newTraaffic(t *testing.T, store storage.StateStorer, logger logging.Logger, streamer p2p.Streamer, chainAddress common.Address, beneficiary common.Address,
+	trafficChainService chain.Traffic, chequeStore chequePkg.ChequeStore, cashout chequePkg.CashoutService,
+	addressBook Addressbook, chequeSigner chequePkg.ChequeSigner, chainID int64) *Service {
 
-			if data.Message["beneficiary"].(string) != beneficiary.Hex() {
-				t.Fatal("signing cheque with wrong beneficiary")
-			}
-
-			return signature, nil
-		}),
-	)
-
-	transactionService, err := transaction.NewService(logger, backend, signer, store, new(big.Int).SetInt64(chainID))
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	chequeStore := chequePkg.NewChequeStore(store, beneficiary, chequePkg.RecoverCheque, chainID)
-	cashOut := chequePkg.NewCashoutService(store, transactionService, chequeStore)
-	addressBook := NewAddressBook(store)
 	protocol := trafficprotocol.New(streamer, logger)
-	chequeSigner := chequePkg.NewChequeSigner(signer, chainID)
 	p2pServer, _ := newP2pService(t, 1, libp2pServiceOpts{libp2pOpts: libp2p.Options{NodeMode: aurora.NewModel()}})
 
 	trafficService := New(
@@ -141,7 +185,7 @@ func newTraaffic(t *testing.T, streamer p2p.Streamer, chainAddress common.Addres
 		store,
 		trafficChainService,
 		chequeStore,
-		cashOut,
+		cashout,
 		p2pServer,
 		addressBook,
 		chequeSigner,
