@@ -243,12 +243,12 @@ func (s *Service) SettlementsReceived() (map[string]*big.Int, error) {
 }
 
 // Balance Get chain balance
-func (s *Service) Balance(ctx context.Context) (*big.Int, error) {
+func (s *Service) Balance() (*big.Int, error) {
 	return new(big.Int).SetUint64(0), nil
 }
 
 // AvailableBalance Get actual available balance
-func (s *Service) AvailableBalance(ctx context.Context) (*big.Int, error) {
+func (s *Service) AvailableBalance() (*big.Int, error) {
 	//s.store.Put(totalKey(peer, SettlementReceivedPrefix), traffic)
 	var availableBalance *big.Int
 	availableBalance = new(big.Int).SetInt64(0)

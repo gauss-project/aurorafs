@@ -27,7 +27,7 @@ type Interface interface {
 	PutTransferTraffic(peer boson.Address, traffic *big.Int) error
 
 	// AvailableBalance Get actual available balance
-	AvailableBalance(ctx context.Context) (*big.Int, error)
+	AvailableBalance() (*big.Int, error)
 
 	// SetNotifyPaymentFunc sets the NotifyPaymentFunc to notify
 	SetNotifyPaymentFunc(notifyPaymentFunc NotifyPaymentFunc)

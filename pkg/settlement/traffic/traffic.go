@@ -267,17 +267,8 @@ func (s *Service) CashCheque(ctx context.Context, peer boson.Address) (common.Ha
 	if !known {
 		return common.Hash{}, chequePkg.ErrNoCheque
 	}
-	sign, err := s.chequeStore.LastReceivedCheque(chainAddress)
 
-	if err != nil {
-		return common.Hash{}, err
-	}
-
-	if chainAddress != sign.Recipient {
-		return common.Hash{}, errors.New("exchange failed")
-	}
-
-	c, err := s.cashout.CashCheque(ctx, chainAddress, sign.Recipient)
+	c, err := s.cashout.CashCheque(ctx, chainAddress, s.chainAddress)
 	if err != nil {
 		return common.Hash{}, err
 	}
@@ -362,7 +353,7 @@ func (s *Service) Pay(ctx context.Context, peer boson.Address, traffic, paymentT
 }
 
 func (s *Service) Issue(ctx context.Context, peer boson.Address, recipient, beneficiary common.Address, traffic *big.Int) error {
-	available, err := s.AvailableBalance(ctx)
+	available, err := s.AvailableBalance()
 	if err != nil {
 		return err
 	}
@@ -479,8 +470,7 @@ func (s *Service) TransferTraffic(peer boson.Address) (traffic *big.Int, err err
 		transferTraffic = tra.(Traffic).transferTraffic
 		transferChequeTraffic = tra.(Traffic).transferChequeTraffic
 	} else {
-		transferTraffic = big.NewInt(0)
-		transferChequeTraffic = big.NewInt(0)
+		return big.NewInt(0), nil
 	}
 
 	return new(big.Int).Sub(transferTraffic, transferChequeTraffic), nil
@@ -520,7 +510,7 @@ func (s *Service) PutRetrieveTraffic(peer boson.Address, traffic *big.Int) error
 		localTraffic.retrieveTraffic = traffic
 	} else {
 		localTraffic = chainTraffic.(Traffic)
-		localTraffic.retrieveTraffic = new(big.Int).Add(chainTraffic.(Traffic).retrieveTraffic, traffic)
+		localTraffic.retrieveTraffic = new(big.Int).Add(localTraffic.retrieveTraffic, traffic)
 	}
 	s.trafficPeers.trafficPeers.Store(chainAddress.String(), localTraffic)
 	return s.chequeStore.PutRetrieveTraffic(chainAddress, traffic)
@@ -540,7 +530,7 @@ func (s *Service) PutTransferTraffic(peer boson.Address, traffic *big.Int) error
 		localTraffic.transferTraffic = traffic
 	} else {
 		localTraffic = chainTraffic.(Traffic)
-		localTraffic.transferTraffic = new(big.Int).Add(chainTraffic.(Traffic).transferTraffic, traffic)
+		localTraffic.transferTraffic = new(big.Int).Add(localTraffic.transferTraffic, traffic)
 	}
 	s.trafficPeers.trafficPeers.Store(chainAddress.String(), localTraffic)
 
@@ -548,12 +538,12 @@ func (s *Service) PutTransferTraffic(peer boson.Address, traffic *big.Int) error
 }
 
 // Balance Get chain balance
-func (s *Service) Balance(ctx context.Context) (*big.Int, error) {
+func (s *Service) Balance() (*big.Int, error) {
 	return s.trafficPeers.balance, nil
 }
 
 // AvailableBalance Get actual available balance
-func (s *Service) AvailableBalance(ctx context.Context) (*big.Int, error) {
+func (s *Service) AvailableBalance() (*big.Int, error) {
 	cashed := big.NewInt(0)
 	transfer := big.NewInt(0)
 	s.trafficPeers.trafficPeers.Range(func(chainAddress, v interface{}) bool {

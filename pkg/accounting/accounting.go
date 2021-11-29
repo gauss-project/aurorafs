@@ -101,7 +101,7 @@ Loop:
 	}
 
 	retrieve = retrieve.Add(retrieve, new(big.Int).SetUint64(traffic))
-	available, err := a.settlement.AvailableBalance(ctx)
+	available, err := a.settlement.AvailableBalance()
 	if err != nil {
 		return err
 	}
@@ -161,7 +161,13 @@ func (a *Accounting) settle() {
 // Debit increases the amount of debt we have with the given peer (and decreases
 // existing credit).
 func (a *Accounting) Debit(peer boson.Address, traffic uint64) error {
+	accountingPeer, err := a.getAccountingPeer(peer)
+	if err != nil {
+		return err
+	}
 
+	accountingPeer.lock.Lock()
+	defer accountingPeer.lock.Unlock()
 	tolerance := a.paymentTolerance
 	traff, err := a.settlement.TransferTraffic(peer)
 	if err != nil {

@@ -2,6 +2,7 @@ package cheque
 
 import (
 	"context"
+	"errors"
 	"github.com/gauss-project/aurorafs/pkg/settlement/chain"
 	"math/big"
 
@@ -17,28 +18,35 @@ type CashoutService interface {
 }
 
 type cashoutService struct {
-	store              storage.StateStorer
-	transactionService chain.Transaction
-	chequeStore        ChequeStore
+	store               storage.StateStorer
+	transactionService  chain.Transaction
+	chequeStore         ChequeStore
+	trafficContractAddr common.Address
 }
 
 // NewCashoutService creates a new CashoutService
-func NewCashoutService(store storage.StateStorer, transactionService chain.Transaction, chequeStore ChequeStore) CashoutService {
+func NewCashoutService(store storage.StateStorer, transactionService chain.Transaction, chequeStore ChequeStore, trafficContractAddr common.Address) CashoutService {
 	return &cashoutService{
-		store:              store,
-		transactionService: transactionService,
-		chequeStore:        chequeStore,
+		store:               store,
+		transactionService:  transactionService,
+		chequeStore:         chequeStore,
+		trafficContractAddr: trafficContractAddr,
 	}
 }
 
 // CashCheque
 func (s *cashoutService) CashCheque(ctx context.Context, beneficiary, recipient common.Address) (common.Hash, error) {
-	cheque, err := s.chequeStore.LastReceivedCheque(recipient)
+	cheque, err := s.chequeStore.LastReceivedCheque(beneficiary)
 	if err != nil {
 		return common.Hash{}, err
 	}
+
+	if beneficiary != cheque.Beneficiary {
+		return common.Hash{}, errors.New("exchange failed")
+	}
+
 	// todo
-	callData, err := trafficAbi.Pack("cashChequeBeneficiary", beneficiary, cheque.CumulativePayout, cheque.Signature)
+	callData, err := trafficAbi.Pack("cashChequeBeneficiary", recipient, cheque.CumulativePayout, cheque.Signature)
 	if err != nil {
 		return common.Hash{}, err
 	}
@@ -48,7 +56,7 @@ func (s *cashoutService) CashCheque(ctx context.Context, beneficiary, recipient 
 		lim = 300000
 	}
 	request := &chain.TxRequest{
-		To:       &recipient,
+		To:       &s.trafficContractAddr,
 		Data:     callData,
 		GasPrice: sctx.GetGasPrice(ctx),
 		GasLimit: lim,
