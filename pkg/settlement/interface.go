@@ -31,6 +31,10 @@ type Interface interface {
 
 	// SetNotifyPaymentFunc sets the NotifyPaymentFunc to notify
 	SetNotifyPaymentFunc(notifyPaymentFunc NotifyPaymentFunc)
+
+	GetPeerBalance(peer boson.Address) (*big.Int, error)
+
+	GetNoPaidBalance(peer boson.Address) (*big.Int, error)
 }
 
 // NotifyPaymentFunc is called when a payment from peer was successfully received

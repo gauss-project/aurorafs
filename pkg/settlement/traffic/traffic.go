@@ -352,7 +352,7 @@ func (s *Service) Pay(ctx context.Context, peer boson.Address, traffic, paymentT
 }
 
 func (s *Service) Issue(ctx context.Context, peer boson.Address, recipient, beneficiary common.Address, traffic *big.Int) error {
-	available, err := s.AvailableBalance(ctx)
+	available, err := s.AvailableBalance()
 	if err != nil {
 		return err
 	}
@@ -656,7 +656,7 @@ func (s *Service) ReceiveCheque(ctx context.Context, peer boson.Address, cheque 
 		return errors.New("The recipient is unable to pay ")
 	}
 
-	_, err := s.chequeStore.ReceiveCheque(ctx, cheque)
+	_, err = s.chequeStore.ReceiveCheque(ctx, cheque)
 
 	return err
 }
@@ -684,7 +684,7 @@ func (s *Service) GetPeerBalance(peer boson.Address) (*big.Int, error) {
 	return trafficPeerBalance, nil
 }
 
-func (s *Service) GetNoPaidBalace(peer boson.Address) (*big.Int, error) {
+func (s *Service) GetNoPaidBalance(peer boson.Address) (*big.Int, error) {
 	chainAddress, known, err := s.addressBook.Beneficiary(peer)
 	if err != nil {
 		return big.NewInt(0), err
