@@ -9,7 +9,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/gauss-project/aurorafs/pkg/settlement/chain/transaction"
+	"github.com/gauss-project/aurorafs/pkg/settlement/chain"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/accounts/abi"
@@ -18,12 +18,12 @@ import (
 )
 
 type transactionServiceMock struct {
-	send           func(ctx context.Context, request *transaction.TxRequest) (txHash common.Hash, err error)
+	send           func(ctx context.Context, request *chain.TxRequest) (txHash common.Hash, err error)
 	waitForReceipt func(ctx context.Context, txHash common.Hash) (receipt *types.Receipt, err error)
-	call           func(ctx context.Context, request *transaction.TxRequest) (result []byte, err error)
+	call           func(ctx context.Context, request *chain.TxRequest) (result []byte, err error)
 }
 
-func (m *transactionServiceMock) Send(ctx context.Context, request *transaction.TxRequest) (txHash common.Hash, err error) {
+func (m *transactionServiceMock) Send(ctx context.Context, request *chain.TxRequest) (txHash common.Hash, err error) {
 	if m.send != nil {
 		return m.send(ctx, request)
 	}
@@ -37,7 +37,7 @@ func (m *transactionServiceMock) WaitForReceipt(ctx context.Context, txHash comm
 	return nil, errors.New("not implemented")
 }
 
-func (m *transactionServiceMock) Call(ctx context.Context, request *transaction.TxRequest) (result []byte, err error) {
+func (m *transactionServiceMock) Call(ctx context.Context, request *chain.TxRequest) (result []byte, err error) {
 	if m.call != nil {
 		return m.call(ctx, request)
 	}
@@ -53,7 +53,7 @@ type optionFunc func(*transactionServiceMock)
 
 func (f optionFunc) apply(r *transactionServiceMock) { f(r) }
 
-func WithSendFunc(f func(ctx context.Context, request *transaction.TxRequest) (txHash common.Hash, err error)) Option {
+func WithSendFunc(f func(ctx context.Context, request *chain.TxRequest) (txHash common.Hash, err error)) Option {
 	return optionFunc(func(s *transactionServiceMock) {
 		s.send = f
 	})
@@ -65,13 +65,13 @@ func WithWaitForReceiptFunc(f func(ctx context.Context, txHash common.Hash) (rec
 	})
 }
 
-func WithCallFunc(f func(ctx context.Context, request *transaction.TxRequest) (result []byte, err error)) Option {
+func WithCallFunc(f func(ctx context.Context, request *chain.TxRequest) (result []byte, err error)) Option {
 	return optionFunc(func(s *transactionServiceMock) {
 		s.call = f
 	})
 }
 
-func New(opts ...Option) transaction.Service {
+func New(opts ...Option) chain.Transaction {
 	mock := new(transactionServiceMock)
 	for _, o := range opts {
 		o.apply(mock)
@@ -97,7 +97,7 @@ func ABICall(abi *abi.ABI, result []byte, method string, params ...interface{}) 
 
 func WithABICallSequence(calls ...Call) Option {
 	return optionFunc(func(s *transactionServiceMock) {
-		s.call = func(ctx context.Context, request *transaction.TxRequest) ([]byte, error) {
+		s.call = func(ctx context.Context, request *chain.TxRequest) ([]byte, error) {
 			if len(calls) == 0 {
 				return nil, errors.New("unexpected call")
 			}
@@ -126,7 +126,7 @@ func WithABICall(abi *abi.ABI, result []byte, method string, params ...interface
 
 func WithABISend(abi *abi.ABI, txHash common.Hash, expectedAddress common.Address, expectedValue *big.Int, method string, params ...interface{}) Option {
 	return optionFunc(func(s *transactionServiceMock) {
-		s.send = func(ctx context.Context, request *transaction.TxRequest) (common.Hash, error) {
+		s.send = func(ctx context.Context, request *chain.TxRequest) (common.Hash, error) {
 			data, err := abi.Pack(method, params...)
 			if err != nil {
 				return common.Hash{}, err
