@@ -15,7 +15,7 @@ import (
 )
 
 const (
-	protocolName    = "traffic"
+	protocolName    = "pseudosettle"
 	protocolVersion = "1.0.0"
 	streamName      = "traffic" // stream for cheques
 	initStreamName  = "init"    // stream for handshake

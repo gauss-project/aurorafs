@@ -18,6 +18,10 @@ import (
 	"sync"
 )
 
+const (
+	AccountConversion = 1024 * 1024 * 1024
+)
+
 var (
 	ErrUnknownBeneficary = errors.New("unknown beneficiary for peer")
 	ErrInsufficientFunds = errors.New("insufficient token balance")
@@ -138,7 +142,7 @@ func (s *Service) InitTraffic() error {
 	if err != nil {
 		return fmt.Errorf("failed to get the chain balance")
 	}
-	s.trafficPeers.balance = balance
+	s.trafficPeers.balance = new(big.Int).Mul(balance, new(big.Int).SetUint64(AccountConversion))
 
 	paiOut, err := s.trafficChainService.TransferredTotal(s.chainAddress)
 	if err != nil {

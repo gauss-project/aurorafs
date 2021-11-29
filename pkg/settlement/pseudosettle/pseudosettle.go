@@ -20,7 +20,7 @@ import (
 const (
 	protocolName    = "pseudosettle"
 	protocolVersion = "1.0.0"
-	streamName      = "pseudosettle"
+	streamName      = "traffic"
 )
 
 var (
@@ -106,7 +106,7 @@ func (s *Service) handler(ctx context.Context, p p2p.Peer, stream p2p.Stream) (e
 }
 
 // Pay initiates a payment to the given peer
-func (s *Service) Pay(ctx context.Context, peer boson.Address, amount *big.Int) error {
+func (s *Service) Pay(ctx context.Context, peer boson.Address, traffic, paymentThreshold *big.Int) error {
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 
@@ -122,10 +122,10 @@ func (s *Service) Pay(ctx context.Context, peer boson.Address, amount *big.Int) 
 		}
 	}()
 
-	s.logger.Tracef("sending payment message to peer %v of %d", peer, amount)
+	s.logger.Tracef("sending payment message to peer %v of %d", peer, traffic)
 	w := protobuf.NewWriter(stream)
 	err = w.WriteMsgWithContext(ctx, &pb.Payment{
-		Amount: amount.Uint64(),
+		Amount: traffic.Uint64(),
 	})
 	if err != nil {
 		return err
@@ -137,19 +137,33 @@ func (s *Service) Pay(ctx context.Context, peer boson.Address, amount *big.Int) 
 		}
 		totalSent = big.NewInt(0)
 	}
-	err = s.store.Put(totalKey(peer, SettlementSentPrefix), totalSent.Add(totalSent, amount))
+	err = s.store.Put(totalKey(peer, SettlementSentPrefix), totalSent.Add(totalSent, traffic))
 	if err != nil {
 		return err
 	}
 
-	amountFloat, _ := new(big.Float).SetInt(amount).Float64()
+	amountFloat, _ := new(big.Float).SetInt(traffic).Float64()
 	s.metrics.TotalSentPseudoSettlements.Add(amountFloat)
 	return nil
 }
 
-// SetNotifyPaymentFunc sets the NotifyPaymentFunc to notify
-func (s *Service) SetNotifyPaymentFunc(notifyPaymentFunc settlement.NotifyPaymentFunc) {
-	s.notifyPaymentFunc = notifyPaymentFunc
+func (s *Service) TransferTraffic(peer boson.Address) (traffic *big.Int, err error) {
+
+	err = s.store.Get(totalKey(peer, SettlementSentPrefix), &traffic)
+	return traffic, err
+}
+
+func (s *Service) RetrieveTraffic(peer boson.Address) (traffic *big.Int, err error) {
+	err = s.store.Get(totalKey(peer, SettlementReceivedPrefix), &traffic)
+	return traffic, err
+}
+
+func (s *Service) PutRetrieveTraffic(peer boson.Address, traffic *big.Int) error {
+	return s.store.Put(totalKey(peer, SettlementReceivedPrefix), traffic)
+}
+
+func (s *Service) PutTransferTraffic(peer boson.Address, traffic *big.Int) error {
+	return s.store.Put(totalKey(peer, SettlementSentPrefix), traffic)
 }
 
 // TotalSent returns the total amount sent to a peer
@@ -228,15 +242,34 @@ func (s *Service) SettlementsReceived() (map[string]*big.Int, error) {
 	return received, nil
 }
 
-func (s *Service) TransferTraffic(peer boson.Address) (traffic *big.Int, err error) {
+// Balance Get chain balance
+func (s *Service) Balance(ctx context.Context) (*big.Int, error) {
 	return new(big.Int).SetUint64(0), nil
 }
-func (s *Service) RetrieveTraffic(peer boson.Address) (traffic *big.Int, err error) {
-	return new(big.Int).SetUint64(0), nil
+
+// AvailableBalance Get actual available balance
+func (s *Service) AvailableBalance(ctx context.Context) (*big.Int, error) {
+	//s.store.Put(totalKey(peer, SettlementReceivedPrefix), traffic)
+	var availableBalance *big.Int
+	availableBalance = new(big.Int).SetInt64(0)
+	s.store.Iterate(SettlementReceivedPrefix, func(key, value []byte) (stop bool, err error) {
+		balance := new(big.Int).SetInt64(0)
+		keys := string(key)
+		if err := s.store.Get(keys, &balance); err != nil {
+			return true, err
+		}
+		availableBalance = new(big.Int).Add(availableBalance, balance)
+		return false, nil
+	})
+
+	return availableBalance, nil
 }
-func (s *Service) PutRetrieveTraffic(peer boson.Address, traffic *big.Int) error {
+
+func (s *Service) UpdatePeerBalance(peer boson.Address) error {
 	return nil
 }
-func (s *Service) PutTransferTraffic(peer boson.Address, traffic *big.Int) error {
-	return nil
+
+// SetNotifyPaymentFunc sets the NotifyPaymentFunc to notify
+func (s *Service) SetNotifyPaymentFunc(notifyPaymentFunc settlement.NotifyPaymentFunc) {
+	s.notifyPaymentFunc = notifyPaymentFunc
 }

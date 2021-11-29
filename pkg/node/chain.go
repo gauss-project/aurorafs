@@ -13,6 +13,7 @@ import (
 	"github.com/gauss-project/aurorafs/pkg/settlement/chain/oracle"
 	chainTraffic "github.com/gauss-project/aurorafs/pkg/settlement/chain/traffic"
 	"github.com/gauss-project/aurorafs/pkg/settlement/chain/transaction"
+	"github.com/gauss-project/aurorafs/pkg/settlement/pseudosettle"
 	"github.com/gauss-project/aurorafs/pkg/settlement/traffic"
 	chequePkg "github.com/gauss-project/aurorafs/pkg/settlement/traffic/cheque"
 	"github.com/gauss-project/aurorafs/pkg/settlement/traffic/trafficprotocol"
@@ -51,7 +52,7 @@ func InitChain(
 	}
 
 	if !trafficEnable {
-		// todo pseudosettle
+		return oracleServer, pseudosettle.New(p2pService, logger, stateStore), nil
 	}
 	beneficiary, err := signer.EthereumAddress()
 	if err != nil {
