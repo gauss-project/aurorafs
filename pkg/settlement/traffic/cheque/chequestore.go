@@ -112,7 +112,7 @@ func (s *chequeStore) LastReceivedCheque(chainAddress common.Address) (*SignedCh
 // ReceiveCheque verifies and stores a cheque. It returns the totam amount earned.
 func (s *chequeStore) ReceiveCheque(ctx context.Context, cheque *SignedCheque) (*big.Int, error) {
 	// verify we are the beneficiary
-	if cheque.Beneficiary != s.beneficiary {
+	if cheque.Recipient != s.beneficiary {
 		return nil, ErrWrongBeneficiary
 	}
 

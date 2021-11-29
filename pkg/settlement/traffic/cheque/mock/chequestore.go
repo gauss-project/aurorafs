@@ -131,6 +131,10 @@ func (s *ChequeStoreMock) PutReceivedCheques(chainAddress common.Address, cheque
 	return s.putReceivedCheques(chainAddress, cheque)
 }
 
+func (s *ChequeStoreMock) VerifyCheque(cheque *cheque.SignedCheque, chaindID int64) (common.Address, error) {
+	return common.HexToAddress(""), nil
+}
+
 // Option is the option passed to the mock ChequeStore service
 type Option interface {
 	apply(*ChequeStoreMock)
