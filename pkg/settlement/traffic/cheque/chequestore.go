@@ -50,6 +50,8 @@ type ChequeStore interface {
 	PutTransferTraffic(chainAddress common.Address, traffic *big.Int) error
 
 	PutReceivedCheques(chainAddress common.Address, cheque SignedCheque) error
+
+	VerifyCheque(cheque *SignedCheque, chaindID int64) (common.Address, error)
 }
 
 type chequeStore struct {
@@ -288,4 +290,8 @@ func (s *chequeStore) RecoverCheque(cheque *SignedCheque, chaindID int64) (commo
 	var issuer common.Address
 	copy(issuer[:], ethAddr)
 	return issuer, nil
+}
+
+func (s *chequeStore) VerifyCheque(cheque *SignedCheque, chaindID int64) (common.Address, error) {
+	return s.recoverChequeFunc(cheque, chaindID)
 }
