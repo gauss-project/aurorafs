@@ -162,23 +162,23 @@ func prepareTransaction(ctx context.Context, request *chain.TxRequest, from comm
 	}
 
 	if request.To != nil {
-		return types.NewTransaction(
-			nonce,
-			*request.To,
-			request.Value,
-			gasLimit,
-			gasPrice,
-			request.Data,
-		), nil
+		return types.NewTx(&types.LegacyTx{
+			Nonce:    nonce,
+			To:       request.To,
+			Value:    request.Value,
+			Gas:      gasLimit,
+			GasPrice: gasPrice,
+			Data:     request.Data,
+		}), nil
 	}
 
-	return types.NewContractCreation(
-		nonce,
-		request.Value,
-		gasLimit,
-		gasPrice,
-		request.Data,
-	), nil
+	return types.NewTx(&types.LegacyTx{
+		Nonce:    nonce,
+		Value:    request.Value,
+		Gas:      gasLimit,
+		GasPrice: gasPrice,
+		Data:     request.Data,
+	}), nil
 }
 
 func (t *transactionService) nonceKey() string {

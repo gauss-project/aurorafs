@@ -8,6 +8,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"github.com/gauss-project/aurorafs/pkg/settlement/chain"
 	"github.com/gauss-project/aurorafs/pkg/settlement/chain/transaction"
 	"github.com/gauss-project/aurorafs/pkg/settlement/chain/transaction/backendmock"
 	"io/ioutil"
@@ -79,8 +80,15 @@ func TestTransactionSend(t *testing.T) {
 	chainID := big.NewInt(5)
 
 	t.Run("send", func(t *testing.T) {
-		signedTx := types.NewTransaction(nonce, recipient, value, estimatedGasLimit, suggestedGasPrice, txData)
-		request := &transaction.TxRequest{
+		signedTx := types.NewTx(&types.LegacyTx{
+			Nonce:    nonce,
+			To:       &recipient,
+			Value:    value,
+			Gas:      estimatedGasLimit,
+			GasPrice: suggestedGasPrice,
+			Data:     txData,
+		})
+		request := &chain.TxRequest{
 			To:    &recipient,
 			Data:  txData,
 			Value: value,
@@ -143,8 +151,15 @@ func TestTransactionSend(t *testing.T) {
 	})
 
 	t.Run("send_no_nonce", func(t *testing.T) {
-		signedTx := types.NewTransaction(nonce, recipient, value, estimatedGasLimit, suggestedGasPrice, txData)
-		request := &transaction.TxRequest{
+		signedTx := types.NewTx(&types.LegacyTx{
+			Nonce:    nonce,
+			To:       &recipient,
+			Value:    value,
+			Gas:      estimatedGasLimit,
+			GasPrice: suggestedGasPrice,
+			Data:     txData,
+		})
+		request := &chain.TxRequest{
 			To:    &recipient,
 			Data:  txData,
 			Value: value,
@@ -204,8 +219,15 @@ func TestTransactionSend(t *testing.T) {
 
 	t.Run("send_skipped_nonce", func(t *testing.T) {
 		nextNonce := nonce + 5
-		signedTx := types.NewTransaction(nextNonce, recipient, value, estimatedGasLimit, suggestedGasPrice, txData)
-		request := &transaction.TxRequest{
+		signedTx := types.NewTx(&types.LegacyTx{
+			Nonce:    nextNonce,
+			To:       &recipient,
+			Value:    value,
+			Gas:      estimatedGasLimit,
+			GasPrice: suggestedGasPrice,
+			Data:     txData,
+		})
+		request := &chain.TxRequest{
 			To:    &recipient,
 			Data:  txData,
 			Value: value,
@@ -268,8 +290,14 @@ func TestTransactionSend(t *testing.T) {
 	})
 
 	t.Run("deploy", func(t *testing.T) {
-		signedTx := types.NewContractCreation(nonce, value, estimatedGasLimit, suggestedGasPrice, txData)
-		request := &transaction.TxRequest{
+		signedTx := types.NewTx(&types.LegacyTx{
+			Nonce:    nonce,
+			Value:    value,
+			Gas:      estimatedGasLimit,
+			GasPrice: suggestedGasPrice,
+			Data:     txData,
+		})
+		request := &chain.TxRequest{
 			To:    nil,
 			Data:  txData,
 			Value: value,

@@ -327,7 +327,7 @@ func (s *Service) retrieveChunk(ctx context.Context, route aco.Route, rootAddr, 
 			return nil, boson.ErrInvalidChunk
 		}
 	}
-	if err := s.accounting.Credit(ctx, route.LinkNode, uint64(dataSize*8)); err != nil {
+	if err := s.accounting.Credit(route.LinkNode, uint64(dataSize*8)); err != nil {
 		return nil, err
 	}
 
@@ -393,8 +393,9 @@ func (s *Service) handler(ctx context.Context, p p2p.Peer, stream p2p.Stream) (e
 			return fmt.Errorf("get from store: %w", err)
 		}
 	}
-
-	if err := s.accounting.Debit(p.Address, 256*1024*8); err != nil {
+	// todo
+	var dataSize = uint64(len(chunk.Data()) * 8)
+	if err := s.accounting.Debit(p.Address, dataSize); err != nil {
 		return nil
 	}
 	if err := w.WriteMsgWithContext(ctx, &pb.Delivery{
