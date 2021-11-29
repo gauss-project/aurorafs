@@ -349,7 +349,7 @@ func (s *Service) Pay(ctx context.Context, peer boson.Address, traffic, paymentT
 }
 
 func (s *Service) Issue(ctx context.Context, peer boson.Address, recipient, beneficiary common.Address, traffic *big.Int) error {
-	available, err := s.AvailableBalance()
+	available, err := s.AvailableBalance(ctx)
 	if err != nil {
 		return err
 	}
@@ -609,14 +609,14 @@ func (s *Service) UpdatePeerBalance(peer boson.Address) error {
 	var localTraffic Traffic
 	chainTraffic, ok := s.trafficPeers.trafficPeers.Load(chainAddress)
 
-	updateTraffice := chainTraffic.(Traffic)
+	updateTraffic := chainTraffic.(Traffic)
 	if ok {
-		localTraffic.transferTraffic = updateTraffice.transferTraffic
-		localTraffic.retrieveTraffic = updateTraffice.retrieveTraffic
-		localTraffic.transferChequeTraffic = updateTraffice.transferChequeTraffic
-		localTraffic.retrieveChainTraffic = updateTraffice.retrieveChainTraffic
-		localTraffic.transferChainTraffic = updateTraffice.transferChainTraffic
-		localTraffic.retrieveChequeTraffic = updateTraffice.retrieveChequeTraffic
+		localTraffic.transferTraffic = updateTraffic.transferTraffic
+		localTraffic.retrieveTraffic = updateTraffic.retrieveTraffic
+		localTraffic.transferChequeTraffic = updateTraffic.transferChequeTraffic
+		localTraffic.retrieveChainTraffic = updateTraffic.retrieveChainTraffic
+		localTraffic.transferChainTraffic = updateTraffic.transferChainTraffic
+		localTraffic.retrieveChequeTraffic = updateTraffic.retrieveChequeTraffic
 	}
 	localTraffic.trafficPeerBalance = balance
 
@@ -626,8 +626,15 @@ func (s *Service) UpdatePeerBalance(peer boson.Address) error {
 }
 
 func (s *Service) ReceiveCheque(ctx context.Context, peer boson.Address, cheque *chequePkg.SignedCheque) error {
+	chainAddress, known, err := s.addressBook.Beneficiary(peer)
+	if err != nil {
+		return err
+	}
+	if !known {
+		return errors.New("account information error")
+	}
 
-	if cheque.Beneficiary != s.Address() {
+	if cheque.Beneficiary != s.Address() && cheque.Recipient != chainAddress {
 		return errors.New("account information error ")
 	}
 
@@ -646,4 +653,46 @@ func (s *Service) ReceiveCheque(ctx context.Context, peer boson.Address, cheque 
 
 func (s *Service) SetNotifyPaymentFunc(notifyPaymentFunc settlement.NotifyPaymentFunc) {
 	s.notifyPaymentFunc = notifyPaymentFunc
+}
+
+func (s *Service) GetPeerBalance(peer boson.Address) (*big.Int, error) {
+	chainAddress, known, err := s.addressBook.Beneficiary(peer)
+	if err != nil {
+		return big.NewInt(0), err
+	}
+	if !known {
+		return new(big.Int).SetInt64(0), chequePkg.ErrNoCheque
+	}
+	var trafficPeerBalance *big.Int
+	tra, ok := s.trafficPeers.trafficPeers.Load(chainAddress)
+	if ok {
+		trafficPeerBalance = tra.(Traffic).trafficPeerBalance
+	} else {
+		trafficPeerBalance = big.NewInt(0)
+		return trafficPeerBalance, nil
+	}
+	return trafficPeerBalance, nil
+}
+
+func (s *Service) GetNoPaidBalace(peer boson.Address) (*big.Int, error) {
+	chainAddress, known, err := s.addressBook.Beneficiary(peer)
+	if err != nil {
+		return big.NewInt(0), err
+	}
+	if !known {
+		return new(big.Int).SetInt64(0), chequePkg.ErrNoCheque
+	}
+	cheque, err := s.LastSentCheque(peer)
+	if err != nil {
+		return big.NewInt(0), err
+	}
+	var noPaidBalance, transferChequeTraffic *big.Int
+	tra, ok := s.trafficPeers.trafficPeers.Load(chainAddress)
+	if ok {
+		transferChequeTraffic = tra.(Traffic).transferChequeTraffic
+	} else {
+		transferChequeTraffic = big.NewInt(0)
+	}
+	noPaidBalance = new(big.Int).Sub(cheque.CumulativePayout, transferChequeTraffic)
+	return noPaidBalance, nil
 }
