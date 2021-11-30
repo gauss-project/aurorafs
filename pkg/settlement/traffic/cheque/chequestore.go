@@ -103,7 +103,13 @@ func (s *chequeStore) LastReceivedCheque(chainAddress common.Address) (*SignedCh
 		if err != storage.ErrNotFound {
 			return nil, err
 		}
-		return &SignedCheque{}, ErrNoCheque
+		return &SignedCheque{
+			Cheque: Cheque{
+				Recipient:        common.Address{},
+				Beneficiary:      common.Address{},
+				CumulativePayout: big.NewInt(0),
+			},
+		}, ErrNoCheque
 	}
 
 	return cheque, nil
@@ -228,7 +234,11 @@ func (s *chequeStore) LastSendCheque(chainAddress common.Address) (*Cheque, erro
 		if err != storage.ErrNotFound {
 			return nil, err
 		}
-		return &Cheque{}, ErrNoCheque
+		return &Cheque{
+			Recipient:        common.Address{},
+			Beneficiary:      common.Address{},
+			CumulativePayout: new(big.Int).SetInt64(0),
+		}, ErrNoCheque
 	}
 
 	return cheque, nil
