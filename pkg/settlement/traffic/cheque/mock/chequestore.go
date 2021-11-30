@@ -27,6 +27,8 @@ type ChequeStoreMock struct {
 	putTransferTraffic func(chainAddress common.Address, traffic *big.Int) error
 
 	putReceivedCheques func(chainAddress common.Address, cheque cheque.SignedCheque) error
+
+	//chequebookIssueFunc            func(ctx context.Context, beneficiary common.Address, amount *big.Int, sendChequeFunc chequebook.SendChequeFunc) (*big.Int, error)
 }
 
 func WithRetrieveChequeFunc(f func(ctx context.Context, cheque *cheque.SignedCheque) (*big.Int, error)) Option {
@@ -82,6 +84,12 @@ func WithPutReceivedCheques(f func(chainAddress common.Address, cheque cheque.Si
 		s.putReceivedCheques = f
 	})
 }
+
+//func WithChequebookIssueFunc(f func(ctx context.Context, beneficiary common.Address, amount *big.Int, sendChequeFunc chequebook.SendChequeFunc) (*big.Int, error)) Option {
+//	return optionFunc(func(s *ChequeStoreMock) {
+//		s.chequebookIssueFunc = f
+//	})
+//}
 
 // NewChequeStore creates the mock chequeStore implementation
 func NewChequeStore(opts ...Option) cheque.ChequeStore {
