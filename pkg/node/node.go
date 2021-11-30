@@ -63,29 +63,26 @@ type Aurora struct {
 }
 
 type Options struct {
-	DataDir                  string
-	CacheCapacity            uint64
-	DBOpenFilesLimit         uint64
-	DBWriteBufferSize        uint64
-	DBBlockCacheCapacity     uint64
-	DBDisableSeeksCompaction bool
-	APIAddr                  string
-	DebugAPIAddr             string
-	ApiBufferSizeMul         int
-	NATAddr                  string
-	EnableWS                 bool
-	EnableQUIC               bool
-	WelcomeMessage           string
-	Bootnodes                []string
-	OracleEndpoint           string
-	OracleContractAddress    string
-	CORSAllowedOrigins       []string
-	Logger                   logging.Logger
-	Standalone               bool
-	IsDev                    bool
-	TracingEnabled           bool
-	TracingEndpoint          string
-	TracingServiceName       string
+	DataDir               string
+	CacheCapacity         uint64
+	DBDriver              string
+	APIAddr               string
+	DebugAPIAddr          string
+	ApiBufferSizeMul      int
+	NATAddr               string
+	EnableWS              bool
+	EnableQUIC            bool
+	WelcomeMessage        string
+	Bootnodes             []string
+	OracleEndpoint        string
+	OracleContractAddress string
+	CORSAllowedOrigins    []string
+	Logger                logging.Logger
+	Standalone            bool
+	IsDev                 bool
+	TracingEnabled        bool
+	TracingEndpoint       string
+	TracingServiceName    string
 	//GlobalPinningEnabled     bool
 	//PaymentThreshold         string
 	//PaymentTolerance         string
@@ -405,11 +402,8 @@ func NewAurora(addr string, bosonAddress boson.Address, publicKey ecdsa.PublicKe
 		path = filepath.Join(o.DataDir, "localstore")
 	}
 	lo := &localstore.Options{
-		Capacity:               o.CacheCapacity,
-		OpenFilesLimit:         o.DBOpenFilesLimit,
-		BlockCacheCapacity:     o.DBBlockCacheCapacity,
-		WriteBufferSize:        o.DBWriteBufferSize,
-		DisableSeeksCompaction: o.DBDisableSeeksCompaction,
+		Capacity: o.CacheCapacity,
+		Driver:   o.DBDriver,
 	}
 	storer, err := localstore.New(path, bosonAddress.Bytes(), lo, logger)
 	if err != nil {

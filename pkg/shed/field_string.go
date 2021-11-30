@@ -20,7 +20,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/syndtr/goleveldb/leveldb"
+	"github.com/gauss-project/aurorafs/pkg/shed/driver"
 )
 
 // StringField is the most simple field implementation
@@ -47,9 +47,9 @@ func (db *DB) NewStringField(name string) (f StringField, err error) {
 // If the value is not found, an empty string is returned
 // an no error.
 func (f StringField) Get() (val string, err error) {
-	b, err := f.db.Get(f.key)
+	b, err := f.db.Get(fieldKeyPrefixLength, f.key)
 	if err != nil {
-		if errors.Is(err, leveldb.ErrNotFound) {
+		if errors.Is(err, driver.ErrNotFound) {
 			return "", nil
 		}
 		return "", err
@@ -59,11 +59,14 @@ func (f StringField) Get() (val string, err error) {
 
 // Put stores a string in the database.
 func (f StringField) Put(val string) (err error) {
-	return f.db.Put(f.key, []byte(val))
+	return f.db.Put(fieldKeyPrefixLength, f.key, []byte(val))
 }
 
 // PutInBatch stores a string in a batch that can be
 // saved later in database.
-func (f StringField) PutInBatch(batch *leveldb.Batch, val string) {
-	batch.Put(f.key, []byte(val))
+func (f StringField) PutInBatch(batch driver.Batching, val string) error {
+	return batch.Put(driver.Key{
+		Prefix: fieldKeyPrefixLength,
+		Data:   f.key,
+	}, driver.Value{Data: []byte(val)})
 }

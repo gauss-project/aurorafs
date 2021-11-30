@@ -24,35 +24,65 @@ package shed
 
 import (
 	"errors"
+	"fmt"
+	"sort"
+	"sync"
 
-	"github.com/syndtr/goleveldb/leveldb"
-	"github.com/syndtr/goleveldb/leveldb/iterator"
-	"github.com/syndtr/goleveldb/leveldb/opt"
-	"github.com/syndtr/goleveldb/leveldb/storage"
+	"github.com/gauss-project/aurorafs/pkg/shed/driver"
 )
 
 var (
-	defaultOpenFilesLimit         = uint64(256)
-	defaultBlockCacheCapacity     = uint64(32 * 1024 * 1024)
-	defaultWriteBufferSize        = uint64(32 * 1024 * 1024)
-	defaultDisableSeeksCompaction = false
+	driversMu sync.RWMutex
+	drivers   = make(map[string]driver.Driver)
 )
 
-type Options struct {
-	BlockCacheCapacity     uint64
-	WriteBufferSize        uint64
-	OpenFilesLimit         uint64
-	DisableSeeksCompaction bool
+type ErrDriverNotRegister struct {
+	Name string
 }
 
-// DB provides abstractions over LevelDB in order to
+func (e ErrDriverNotRegister) Error() string {
+	return fmt.Sprintf("driver %s not register\n", e.Name)
+}
+
+// Register makes a database driver available by the provided name.
+// If Register is called twice with the same name or if driver is nil,
+// it panics.
+func Register(name string, driver driver.Driver) {
+	driversMu.Lock()
+	defer driversMu.Unlock()
+	if driver == nil {
+		panic("sql: Register driver is nil")
+	}
+	if _, dup := drivers[name]; dup {
+		panic("sql: Register called twice for driver " + name)
+	}
+	drivers[name] = driver
+}
+
+// Drivers returns a sorted list of the names of the registered drivers.
+func Drivers() []string {
+	driversMu.RLock()
+	defer driversMu.RUnlock()
+	list := make([]string, 0, len(drivers))
+	for name := range drivers {
+		list = append(list, name)
+	}
+	sort.Strings(list)
+	return list
+}
+
+// DB provides abstractions over database driver in order to
 // implement complex structures using fields and ordered indexes.
 // It provides a schema functionality to store fields and indexes
 // information about naming and types.
 type DB struct {
-	ldb     *leveldb.DB
+	backend driver.BatchDB
 	metrics metrics
 	quit    chan struct{} // Quit channel to stop the metrics collection before closing the database
+}
+
+type Options struct {
+	Driver string
 }
 
 // NewDB constructs a new DB and validates the schema
@@ -61,59 +91,43 @@ type DB struct {
 func NewDB(path string, o *Options) (db *DB, err error) {
 	if o == nil {
 		o = &Options{
-			OpenFilesLimit:         defaultOpenFilesLimit,
-			BlockCacheCapacity:     defaultBlockCacheCapacity,
-			WriteBufferSize:        defaultWriteBufferSize,
-			DisableSeeksCompaction: defaultDisableSeeksCompaction,
+			// pick one database
+			Driver: Drivers()[0],
 		}
 	}
-	var ldb *leveldb.DB
-	if path == "" {
-		ldb, err = leveldb.Open(storage.NewMemStorage(), nil)
-	} else {
-		ldb, err = leveldb.OpenFile(path, &opt.Options{
-			BlockSize:              256 * 1024,
-			CompactionTableSize:    128 * 1024 * 1024,
-			CompactionTotalSize:    5 * 128 * 1024 * 1024,
-			OpenFilesCacheCapacity: int(o.OpenFilesLimit),
-			BlockCacheCapacity:     int(o.BlockCacheCapacity),
-			WriteBuffer:            int(o.WriteBufferSize),
-			DisableSeeksCompaction: o.DisableSeeksCompaction,
-		})
+
+	d, ok := drivers[o.Driver]
+	if !ok {
+		return nil, ErrDriverNotRegister{Name: o.Driver}
 	}
+
+	i, err := d.Open(path)
 
 	if err != nil {
 		return nil, err
 	}
 
-	return NewDBWrap(ldb)
+	bi, ok := i.(driver.BatchDB)
+	if !ok {
+		return nil, fmt.Errorf("current backend %s not support batching", o.Driver)
+	}
+
+	return NewDBWrap(bi)
 }
 
-// NewDBWrap returns new DB which uses the given ldb as its underlying storage.
-// The function will panics if the given ldb is nil.
-func NewDBWrap(ldb *leveldb.DB) (db *DB, err error) {
-	if ldb == nil {
-		panic(errors.New("shed: NewDBWrap: nil ldb"))
+// NewDBWrap returns new DB which uses the given database as its underlying storage.
+// The function will panics if the given database is nil.
+func NewDBWrap(i driver.BatchDB) (db *DB, err error) {
+	if i == nil {
+		panic(errors.New("shed: NewDBWrap: nil db backend"))
 	}
 
 	db = &DB{
-		ldb:     ldb,
+		backend: i,
 		metrics: newMetrics(),
 	}
 
-	if _, err = db.getSchema(); err != nil {
-		if errors.Is(err, leveldb.ErrNotFound) {
-			// Save schema with initialized default fields.
-			if err = db.putSchema(schema{
-				Fields:  make(map[string]fieldSpec),
-				Indexes: make(map[byte]indexSpec),
-			}); err != nil {
-				return nil, err
-			}
-		} else {
-			return nil, err
-		}
-	}
+	db.initSchema()
 
 	// Create a quit channel for the periodic metrics collector and run it.
 	db.quit = make(chan struct{})
@@ -121,9 +135,9 @@ func NewDBWrap(ldb *leveldb.DB) (db *DB, err error) {
 	return db, nil
 }
 
-// Put wraps LevelDB Put method to increment metrics counter.
-func (db *DB) Put(key, value []byte) (err error) {
-	err = db.ldb.Put(key, value, nil)
+// Put wraps database Put method to increment metrics counter.
+func (db *DB) Put(prefix int, key, value []byte) (err error) {
+	err = db.backend.Put(driver.Key{Prefix: prefix, Data: key}, driver.Value{Data: value})
 	if err != nil {
 		db.metrics.PutFailCounter.Inc()
 		return err
@@ -132,11 +146,11 @@ func (db *DB) Put(key, value []byte) (err error) {
 	return nil
 }
 
-// Get wraps LevelDB Get method to increment metrics counter.
-func (db *DB) Get(key []byte) (value []byte, err error) {
-	value, err = db.ldb.Get(key, nil)
+// Get wraps database Get method to increment metrics counter.
+func (db *DB) Get(prefix int, key []byte) (value []byte, err error) {
+	value, err = db.backend.Get(driver.Key{Prefix: prefix, Data: key})
 	if err != nil {
-		if errors.Is(err, leveldb.ErrNotFound) {
+		if errors.Is(err, driver.ErrNotFound) {
 			db.metrics.GetNotFoundCounter.Inc()
 		} else {
 			db.metrics.GetFailCounter.Inc()
@@ -147,9 +161,9 @@ func (db *DB) Get(key []byte) (value []byte, err error) {
 	return value, nil
 }
 
-// Has wraps LevelDB Has method to increment metrics counter.
-func (db *DB) Has(key []byte) (yes bool, err error) {
-	yes, err = db.ldb.Has(key, nil)
+// Has wraps database Has method to increment metrics counter.
+func (db *DB) Has(prefix int, key []byte) (yes bool, err error) {
+	yes, err = db.backend.Has(driver.Key{Prefix: prefix, Data: key})
 	if err != nil {
 		db.metrics.HasFailCounter.Inc()
 		return false, err
@@ -158,9 +172,9 @@ func (db *DB) Has(key []byte) (yes bool, err error) {
 	return yes, nil
 }
 
-// Delete wraps LevelDB Delete method to increment metrics counter.
-func (db *DB) Delete(key []byte) (err error) {
-	err = db.ldb.Delete(key, nil)
+// Delete wraps database Delete method to increment metrics counter.
+func (db *DB) Delete(prefix int, key []byte) (err error) {
+	err = db.backend.Delete(driver.Key{Prefix: prefix, Data: key})
 	if err != nil {
 		db.metrics.DeleteFailCounter.Inc()
 		return err
@@ -169,25 +183,31 @@ func (db *DB) Delete(key []byte) (err error) {
 	return nil
 }
 
-// NewIterator wraps LevelDB NewIterator method to increment metrics counter.
-func (db *DB) NewIterator() iterator.Iterator {
-	db.metrics.IteratorCounter.Inc()
-	return db.ldb.NewIterator(nil, nil)
+type Batch struct {
+	db *DB
+	driver.Batching
 }
 
-// WriteBatch wraps LevelDB Write method to increment metrics counter.
-func (db *DB) WriteBatch(batch *leveldb.Batch) (err error) {
-	err = db.ldb.Write(batch, nil)
+// Commit wraps database Commit method to increment metrics counter.
+func (b *Batch) Commit() (err error) {
+	err = b.Batching.Commit()
 	if err != nil {
-		db.metrics.WriteBatchFailCounter.Inc()
+		b.db.metrics.WriteBatchFailCounter.Inc()
 		return err
 	}
-	db.metrics.WriteBatchCounter.Inc()
+	b.db.metrics.WriteBatchCounter.Inc()
 	return nil
 }
 
-// Close closes LevelDB database.
+func (db *DB) NewBatch() driver.Batching {
+	return &Batch{
+		Batching: db.backend.NewBatch(),
+		db:       db,
+	}
+}
+
+// Close closes database backend.
 func (db *DB) Close() (err error) {
 	close(db.quit)
-	return db.ldb.Close()
+	return db.backend.Close()
 }

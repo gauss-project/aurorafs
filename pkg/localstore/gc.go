@@ -23,6 +23,7 @@ import (
 
 	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/shed"
+	"github.com/gauss-project/aurorafs/pkg/shed/driver"
 	"github.com/syndtr/goleveldb/leveldb"
 )
 
@@ -91,7 +92,7 @@ func (db *DB) collectGarbage() (collectedCount uint64, done bool, err error) {
 		}
 		totalTimeMetric(db.metrics.TotalTimeCollectGarbage, start)
 	}(time.Now())
-	batch := new(leveldb.Batch)
+	batch := db.shed.NewBatch()
 	target := db.gcTarget()
 
 	// tell the localstore to start logging dirty addresses
@@ -210,7 +211,7 @@ func (db *DB) collectGarbage() (collectedCount uint64, done bool, err error) {
 	db.metrics.GCCommittedCounter.Add(float64(currentCollectedCount))
 	db.gcSize.PutInBatch(batch, gcSize-currentCollectedCount)
 
-	err = db.shed.WriteBatch(batch)
+	err = batch.Commit()
 	if err != nil {
 		db.metrics.GCErrorCounter.Inc()
 		return 0, false, err
@@ -235,7 +236,7 @@ func (db *DB) recycleGarbageWorker() {
 	done := true
 
 	for {
-		batch := new(leveldb.Batch)
+		batch := db.shed.NewBatch()
 		candidates := make([]shed.Item, 0)
 
 		// iterate from large to small
@@ -311,7 +312,7 @@ func (db *DB) recycleGarbageWorker() {
 			}
 
 		writeBatch:
-			err = db.shed.WriteBatch(batch)
+			err = batch.Commit()
 			if err != nil {
 				db.metrics.GCErrorCounter.Inc()
 				db.logger.Errorf("localstore: recycle garbage: %v", err)
@@ -372,7 +373,7 @@ func (db *DB) triggerGarbageRecycling() {
 // incGCSizeInBatch changes gcSize field value
 // by change which can be negative. This function
 // must be called under batchMu lock.
-func (db *DB) incGCSizeInBatch(batch *leveldb.Batch, change int64) (err error) {
+func (db *DB) incGCSizeInBatch(batch driver.Batching, change int64) (err error) {
 	if change == 0 {
 		return nil
 	}

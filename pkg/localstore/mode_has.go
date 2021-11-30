@@ -18,10 +18,10 @@ package localstore
 
 import (
 	"context"
-	"github.com/gauss-project/aurorafs/pkg/storage"
 	"time"
 
 	"github.com/gauss-project/aurorafs/pkg/boson"
+	"github.com/gauss-project/aurorafs/pkg/storage"
 )
 
 // Has returns true if the chunk is stored in database.

@@ -16,35 +16,32 @@ import (
 )
 
 const (
-	optionNameDataDir                  = "data-dir"
-	optionNameCacheCapacity            = "cache-capacity"
-	optionNameDBOpenFilesLimit         = "db-open-files-limit"
-	optionNameDBBlockCacheCapacity     = "db-block-cache-capacity"
-	optionNameDBWriteBufferSize        = "db-write-buffer-size"
-	optionNameDBDisableSeeksCompaction = "db-disable-seeks-compaction"
-	optionNamePassword                 = "password"
-	optionNamePasswordFile             = "password-file"
-	optionNameAPIAddr                  = "api-addr"
-	optionNameP2PAddr                  = "p2p-addr"
-	optionNameNATAddr                  = "nat-addr"
-	optionNameP2PWSEnable              = "p2p-ws-enable"
-	optionNameP2PQUICEnable            = "p2p-quic-enable"
-	optionNameDebugAPIEnable           = "debug-api-enable"
-	optionNameDebugAPIAddr             = "debug-api-addr"
-	optionNameBootnodes                = "bootnode"
-	optionNameOracleEndpoint           = "oracle-endpoint"
-	optionNameOracleContractAddr       = "oracle-contract-addr"
-	optionNameNetworkID                = "network-id"
-	optionWelcomeMessage               = "welcome-message"
-	optionCORSAllowedOrigins           = "cors-allowed-origins"
-	optionNameStandalone               = "standalone"
-	optionNameDevMode                  = "dev-mode"
-	optionNameTracingEnabled           = "tracing-enable"
-	optionNameTracingEndpoint          = "tracing-endpoint"
-	optionNameTracingServiceName       = "tracing-service-name"
-	optionNameVerbosity                = "verbosity"
-	optionNameGlobalPinningEnabled     = "global-pinning-enable"
-	optionNameApiFileBufferMultiple    = "api-file-buffer-multiple"
+	optionNameDataDir               = "data-dir"
+	optionNameCacheCapacity         = "cache-capacity"
+	optionDatabaseDriver            = "db-driver"
+	optionNamePassword              = "password"
+	optionNamePasswordFile          = "password-file"
+	optionNameAPIAddr               = "api-addr"
+	optionNameP2PAddr               = "p2p-addr"
+	optionNameNATAddr               = "nat-addr"
+	optionNameP2PWSEnable           = "p2p-ws-enable"
+	optionNameP2PQUICEnable         = "p2p-quic-enable"
+	optionNameDebugAPIEnable        = "debug-api-enable"
+	optionNameDebugAPIAddr          = "debug-api-addr"
+	optionNameBootnodes             = "bootnode"
+	optionNameOracleEndpoint        = "oracle-endpoint"
+	optionNameOracleContractAddr    = "oracle-contract-addr"
+	optionNameNetworkID             = "network-id"
+	optionWelcomeMessage            = "welcome-message"
+	optionCORSAllowedOrigins        = "cors-allowed-origins"
+	optionNameStandalone            = "standalone"
+	optionNameDevMode               = "dev-mode"
+	optionNameTracingEnabled        = "tracing-enable"
+	optionNameTracingEndpoint       = "tracing-endpoint"
+	optionNameTracingServiceName    = "tracing-service-name"
+	optionNameVerbosity             = "verbosity"
+	optionNameGlobalPinningEnabled  = "global-pinning-enable"
+	optionNameApiFileBufferMultiple = "api-file-buffer-multiple"
 	//optionNamePaymentThreshold          = "payment-threshold"
 	//optionNamePaymentTolerance          = "payment-tolerance"
 	//optionNamePaymentEarly              = "payment-early"
@@ -192,10 +189,7 @@ func (c *command) setHomeDir() (err error) {
 func (c *command) setAllFlags(cmd *cobra.Command) {
 	cmd.Flags().String(optionNameDataDir, filepath.Join(c.homeDir, ".aurorafs"), "data directory")
 	cmd.Flags().Uint64(optionNameCacheCapacity, 80000, fmt.Sprintf("cache capacity in chunks, multiply by %d to get approximate capacity in bytes", boson.ChunkSize))
-	cmd.Flags().Uint64(optionNameDBOpenFilesLimit, 1024, "number of open files allowed by database")
-	cmd.Flags().Uint64(optionNameDBBlockCacheCapacity, 32*1024*1024, "size of block cache of the database in bytes")
-	cmd.Flags().Uint64(optionNameDBWriteBufferSize, 32*1024*1024, "size of the database write buffer in bytes")
-	cmd.Flags().Bool(optionNameDBDisableSeeksCompaction, false, "disables db compactions triggered by seeks")
+	cmd.Flags().String(optionDatabaseDriver, "leveldb", fmt.Sprintf("database storage driver, support leveldb or wiredtiger"))
 	cmd.Flags().String(optionNamePassword, "", "password for decrypting keys")
 	cmd.Flags().String(optionNamePasswordFile, "", "path to a file that contains password for decrypting keys")
 	cmd.Flags().String(optionNameAPIAddr, ":1633", "HTTP API listen address")

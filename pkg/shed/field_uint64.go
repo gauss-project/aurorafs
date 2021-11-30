@@ -21,7 +21,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/syndtr/goleveldb/leveldb"
+	"github.com/gauss-project/aurorafs/pkg/shed/driver"
 )
 
 // Uint64Field provides a way to have a simple counter in the database.
@@ -48,9 +48,9 @@ func (db *DB) NewUint64Field(name string) (f Uint64Field, err error) {
 // If the value is not found in the database a 0 value
 // is returned and no error.
 func (f Uint64Field) Get() (val uint64, err error) {
-	b, err := f.db.Get(f.key)
+	b, err := f.db.Get(fieldKeyPrefixLength, f.key)
 	if err != nil {
-		if errors.Is(err, leveldb.ErrNotFound) {
+		if errors.Is(err, driver.ErrNotFound) {
 			return 0, nil
 		}
 		return 0, err
@@ -60,13 +60,16 @@ func (f Uint64Field) Get() (val uint64, err error) {
 
 // Put encodes uin64 value and stores it in the database.
 func (f Uint64Field) Put(val uint64) (err error) {
-	return f.db.Put(f.key, encodeUint64(val))
+	return f.db.Put(fieldKeyPrefixLength, f.key, encodeUint64(val))
 }
 
 // PutInBatch stores a uint64 value in a batch
 // that can be saved later in the database.
-func (f Uint64Field) PutInBatch(batch *leveldb.Batch, val uint64) {
-	batch.Put(f.key, encodeUint64(val))
+func (f Uint64Field) PutInBatch(batch driver.Batching, val uint64) error {
+	return batch.Put(driver.Key{
+		Prefix: fieldKeyPrefixLength,
+		Data:   f.key,
+	}, driver.Value{Data: encodeUint64(val)})
 }
 
 // Inc increments a uint64 value in the database.
@@ -74,7 +77,7 @@ func (f Uint64Field) PutInBatch(batch *leveldb.Batch, val uint64) {
 func (f Uint64Field) Inc() (val uint64, err error) {
 	val, err = f.Get()
 	if err != nil {
-		if errors.Is(err, leveldb.ErrNotFound) {
+		if errors.Is(err, driver.ErrNotFound) {
 			val = 0
 		} else {
 			return 0, fmt.Errorf("get value: %w", err)
@@ -87,18 +90,17 @@ func (f Uint64Field) Inc() (val uint64, err error) {
 // IncInBatch increments a uint64 value in the batch
 // by retreiving a value from the database, not the same batch.
 // This operation is not goroutine save.
-func (f Uint64Field) IncInBatch(batch *leveldb.Batch) (val uint64, err error) {
+func (f Uint64Field) IncInBatch(batch driver.Batching) (val uint64, err error) {
 	val, err = f.Get()
 	if err != nil {
-		if errors.Is(err, leveldb.ErrNotFound) {
+		if errors.Is(err, driver.ErrNotFound) {
 			val = 0
 		} else {
 			return 0, fmt.Errorf("get value: %w", err)
 		}
 	}
 	val++
-	f.PutInBatch(batch, val)
-	return val, nil
+	return val, f.PutInBatch(batch, val)
 }
 
 // Dec decrements a uint64 value in the database.
@@ -107,7 +109,7 @@ func (f Uint64Field) IncInBatch(batch *leveldb.Batch) (val uint64, err error) {
 func (f Uint64Field) Dec() (val uint64, err error) {
 	val, err = f.Get()
 	if err != nil {
-		if errors.Is(err, leveldb.ErrNotFound) {
+		if errors.Is(err, driver.ErrNotFound) {
 			val = 0
 		} else {
 			return 0, fmt.Errorf("get value: %w", err)
@@ -123,10 +125,10 @@ func (f Uint64Field) Dec() (val uint64, err error) {
 // by retreiving a value from the database, not the same batch.
 // This operation is not goroutine save.
 // The field is protected from overflow to a negative value.
-func (f Uint64Field) DecInBatch(batch *leveldb.Batch) (val uint64, err error) {
+func (f Uint64Field) DecInBatch(batch driver.Batching) (val uint64, err error) {
 	val, err = f.Get()
 	if err != nil {
-		if errors.Is(err, leveldb.ErrNotFound) {
+		if errors.Is(err, driver.ErrNotFound) {
 			val = 0
 		} else {
 			return 0, fmt.Errorf("get value: %w", err)
@@ -135,8 +137,7 @@ func (f Uint64Field) DecInBatch(batch *leveldb.Batch) (val uint64, err error) {
 	if val != 0 {
 		val--
 	}
-	f.PutInBatch(batch, val)
-	return val, nil
+	return val, f.PutInBatch(batch, val)
 }
 
 // encode transforms uint64 to 8 byte long

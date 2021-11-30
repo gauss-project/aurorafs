@@ -22,14 +22,20 @@ else
 BINARY_NAME ?= aurora
 endif
 
+DATABASE ?= leveldb
+
 .PHONY: all
 all: build lint vet test-race binary
 
+.PHONY: binary-wt
+binary-wt: DATABASE=wiredtiger
+binary-wt: binary
+
 .PHONY: binary
-binary: export CGO_ENABLED=0
+#binary: export CGO_ENABLED=0
 binary: dist FORCE
 	$(GO) version
-	$(GO) build -trimpath -ldflags "$(LDFLAGS)" -o dist/$(BINARY_NAME) ./cmd/aurorafs
+	$(GO) build -tags $(DATABASE) -trimpath -ldflags "$(LDFLAGS)" -o dist/$(BINARY_NAME) ./cmd/aurorafs
 
 dist:
 	mkdir $@

@@ -6,9 +6,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/gauss-project/aurorafs/pkg/boson"
-	"github.com/syndtr/goleveldb/leveldb"
 	"io"
+
+	"github.com/gauss-project/aurorafs/pkg/boson"
+	"github.com/gauss-project/aurorafs/pkg/shed/driver"
 )
 
 var (
@@ -165,7 +166,7 @@ type StateStorer interface {
 	Delete(key string) (err error)
 	Iterate(prefix string, iterFunc StateIterFunc) (err error)
 	// DB returns the underlying DB storage.
-	DB() *leveldb.DB
+	DB() driver.BatchDB
 	io.Closer
 }
 
