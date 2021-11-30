@@ -22,7 +22,7 @@ var (
 // Addressbook maps peers to beneficaries, chequebooks and in reverse.
 type Addressbook interface {
 	// Beneficiary returns the beneficiary for the given peer.
-	Beneficiary(peer boson.Address) (beneficiary common.Address, known bool, err error)
+	Beneficiary(peer boson.Address) (beneficiary common.Address, known bool)
 	// BeneficiaryPeer returns the peer for a beneficiary.
 	BeneficiaryPeer(beneficiary common.Address) (peer boson.Address, known bool, err error)
 	// PutBeneficiary stores the beneficiary for the given peer.
@@ -110,11 +110,11 @@ func (a *addressBook) putBeneficiaryPeer(peer boson.Address, beneficiary common.
 }
 
 // Beneficiary returns the beneficiary for the given peer.
-func (a *addressBook) Beneficiary(peer boson.Address) (beneficiary common.Address, known bool, err error) {
+func (a *addressBook) Beneficiary(peer boson.Address) (beneficiary common.Address, known bool) {
 	if value, ok := a.peerBeneficiary.Load(peer.String()); ok {
-		return value.(common.Address), true, nil
+		return value.(common.Address), true
 	} else {
-		return common.Address{}, false, storage.ErrNotFound
+		return common.Address{}, false
 	}
 }
 
