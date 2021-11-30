@@ -124,11 +124,6 @@ func (s *Service) init(ctx context.Context, p p2p.Peer) error {
 		}
 	}()
 
-	err = s.traffic.UpdatePeerBalance(p.Address)
-	if err != nil {
-		return err
-	}
-
 	receiveCheque, err := s.traffic.LastReceivedCheque(p.Address)
 	if err != nil {
 		return fmt.Errorf("failed to get the last cheque")

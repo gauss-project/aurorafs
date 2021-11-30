@@ -474,6 +474,7 @@ func (s *Service) TransferTraffic(peer boson.Address) (traffic *big.Int, err err
 
 	return new(big.Int).Sub(transferTraffic, transferChequeTraffic), nil
 }
+
 func (s *Service) RetrieveTraffic(peer boson.Address) (traffic *big.Int, err error) {
 	chainAddress, known, err := s.addressBook.Beneficiary(peer)
 	if err != nil {
