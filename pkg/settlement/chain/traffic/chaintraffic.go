@@ -2,6 +2,7 @@ package traffic
 
 import (
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/gauss-project/aurorafs/pkg/logging"
 	"github.com/gauss-project/aurorafs/pkg/settlement/chain"
@@ -51,6 +52,10 @@ func (chainTraffic *ChainTraffic) TransferredTotal(arg0 common.Address) (*big.In
 	return out0, err
 }
 
-func (chainTraffic *ChainTraffic) TransAmount(from common.Address, to common.Address) (*big.Int, error) {
-	return chainTraffic.traffic.TransAmount(nil, from, to)
+func (chainTraffic *ChainTraffic) TransAmount(beneficiary, recipient common.Address) (*big.Int, error) {
+	return chainTraffic.traffic.TransTraffic(nil, beneficiary, recipient)
+}
+
+func (chainTraffic *ChainTraffic) CashChequeBeneficiary(beneficiary, recipient common.Address, cumulativePayout *big.Int, signature []byte) (*types.Transaction, error) {
+	return chainTraffic.traffic.CashChequeBeneficiary(nil, beneficiary, recipient, cumulativePayout, signature)
 }

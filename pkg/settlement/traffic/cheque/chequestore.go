@@ -57,7 +57,7 @@ type ChequeStore interface {
 type chequeStore struct {
 	lock              sync.Mutex
 	store             storage.StateStorer
-	beneficiary       common.Address // the beneficiary we expect in cheques sent to us
+	recipient         common.Address // the beneficiary we expect in cheques sent to us
 	recoverChequeFunc RecoverChequeFunc
 	chainID           int64
 }
@@ -67,12 +67,12 @@ type RecoverChequeFunc func(cheque *SignedCheque, chainID int64) (common.Address
 // NewChequeStore creates new ChequeStore
 func NewChequeStore(
 	store storage.StateStorer,
-	beneficiary common.Address,
+	recipient common.Address,
 	recoverChequeFunc RecoverChequeFunc,
 	chainID int64) ChequeStore {
 	return &chequeStore{
 		store:             store,
-		beneficiary:       beneficiary,
+		recipient:         recipient,
 		recoverChequeFunc: recoverChequeFunc,
 		chainID:           chainID,
 	}
@@ -112,7 +112,7 @@ func (s *chequeStore) LastReceivedCheque(chainAddress common.Address) (*SignedCh
 // ReceiveCheque verifies and stores a cheque. It returns the totam amount earned.
 func (s *chequeStore) ReceiveCheque(ctx context.Context, cheque *SignedCheque) (*big.Int, error) {
 	// verify we are the beneficiary
-	if cheque.Recipient != s.beneficiary {
+	if cheque.Recipient != s.recipient {
 		return nil, ErrWrongBeneficiary
 	}
 
