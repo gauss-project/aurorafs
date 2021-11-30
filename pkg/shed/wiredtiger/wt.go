@@ -11,8 +11,6 @@ int wiredtiger_connection_close(WT_CONNECTION *connection, const char *config) {
 */
 import "C"
 import (
-	"errors"
-	"sync"
 	"syscall"
 	"time"
 
@@ -109,6 +107,8 @@ func (db *DB) Get(key driver.Key) ([]byte, error) {
 		return nil, err
 	}
 
+	defer result.Close()
+
 	return result.Value(), nil
 }
 
@@ -130,13 +130,15 @@ func (db *DB) Has(key driver.Key) (bool, error) {
 		return false, err
 	}
 
-	_, err = c.find(k)
+	result, err := c.find(k)
 	if err != nil {
 		if IsNotFound(err) {
 			return false, nil
 		}
 		return false, err
 	}
+
+	_ = result.Close()
 
 	return true, nil
 }
@@ -219,66 +221,4 @@ func (db *DB) GetSnapshot() (driver.Snapshot, error) {
 		s:  s,
 		db: db,
 	}, nil
-}
-
-type snapshot struct {
-	s      *session
-	db     *DB
-	mu     sync.RWMutex
-	closed bool
-}
-
-var ErrSnapshotReleased = errors.New("wiredtiger: snapshot released")
-
-func (s *snapshot) Get(key driver.Key) ([]byte, error) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	if s.closed {
-		return nil, ErrSnapshotReleased
-	}
-	obj, k := parseKey(key)
-	c, err := s.s.openCursor(obj, &cursorOption{
-		Raw:      true,
-		ReadOnce: true,
-	})
-	if err != nil {
-		return nil, err
-	}
-	r, err := c.find(k)
-	if err != nil {
-		return nil, err
-	}
-	return r.Value(), nil
-}
-
-func (s *snapshot) Has(key driver.Key) (bool, error) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	if s.closed {
-		return false, ErrSnapshotReleased
-	}
-	obj, k := parseKey(key)
-	c, err := s.s.openCursor(obj, &cursorOption{
-		Raw:      true,
-		ReadOnce: true,
-	})
-	if err != nil {
-		return false, err
-	}
-	_, err = c.find(k)
-	if err != nil {
-		if IsNotFound(err) {
-			return false, nil
-		}
-		return false, err
-	}
-	return true, nil
-}
-
-func (s *snapshot) Close() error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.closed = true
-	s.db.pool.Put(s.s)
-	return nil
 }

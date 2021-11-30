@@ -102,6 +102,7 @@ func (t *transaction) Commit() (err error) {
 	defer func() {
 		if err == nil {
 			t.stat.commitTime = time.Now()
+			t.s.txn = false
 
 			t.db.pool.PutLock(t.s, t.txnId)
 		}
@@ -121,9 +122,12 @@ func (t *transaction) Rollback() error {
 	}
 
 	// always put it back
-	defer t.db.pool.PutLock(t.s, t.txnId)
+	defer func() {
+		t.s.txn = false
+		t.db.pool.PutLock(t.s, t.txnId)
+	}()
 
-	result := int(C.wiredtiger_session_commit_transaction(t.s.impl, nil))
+	result := int(C.wiredtiger_session_rollback_transaction(t.s.impl, nil))
 	if checkError(result) {
 		return NewError(result)
 	}
@@ -132,8 +136,8 @@ func (t *transaction) Rollback() error {
 }
 
 func (db *DB) newTxn(sync bool) *transaction {
-	s := db.pool.Get()
 	t := time.Now()
+	s := db.pool.Lock(uint64(t.UnixNano()))
 
 	var (
 		err    error
@@ -144,9 +148,12 @@ func (db *DB) newTxn(sync bool) *transaction {
 		config = C.CString("sync=true")
 	}
 
-	result := int(C.wiredtiger_session_begin_transaction(s.impl, config))
-	if checkError(result) {
-		err = NewError(result)
+	if !s.txn {
+		result := int(C.wiredtiger_session_begin_transaction(s.impl, config))
+		if checkError(result) {
+			err = NewError(result)
+		}
+		s.txn = true
 	}
 
 	return &transaction{

@@ -22,7 +22,6 @@ import (
 	"fmt"
 
 	"github.com/gauss-project/aurorafs/pkg/shed/driver"
-	"github.com/syndtr/goleveldb/leveldb"
 )
 
 // Item holds fields relevant to Aurora Chunk data and metadata.
@@ -79,12 +78,12 @@ func (i Item) Merge(i2 Item) Item {
 	return i
 }
 
-// Index represents a set of LevelDB key value pairs that have common
+// Index represents a set of database key value pairs that have common
 // prefix. It holds functions for encoding and decoding keys and values
 // to provide transparent actions on saved data which inclide:
 // - getting a particular Item
 // - saving a particular Item
-// - iterating over a sorted LevelDB keys
+// - iterating over a sorted database keys
 // It implements IndexIteratorInterface interface.
 type Index struct {
 	db              *DB
@@ -96,7 +95,7 @@ type Index struct {
 }
 
 // IndexFuncs structure defines functions for encoding and decoding
-// LevelDB keys and values for a specific index.
+// database keys and values for a specific index.
 type IndexFuncs struct {
 	EncodeKey   func(fields Item) (key []byte, err error)
 	DecodeKey   func(key []byte) (e Item, err error)
@@ -115,7 +114,7 @@ func (db *DB) NewIndex(name string, funcs IndexFuncs) (f Index, err error) {
 	return Index{
 		db:     db,
 		prefix: id,
-		// This function adjusts Index LevelDB key
+		// This function adjusts Index database key
 		// by appending the provided index id byte.
 		// This is needed to avoid collisions between keys of different
 		// indexes as all index ids are unique.
@@ -395,7 +394,7 @@ func (f Index) Iterate(fn IndexIterFunc, options *IterateOptions) (err error) {
 	for ; ok; ok = itSeekerFn() {
 		item, err := f.itemFromIterator(it, prefix)
 		if err != nil {
-			if errors.Is(err, leveldb.ErrNotFound) {
+			if errors.Is(err, driver.ErrNotFound) {
 				break
 			}
 			return fmt.Errorf("get item from iterator: %w", err)
@@ -433,7 +432,7 @@ func bytesIncrement(bytes []byte) []byte {
 
 // First returns the first item in the Index which encoded key starts with a prefix.
 // If the prefix is nil, the first element of the whole index is returned.
-// If Index has no elements, a leveldb.ErrNotFound error is returned.
+// If Index has no elements, a driver.ErrNotFound error is returned.
 func (f Index) First(prefix []byte) (i Item, err error) {
 	it := f.db.backend.Search(driver.Query{Prefix: driver.Key{
 		Prefix: indexKeyPrefixLength,
@@ -450,19 +449,19 @@ func (f Index) First(prefix []byte) (i Item, err error) {
 
 // itemFromIterator returns the Item from the current iterator position.
 // If the complete encoded key does not start with totalPrefix,
-// leveldb.ErrNotFound is returned. Value for totalPrefix must start with
+// driver.ErrNotFound is returned. Value for totalPrefix must start with
 // Index prefix.
 func (f Index) itemFromIterator(it driver.Cursor, totalPrefix []byte) (i Item, err error) {
 	key := it.Key()
 	if !bytes.HasPrefix(key, totalPrefix) {
-		return i, leveldb.ErrNotFound
+		return i, driver.ErrNotFound
 	}
-	// create a copy of key byte slice not to share leveldb underlaying slice array
+	// create a copy of key byte slice not to share database underlaying slice array
 	keyItem, err := f.decodeKeyFunc(append([]byte(nil), key...))
 	if err != nil {
 		return i, fmt.Errorf("decode key: %w", err)
 	}
-	// create a copy of value byte slice not to share leveldb underlaying slice array
+	// create a copy of value byte slice not to share database underlaying slice array
 	valueItem, err := f.decodeValueFunc(keyItem, append([]byte(nil), it.Value()...))
 	if err != nil {
 		return i, fmt.Errorf("decode value: %w", err)
@@ -472,7 +471,7 @@ func (f Index) itemFromIterator(it driver.Cursor, totalPrefix []byte) (i Item, e
 
 // Last returns the last item in the Index which encoded key starts with a prefix.
 // If the prefix is nil, the last element of the whole index is returned.
-// If Index has no elements, a leveldb.ErrNotFound error is returned.
+// If Index has no elements, a driver.ErrNotFound error is returned.
 func (f Index) Last(prefix []byte) (i Item, err error) {
 	it := f.db.backend.Search(driver.Query{Prefix: driver.Key{
 		Prefix: indexKeyPrefixLength,
@@ -483,7 +482,7 @@ func (f Index) Last(prefix []byte) (i Item, err error) {
 	}()
 
 	// get the next prefix in line
-	// since leveldb iterator Seek seeks to the
+	// since database iterator Seek seeks to the
 	// next key if the key that it seeks to is not found
 	// and by getting the previous key, the last one for the
 	// actual prefix is found

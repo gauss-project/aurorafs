@@ -131,7 +131,7 @@ func (db *DB) RenameIndex(oldName, newName string) (bool, error) {
 		return false, err
 	}
 	key := append([]byte(indexMetadataKeyPrefix), []byte(oldName)...)
-	_, err = c.find(key)
+	r, err := c.find(key)
 	switch {
 	case err == nil:
 	case IsNotFound(err):
@@ -139,6 +139,7 @@ func (db *DB) RenameIndex(oldName, newName string) (bool, error) {
 	default:
 		return false, err
 	}
+	defer r.Close()
 	err = c.remove(key)
 	if err != nil {
 		return false, err

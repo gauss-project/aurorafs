@@ -22,10 +22,10 @@ import (
 	"github.com/gauss-project/aurorafs/pkg/logging"
 	"github.com/gauss-project/aurorafs/pkg/manifest"
 	"github.com/gauss-project/aurorafs/pkg/sctx"
+	"github.com/gauss-project/aurorafs/pkg/shed/driver"
 	"github.com/gauss-project/aurorafs/pkg/storage"
 	"github.com/gauss-project/aurorafs/pkg/tracing"
 	"github.com/gorilla/mux"
-	"github.com/syndtr/goleveldb/leveldb"
 )
 
 // dirUploadHandler uploads a directory supplied as a tar in an HTTP request
@@ -378,7 +378,7 @@ func (s *server) auroraDeleteHandler(w http.ResponseWriter, r *http.Request) {
 		for i := 0; i < chunk.Number; i++ {
 			err = s.storer.Set(r.Context(), storage.ModeSetRemove, chunk.Cid)
 			if err != nil {
-				if errors.Is(err, leveldb.ErrNotFound) {
+				if errors.Is(err, driver.ErrNotFound) {
 					continue
 				}
 
@@ -392,7 +392,7 @@ func (s *server) auroraDeleteHandler(w http.ResponseWriter, r *http.Request) {
 
 	err = s.storer.Set(r.Context(), storage.ModeSetRemove, hash)
 	if err != nil {
-		if !errors.Is(err, leveldb.ErrNotFound) {
+		if !errors.Is(err, driver.ErrNotFound) {
 			s.logger.Debugf("aurora delete: remove chunk: %w", err)
 			s.logger.Errorf("aurora delete: remove chunk %s", hash)
 			jsonhttp.InternalServerError(w, "aurora deleting occur error")

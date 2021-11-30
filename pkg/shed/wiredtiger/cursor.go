@@ -167,13 +167,15 @@ func (cc *cursorCache) releaseCursor(c *cursor) {
 	for cc.cursors.Len() > 0 {
 		i := cc.cursors.Back()
 		if i != nil {
-			c := i.Value.(*cursor)
-			if cc.index-c.gen > cc.size {
-				cc.cursors.Remove(i)
-				err = c.close()
-				if err != nil {
-					logger.Errorf("wiredtiger: clean old cursor(%s#%d): %v", c.uri, c.s.id, err)
-				}
+			ci := i.Value.(*cursor)
+			if cc.index-ci.gen <= cc.size {
+				break
+			}
+
+			cc.cursors.Remove(i)
+			err = ci.close()
+			if err != nil {
+				logger.Errorf("wiredtiger: clean old cursor(%s#%d): %v", c.uri, c.s.id, err)
 			}
 		}
 	}
@@ -242,15 +244,19 @@ func (c *cursor) insert(key, value []byte) error {
 		return ErrInvalidArgument
 	}
 
-	keyData := unsafe.Pointer(&key[0])
+	keyData := C.CBytes(key) // unsafe.Pointer
 	keySize := C.size_t(len(key))
+
+	defer C.free(keyData)
 
 	if len(value) == 0 {
 		return ErrInvalidArgument
 	}
 
-	valueData := unsafe.Pointer(&value[0])
+	valueData := C.CBytes(value) // unsafe.Pointer
 	valueSize := C.size_t(len(value))
+
+	defer C.free(valueData)
 
 	result := int(C.wiredtiger_cursor_insert(c.impl, keyData, keySize, valueData, valueSize))
 	if checkError(result) {
@@ -264,7 +270,7 @@ func (c *cursor) update(key, value []byte) error {
 		return ErrInvalidArgument
 	}
 
-	keyData := unsafe.Pointer(&key[0])
+	keyData := C.CBytes(key) // unsafe.Pointer
 	keySize := C.size_t(len(key))
 
 	defer C.free(keyData)
@@ -273,7 +279,7 @@ func (c *cursor) update(key, value []byte) error {
 		return ErrInvalidArgument
 	}
 
-	valueData := unsafe.Pointer(&value[0])
+	valueData := C.CBytes(value) // unsafe.Pointer
 	valueSize := C.size_t(len(value))
 
 	defer C.free(valueData)
@@ -290,8 +296,11 @@ func (c *cursor) find(key []byte) (*resultCursor, error) {
 		return nil, ErrInvalidArgument
 	}
 
-	data := unsafe.Pointer(&key[0])
+	data := C.CBytes(key) // unsafe.Pointer
 	size := C.size_t(len(key))
+
+	// TODO why free will be stuck?
+	defer C.free(data)
 
 	result := int(C.wiredtiger_cursor_search(c.impl, data, size))
 	if checkError(result) {
@@ -307,8 +316,11 @@ func (c *cursor) search(key []byte) (*searchCursor, error) {
 	var size C.size_t = 0
 
 	if len(key) != 0 {
-		data = unsafe.Pointer(&key[0])
+		data = C.CBytes(key)
 		size = C.size_t(len(key))
+
+		// TODO why free will be stuck?
+		defer C.free(data)
 
 		result := int(C.wiredtiger_cursor_search_near(c.impl, data, size, &compare))
 		if checkError(result) {
@@ -324,8 +336,10 @@ func (c *cursor) remove(key []byte) error {
 		return ErrInvalidArgument
 	}
 
-	data := unsafe.Pointer(&key[0])
+	data := C.CBytes(key) // unsafe.Pointer
 	size := C.size_t(len(key))
+
+	defer C.free(data)
 
 	result := int(C.wiredtiger_cursor_remove(c.impl, data, size))
 	if checkError(result) {
@@ -427,6 +441,7 @@ func (r *resultCursor) Error() error {
 }
 
 func (r *resultCursor) Close() error {
+	defer r.s.cursors.releaseCursor(r.cursor)
 	return r.reset()
 }
 
@@ -508,6 +523,7 @@ func (s *searchCursor) Seek(key driver.Key) bool {
 	}
 
 	c, err := s.search(k)
+
 	if err != nil {
 		s.err = fmt.Errorf("wiredtiger: cursor seek key %s: %v", k, err)
 		return false
@@ -541,6 +557,7 @@ func (s *searchCursor) Value() []byte {
 }
 
 func (s *searchCursor) Close() error {
+	defer s.s.cursors.releaseCursor(s.cursor)
 	return s.reset()
 }
 
