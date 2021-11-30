@@ -139,7 +139,7 @@ func (s *ChequeStoreMock) PutReceivedCheques(chainAddress common.Address, cheque
 	return s.putReceivedCheques(chainAddress, cheque)
 }
 
-func (s *ChequeStoreMock) VerifyCheque(cheque *cheque.SignedCheque, chaindID int64) (common.Address, error) {
+func (s *ChequeStoreMock) VerifyCheque(cheque *cheque.SignedCheque, chainID int64) (common.Address, error) {
 	return common.HexToAddress(""), nil
 }
 

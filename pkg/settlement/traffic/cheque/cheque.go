@@ -91,7 +91,7 @@ func (s *chequeSigner) Sign(cheque *Cheque) ([]byte, error) {
 }
 
 func (cheque *Cheque) String() string {
-	return fmt.Sprintf("Contract: %x Beneficiary: %x CumulativePayout: %v", cheque.Beneficiary, cheque.CumulativePayout)
+	return fmt.Sprintf(" Beneficiary: %x CumulativePayout: %v", cheque.Beneficiary, cheque.CumulativePayout)
 }
 
 func (cheque *Cheque) Equal(other *Cheque) bool {

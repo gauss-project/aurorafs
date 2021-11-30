@@ -157,7 +157,6 @@ func (s *chequeStore) ReceiveCheque(ctx context.Context, cheque *SignedCheque) (
 	if err != nil {
 		return nil, err
 	}
-
 	return amount, nil
 }
 
@@ -274,8 +273,8 @@ func (s *chequeStore) PutReceivedCheques(chainAddress common.Address, cheque Sig
 }
 
 // RecoverCheque recovers the issuer ethereum address from a signed cheque
-func (s *chequeStore) RecoverCheque(cheque *SignedCheque, chaindID int64) (common.Address, error) {
-	eip712Data := eip712DataForCheque(&cheque.Cheque, chaindID)
+func (s *chequeStore) RecoverCheque(cheque *SignedCheque, chainID int64) (common.Address, error) {
+	eip712Data := eip712DataForCheque(&cheque.Cheque, chainID)
 
 	pubkey, err := crypto.RecoverEIP712(cheque.Signature, eip712Data)
 	if err != nil {
