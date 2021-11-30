@@ -18,6 +18,7 @@ import (
 	"math/rand"
 	"resenje.org/singleflight"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -36,7 +37,7 @@ var (
 	errOverlayMismatch = errors.New("overlay mismatch")
 	errPruneEntry      = errors.New("prune entry")
 
-	MaxTTL               uint8 = 10
+	MaxTTL               int32 = 10
 	DefaultNeighborAlpha int32 = 2
 	gcTime                     = time.Minute * 10
 	gcInterval                 = time.Minute
@@ -186,7 +187,7 @@ func (s *Service) onRouteReq(ctx context.Context, p p2p.Peer, stream p2p.Stream)
 
 	for _, v := range req.Paths {
 		items := v.Items // request path only one
-		if len(items) > int(MaxTTL) {
+		if len(items) > int(atomic.LoadInt32(&MaxTTL)) {
 			// discard
 			s.logger.Tracef("route:%s handlerFindRouteReq target=%s discard, ttl=%d", s.self.String(), target.String(), len(items))
 			return nil

@@ -141,7 +141,7 @@ func (s *server) setupRouting() {
 				if o := r.Header.Get("Origin"); o != "" && s.checkOrigin(r) {
 					w.Header().Set("Access-Control-Allow-Credentials", "true")
 					w.Header().Set("Access-Control-Allow-Origin", o)
-					w.Header().Set("Access-Control-Allow-Headers", "Origin, Accept, Authorization, Content-Type, X-Requested-With, Access-Control-Request-Headers, Access-Control-Request-Method, Aurora-Tag, Aurora-Pin, Aurora-Encrypt, Aurora-Index-Document, Aurora-Error-Document, Aurora-Collection, Aurora-Collection-Name")
+					w.Header().Set("Access-Control-Allow-Headers", "User-Agent, Origin, Accept, Authorization, Content-Type, X-Requested-With, Access-Control-Request-Headers, Access-Control-Request-Method, Aurora-Tag, Aurora-Pin, Aurora-Encrypt, Aurora-Index-Document, Aurora-Error-Document, Aurora-Collection, Aurora-Collection-Name")
 					w.Header().Set("Access-Control-Allow-Methods", "GET, HEAD, OPTIONS, POST, PUT, DELETE")
 					w.Header().Set("Access-Control-Max-Age", "3600")
 				}
