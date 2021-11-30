@@ -41,7 +41,7 @@ func (ci *ChunkInfo) initChunkPyramid(ctx context.Context, rootCid boson.Address
 	if err != nil {
 		return err
 	}
-	data, err := ci.traversal.GetChunkHashes(ctx, rootCid, trie)
+	data, _, err := ci.traversal.GetChunkHashes(ctx, rootCid, nil)
 	if err != nil {
 		return err
 	}
@@ -119,7 +119,7 @@ func (ci *ChunkInfo) getChunkSize(cxt context.Context, rootCid boson.Address) (i
 	}
 
 	if ci.cp.pyramid[rootCid.String()] == nil {
-		trie, err := ci.traversal.GetChunkHashes(cxt, rootCid, v)
+		trie, _, err := ci.traversal.GetChunkHashes(cxt, rootCid, nil)
 		if err != nil {
 			return 0, err
 		}
@@ -146,23 +146,29 @@ func (ci *ChunkInfo) doFindChunkPyramid(ctx context.Context, authInfo []byte, ro
 		RootCid: rootCid.Bytes(),
 		Target:  overlay.Bytes(),
 	}
-	resp, err := ci.sendPyramids(ctx, overlay, streamPyramidName, req)
-	if err != nil {
-		return err
-	}
-	return ci.onChunkPyramidResp(ctx, nil, boson.NewAddress(req.RootCid), resp.([]pb.ChunkPyramidResp))
+	return ci.sendPyramids(ctx, overlay, streamPyramidName, req)
 }
 
 func (cp *chunkPyramid) getChunkCid(rootCid boson.Address) []*PyramidCidNum {
 	cp.RLock()
 	defer cp.RUnlock()
 	v := cp.pyramid[rootCid.String()]
+	//mate := cp.mateData[rootCid.String()]
+	//cids := make([]*PyramidCidNum, 0, len(v)+len(mate))
 	cids := make([]*PyramidCidNum, 0, len(v))
 	for overlay, c := range v {
 		over := boson.MustParseHexAddress(overlay)
 		pcn := PyramidCidNum{Cid: over, Number: c.number}
 		cids = append(cids, &pcn)
 	}
+	// pyramid data is not deleted when gc
+	//for overlay, _ := range mate {
+	//	over := boson.MustParseHexAddress(overlay)
+	//	if _, ok := cp.pyramid[rootCid.String()][overlay]; !ok {
+	//		pcn := PyramidCidNum{Cid: over, Number: 1}
+	//		cids = append(cids, &pcn)
+	//	}
+	//}
 	return cids
 }
 

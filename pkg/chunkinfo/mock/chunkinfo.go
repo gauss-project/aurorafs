@@ -14,7 +14,7 @@ import (
 
 var (
 	chunkMap map[string][]aco.Route
-	mu sync.Mutex
+	mu       sync.Mutex
 )
 
 func init() {
@@ -163,6 +163,10 @@ func (ci *ChunkInfo) DelDiscover(rootCid boson.Address) {
 
 }
 
-func (ci *ChunkInfo) DelPyramid(rootCid boson.Address) bool {
-	return ci.cp.delRootCid(rootCid)
+func (ci *ChunkInfo) OnChunkRetrieved(cid, rootCid, sourceOverlay boson.Address) error {
+	return nil
+}
+
+func (ci *ChunkInfo) GetChunkInfoSource(rootCid boson.Address) aurora.ChunkInfoSourceApi {
+	return aurora.ChunkInfoSourceApi{}
 }

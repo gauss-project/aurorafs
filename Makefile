@@ -22,6 +22,7 @@ else
 BINARY_NAME ?= aurora
 endif
 
+SHELL ?= bash
 DATABASE ?= leveldb
 
 .PHONY: all
@@ -73,6 +74,55 @@ build: export CGO_ENABLED=0
 build: check-version
 build:
 	$(GO) build -trimpath -ldflags "$(LDFLAGS)" ./...
+
+.PHONY: android
+android: check-java
+android: check-mobile-tool
+android: download-vendor
+android:
+	[ -d "dist" ] || mkdir dist
+	$(GO) mod vendor && echo "create go dependency vendor"
+	[ -f "dist/aurora.aar" ] || (GO111MODULE=off $(GOMOBILE) bind -target=android -o=aurora.aar ./mobile && mv -n aurora.aar dist/ && mv -n aurora-sources.jar dist/) || (echo "build android sdk failed" && rm -rf vendor && exit 1)
+	rm -rf vendor
+	echo "android sdk build finished."
+	echo "please import dist/aurora.aar to android studio!"
+
+.PHONY: ios
+ios: check-xcode
+ios: check-mobile-tool
+ios: download-vendor
+ios:
+	[ -d "dist" ] || mkdir dist
+	$(GO) mod vendor && echo "create go dependency vendor"
+	[ -d "dist/aurora.xcframework" ] || (GO111MODULE=off $(GOMOBILE) bind -target=ios -o=aurora.xcframework ./mobile && mv -n aurora.xcframework dist/) || (echo "build ios framework failed" && rm -rf vendor && exit 1)
+	rm -rf vendor
+	echo "ios framework build finished."
+	echo "please import dist/aurora.xcframework to xcode!"
+
+.PHONY: check-mobile-tool
+check-mobile-tool: check-version
+check-mobile-tool:
+	check_path=false; for line in $(shell $(GO) env GOPATH | tr ':' '\n'); do if [[ $$PWD = $$line* ]]; then check_path=true; fi; done; $$check_path || (echo "Current path does not match your GOPATH, please check" && exit 1)
+	type ${GOMOBILE} || $(GO) install golang.org/x/mobile/cmd/gomobile@latest
+	type ${GOBIND} || $(GO) install golang.org/x/mobile/cmd/gobind@latest
+
+.PHONY: check-java
+check-java:
+	type java || (echo "Not found java on the system" && exit 1)
+	java -version || (echo "Java check version failed, please check java setup" && exit 1)
+	[ -z $(ANDROID_HOME) ] && echo "Please set ANDROID_HOME env" && exit 1; exit 0
+	[ -z $(ANDROID_NDK_HOME) ] && echo "Please install android NDK tools, and set ANDROID_NDK_HOME" && exit 1; exit 0
+
+.PHONY: check-xcode
+check-xcode:
+	[ ${GOOS} = "darwin" ] || (echo "Must be on the MacOS system" && exit 1)
+	xcode-select -p || (echo "Please install command line tool first" && exit 1)
+	xcrun xcodebuild -version || (echo "Please install Xcode. If xcode installed, you should exec `sudo xcode-select -s /Applications/Xcode.app/Contents/Developer` in your shell" && exit 1)
+
+.PHONY: download-vendor
+download-vendor:
+	$(GO) mod download
+	$(GO) get github.com/karalabe/usb
 
 .PHONY: check-version
 check-version:

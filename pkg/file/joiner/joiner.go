@@ -23,11 +23,11 @@ type joiner struct {
 	off       int64
 	refLength int
 
-	dataChunks       [][]byte
-	isSaveDataChunks bool
+	dataChunks    [][]byte
+	allowSaveData bool
 
-	intermediateChunks map[string][]byte
-	isSaveIntChunks    bool
+	edgeChunks    map[string][]byte
+	allowSaveEdge bool
 
 	ctx    context.Context
 	getter storage.Getter
@@ -64,12 +64,12 @@ func (j *joiner) GetRootData() []byte {
 
 func (j *joiner) SetSaveDataChunks() {
 	j.dataChunks = make([][]byte, 0)
-	j.isSaveDataChunks = true
+	j.allowSaveData = true
 }
 
-func (j *joiner) SetSaveIntChunks(data map[string][]byte) {
-	j.intermediateChunks = data
-	j.isSaveIntChunks = true
+func (j *joiner) SetSaveEdgeChunks(data map[string][]byte) {
+	j.edgeChunks = data
+	j.allowSaveEdge = true
 }
 
 func (j *joiner) GetDataChunks() [][]byte {
@@ -254,7 +254,7 @@ func (j *joiner) IterateChunkAddresses(fn boson.AddressIterFunc) error {
 func (j *joiner) processChunkAddresses(ctx context.Context, fn boson.AddressIterFunc, data []byte, subTrieSize int64) error {
 	// we are at a leaf data chunk
 	if subTrieSize <= int64(len(data)) {
-		if j.isSaveDataChunks {
+		if j.allowSaveData {
 			j.dataChunks = append(j.dataChunks, j.addr.Bytes())
 		}
 		return nil
@@ -280,7 +280,7 @@ func (j *joiner) processChunkAddresses(ctx context.Context, fn boson.AddressIter
 
 		sec := subtrieSection(data, cursor, j.refLength, subTrieSize)
 		if sec <= boson.ChunkSize {
-			if j.isSaveDataChunks {
+			if j.allowSaveData {
 				j.dataChunks = append(j.dataChunks, address.Bytes())
 			}
 			continue
@@ -300,8 +300,8 @@ func (j *joiner) processChunkAddresses(ctx context.Context, fn boson.AddressIter
 				chunkData := ch.Data()[8:]
 				subtrieSpan := int64(chunkToSpan(ch.Data()))
 
-				if j.isSaveIntChunks && subtrieSpan > int64(len(chunkData)) {
-					j.intermediateChunks[address.String()] = ch.Data()
+				if j.allowSaveEdge && subtrieSpan > int64(len(chunkData)) {
+					j.edgeChunks[address.String()] = ch.Data()
 				}
 
 				return j.processChunkAddresses(ectx, fn, chunkData, subtrieSpan)

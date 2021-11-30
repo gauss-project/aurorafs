@@ -429,7 +429,7 @@ func NewAurora(addr string, bosonAddress boson.Address, publicKey ecdsa.PublicKe
 	if err = p2ps.AddProtocol(chunkInfo.Protocol()); err != nil {
 		return nil, fmt.Errorf("chunkInfo service: %w", err)
 	}
-	storer.Config(chunkInfo)
+	storer.WithChunkInfo(chunkInfo)
 	retrieve.Config(chunkInfo)
 
 	//multiResolver := multiresolver.NewMultiResolver(

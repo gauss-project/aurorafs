@@ -127,6 +127,11 @@ func (bv *BitVector) String() (s string) {
 }
 
 func (bv *BitVector) Equals() bool {
+
+	if bv == nil {
+		return false
+	}
+
 	l := len(bv.b)
 
 	len := bv.len % 8

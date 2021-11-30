@@ -154,9 +154,6 @@ func (s *Service) RetrieveChunk(ctx context.Context, rootAddr, chunkAddr boson.A
 						s.logger.Debugf("retrieval: failed to get chunk (%s,%s) from route %s: %v",
 							rootAddr, chunkAddr, retrievalRoute, result.err)
 					} else {
-						//if s.isFullNode {
-						//	s.chunkinfo.OnChunkTransferred(chunkAddr, rootAddr, s.addr, boson.ZeroAddress)
-						//}
 						return result.chunk, nil
 					}
 				case <-ctx.Done():
@@ -248,9 +245,7 @@ func (s *Service) RetrieveChunkFromNode(ctx context.Context, targetNode boson.Ad
 }
 
 func (s *Service) retrieveChunk(ctx context.Context, route aco.Route, rootAddr, chunkAddr boson.Address) (chunk boson.Chunk, err error) {
-	// if !route.LinkNode.Equal(route.TargetNode) {
-	// 	return nil, nil, fmt.Errorf("not direct link, %v,%v(not same)", route.LinkNode.String(), route.TargetNode.String())
-	// }
+
 	var (
 		startMs  = time.Now().UnixNano() / 1e6
 		endMs    = int64(0)
@@ -258,7 +253,9 @@ func (s *Service) retrieveChunk(ctx context.Context, route aco.Route, rootAddr, 
 	)
 	defer func() {
 		if err != nil && (ctx.Err() == nil || !errors.Is(ctx.Err(), context.Canceled)) {
-			go s.routeTab.FindRoute(ctx, route.TargetNode)
+			go func() {
+				_, _ = s.routeTab.FindRoute(context.Background(), route.TargetNode)
+			}()
 		}
 		if err == nil || (err != nil && (ctx.Err() == nil || !errors.Is(ctx.Err(), context.Canceled))) {
 			endMs = time.Now().UnixNano() / 1e6
@@ -279,8 +276,7 @@ func (s *Service) retrieveChunk(ctx context.Context, route aco.Route, rootAddr, 
 		s.logger.Errorf("connect failed, peer: %v  err: %s", route.LinkNode.String(), err)
 		return nil, fmt.Errorf("connect failed, peer: %v", route.LinkNode.String())
 	}
-	s.acoServer.OnDownloadStart(route)
-	defer s.acoServer.OnDownloadEnd(route)
+
 	ctx, cancel := context.WithTimeout(ctx, retrieveChunkTimeout)
 	defer cancel()
 	stream, err := s.streamer.NewStream(ctx, route.LinkNode, nil, protocolName, protocolVersion, streamName)
@@ -312,6 +308,7 @@ func (s *Service) retrieveChunk(ctx context.Context, route aco.Route, rootAddr, 
 		s.metrics.TotalErrors.Inc()
 		return nil, fmt.Errorf("read delivery: %w route %v,%v", err, route.LinkNode.String(), route.TargetNode.String())
 	}
+	s.metrics.TotalRetrieved.Inc()
 	dataSize = d.Size()
 
 	chunk = boson.NewChunk(chunkAddr, d.Data)
@@ -324,14 +321,13 @@ func (s *Service) retrieveChunk(ctx context.Context, route aco.Route, rootAddr, 
 	}
 
 	s.logger.Tracef("retrieval: chunk %s is received", chunkAddr)
-	err = s.chunkinfo.OnChunkTransferred(chunkAddr, rootAddr, s.addr, route.LinkNode)
+	err = s.chunkinfo.OnChunkRetrieved(chunkAddr, rootAddr, route.LinkNode)
 	if err != nil {
-		return nil, fmt.Errorf("retrieval: report chunk transfer: %w", err)
+		return nil, fmt.Errorf("retrieval: report chunk source: %v", err)
 	}
-
 	_, err = s.storer.Put(sctx.SetRootCID(ctx, rootAddr), storage.ModePutRequest, chunk)
 	if err != nil {
-		return nil, fmt.Errorf("retrieval: storage put cache:%w", err)
+		return nil, fmt.Errorf("retrieval: storage put cache:%v", err)
 	}
 
 	return
@@ -341,6 +337,7 @@ func (s *Service) handler(ctx context.Context, p p2p.Peer, stream p2p.Stream) (e
 	w, r := protobuf.NewWriterAndReader(stream)
 	defer func() {
 		if err != nil {
+			s.metrics.ChunkTransferredError.Inc()
 			_ = stream.Reset()
 		} else {
 			go stream.FullClose()
@@ -403,7 +400,7 @@ func (s *Service) handler(ctx context.Context, p p2p.Peer, stream p2p.Stream) (e
 		}
 	}
 	// s.logger.Tracef("retrieval protocol debiting peer %s", p.Address.String())
-
+	s.metrics.TotalTransferred.Inc()
 	return nil
 }
 

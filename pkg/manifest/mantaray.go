@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 
 	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/file"
@@ -123,14 +124,19 @@ func (m *mantarayManifest) Store(ctx context.Context, storeSizeFn ...StoreSizeFu
 	return address, nil
 }
 
-func (m *mantarayManifest) IterateNodes(ctx context.Context, path []byte, level int, fn NodeIterFunc) error {
+func (m *mantarayManifest) IterateDirectories(ctx context.Context, path []byte, level int, fn NodeIterFunc) error {
 	reference := boson.NewAddress(m.trie.Reference())
 
 	if boson.ZeroAddress.Equal(reference) {
 		return ErrMissingReference
 	}
 
-	uLevel := uint(level)
+	var uLevel uint
+	if level > 0 && level < math.MaxInt32 {
+		uLevel = uint(level)
+	} else {
+		uLevel = mantaray.MaxLevel
+	}
 
 	err := m.trie.WalkLevel(ctx, path, m.ls, uLevel, mantaray.WalkLevelFunc(fn))
 	if err != nil {

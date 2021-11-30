@@ -80,15 +80,7 @@ func (s *server) dirUploadHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	pyramid, err := s.traversal.GetPyramid(ctx, reference)
-	if err != nil {
-		logger.Debugf("aurora upload dir: get pyramid err: %v", err)
-		logger.Errorf("aurora upload dir: get pyramid err")
-		jsonhttp.InternalServerError(w, "could not get pyramid")
-		return
-	}
-
-	dataChunks, _ := s.traversal.GetChunkHashes(ctx, reference, pyramid)
+	dataChunks, _, err := s.traversal.GetChunkHashes(ctx, reference, nil)
 	if err != nil {
 		logger.Debugf("aurora upload dir: get chunk hashes err: %v", err)
 		logger.Errorf("aurora upload dir: get chunk hashes err")
@@ -98,7 +90,7 @@ func (s *server) dirUploadHandler(w http.ResponseWriter, r *http.Request) {
 
 	for _, li := range dataChunks {
 		for _, b := range li {
-			err := s.chunkInfo.OnChunkTransferred(boson.NewAddress(b), reference, s.overlay, boson.ZeroAddress)
+			err := s.chunkInfo.OnChunkRetrieved(boson.NewAddress(b), reference, s.overlay)
 			if err != nil {
 				logger.Errorf("aurora upload dir: chunk transfer data err: %v", err)
 				logger.Errorf("aurora upload dir: chunk transfer data err")
@@ -406,13 +398,6 @@ func (s *server) auroraDeleteHandler(w http.ResponseWriter, r *http.Request) {
 			jsonhttp.InternalServerError(w, "aurora deleting occur error")
 			return
 		}
-	}
-
-	ok = s.chunkInfo.DelPyramid(hash)
-	if !ok {
-		s.logger.Errorf("aurora delete: chunk info report delete %s related pyramid failed", hash)
-		jsonhttp.InternalServerError(w, "aurora deleting occur error")
-		return
 	}
 
 	jsonhttp.OK(w, nil)

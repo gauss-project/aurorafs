@@ -215,7 +215,7 @@ func (ci *ChunkInfo) cleanDiscoverTrigger() {
 			now := time.Now().Unix()
 			for rootCid, discover := range ci.cd.presence {
 				rc := boson.MustParseHexAddress(rootCid)
-				if ci.ct.isExists(rc, ci.addr) {
+				if ci.ct.isDownload(rc, ci.addr) {
 					ci.DelDiscover(rc)
 				}
 				for overlay, db := range discover {
