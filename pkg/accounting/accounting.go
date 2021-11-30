@@ -173,7 +173,7 @@ func (a *Accounting) Debit(peer boson.Address, traffic uint64) error {
 	if err != nil {
 		return err
 	}
-	if tolerance.Cmp(traff) >= 0 {
+	if tolerance.Cmp(traff) <= 0 {
 		a.metrics.AccountingDisconnectsCount.Inc()
 		return p2p.NewBlockPeerError(10000*time.Hour, ErrDisconnectThresholdExceeded)
 	}
@@ -182,7 +182,7 @@ func (a *Accounting) Debit(peer boson.Address, traffic uint64) error {
 	if err != nil {
 		return err
 	}
-	unPaid, err := a.settlement.GetNoPaidBalance(peer)
+	unPaid, err := a.settlement.GetUnPaidBalance(peer)
 	if err != nil {
 		return err
 	}
@@ -202,10 +202,11 @@ func (a *Accounting) getAccountingPeer(peer boson.Address) (*accountingPeer, err
 	defer a.accountingPeersMu.Unlock()
 	peerData, ok := a.accountingPeers[peer.String()]
 	if !ok {
-		a.accountingPeers[peer.String()] = &accountingPeer{
+		peerData = &accountingPeer{
 			paymentThreshold: a.paymentThreshold,
 			unPayTraffic:     big.NewInt(0),
 		}
+		a.accountingPeers[peer.String()] = peerData
 	}
 	return peerData, nil
 }
