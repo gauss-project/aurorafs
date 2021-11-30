@@ -3,11 +3,8 @@ package cheque
 import (
 	"context"
 	"errors"
-	"github.com/gauss-project/aurorafs/pkg/settlement/chain"
-	"math/big"
-
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/gauss-project/aurorafs/pkg/sctx"
+	"github.com/gauss-project/aurorafs/pkg/settlement/chain"
 	"github.com/gauss-project/aurorafs/pkg/storage"
 )
 
@@ -20,6 +17,7 @@ type CashoutService interface {
 type cashoutService struct {
 	store               storage.StateStorer
 	transactionService  chain.Transaction
+	cashTrafficService  chain.Traffic
 	chequeStore         ChequeStore
 	trafficContractAddr common.Address
 }
@@ -45,25 +43,12 @@ func (s *cashoutService) CashCheque(ctx context.Context, beneficiary, recipient 
 		return common.Hash{}, errors.New("exchange failed")
 	}
 
-	// todo
-	callData, err := trafficAbi.Pack("cashChequeBeneficiary", recipient, cheque.CumulativePayout, cheque.Signature)
+	txData, err := s.cashTrafficService.CashChequeBeneficiary(beneficiary, recipient, cheque.CumulativePayout, cheque.Signature)
 	if err != nil {
 		return common.Hash{}, err
 	}
-	lim := sctx.GetGasLimit(ctx)
-	if lim == 0 {
-		// fix for out of gas errors
-		lim = 300000
-	}
-	request := &chain.TxRequest{
-		To:       &s.trafficContractAddr,
-		Data:     callData,
-		GasPrice: sctx.GetGasPrice(ctx),
-		GasLimit: lim,
-		Value:    big.NewInt(0),
-	}
 
-	txHash, err := s.transactionService.Send(ctx, request)
+	txHash, err := s.transactionService.Send(ctx, txData)
 	if err != nil {
 		return common.Hash{}, err
 	}

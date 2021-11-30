@@ -60,16 +60,11 @@ func NewService(logger logging.Logger, backend Backend, signer crypto.Signer, st
 }
 
 // Send creates and signs a transaction based on the request and sends it.
-func (t *transactionService) Send(ctx context.Context, request *chain.TxRequest) (txHash common.Hash, err error) {
+func (t *transactionService) Send(ctx context.Context, tx *types.Transaction) (txHash common.Hash, err error) {
 	t.lock.Lock()
 	defer t.lock.Unlock()
 
 	nonce, err := t.nextNonce(ctx)
-	if err != nil {
-		return common.Hash{}, err
-	}
-
-	tx, err := prepareTransaction(ctx, request, t.sender, t.backend, nonce)
 	if err != nil {
 		return common.Hash{}, err
 	}

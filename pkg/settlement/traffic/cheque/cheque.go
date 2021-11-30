@@ -3,18 +3,12 @@ package cheque
 import (
 	"bytes"
 	"fmt"
-	"github.com/ethersphere/sw3-bindings/v3/simpleswapfactory"
-	"github.com/gauss-project/aurorafs/pkg/settlement/chain/transaction"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/gauss-project/aurorafs/pkg/crypto"
 	"github.com/gauss-project/aurorafs/pkg/crypto/eip712"
-)
-
-var (
-	trafficAbi = transaction.ParseABIUnchecked(simpleswapfactory.ERC20SimpleSwapABI)
 )
 
 // Cheque represents a cheque for a SimpleSwap chequebook

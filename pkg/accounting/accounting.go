@@ -23,6 +23,7 @@ var (
 
 	// ErrDisconnectThresholdExceeded denotes a peer has exceeded the disconnect threshold.
 	ErrDisconnectThresholdExceeded = errors.New("disconnect threshold exceeded")
+	ErrLowAvailableExceeded        = errors.New("low available balance")
 )
 
 // Interface is the Accounting interface.
@@ -106,8 +107,8 @@ Loop:
 		return err
 	}
 
-	if available.Cmp(retrieve) > 0 {
-		return fmt.Errorf("low available balance")
+	if available.Cmp(retrieve) < 0 {
+		return ErrLowAvailableExceeded
 	}
 
 	if retrieve.Cmp(a.paymentTolerance) >= 0 {

@@ -8,7 +8,6 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"github.com/gauss-project/aurorafs/pkg/settlement/chain"
 	"github.com/gauss-project/aurorafs/pkg/settlement/chain/transaction"
 	"github.com/gauss-project/aurorafs/pkg/settlement/chain/transaction/backendmock"
 	"io/ioutil"
@@ -88,11 +87,11 @@ func TestTransactionSend(t *testing.T) {
 			GasPrice: suggestedGasPrice,
 			Data:     txData,
 		})
-		request := &chain.TxRequest{
-			To:    &recipient,
-			Data:  txData,
-			Value: value,
-		}
+		//request := &chain.TxRequest{
+		//	To:    &recipient,
+		//	Data:  txData,
+		//	Value: value,
+		//}
 		store := storemock.NewStateStore()
 		err := store.Put(nonceKey(sender), nonce)
 		if err != nil {
@@ -131,7 +130,7 @@ func TestTransactionSend(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		txHash, err := transactionService.Send(context.Background(), request)
+		txHash, err := transactionService.Send(context.Background(), signedTx)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -159,11 +158,11 @@ func TestTransactionSend(t *testing.T) {
 			GasPrice: suggestedGasPrice,
 			Data:     txData,
 		})
-		request := &chain.TxRequest{
-			To:    &recipient,
-			Data:  txData,
-			Value: value,
-		}
+		//request := &chain.TxRequest{
+		//	To:    &recipient,
+		//	Data:  txData,
+		//	Value: value,
+		//}
 		store := storemock.NewStateStore()
 
 		transactionService, err := transaction.NewService(logger,
@@ -198,7 +197,7 @@ func TestTransactionSend(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		txHash, err := transactionService.Send(context.Background(), request)
+		txHash, err := transactionService.Send(context.Background(), signedTx)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -227,11 +226,11 @@ func TestTransactionSend(t *testing.T) {
 			GasPrice: suggestedGasPrice,
 			Data:     txData,
 		})
-		request := &chain.TxRequest{
-			To:    &recipient,
-			Data:  txData,
-			Value: value,
-		}
+		//request := &chain.TxRequest{
+		//	To:    &recipient,
+		//	Data:  txData,
+		//	Value: value,
+		//}
 		store := storemock.NewStateStore()
 		err := store.Put(nonceKey(sender), nonce)
 		if err != nil {
@@ -270,7 +269,7 @@ func TestTransactionSend(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		txHash, err := transactionService.Send(context.Background(), request)
+		txHash, err := transactionService.Send(context.Background(), signedTx)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -297,11 +296,11 @@ func TestTransactionSend(t *testing.T) {
 			GasPrice: suggestedGasPrice,
 			Data:     txData,
 		})
-		request := &chain.TxRequest{
-			To:    nil,
-			Data:  txData,
-			Value: value,
-		}
+		//request := &chain.TxRequest{
+		//	To:    nil,
+		//	Data:  txData,
+		//	Value: value,
+		//}
 
 		transactionService, err := transaction.NewService(logger,
 			backendmock.New(
@@ -335,7 +334,7 @@ func TestTransactionSend(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		txHash, err := transactionService.Send(context.Background(), request)
+		txHash, err := transactionService.Send(context.Background(), signedTx)
 		if err != nil {
 			t.Fatal(err)
 		}
