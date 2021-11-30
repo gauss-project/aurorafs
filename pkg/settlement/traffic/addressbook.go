@@ -24,7 +24,7 @@ type Addressbook interface {
 	// Beneficiary returns the beneficiary for the given peer.
 	Beneficiary(peer boson.Address) (beneficiary common.Address, known bool)
 	// BeneficiaryPeer returns the peer for a beneficiary.
-	BeneficiaryPeer(beneficiary common.Address) (peer boson.Address, known bool, err error)
+	BeneficiaryPeer(beneficiary common.Address) (peer boson.Address, known bool)
 	// PutBeneficiary stores the beneficiary for the given peer.
 	PutBeneficiary(peer boson.Address, beneficiary common.Address) error
 
@@ -119,11 +119,11 @@ func (a *addressBook) Beneficiary(peer boson.Address) (beneficiary common.Addres
 }
 
 // BeneficiaryPeer returns the peer for a beneficiary.
-func (a *addressBook) BeneficiaryPeer(beneficiary common.Address) (peer boson.Address, known bool, err error) {
+func (a *addressBook) BeneficiaryPeer(beneficiary common.Address) (peer boson.Address, known bool) {
 	if value, ok := a.beneficiaryPeer.Load(beneficiary.String()); ok {
-		return value.(boson.Address), true, nil
+		return value.(boson.Address), true
 	} else {
-		return boson.Address{}, false, storage.ErrNotFound
+		return boson.Address{}, false
 	}
 }
 
