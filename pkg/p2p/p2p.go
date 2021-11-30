@@ -16,7 +16,7 @@ import (
 
 // Service provides methods to handle p2p Peers and Protocols.
 type Service interface {
-	CallHandler(ctx context.Context, relayData *pb.RouteRelayReq, reallyDataChan chan []byte, last Peer, stream Stream) (err error)
+	CallHandler(ctx context.Context, last Peer, stream Stream) (relayData *pb.RouteRelayReq, w WriterChan, r ReaderChan, forward bool, err error)
 	AddProtocol(ProtocolSpec) error
 	Connect
 	Disconnecter
@@ -72,7 +72,7 @@ type DebugService interface {
 // Streamer is able to create a new Stream.
 type Streamer interface {
 	NewStream(ctx context.Context, address boson.Address, h Headers, protocol, version, stream string) (Stream, error)
-	NewRelayStream(ctx context.Context, address boson.Address, h Headers, protocol, version, stream string) (Stream, error)
+	NewRelayStream(ctx context.Context, address boson.Address, h Headers, protocol, version, stream string, midCall bool) (Stream, error)
 }
 
 type StreamerDisconnecter interface {
@@ -124,6 +124,16 @@ type StreamSpec struct {
 type Peer struct {
 	Address boson.Address `json:"address"`
 	Mode    aurora.Model  `json:"mode"`
+}
+
+type WriterChan struct {
+	W   chan []byte
+	Err chan error
+}
+
+type ReaderChan struct {
+	R   chan []byte
+	Err chan error
 }
 
 // HandlerFunc handles a received Stream from a Peer.

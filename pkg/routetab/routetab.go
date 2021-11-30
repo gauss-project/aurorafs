@@ -4,6 +4,8 @@ import (
 	"context"
 	"github.com/gauss-project/aurorafs/pkg/aurora"
 	"github.com/gauss-project/aurorafs/pkg/boson"
+	"github.com/gauss-project/aurorafs/pkg/p2p"
+	"github.com/gauss-project/aurorafs/pkg/routetab/pb"
 	"time"
 )
 
@@ -17,6 +19,8 @@ type RouteTab interface {
 	FindUnderlay(ctx context.Context, target boson.Address) (addr *aurora.Address, err error)
 }
 
-type GetNextHop interface {
+type RelayStream interface {
 	GetNextHopRandomOrFind(ctx context.Context, target boson.Address) (next boson.Address, err error)
+	PackRelayReq(ctx context.Context, stream p2p.Stream, req *pb.RouteRelayReq) (write p2p.WriterChan, read p2p.ReaderChan, done chan struct{})
+	PackRelayResp(ctx context.Context, stream p2p.Stream, req chan *pb.RouteRelayReq) (write p2p.WriterChan, read p2p.ReaderChan, done chan struct{})
 }

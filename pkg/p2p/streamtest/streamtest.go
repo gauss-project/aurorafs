@@ -99,7 +99,7 @@ func (r *Recorder) SetProtocols(protocols ...p2p.ProtocolSpec) {
 	r.protocols = append(r.protocols, protocols...)
 }
 
-func (r *Recorder) NewRelayStream(ctx context.Context, address boson.Address, h p2p.Headers, protocol, version, stream string) (p2p.Stream, error) {
+func (r *Recorder) NewRelayStream(ctx context.Context, address boson.Address, h p2p.Headers, protocol, version, stream string, midCall bool) (p2p.Stream, error) {
 	panic("implement me")
 }
 

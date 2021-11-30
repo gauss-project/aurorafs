@@ -93,7 +93,7 @@ func (pend *pendCallResTab) GcReqLog(expire time.Duration) {
 func (pend *pendCallResTab) GcResItems(expire time.Duration) {
 	pend.mu.Lock()
 	list := pend.respList
-	pend.mu.Unlock()
+	defer pend.mu.Unlock()
 	for key, item := range list {
 		if time.Since(item[0].CreateTime).Milliseconds() < expire.Milliseconds() {
 			// If the first one doesn't expire, then the next ones don't expire
@@ -106,12 +106,10 @@ func (pend *pendCallResTab) GcResItems(expire time.Duration) {
 				break
 			}
 		}
-		pend.mu.Lock()
 		if expireK == 0 {
 			delete(pend.respList, key)
 		} else {
 			pend.respList[key] = item[expireK:]
 		}
-		pend.mu.Unlock()
 	}
 }

@@ -39,6 +39,7 @@ message RouteRelayReq {
   bytes ProtocolVersion = 5;
   bytes StreamName = 6;
   bytes Data = 7;
+  bool MidCall = 8;
 }
 
 message RouteRelayResp {

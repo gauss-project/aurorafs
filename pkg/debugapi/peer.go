@@ -17,10 +17,25 @@ type peerConnectResponse struct {
 }
 
 func (s *Service) peerConnectHandler(w http.ResponseWriter, r *http.Request) {
-	addr, err := multiaddr.NewMultiaddr("/" + mux.Vars(r)["multi-address"])
+	dest := mux.Vars(r)["multi-address"]
+	addr, err := multiaddr.NewMultiaddr("/" + dest)
 	if err != nil {
-		s.logger.Debugf("debug api: peer connect: parse multiaddress: %v", err)
-		jsonhttp.BadRequest(w, err)
+		auroraAddr, e := boson.ParseHexAddress(dest)
+		if e != nil {
+			s.logger.Debugf("debug api: peer connect: parse multiaddress: %v", err)
+			jsonhttp.BadRequest(w, err)
+			return
+		}
+		err = s.routetab.Connect(r.Context(), auroraAddr)
+		if err != nil {
+			s.logger.Debugf("debug api: peer connect %s: %v", auroraAddr, err)
+			s.logger.Errorf("unable to connect to peer %s", auroraAddr)
+			jsonhttp.InternalServerError(w, err)
+			return
+		}
+		jsonhttp.OK(w, peerConnectResponse{
+			Address: auroraAddr.String(),
+		})
 		return
 	}
 

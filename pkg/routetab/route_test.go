@@ -213,6 +213,7 @@ func TestService_FindUnderlay(t *testing.T) {
 	})
 
 	t.Run("find underlay", func(t *testing.T) {
+		t.Skipf("test new relayStream")
 		// check find underlay
 		_, err = nodes[0].book.Get(nodes[3].overlay)
 		if !errors.Is(err, addressbook.ErrNotFound) {

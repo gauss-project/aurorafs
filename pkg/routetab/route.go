@@ -14,6 +14,7 @@ import (
 	"github.com/gauss-project/aurorafs/pkg/storage"
 	"github.com/gauss-project/aurorafs/pkg/topology/kademlia"
 	"github.com/gauss-project/aurorafs/pkg/topology/lightnode"
+	"io"
 	"math/rand"
 	"resenje.org/singleflight"
 	"sync"
@@ -22,11 +23,11 @@ import (
 
 const (
 	ProtocolName         = "router"
-	ProtocolVersion      = "2.0.0"
+	ProtocolVersion      = "3.0.0"
+	StreamOnRelay        = "relay"
 	streamOnRouteReq     = "onRouteReq"
 	streamOnRouteResp    = "onRouteResp"
 	streamOnFindUnderlay = "onFindUnderlay"
-	StreamOnRelay        = "relay"
 
 	peerConnectionAttemptTimeout = 5 * time.Second // Timeout for establishing a new connection with peer.
 )
@@ -591,7 +592,16 @@ func (s *Service) connect(ctx context.Context, peer boson.Address) (err error) {
 	return nil
 }
 
-func (s *Service) onFindUnderlay(ctx context.Context, p p2p.Peer, stream p2p.Stream) (err error) {
+func (s *Service) getOrFindRoute(ctx context.Context, target boson.Address) (paths []*Path, err error) {
+	paths, err = s.GetRoute(ctx, target)
+	if errors.Is(err, ErrNotFound) {
+		paths, err = s.FindRoute(ctx, target)
+	}
+	return
+}
+
+// Deprecated
+func (s *Service) onFindUnderlayOld(ctx context.Context, p p2p.Peer, stream p2p.Stream) (err error) {
 	w, r := protobuf.NewWriterAndReader(stream)
 	defer func() {
 		go func() {
@@ -671,15 +681,8 @@ func (s *Service) onFindUnderlay(ctx context.Context, p p2p.Peer, stream p2p.Str
 	return err
 }
 
-func (s *Service) getOrFindRoute(ctx context.Context, target boson.Address) (paths []*Path, err error) {
-	paths, err = s.GetRoute(ctx, target)
-	if errors.Is(err, ErrNotFound) {
-		paths, err = s.FindRoute(ctx, target)
-	}
-	return
-}
-
-func (s *Service) FindUnderlay(ctx context.Context, target boson.Address) (addr *aurora.Address, err error) {
+// Deprecated
+func (s *Service) findUnderlayOld(ctx context.Context, target boson.Address) (addr *aurora.Address, err error) {
 	next, err := s.GetNextHopRandomOrFind(ctx, target)
 	if err != nil {
 		return nil, err
@@ -729,6 +732,80 @@ func (s *Service) FindUnderlay(ctx context.Context, target boson.Address) (addr 
 	return addr, nil
 }
 
+func (s *Service) FindUnderlay(ctx context.Context, target boson.Address) (addr *aurora.Address, err error) {
+	stream, err := s.config.Stream.NewRelayStream(ctx, target, nil, ProtocolName, ProtocolVersion, streamOnFindUnderlay, true)
+	if err != nil {
+		return nil, err
+	}
+
+	defer func() {
+		if err != nil {
+			_ = stream.Reset()
+		} else {
+			go stream.FullClose()
+		}
+	}()
+
+	w, r := protobuf.NewWriterAndReader(stream)
+	req := pb.UnderlayReq{
+		Dest: target.Bytes(),
+	}
+	if err = w.WriteMsgWithContext(ctx, &req); err != nil {
+		s.logger.Errorf("find underlay dest %s req err %s", target.String(), err.Error())
+		return nil, err
+	}
+
+	resp := &pb.UnderlayResp{}
+	if err = r.ReadMsgWithContext(ctx, resp); err != nil {
+		s.logger.Errorf("find underlay dest %s read msg: %s", target, err.Error())
+		return nil, err
+	}
+
+	addr, err = aurora.ParseAddress(resp.Underlay, resp.Dest, resp.Signature, s.config.NetworkID)
+	if err != nil {
+		s.logger.Errorf("find underlay dest %s parse err %s", target.String(), err.Error())
+		return nil, err
+	}
+	err = s.config.AddressBook.Put(addr.Overlay, *addr)
+	if err != nil {
+		return nil, err
+	}
+	return addr, nil
+}
+
+func (s *Service) onFindUnderlay(ctx context.Context, p p2p.Peer, stream p2p.Stream) (err error) {
+	w, r := protobuf.NewWriterAndReader(stream)
+	defer func() {
+		if err != nil {
+			_ = stream.Reset()
+		} else {
+			go stream.FullClose()
+		}
+	}()
+	req := pb.UnderlayReq{}
+	if err = r.ReadMsgWithContext(ctx, &req); err != nil {
+		content := fmt.Sprintf("route: onFindUnderlay read msg: %s", err.Error())
+		s.logger.Errorf(content)
+		return fmt.Errorf(content)
+	}
+	target := boson.NewAddress(req.Dest)
+	s.logger.Tracef("find underlay dest %s receive: from %s", target.String(), p.Address.String())
+	address, err := s.config.AddressBook.Get(target)
+	if err == nil {
+		err = w.WriteMsgWithContext(ctx, &pb.UnderlayResp{
+			Dest:      req.Dest,
+			Underlay:  address.Underlay.Bytes(),
+			Signature: address.Signature,
+		})
+		if err != nil {
+			return err
+		}
+		s.logger.Tracef("find underlay dest %s send: to %s", target.String(), p.Address.String())
+		return nil
+	}
+	return err
+}
+
 func (s *Service) GetNextHopRandomOrFind(ctx context.Context, target boson.Address) (next boson.Address, err error) {
 	next = s.getNextHopRandom(target)
 	if next.IsZero() {
@@ -766,101 +843,62 @@ func (s *Service) getNextHopEffective(target boson.Address) (next []boson.Addres
 }
 
 func (s *Service) onRelay(ctx context.Context, p p2p.Peer, stream p2p.Stream) (err error) {
-	w, r := protobuf.NewWriterAndReader(stream)
-	defer func() {
-		go func() {
-			if err != nil {
-				_ = stream.Reset()
-			} else {
-				_ = stream.FullClose()
-			}
-		}()
-	}()
-
 	var (
-		target       boson.Address
-		next         boson.Address
-		forwardStram p2p.Stream
-		w1           protobuf.Writer
-		r1           protobuf.Reader
-		called       bool // the called handler
+		target        boson.Address
+		next          boson.Address
+		forwardStream p2p.Stream
+		forwardWriter protobuf.Writer
+		forwardReader protobuf.Reader
+		forwardNext   bool
 	)
-	reallyDataChan := make(chan []byte, 1)
+
 	errChan := make(chan error, 1)
-	readReqChan := make(chan *pb.RouteRelayReq, 1)
+	forwardChan := make(chan *pb.RouteRelayReq, 1)
 	readRespChan := make(chan *pb.RouteRelayResp, 1)
 
 	defer func() {
-		if forwardStram != nil {
+		if forwardStream != nil {
 			go func() {
-				if err != nil {
-					_ = forwardStram.Reset()
-				} else {
-					_ = forwardStram.FullClose()
-				}
+				_ = forwardStream.FullClose()
 			}()
 		}
 	}()
 
-	// read request
-	go func() {
-		for {
-			select {
-			case <-errChan:
-				s.logger.Tracef("route: onRelay read request done.")
-				return
-			default:
-				req := &pb.RouteRelayReq{}
-				if err = r.ReadMsgWithContext(ctx, req); err != nil {
-					content := fmt.Sprintf("route: onRelay read req msg from src: %s", err.Error())
-					s.logger.Errorf(content)
-					errChan <- fmt.Errorf(content)
-					break
-				}
-				readReqChan <- req
-			}
-		}
-	}()
+	req, w, _, forwardNext, err := s.p2ps.CallHandler(ctx, p, stream)
 
-	// read response
-	readResp := func() {
+	if forwardNext {
+		forwardChan <- req
+	} else {
+		return err
+	}
+
+	// read forward response
+	readResp := func(ch chan *pb.RouteRelayResp) {
 		for {
-			select {
-			case <-errChan:
-				s.logger.Tracef("route: onRelay read response done.")
+			resp := &pb.RouteRelayResp{}
+			err = forwardReader.ReadMsg(resp)
+			if errors.Is(err, io.EOF) {
+				// when next node FullClose
+				errChan <- nil
 				return
-			default:
-				resp := &pb.RouteRelayResp{}
-				if err = r1.ReadMsgWithContext(ctx, resp); err != nil {
-					content := fmt.Sprintf("route: onRelay read resp msg from src: %s", err.Error())
-					s.logger.Errorf(content)
-					errChan <- fmt.Errorf(content)
-					break
-				}
-				readRespChan <- resp
-				s.logger.Tracef("route: onRelay target %s receive: from %s", target, next)
 			}
+			if err != nil {
+				content := fmt.Sprintf("route: onRelay read resp from next: %s", err.Error())
+				s.logger.Debug(content)
+				errChan <- fmt.Errorf(content)
+				return
+			}
+			ch <- resp
+			s.logger.Tracef("route: onRelay target %s receive: from %s", target, next)
 		}
 	}
 
 	for {
 		select {
-		case req := <-readReqChan:
+		case req := <-forwardChan:
 			target = boson.NewAddress(req.Dest)
-			s.logger.Tracef("route: onRelay target %s receive: from %s", target.String(), p.Address.String())
-			if target.Equal(s.self) {
-				reallyDataChan <- req.Data
-				if !called {
-					called = true
-					go func() {
-						s.logger.Debugf("route: call handel %s/%s/%s", string(req.ProtocolName), string(req.ProtocolVersion), string(req.StreamName))
-						errChan <- s.p2ps.CallHandler(ctx, req, reallyDataChan, p, stream)
-					}()
-				}
-				break
-			}
-			if forwardStram == nil {
-				// jump next
+			// jump next
+			if forwardStream == nil {
 				if s.IsNeighbor(target) {
 					next = target
 				} else {
@@ -871,31 +909,138 @@ func (s *Service) onRelay(ctx context.Context, p p2p.Peer, stream p2p.Stream) (e
 						break
 					}
 				}
-				forwardStram, err = s.config.Stream.NewStream(ctx, next, stream.Headers(), ProtocolName, ProtocolVersion, StreamOnRelay)
+				forwardStream, err = s.config.Stream.NewStream(ctx, next, stream.Headers(), ProtocolName, ProtocolVersion, StreamOnRelay)
 				if err != nil {
 					errChan <- err
 					break
 				}
-				w1, r1 = protobuf.NewWriterAndReader(forwardStram)
-				go readResp()
+				forwardWriter, forwardReader = protobuf.NewWriterAndReader(forwardStream)
+				go readResp(readRespChan)
 				s.logger.Tracef("route: relay stream created, target %s next %s", target, next)
 			}
-			if err = w1.WriteMsgWithContext(ctx, req); err != nil {
+			if err = forwardWriter.WriteMsg(req); err != nil {
 				content := fmt.Sprintf("route: onRelay forward msg: %s", err.Error())
 				s.logger.Errorf(content)
 				errChan <- fmt.Errorf(content)
 				break
 			}
-			s.logger.Tracef("route: onRelay forward target %s to %s", target, next)
+			s.logger.Tracef("route: onRelay target %s forward req to %s", target, next)
 		case resp := <-readRespChan:
-			if err = w.WriteMsgWithContext(ctx, resp); err != nil {
-				content := fmt.Sprintf("route: onRelay write msg to src: %s", err.Error())
+			w.W <- resp.Data
+			err = <-w.Err
+			if err != nil {
+				content := fmt.Sprintf("route: onRelay target %s send resp to %s: %s", target, p.Address, err.Error())
 				s.logger.Errorf(content)
 				errChan <- fmt.Errorf(content)
 				break
 			}
+			s.logger.Tracef("route: onRelay target %s send resp to %s", target, p.Address)
 		case err = <-errChan:
 			return err
 		}
 	}
+}
+
+// PackRelayReq This packet mode is UDP mode and writing success does not mean that the final target has received a message
+func (s *Service) PackRelayReq(ctx context.Context, stream p2p.Stream, req *pb.RouteRelayReq) (write p2p.WriterChan, read p2p.ReaderChan, done chan struct{}) {
+	write = p2p.WriterChan{
+		W:   make(chan []byte, 1),
+		Err: make(chan error, 1),
+	}
+	read = p2p.ReaderChan{
+		R:   make(chan []byte, 1),
+		Err: make(chan error, 1),
+	}
+	done = make(chan struct{}, 1)
+
+	go func() {
+		ctx, cancel := context.WithCancel(ctx)
+		w, r := protobuf.NewWriterAndReader(stream)
+		var err error
+		defer func() {
+			_ = stream.FullClose()
+		}()
+		go func() {
+			for {
+				select {
+				case <-done:
+					cancel()
+					return
+				case <-ctx.Done():
+					return
+				case p := <-write.W:
+					req.Data = p
+					err = w.WriteMsg(req)
+					write.Err <- err
+					if err != nil {
+						return
+					}
+				}
+			}
+		}()
+
+		for {
+			resp := &pb.RouteRelayResp{}
+			err = r.ReadMsgWithContext(ctx, resp)
+			if err != nil {
+				read.Err <- err
+				return
+			}
+			read.R <- resp.Data
+		}
+	}()
+	return
+}
+
+// PackRelayResp This packet mode is UDP mode and writing success does not mean that the final target has received a message
+// This channel is closed by the initiator node
+func (s *Service) PackRelayResp(ctx context.Context, stream p2p.Stream, reqCh chan *pb.RouteRelayReq) (write p2p.WriterChan, read p2p.ReaderChan, done chan struct{}) {
+	write = p2p.WriterChan{
+		W:   make(chan []byte, 1),
+		Err: make(chan error, 1),
+	}
+	read = p2p.ReaderChan{
+		R:   make(chan []byte, 1),
+		Err: make(chan error, 1),
+	}
+	done = make(chan struct{}, 1)
+
+	go func() {
+		w, r := protobuf.NewWriterAndReader(stream)
+		var err error
+		defer func() {
+			_ = stream.FullClose()
+		}()
+
+		first := true
+
+		go func() {
+			for {
+				select {
+				case <-ctx.Done():
+					return
+				case p := <-write.W:
+					err = w.WriteMsg(&pb.RouteRelayResp{Data: p})
+					write.Err <- err
+					if err != nil {
+						return
+					}
+				}
+			}
+		}()
+		for {
+			req := &pb.RouteRelayReq{}
+			err = r.ReadMsgWithContext(ctx, req)
+			if err != nil {
+				read.Err <- err
+				return
+			}
+			if first {
+				first = false
+				reqCh <- req
+			}
+			read.R <- req.Data
+		}
+	}()
+	return
 }
