@@ -266,10 +266,34 @@ func (s *Service) AvailableBalance() (*big.Int, error) {
 }
 
 func (s *Service) UpdatePeerBalance(peer boson.Address) error {
+
 	return nil
 }
 
 // SetNotifyPaymentFunc sets the NotifyPaymentFunc to notify
 func (s *Service) SetNotifyPaymentFunc(notifyPaymentFunc settlement.NotifyPaymentFunc) {
 	s.notifyPaymentFunc = notifyPaymentFunc
+}
+
+func (s *Service) GetPeerBalance(peer boson.Address) (*big.Int, error) {
+	receivedKey := totalKey(peer, SettlementReceivedPrefix)
+	sendKey := totalKey(peer, SettlementSentPrefix)
+
+	var balance, receivedBalance, sendBalance *big.Int
+	err := s.store.Get(receivedKey, &receivedBalance)
+	if err != nil {
+		return balance, err
+	}
+	err = s.store.Get(sendKey, &sendBalance)
+	if err != nil {
+		return balance, err
+	}
+
+	balance = big.NewInt(0).Sub(receivedBalance, sendBalance)
+
+	return balance, nil
+}
+
+func (s *Service) GetUnPaidBalance(peer boson.Address) (*big.Int, error) {
+	return big.NewInt(0), nil
 }

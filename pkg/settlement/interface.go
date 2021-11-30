@@ -34,7 +34,7 @@ type Interface interface {
 
 	GetPeerBalance(peer boson.Address) (*big.Int, error)
 
-	GetNoPaidBalance(peer boson.Address) (*big.Int, error)
+	GetUnPaidBalance(peer boson.Address) (*big.Int, error)
 }
 
 // NotifyPaymentFunc is called when a payment from peer was successfully received
