@@ -178,8 +178,17 @@ func (a *Accounting) Debit(peer boson.Address, traffic uint64) error {
 		return p2p.NewBlockPeerError(10000*time.Hour, ErrDisconnectThresholdExceeded)
 	}
 
-	// todo
-
+	balance, err := a.settlement.GetPeerBalance(peer)
+	if err != nil {
+		return err
+	}
+	unPaid, err := a.settlement.GetNoPaidBalance(peer)
+	if err != nil {
+		return err
+	}
+	if balance.Cmp(unPaid) < 0 {
+		return fmt.Errorf("low node traffic balance: %s ", peer.String())
+	}
 	if err := a.settlement.PutTransferTraffic(peer, new(big.Int).SetUint64(traffic)); err != nil {
 		return err
 	}

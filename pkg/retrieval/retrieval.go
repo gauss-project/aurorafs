@@ -396,7 +396,7 @@ func (s *Service) handler(ctx context.Context, p p2p.Peer, stream p2p.Stream) (e
 	// todo
 	var dataSize = uint64(len(chunk.Data()) * 8)
 	if err := s.accounting.Debit(p.Address, dataSize); err != nil {
-		return nil
+		return err
 	}
 	if err := w.WriteMsgWithContext(ctx, &pb.Delivery{
 		Data: chunk.Data(),

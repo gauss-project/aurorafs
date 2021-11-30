@@ -49,18 +49,20 @@ type Traffic interface {
 
 	BalanceOf(account common.Address) (*big.Int, error)
 
-	RetrievedTotal(rg0 common.Address) (*big.Int, error)
+	RetrievedTotal(address common.Address) (*big.Int, error)
 
-	TransferredTotal(arg0 common.Address) (*big.Int, error)
+	TransferredTotal(address common.Address) (*big.Int, error)
 
-	TransAmount(from common.Address, to common.Address) (*big.Int, error)
+	TransAmount(beneficiary, recipient common.Address) (*big.Int, error)
+
+	CashChequeBeneficiary(beneficiary, recipient common.Address, cumulativePayout *big.Int, signature []byte) (*types.Transaction, error)
 }
 
 // Service is the service to send transactions. It takes care of gas price, gas
 // limit and nonce management.
 type Transaction interface {
 	// Send creates a transaction based on the request and sends it.
-	Send(ctx context.Context, request *TxRequest) (txHash common.Hash, err error)
+	Send(ctx context.Context, tx *types.Transaction) (txHash common.Hash, err error)
 	// Call simulate a transaction based on the request.
 	Call(ctx context.Context, request *TxRequest) (result []byte, err error)
 	// WaitForReceipt waits until either the transaction with the given hash has been mined or the context is cancelled.
