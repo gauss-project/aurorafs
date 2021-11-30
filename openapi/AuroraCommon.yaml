@@ -243,12 +243,14 @@ components:
     RoutePath:
       type: object
       properties:
-        createTime:
-          type: integer
         sign:
           type: string
-        item:
+        bodys:
           type: array
+        items:
+          type: array
+        createTime:
+          $ref: "#/components/schemas/DateTime"
         usedTime:
           $ref: "#/components/schemas/DateTime"
 
