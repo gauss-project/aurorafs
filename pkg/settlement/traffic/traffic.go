@@ -676,7 +676,7 @@ func (s *Service) GetPeerBalance(peer boson.Address) (*big.Int, error) {
 	return trafficPeerBalance, nil
 }
 
-func (s *Service) GetNoPaidBalace(peer boson.Address) (*big.Int, error) {
+func (s *Service) GetNoPaidBalance(peer boson.Address) (*big.Int, error) {
 	chainAddress, known, err := s.addressBook.Beneficiary(peer)
 	if err != nil {
 		return big.NewInt(0), err
