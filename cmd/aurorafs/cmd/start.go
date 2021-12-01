@@ -140,9 +140,12 @@ func (c *command) initStartCmd() (err error) {
 				//SwapFactoryAddress:       c.config.GetString(optionNameSwapFactoryAddress),
 				//SwapInitialDeposit:       c.config.GetString(optionNameSwapInitialDeposit),
 				//SwapEnable:               c.config.GetBool(optionNameSwapEnable),
-				KadBinMaxPeers:    c.config.GetInt(optionNameBinMaxPeers),
-				LightNodeMaxPeers: c.config.GetInt(optionNameLightMaxPeers),
-				AllowPrivateCIDRs: c.config.GetBool(optionNameAllowPrivateCIDRs),
+				KadBinMaxPeers:     c.config.GetInt(optionNameBinMaxPeers),
+				LightNodeMaxPeers:  c.config.GetInt(optionNameLightMaxPeers),
+				AllowPrivateCIDRs:  c.config.GetBool(optionNameAllowPrivateCIDRs),
+				Restricted:         c.config.GetBool(optionNameRestrictedAPI),
+				TokenEncryptionKey: c.config.GetString(optionNameTokenEncryptionKey),
+				AdminPasswordHash:  c.config.GetString(optionNameAdminPasswordHash),
 			})
 			if err != nil {
 				return err

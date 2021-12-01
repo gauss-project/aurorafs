@@ -2,6 +2,7 @@ package debugapi
 
 import (
 	"expvar"
+	"github.com/gauss-project/aurorafs/pkg/auth"
 	"net/http"
 	"net/http/pprof"
 
@@ -46,7 +47,19 @@ func (s *Service) newBasicRouter() *mux.Router {
 
 	router.Handle("/debug/vars", expvar.Handler())
 
-	router.Handle("/addresses", jsonhttp.MethodHandler{
+	router.Handle("/health", web.ChainHandlers(
+		httpaccess.SetAccessLogLevelHandler(0), // suppress access log messages
+		web.FinalHandlerFunc(s.statusHandler),
+	))
+
+	var handle = func(path string, handler http.Handler) {
+		if s.restricted {
+			handler = web.ChainHandlers(auth.PermissionCheckHandler(s.auth), web.FinalHandler(handler))
+		}
+		router.Handle(path, handler)
+	}
+
+	handle("/addresses", jsonhttp.MethodHandler{
 		"GET": http.HandlerFunc(s.addressesHandler),
 	})
 
@@ -59,94 +72,95 @@ func (s *Service) newBasicRouter() *mux.Router {
 func (s *Service) newRouter() *mux.Router {
 	router := s.newBasicRouter()
 
-	router.Handle("/readiness", jsonhttp.MethodHandler{
-		"GET": http.HandlerFunc(s.statusHandler),
-	})
+	router.Handle("/readiness", web.ChainHandlers(
+		httpaccess.SetAccessLogLevelHandler(0), // suppress access log messages
+		web.FinalHandlerFunc(s.statusHandler),
+	))
 
-	router.Handle("/pingpong/{peer-id}", jsonhttp.MethodHandler{
+	var handle = func(path string, handler http.Handler) {
+		if s.restricted {
+			handler = web.ChainHandlers(auth.PermissionCheckHandler(s.auth), web.FinalHandler(handler))
+		}
+		router.Handle(path, handler)
+	}
+
+	handle("/pingpong/{peer-id}", jsonhttp.MethodHandler{
 		"POST": http.HandlerFunc(s.pingpongHandler),
 	})
-
-	router.Handle("/connect/{multi-address:.+}", jsonhttp.MethodHandler{
+	handle("/connect/{multi-address:.+}", jsonhttp.MethodHandler{
 		"POST": http.HandlerFunc(s.peerConnectHandler),
 	})
-	router.Handle("/peers", jsonhttp.MethodHandler{
+	handle("/peers", jsonhttp.MethodHandler{
 		"GET": http.HandlerFunc(s.peersHandler),
 	})
-	router.Handle("/blocklist", jsonhttp.MethodHandler{
-		"GET": http.HandlerFunc(s.blocklistedPeersHandler),
-	})
-	router.Handle("/peers/{address}", jsonhttp.MethodHandler{
+	handle("/peers/{address}", jsonhttp.MethodHandler{
 		"DELETE": http.HandlerFunc(s.peerDisconnectHandler),
 	})
-	router.Handle("/blocklist/{address}", jsonhttp.MethodHandler{
+	handle("/blocklist", jsonhttp.MethodHandler{
+		"GET": http.HandlerFunc(s.blocklistedPeersHandler),
+	})
+	handle("/blocklist/{address}", jsonhttp.MethodHandler{
 		"POST": http.HandlerFunc(s.peerBlockingHandler),
 	})
-	router.Handle("/chunks/{address}", jsonhttp.MethodHandler{
+	handle("/chunks/{address}", jsonhttp.MethodHandler{
 		"GET":    http.HandlerFunc(s.hasChunkHandler),
 		"DELETE": http.HandlerFunc(s.removeChunk),
 	})
-	router.Handle("/topology", jsonhttp.MethodHandler{
+	handle("/topology", jsonhttp.MethodHandler{
 		"GET": http.HandlerFunc(s.topologyHandler),
 	})
-	router.Handle("/route/{peer-id}", jsonhttp.MethodHandler{
+	handle("/route/{peer-id}", jsonhttp.MethodHandler{
 		"GET":    http.HandlerFunc(s.getRouteHandel),
 		"POST":   http.HandlerFunc(s.findRouteHandel),
 		"DELETE": http.HandlerFunc(s.delRouteHandel),
 	})
-	router.Handle("/route/findunderlay/{peer-id}", jsonhttp.MethodHandler{
+	handle("/route/findunderlay/{peer-id}", jsonhttp.MethodHandler{
 		"GET":    http.HandlerFunc(s.findUnderlayHandel),
 	})
-	router.Handle("/welcome-message", jsonhttp.MethodHandler{
+	handle("/welcome-message", jsonhttp.MethodHandler{
 		"GET": http.HandlerFunc(s.getWelcomeMessageHandler),
 		"POST": web.ChainHandlers(
 			jsonhttp.NewMaxBodyBytesHandler(welcomeMessageMaxRequestSize),
 			web.FinalHandlerFunc(s.setWelcomeMessageHandler),
 		),
 	})
-	router.Handle("/chunk/discover/{rootCid}", jsonhttp.MethodHandler{
+	handle("/chunk/discover/{rootCid}", jsonhttp.MethodHandler{
 		"GET": http.HandlerFunc(s.chunkInfoDiscoverHandler),
 	})
-	router.Handle("/chunk/server/{rootCid}", jsonhttp.MethodHandler{
+	handle("/chunk/server/{rootCid}", jsonhttp.MethodHandler{
 		"GET": http.HandlerFunc(s.chunkInfoServerHandler),
 	})
-
-	router.Handle("/chunk/init/{rootCid}", jsonhttp.MethodHandler{
+	handle("/chunk/init/{rootCid}", jsonhttp.MethodHandler{
 		"GET": http.HandlerFunc(s.chunkInfoInitHandler),
 	})
-
-	router.Handle("/health", jsonhttp.MethodHandler{
-		"GET": http.HandlerFunc(s.statusHandler),
+	handle("/chunk/source/{rootCid}", jsonhttp.MethodHandler{
+		"GET": http.HandlerFunc(s.chunkInfoSource),
 	})
-
-	router.Handle("/aco/{timestamp}", jsonhttp.MethodHandler{
+	handle("/aco/{timestamp}", jsonhttp.MethodHandler{
 		"GET": http.HandlerFunc(s.getRouteScoreHandle),
 	})
 
-	router.Handle("/chunk/source/{rootCid}", jsonhttp.MethodHandler{
-		"GET": http.HandlerFunc(s.chunkInfoSource),
-	})
-	//router.Handle("/balances", jsonhttp.MethodHandler{
+	//handle("/balances", jsonhttp.MethodHandler{
 	//	"GET": http.HandlerFunc(s.compensatedBalancesHandler),
 	//})
 	//
-	//router.Handle("/balances/{peer}", jsonhttp.MethodHandler{
+	//handle("/balances/{peer}", jsonhttp.MethodHandler{
 	//	"GET": http.HandlerFunc(s.compensatedPeerBalanceHandler),
 	//})
 	//
-	//router.Handle("/consumed", jsonhttp.MethodHandler{
+	//handle("/consumed", jsonhttp.MethodHandler{
 	//	"GET": http.HandlerFunc(s.balancesHandler),
 	//})
 	//
-	//router.Handle("/consumed/{peer}", jsonhttp.MethodHandler{
+	//handle("/consumed/{peer}", jsonhttp.MethodHandler{
 	//	"GET": http.HandlerFunc(s.peerBalanceHandler),
 	//})
 
-	//router.Handle("/settlements", jsonhttp.MethodHandler{
+	//handle("/settlements", jsonhttp.MethodHandler{
 	//	"GET": http.HandlerFunc(s.settlementsHandler),
 	//})
 	//
-	//router.Handle("/settlements/{peer}", jsonhttp.MethodHandler{
+	//handle("/settlements/{peer}", jsonhttp.MethodHandler{
 	//	"GET": http.HandlerFunc(s.peerSettlementsHandler),
 	//})
 
