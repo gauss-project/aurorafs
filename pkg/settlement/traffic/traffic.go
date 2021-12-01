@@ -572,15 +572,15 @@ func (s *Service) UpdatePeerBalance(peer boson.Address) error {
 		return err
 	}
 
-	chainTraffic, ok := s.trafficPeers.trafficPeers.Load(chainAddress)
+	chainTraffic, ok := s.trafficPeers.trafficPeers.Load(chainAddress.String())
 	if ok {
 		traffic := chainTraffic.(Traffic)
 		traffic.trafficPeerBalance = balance
-		s.trafficPeers.trafficPeers.Store(chainAddress, traffic)
+		s.trafficPeers.trafficPeers.Store(chainAddress.String(), traffic)
 	} else {
 		traffic := newTraffic()
 		traffic.trafficPeerBalance = balance
-		s.trafficPeers.trafficPeers.Store(chainAddress, *traffic)
+		s.trafficPeers.trafficPeers.Store(chainAddress.String(), *traffic)
 	}
 	return nil
 }
@@ -601,17 +601,17 @@ func (s *Service) ReceiveCheque(ctx context.Context, peer boson.Address, cheque 
 		return err
 	}
 
-	traffic, ok := s.trafficPeers.trafficPeers.Load(cheque.Beneficiary)
+	traffic, ok := s.trafficPeers.trafficPeers.Load(cheque.Beneficiary.String())
 	if ok {
 		localTraffic := traffic.(Traffic)
 		transChequeTraffic := localTraffic.transferChequeTraffic
 		transChequeTraffic = big.NewInt(0).Add(transChequeTraffic, transferCheque)
 		localTraffic.transferChequeTraffic = transChequeTraffic
-		s.trafficPeers.trafficPeers.Store(cheque.Beneficiary, localTraffic)
+		s.trafficPeers.trafficPeers.Store(cheque.Beneficiary.String(), localTraffic)
 	} else {
 		traffic := newTraffic()
 		traffic.transferChequeTraffic = transferCheque
-		s.trafficPeers.trafficPeers.Store(cheque.Beneficiary, *traffic)
+		s.trafficPeers.trafficPeers.Store(cheque.Beneficiary.String(), *traffic)
 	}
 	return err
 }
