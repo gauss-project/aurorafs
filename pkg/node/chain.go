@@ -55,6 +55,7 @@ func InitChain(
 		return oracleServer, pseudosettle.New(p2pService, logger, stateStore), nil
 	}
 	beneficiary, err := signer.EthereumAddress()
+	logger.Infof("address ----> %s", beneficiary.String())
 	if err != nil {
 		return nil, nil, fmt.Errorf("chain address: %w", err)
 	}
@@ -68,7 +69,10 @@ func InitChain(
 		return nil, nil, fmt.Errorf("new transaction service: %w", err)
 	}
 
-	trafficService := InitTraffic(stateStore, beneficiary, trafficChainService, transactionService, logger, p2pService, signer, chainID.Int64(), trafficContractAddr)
+	trafficService, err := InitTraffic(stateStore, beneficiary, trafficChainService, transactionService, logger, p2pService, signer, chainID.Int64(), trafficContractAddr)
+	if err != nil {
+		return nil, nil, err
+	}
 	err = trafficService.InitTraffic()
 	if err != nil {
 		return nil, nil, fmt.Errorf("InitChain: %w", err)
@@ -77,13 +81,16 @@ func InitChain(
 }
 
 func InitTraffic(store storage.StateStorer, beneficiary common.Address, trafficChainService chain.Traffic,
-	transactionService chain.Transaction, logger logging.Logger, p2pService *libp2p.Service, signer crypto.Signer, chainID int64, trafficContractAddr string) *traffic.Service {
+	transactionService chain.Transaction, logger logging.Logger, p2pService *libp2p.Service, signer crypto.Signer, chainID int64, trafficContractAddr string) (*traffic.Service, error) {
 	chequeStore := chequePkg.NewChequeStore(store, beneficiary, chequePkg.RecoverCheque, chainID)
 	cashOut := chequePkg.NewCashoutService(store, transactionService, chequeStore, common.HexToAddress(trafficContractAddr))
 	addressBook := traffic.NewAddressBook(store)
-	protocol := trafficprotocol.New(p2pService, logger)
+	protocol := trafficprotocol.New(p2pService, logger, beneficiary)
+	if err := p2pService.AddProtocol(protocol.Protocol()); err != nil {
+		return nil, fmt.Errorf("traffic server :%v", err)
+	}
 	chequeSigner := chequePkg.NewChequeSigner(signer, chainID)
 	trafficService := traffic.New(logger, beneficiary, store, trafficChainService, chequeStore, cashOut, p2pService, addressBook, chequeSigner, protocol, chainID)
 	protocol.SetTraffic(trafficService)
-	return trafficService
+	return trafficService, nil
 }

@@ -218,12 +218,12 @@ func (s *Service) replaceTraffic(addressList map[common.Address]Traffic, lastChe
 			retrieveChequeTraffic: retrievedTotal,
 			retrieveTraffic:       retrievedTotal,
 		}
-		if cq, ok := lastCheques[k]; !ok {
+		if cq, ok := lastCheques[k]; ok {
 			traffic.retrieveTraffic = s.maxBigint(traffic.retrieveTraffic, cq.CumulativePayout)
 			traffic.retrieveChequeTraffic = s.maxBigint(traffic.retrieveChequeTraffic, cq.CumulativePayout)
 		}
 
-		if cq, ok := lastTransCheques[k]; !ok {
+		if cq, ok := lastTransCheques[k]; ok {
 			traffic.transferTraffic = s.maxBigint(traffic.transferTraffic, cq.CumulativePayout)
 			traffic.transferChequeTraffic = s.maxBigint(traffic.retrieveChequeTraffic, cq.CumulativePayout)
 		}
@@ -257,7 +257,7 @@ func (s *Service) LastReceivedCheque(peer boson.Address) (*chequePkg.SignedChequ
 	chainAddress, known := s.addressBook.Beneficiary(peer)
 
 	if !known {
-		return nil, chequePkg.ErrNoCheque
+		return &chequePkg.SignedCheque{}, nil
 	}
 	return s.chequeStore.LastReceivedCheque(chainAddress)
 }
@@ -441,6 +441,7 @@ func (s *Service) TransferTraffic(peer boson.Address) (traffic *big.Int, err err
 }
 
 func (s *Service) RetrieveTraffic(peer boson.Address) (traffic *big.Int, err error) {
+	s.protocol.Init(context.Background(), peer)
 	chainAddress, known := s.addressBook.Beneficiary(peer)
 
 	if !known {
@@ -530,7 +531,7 @@ func (s *Service) Handshake(peer boson.Address, beneficiary common.Address, cheq
 	}
 
 	if cheque == nil {
-		return fmt.Errorf("traffic: Empty cheque ")
+		return nil
 	}
 
 	isUser, err := s.chequeStore.VerifyCheque(cheque, s.chainID) //chequePkg.RecoverCheque(cheque, s.chainID)

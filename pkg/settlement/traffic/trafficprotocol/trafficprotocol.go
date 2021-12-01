@@ -24,6 +24,8 @@ const (
 type Interface interface {
 	// EmitCheque sends a signed cheque to a peer.
 	EmitCheque(ctx context.Context, peer boson.Address, cheque *cheque.SignedCheque) error
+
+	Init(ctx context.Context, peer boson.Address) error
 }
 
 type Traffic interface {
@@ -39,11 +41,12 @@ type Traffic interface {
 type Service struct {
 	streamer p2p.Streamer
 	logging  logging.Logger
+	address  common.Address
 	traffic  Traffic
 }
 
-func New(streamer p2p.Streamer, logging logging.Logger) *Service {
-	return &Service{streamer: streamer, logging: logging}
+func New(streamer p2p.Streamer, logging logging.Logger, address common.Address) *Service {
+	return &Service{streamer: streamer, logging: logging, address: address}
 }
 
 func (s *Service) SetTraffic(traffic Traffic) {
@@ -64,7 +67,6 @@ func (s *Service) Protocol() p2p.ProtocolSpec {
 				Handler: s.initHandler,
 			},
 		},
-		ConnectOut: s.init,
 	}
 }
 
@@ -82,10 +84,14 @@ func (s *Service) initHandler(ctx context.Context, p p2p.Peer, stream p2p.Stream
 		return fmt.Errorf("read request from peer %v: %w", p.Address, err)
 	}
 
-	receiveCheque, err := s.traffic.LastReceivedCheque(p.Address)
+	var c *cheque.SignedCheque
+	err = json.Unmarshal(req.SignedCheque, &c)
 	if err != nil {
-		return fmt.Errorf("failed to get the last cheque")
+		return err
 	}
+	s.traffic.Handshake(p.Address, common.BytesToAddress(req.Address), c)
+
+	receiveCheque, _ := s.traffic.LastReceivedCheque(p.Address)
 
 	signedCheque, err := json.Marshal(receiveCheque)
 	if err != nil {
@@ -93,26 +99,20 @@ func (s *Service) initHandler(ctx context.Context, p p2p.Peer, stream p2p.Stream
 	}
 
 	err = w.WriteMsgWithContext(ctx, &pb.EmitCheque{
+		Address:      s.address.Bytes(),
 		SignedCheque: signedCheque,
 	})
 	if err != nil {
 		return err
 	}
-
-	var cheque *cheque.SignedCheque
-	err = json.Unmarshal(req.SignedCheque, &signedCheque)
-	if err != nil {
-		return err
-	}
-	return s.traffic.Handshake(p.Address, common.Address{}, cheque)
-
+	return nil
 }
 
-func (s *Service) init(ctx context.Context, p p2p.Peer) error {
+func (s *Service) Init(ctx context.Context, peer boson.Address) error {
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 
-	stream, err := s.streamer.NewStream(ctx, p.Address, nil, protocolName, protocolVersion, initStreamName)
+	stream, err := s.streamer.NewStream(ctx, peer, nil, protocolName, protocolVersion, initStreamName)
 	if err != nil {
 		return err
 	}
@@ -124,10 +124,7 @@ func (s *Service) init(ctx context.Context, p p2p.Peer) error {
 		}
 	}()
 
-	receiveCheque, err := s.traffic.LastReceivedCheque(p.Address)
-	if err != nil {
-		return fmt.Errorf("failed to get the last cheque")
-	}
+	receiveCheque, _ := s.traffic.LastReceivedCheque(peer)
 
 	w, r := protobuf.NewWriterAndReader(stream)
 	signedCheque, err := json.Marshal(receiveCheque)
@@ -136,6 +133,7 @@ func (s *Service) init(ctx context.Context, p p2p.Peer) error {
 	}
 
 	err = w.WriteMsgWithContext(ctx, &pb.EmitCheque{
+		Address:      s.address.Bytes(),
 		SignedCheque: signedCheque,
 	})
 	if err != nil {
@@ -144,15 +142,15 @@ func (s *Service) init(ctx context.Context, p p2p.Peer) error {
 
 	var req pb.EmitCheque
 	if err := r.ReadMsgWithContext(ctx, &req); err != nil {
-		return fmt.Errorf("read request from peer %v: %w", p.Address, err)
+		return fmt.Errorf("read request from peer %v: %w", peer, err)
 	}
 
-	var cheque *cheque.SignedCheque
-	err = json.Unmarshal(req.SignedCheque, &signedCheque)
+	var c *cheque.SignedCheque
+	err = json.Unmarshal(req.SignedCheque, &c)
 	if err != nil {
 		return err
 	}
-	return s.traffic.Handshake(p.Address, common.Address{}, cheque)
+	return s.traffic.Handshake(peer, common.BytesToAddress(req.Address), c)
 }
 
 func (s *Service) handler(ctx context.Context, p p2p.Peer, stream p2p.Stream) (err error) {

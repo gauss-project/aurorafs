@@ -8,12 +8,10 @@ import (
 	"fmt"
 	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/logging"
-	"github.com/gauss-project/aurorafs/pkg/p2p"
 	"github.com/gauss-project/aurorafs/pkg/settlement"
 	"github.com/gauss-project/aurorafs/pkg/storage"
 	"math/big"
 	"sync"
-	"time"
 )
 
 var (
@@ -47,6 +45,7 @@ type Accounting struct {
 	settlement        settlement.Interface
 	metrics           metrics
 	payChan           chan payChan
+	reserveChan       chan bool
 }
 
 type payChan struct {
@@ -85,37 +84,39 @@ func NewAccounting(
 // Reserve reserves a portion of the balance for peer and attempts settlements if necessary.
 func (a *Accounting) Reserve(ctx context.Context, peer boson.Address, traffic uint64) error {
 
-Loop:
 	accountingPeer, err := a.getAccountingPeer(peer)
 	if err != nil {
 		return err
 	}
 	accountingPeer.lock.Lock()
 	defer accountingPeer.lock.Unlock()
-	retrieve := accountingPeer.unPayTraffic
+	for {
+		retrieve := accountingPeer.unPayTraffic
 
-	if retrieve.Cmp(big.NewInt(0)) == 0 {
-		retrieve, err = a.settlement.RetrieveTraffic(peer)
+		if retrieve.Cmp(big.NewInt(0)) == 0 {
+			retrieve, err = a.settlement.RetrieveTraffic(peer)
+			if err != nil {
+				return err
+			}
+		}
+
+		ret := big.NewInt(0).Add(retrieve, new(big.Int).SetUint64(traffic))
+		available, err := a.settlement.AvailableBalance()
 		if err != nil {
 			return err
 		}
-	}
 
-	retrieve = retrieve.Add(retrieve, new(big.Int).SetUint64(traffic))
-	available, err := a.settlement.AvailableBalance()
-	if err != nil {
-		return err
+		if available.Cmp(ret) < 0 {
+			return ErrLowAvailableExceeded
+		}
+		break
+		//
+		//if retrieve.Cmp(a.paymentTolerance) < 0 {
+		//	// todo prevent frequent loop logic
+		//	accountingPeer.unPayTraffic = ret
+		//	break
+		//}
 	}
-
-	if available.Cmp(retrieve) < 0 {
-		return ErrLowAvailableExceeded
-	}
-
-	if retrieve.Cmp(a.paymentTolerance) >= 0 {
-		// todo prevent frequent loop logic
-		goto Loop
-	}
-	accountingPeer.unPayTraffic = retrieve
 
 	return nil
 }
@@ -135,7 +136,7 @@ func (a *Accounting) Credit(peer boson.Address, traffic uint64) error {
 		return err
 	}
 	balance, err := a.settlement.RetrieveTraffic(peer)
-	balance = balance.Add(balance, new(big.Int).SetUint64(traffic))
+	balance = new(big.Int).Add(balance, new(big.Int).SetUint64(traffic))
 	if balance.Cmp(accountingPeer.paymentThreshold) >= 0 {
 		a.payChan <- payChan{
 			peer:             peer,
@@ -176,7 +177,9 @@ func (a *Accounting) Debit(peer boson.Address, traffic uint64) error {
 	}
 	if tolerance.Cmp(traff) <= 0 {
 		a.metrics.AccountingDisconnectsCount.Inc()
-		return p2p.NewBlockPeerError(10000*time.Hour, ErrDisconnectThresholdExceeded)
+		a.logger.Errorf("block list %s", peer.String())
+		return ErrDisconnectThresholdExceeded
+		//return p2p.NewBlockPeerError(10000*time.Hour, ErrDisconnectThresholdExceeded)
 	}
 
 	balance, err := a.settlement.GetPeerBalance(peer)
@@ -188,6 +191,7 @@ func (a *Accounting) Debit(peer boson.Address, traffic uint64) error {
 		return err
 	}
 	if balance.Cmp(unPaid) < 0 {
+		a.logger.Errorf("low node traffic balance: %s ", peer.String())
 		return fmt.Errorf("low node traffic balance: %s ", peer.String())
 	}
 	if err := a.settlement.PutTransferTraffic(peer, new(big.Int).SetUint64(traffic)); err != nil {
@@ -227,7 +231,7 @@ func (a *Accounting) NotifyPayment(peer boson.Address, traffic *big.Int) error {
 	if unPay.Cmp(traffic) < 0 {
 		return fmt.Errorf("unpaid traffic is less than paid traffic")
 	}
-	accountingPeer.unPayTraffic = unPay.Sub(unPay, traffic)
+	accountingPeer.unPayTraffic = new(big.Int).Sub(unPay, traffic)
 	return nil
 }
 
