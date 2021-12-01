@@ -57,7 +57,7 @@ type TrafficInfo struct {
 	ReceivedTraffic  *big.Int
 }
 
-type Interface interface {
+type ApiInterface interface {
 	// LastSentCheque returns the last sent cheque for the peer
 	LastSentCheque(peer boson.Address) (*chequePkg.Cheque, error)
 	// LastReceivedCheques returns the list of last received cheques for all peers
@@ -158,6 +158,14 @@ func newTraffic() *Traffic {
 		transferChequeTraffic: big.NewInt(0),
 		retrieveTraffic:       big.NewInt(0),
 		transferTraffic:       big.NewInt(0),
+	}
+}
+func NewTrafficInfo() *TrafficInfo {
+	return &TrafficInfo{
+		Balance:          big.NewInt(0),
+		AvailableBalance: big.NewInt(0),
+		TotalSendTraffic: big.NewInt(0),
+		ReceivedTraffic:  big.NewInt(0),
 	}
 }
 func (s *Service) getAllAddress(lastCheques map[common.Address]*chequePkg.Cheque, lastTransCheques map[common.Address]*chequePkg.SignedCheque) (map[common.Address]Traffic, error) {
@@ -282,7 +290,8 @@ func (s *Service) Address() common.Address {
 }
 
 func (s *Service) TrafficInfo() (*TrafficInfo, error) {
-	var respTraffic TrafficInfo
+	respTraffic := NewTrafficInfo()
+
 	cashed := big.NewInt(0)
 	transfer := big.NewInt(0)
 	s.trafficPeers.trafficPeers.Range(func(chainAddress, v interface{}) bool {
@@ -297,7 +306,7 @@ func (s *Service) TrafficInfo() (*TrafficInfo, error) {
 	respTraffic.Balance = s.trafficPeers.balance
 	respTraffic.AvailableBalance = new(big.Int).Add(respTraffic.Balance, new(big.Int).Sub(cashed, transfer))
 
-	return &respTraffic, nil
+	return respTraffic, nil
 }
 
 func (s *Service) TrafficCheques() ([]*TrafficCheque, error) {
@@ -476,7 +485,7 @@ func (s *Service) PutRetrieveTraffic(peer boson.Address, traffic *big.Int) error
 		localTraffic.retrieveTraffic = traffic
 	}
 	s.trafficPeers.trafficPeers.Store(chainAddress.String(), localTraffic)
-	return s.chequeStore.PutRetrieveTraffic(chainAddress, traffic)
+	return s.chequeStore.PutRetrieveTraffic(chainAddress, localTraffic.retrieveTraffic)
 }
 
 func (s *Service) PutTransferTraffic(peer boson.Address, traffic *big.Int) error {
@@ -496,7 +505,7 @@ func (s *Service) PutTransferTraffic(peer boson.Address, traffic *big.Int) error
 	}
 	s.trafficPeers.trafficPeers.Store(chainAddress.String(), localTraffic)
 
-	return s.chequeStore.PutTransferTraffic(chainAddress, traffic)
+	return s.chequeStore.PutTransferTraffic(chainAddress, localTraffic.transferTraffic)
 }
 
 // Balance Get chain balance

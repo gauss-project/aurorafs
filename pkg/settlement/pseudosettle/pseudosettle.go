@@ -4,8 +4,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/gauss-project/aurorafs/pkg/settlement/traffic"
+	chequePkg "github.com/gauss-project/aurorafs/pkg/settlement/traffic/cheque"
 	"math/big"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/gauss-project/aurorafs/pkg/boson"
@@ -28,12 +32,18 @@ var (
 	SettlementSentPrefix     = "pseudosettle_total_sent_"
 )
 
+type trafficInfo struct {
+	retrieveTraffic *big.Int
+	transferTraffic *big.Int
+}
+
 type Service struct {
 	streamer          p2p.Streamer
 	logger            logging.Logger
 	store             storage.StateStorer
 	notifyPaymentFunc settlement.NotifyPaymentFunc
 	metrics           metrics
+	trafficInfo       sync.Map
 }
 
 func New(streamer p2p.Streamer, logger logging.Logger, store storage.StateStorer) *Service {
@@ -42,6 +52,13 @@ func New(streamer p2p.Streamer, logger logging.Logger, store storage.StateStorer
 		logger:   logger,
 		metrics:  newMetrics(),
 		store:    store,
+	}
+}
+
+func newTraffic() *trafficInfo {
+	return &trafficInfo{
+		retrieveTraffic: big.NewInt(0),
+		transferTraffic: big.NewInt(0),
 	}
 }
 
@@ -56,6 +73,47 @@ func (s *Service) Protocol() p2p.ProtocolSpec {
 			},
 		},
 	}
+}
+
+func (s *Service) InitTraffic() error {
+
+	if err := s.store.Iterate(SettlementReceivedPrefix, func(key, val []byte) (stop bool, err error) {
+		addr, err := totalKeyPeer(key, SettlementReceivedPrefix)
+		if err != nil {
+			return false, fmt.Errorf("parse address from key: %s: %w", string(key), err)
+		}
+		var traffic *big.Int
+		if err = s.store.Get(string(key), &traffic); err != nil {
+			return true, err
+		}
+		_, err = s.putRetrieveTraffic(addr, traffic)
+		if err != nil {
+			return true, err
+		}
+		return false, nil
+	}); err != nil {
+		return err
+	}
+
+	if err := s.store.Iterate(SettlementSentPrefix, func(key, val []byte) (stop bool, err error) {
+		addr, err := totalKeyPeer(key, SettlementSentPrefix)
+		if err != nil {
+			return false, fmt.Errorf("parse address from key: %s: %w", string(key), err)
+		}
+		var traffic *big.Int
+		if err = s.store.Get(string(key), &traffic); err != nil {
+			return true, err
+		}
+		_, err = s.putTransferTraffic(addr, traffic)
+		if err != nil {
+			return true, err
+		}
+		return false, nil
+	}); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func totalKey(peer boson.Address, prefix string) string {
@@ -144,26 +202,74 @@ func (s *Service) Pay(ctx context.Context, peer boson.Address, traffic, paymentT
 
 	amountFloat, _ := new(big.Float).SetInt(traffic).Float64()
 	s.metrics.TotalSentPseudoSettlements.Add(amountFloat)
-	return nil
+	return s.notifyPaymentFunc(peer, traffic)
+
 }
 
 func (s *Service) TransferTraffic(peer boson.Address) (traffic *big.Int, err error) {
-
 	err = s.store.Get(totalKey(peer, SettlementSentPrefix), &traffic)
+	if errors.Is(err, storage.ErrNotFound) {
+		return big.NewInt(0), nil
+	}
+
 	return traffic, err
 }
 
 func (s *Service) RetrieveTraffic(peer boson.Address) (traffic *big.Int, err error) {
-	err = s.store.Get(totalKey(peer, SettlementReceivedPrefix), &traffic)
-	return traffic, err
+	//err = s.store.Get(totalKey(peer, SettlementReceivedPrefix), &traffic)
+	//if errors.Is(err, storage.ErrNotFound) {
+	//	return big.NewInt(0), nil
+	//}
+	return big.NewInt(0), err
 }
 
 func (s *Service) PutRetrieveTraffic(peer boson.Address, traffic *big.Int) error {
-	return s.store.Put(totalKey(peer, SettlementReceivedPrefix), traffic)
+
+	retrieveTraffic, err := s.putRetrieveTraffic(peer, traffic)
+	if err != nil {
+		return err
+	}
+	return s.store.Put(totalKey(peer, SettlementReceivedPrefix), retrieveTraffic)
+}
+
+func (s *Service) putRetrieveTraffic(peer boson.Address, traffic *big.Int) (retrieveTraffic *big.Int, err error) {
+	var localTraffic trafficInfo
+
+	chainTraffic, ok := s.trafficInfo.Load(peer.String())
+	if ok {
+		localTraffic = chainTraffic.(trafficInfo)
+		localTraffic.retrieveTraffic = new(big.Int).Add(localTraffic.retrieveTraffic, traffic)
+	} else {
+		localTraffic = *newTraffic()
+		localTraffic.retrieveTraffic = traffic
+	}
+	s.trafficInfo.Store(peer.String(), localTraffic)
+	return localTraffic.retrieveTraffic, nil
 }
 
 func (s *Service) PutTransferTraffic(peer boson.Address, traffic *big.Int) error {
-	return s.store.Put(totalKey(peer, SettlementSentPrefix), traffic)
+
+	transferTraffic, err := s.putTransferTraffic(peer, traffic)
+	if err != nil {
+		return err
+	}
+	return s.store.Put(totalKey(peer, SettlementSentPrefix), transferTraffic)
+}
+
+func (s *Service) putTransferTraffic(peer boson.Address, traffic *big.Int) (transferTraffic *big.Int, err error) {
+	var localTraffic trafficInfo
+
+	chainTraffic, ok := s.trafficInfo.Load(peer.String())
+	if ok {
+		localTraffic = chainTraffic.(trafficInfo)
+		localTraffic.transferTraffic = new(big.Int).Add(localTraffic.transferTraffic, traffic)
+	} else {
+		localTraffic = *newTraffic()
+		localTraffic.transferTraffic = traffic
+	}
+	s.trafficInfo.Store(peer.String(), localTraffic)
+
+	return localTraffic.transferTraffic, nil
 }
 
 // TotalSent returns the total amount sent to a peer
@@ -172,7 +278,7 @@ func (s *Service) TotalSent(peer boson.Address) (totalSent *big.Int, err error) 
 	err = s.store.Get(key, &totalSent)
 	if err != nil {
 		if errors.Is(err, storage.ErrNotFound) {
-			return nil, settlement.ErrPeerNoSettlements
+			return big.NewInt(0), nil
 		}
 		return nil, err
 	}
@@ -185,7 +291,8 @@ func (s *Service) TotalReceived(peer boson.Address) (totalReceived *big.Int, err
 	err = s.store.Get(key, &totalReceived)
 	if err != nil {
 		if errors.Is(err, storage.ErrNotFound) {
-			return nil, settlement.ErrPeerNoSettlements
+			//return nil, settlement.ErrPeerNoSettlements
+			return big.NewInt(0), nil
 		}
 		return nil, err
 	}
@@ -221,6 +328,10 @@ func (s *Service) SettlementsSent() (map[string]*big.Int, error) {
 func (s *Service) SettlementsReceived() (map[string]*big.Int, error) {
 	received := make(map[string]*big.Int)
 	err := s.store.Iterate(SettlementReceivedPrefix, func(key, val []byte) (stop bool, err error) {
+		if !strings.HasPrefix(string(key), SettlementReceivedPrefix) {
+			return true, nil
+		}
+
 		addr, err := totalKeyPeer(key, SettlementReceivedPrefix)
 		if err != nil {
 			return false, fmt.Errorf("parse address from key: %s: %w", string(key), err)
@@ -250,19 +361,19 @@ func (s *Service) Balance() (*big.Int, error) {
 // AvailableBalance Get actual available balance
 func (s *Service) AvailableBalance() (*big.Int, error) {
 	//s.store.Put(totalKey(peer, SettlementReceivedPrefix), traffic)
-	var availableBalance *big.Int
-	availableBalance = new(big.Int).SetInt64(0)
-	s.store.Iterate(SettlementReceivedPrefix, func(key, value []byte) (stop bool, err error) {
-		balance := new(big.Int).SetInt64(0)
-		keys := string(key)
-		if err := s.store.Get(keys, &balance); err != nil {
-			return true, err
-		}
-		availableBalance = new(big.Int).Add(availableBalance, balance)
-		return false, nil
-	})
+	//var availableBalance *big.Int
+	//availableBalance = new(big.Int).SetInt64(0)
+	//s.store.Iterate(SettlementReceivedPrefix, func(key, value []byte) (stop bool, err error) {
+	//	balance := new(big.Int).SetInt64(0)
+	//	keys := string(key)
+	//	if err := s.store.Get(keys, &balance); err != nil {
+	//		return true, err
+	//	}
+	//	availableBalance = new(big.Int).Add(availableBalance, balance)
+	//	return false, nil
+	//})
 
-	return availableBalance, nil
+	return big.NewInt(256 * 1024 * 8 * 50000), nil
 }
 
 func (s *Service) UpdatePeerBalance(peer boson.Address) error {
@@ -276,24 +387,63 @@ func (s *Service) SetNotifyPaymentFunc(notifyPaymentFunc settlement.NotifyPaymen
 }
 
 func (s *Service) GetPeerBalance(peer boson.Address) (*big.Int, error) {
-	receivedKey := totalKey(peer, SettlementReceivedPrefix)
-	sendKey := totalKey(peer, SettlementSentPrefix)
+	//receivedKey := totalKey(peer, SettlementReceivedPrefix)
+	//sendKey := totalKey(peer, SettlementSentPrefix)
+	//
+	//var balance, receivedBalance, sendBalance *big.Int
+	//err := s.store.Get(receivedKey, &receivedBalance)
+	//if err != nil {
+	//	return balance, err
+	//}
+	//err = s.store.Get(sendKey, &sendBalance)
+	//if err != nil {
+	//	return balance, err
+	//}
 
-	var balance, receivedBalance, sendBalance *big.Int
-	err := s.store.Get(receivedKey, &receivedBalance)
-	if err != nil {
-		return balance, err
-	}
-	err = s.store.Get(sendKey, &sendBalance)
-	if err != nil {
-		return balance, err
-	}
+	//balance = big.NewInt(0).Sub(receivedBalance, sendBalance)
 
-	balance = big.NewInt(0).Sub(receivedBalance, sendBalance)
-
-	return balance, nil
+	return big.NewInt(256 * 1024 * 8 * 50000), nil
 }
 
 func (s *Service) GetUnPaidBalance(peer boson.Address) (*big.Int, error) {
 	return big.NewInt(0), nil
+}
+
+// LastSentCheque returns the last sent cheque for the peer
+func (s *Service) LastSentCheque(peer boson.Address) (*chequePkg.Cheque, error) {
+	return nil, nil
+}
+
+// LastReceivedCheques returns the list of last received cheques for all peers
+func (s *Service) LastReceivedCheque(peer boson.Address) (*chequePkg.SignedCheque, error) {
+	return nil, nil
+}
+
+// CashCheque sends a cashing transaction for the last cheque of the peer
+func (s *Service) CashCheque(ctx context.Context, peer boson.Address) (common.Hash, error) {
+	return common.Hash{}, nil
+}
+
+func (s *Service) TrafficCheques() ([]*traffic.TrafficCheque, error) {
+	var trafficList []*traffic.TrafficCheque
+	return trafficList, nil
+}
+
+func (s *Service) Address() common.Address {
+	return common.Address{}
+}
+
+func (s *Service) TrafficInfo() (*traffic.TrafficInfo, error) {
+	respTraffic := traffic.NewTrafficInfo()
+
+	s.trafficInfo.Range(func(chainAddress, v interface{}) bool {
+		traffic := v.(trafficInfo)
+		respTraffic.TotalSendTraffic = new(big.Int).Add(respTraffic.TotalSendTraffic, traffic.transferTraffic)
+		respTraffic.ReceivedTraffic = new(big.Int).Add(respTraffic.ReceivedTraffic, traffic.retrieveTraffic)
+		return true
+	})
+	respTraffic.Balance = big.NewInt(0)
+	respTraffic.AvailableBalance = big.NewInt(0)
+
+	return respTraffic, nil
 }

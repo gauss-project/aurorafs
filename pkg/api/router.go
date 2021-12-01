@@ -130,6 +130,34 @@ func (s *server) setupRouting() {
 		})),
 	)
 
+	handle("/chequebook/trafficInfo", web.ChainHandlers(
+		s.gatewayModeForbidEndpointHandler,
+		web.FinalHandler(jsonhttp.MethodHandler{
+			"GET": http.HandlerFunc(s.trafficInfo),
+		})),
+	)
+
+	handle("/chequebook/address", web.ChainHandlers(
+		s.gatewayModeForbidEndpointHandler,
+		web.FinalHandler(jsonhttp.MethodHandler{
+			"GET": http.HandlerFunc(s.address),
+		})),
+	)
+
+	handle("/chequebook/trafficCheques", web.ChainHandlers(
+		s.gatewayModeForbidEndpointHandler,
+		web.FinalHandler(jsonhttp.MethodHandler{
+			"GET": http.HandlerFunc(s.trafficCheques),
+		})),
+	)
+
+	handle("/chequebook/cashCheque/{address}", web.ChainHandlers(
+		s.gatewayModeForbidEndpointHandler,
+		web.FinalHandler(jsonhttp.MethodHandler{
+			"GET": http.HandlerFunc(s.cashCheque),
+		})),
+	)
+
 	s.Handler = web.ChainHandlers(
 		httpaccess.NewHTTPAccessLogHandler(s.logger, logrus.InfoLevel, s.tracer, "api access"),
 		handlers.CompressHandler,

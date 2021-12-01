@@ -5,6 +5,7 @@ package api
 import (
 	"context"
 	"errors"
+	"github.com/gauss-project/aurorafs/pkg/settlement/traffic"
 	"io"
 	"math"
 	"net/http"
@@ -85,6 +86,7 @@ type server struct {
 	pinning   pinning.Interface
 	logger    logging.Logger
 	tracer    *tracing.Tracer
+	traffic   traffic.ApiInterface
 
 	Options
 	http.Handler
@@ -107,7 +109,8 @@ const (
 )
 
 // New will create a and initialize a new API service.
-func New(storer storage.Storer, resolver resolver.Interface, addr boson.Address, chunkInfo chunkinfo.Interface, traversalService traversal.Traverser, pinning pinning.Interface, logger logging.Logger, tracer *tracing.Tracer, o Options) Service {
+func New(storer storage.Storer, resolver resolver.Interface, addr boson.Address, chunkInfo chunkinfo.Interface, traversalService traversal.Traverser, pinning pinning.Interface, logger logging.Logger,
+	tracer *tracing.Tracer, o Options, traffic traffic.ApiInterface) Service {
 	s := &server{
 		storer:    storer,
 		resolver:  resolver,
@@ -120,6 +123,7 @@ func New(storer storage.Storer, resolver resolver.Interface, addr boson.Address,
 		tracer:    tracer,
 		metrics:   newMetrics(),
 		quit:      make(chan struct{}),
+		traffic:   traffic,
 	}
 
 	BufferSizeMul = o.BufferSizeMul
