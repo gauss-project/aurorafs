@@ -55,7 +55,7 @@ func InitChain(
 		return oracleServer, pseudosettle.New(p2pService, logger, stateStore), nil
 	}
 	beneficiary, err := signer.EthereumAddress()
-	logger.Infof("address ----> %s", beneficiary.String())
+	logger.Infof("address  %s", beneficiary.String())
 	if err != nil {
 		return nil, nil, fmt.Errorf("chain address: %w", err)
 	}

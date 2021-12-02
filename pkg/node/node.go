@@ -249,7 +249,7 @@ func NewAurora(addr string, bosonAddress boson.Address, publicKey ecdsa.PublicKe
 	}
 
 	paymentThreshold := new(big.Int).SetUint64(256 * 1024 * 8)
-	paymentTolerance := new(big.Int).Mul(paymentThreshold, new(big.Int).SetUint64(5))
+	paymentTolerance := new(big.Int).Mul(paymentThreshold, new(big.Int).SetUint64(32))
 
 	acc := accounting.NewAccounting(
 		paymentTolerance,
@@ -258,7 +258,7 @@ func NewAurora(addr string, bosonAddress boson.Address, publicKey ecdsa.PublicKe
 		stateStore,
 		settlement,
 	)
-	settlement.SetNotifyPaymentFunc(acc.AsyncNotifyPayment)
+	settlement.SetNotifyPaymentFunc(acc.NotifyPayment)
 
 	metricsDB, err := shed.NewDBWrap(stateStore.DB())
 	if err != nil {

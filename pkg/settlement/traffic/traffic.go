@@ -350,6 +350,9 @@ func (s *Service) Pay(ctx context.Context, peer boson.Address, traffic, paymentT
 }
 
 func (s *Service) Issue(ctx context.Context, peer boson.Address, recipient, beneficiary common.Address, traffic *big.Int) error {
+	defer func() {
+		_ = s.notifyPaymentFunc(peer, traffic)
+	}()
 	available, err := s.AvailableBalance()
 	if err != nil {
 		return err
@@ -388,10 +391,7 @@ func (s *Service) Issue(ctx context.Context, peer boson.Address, recipient, bene
 	if err := s.protocol.EmitCheque(ctx, peer, signedCheque); err != nil {
 		return err
 	}
-	if err := s.chequeStore.PutSendCheque(ctx, &c, recipient); err != nil {
-		return err
-	}
-	return s.notifyPaymentFunc(peer, traffic)
+	return s.chequeStore.PutSendCheque(ctx, &c, recipient)
 }
 
 // TotalSent returns the total amount sent to a peer
@@ -598,6 +598,7 @@ func (s *Service) ReceiveCheque(ctx context.Context, peer boson.Address, cheque 
 	}
 
 	transferCheque, err := s.chequeStore.ReceiveCheque(ctx, cheque)
+	s.logger.Errorf("receive cheque %s", transferCheque.Int64())
 	if err != nil {
 		return err
 	}
@@ -607,6 +608,7 @@ func (s *Service) ReceiveCheque(ctx context.Context, peer boson.Address, cheque 
 		localTraffic := traffic.(Traffic)
 		transChequeTraffic := localTraffic.transferChequeTraffic
 		transChequeTraffic = big.NewInt(0).Add(transChequeTraffic, transferCheque)
+		s.logger.Errorf("trans cheque traffic %s", transChequeTraffic.Int64())
 		localTraffic.transferChequeTraffic = transChequeTraffic
 		s.trafficPeers.trafficPeers.Store(cheque.Beneficiary.String(), localTraffic)
 	} else {

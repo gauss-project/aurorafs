@@ -76,7 +76,7 @@ func (s *Service) initHandler(ctx context.Context, p p2p.Peer, stream p2p.Stream
 		if err != nil {
 			_ = stream.Reset()
 		} else {
-			_ = stream.FullClose()
+			go stream.FullClose()
 		}
 	}()
 	var req pb.EmitCheque
@@ -159,7 +159,7 @@ func (s *Service) handler(ctx context.Context, p p2p.Peer, stream p2p.Stream) (e
 		if err != nil {
 			_ = stream.Reset()
 		} else {
-			_ = stream.FullClose()
+			go stream.FullClose()
 		}
 	}()
 	var req pb.EmitCheque
