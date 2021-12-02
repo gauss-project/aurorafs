@@ -4,6 +4,7 @@ go 1.17
 
 require (
 	github.com/btcsuite/btcd v0.22.0-beta
+	github.com/casbin/casbin/v2 v2.35.0
 	github.com/coreos/go-semver v0.3.0
 	github.com/ethereum/go-ethereum v1.10.11
 	github.com/ethersphere/langos v1.0.0
@@ -22,6 +23,7 @@ require (
 	github.com/libp2p/go-libp2p v0.15.0
 	github.com/libp2p/go-libp2p-autonat v0.4.2
 	github.com/libp2p/go-libp2p-core v0.9.0
+	github.com/libp2p/go-libp2p-nat v0.0.6
 	github.com/libp2p/go-libp2p-peerstore v0.2.8
 	github.com/libp2p/go-libp2p-quic-transport v0.11.2
 	github.com/libp2p/go-libp2p-swarm v0.5.3
@@ -52,6 +54,7 @@ require (
 )
 
 require (
+	github.com/Knetic/govaluate v3.0.1-0.20171022003610-9aa49832a739+incompatible // indirect
 	github.com/StackExchange/wmi v0.0.0-20210224194228-fe8f1750fd46 // indirect
 	github.com/VictoriaMetrics/fastcache v1.6.0 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
@@ -100,7 +103,6 @@ require (
 	github.com/libp2p/go-libp2p-circuit v0.4.0 // indirect
 	github.com/libp2p/go-libp2p-discovery v0.5.1 // indirect
 	github.com/libp2p/go-libp2p-mplex v0.4.1 // indirect
-	github.com/libp2p/go-libp2p-nat v0.0.6 // indirect
 	github.com/libp2p/go-libp2p-noise v0.2.2 // indirect
 	github.com/libp2p/go-libp2p-pnet v0.2.0 // indirect
 	github.com/libp2p/go-libp2p-testing v0.4.2 // indirect

@@ -1,10 +1,13 @@
 package libp2p
 
 import (
+	"bytes"
 	"context"
 	"crypto/ecdsa"
 	"errors"
 	"fmt"
+	"github.com/gauss-project/aurorafs/pkg/routetab"
+	"github.com/gauss-project/aurorafs/pkg/routetab/pb"
 	"net"
 	"runtime"
 	"strings"
@@ -79,6 +82,9 @@ type Service struct {
 	bootNodes         bootnode.BootNodes
 	lightNodeLimit    int
 	protocolsmu       sync.RWMutex
+	route             routetab.RelayStream
+	self              boson.Address
+	nodeMode          aurora.Model
 }
 
 type Options struct {
@@ -280,6 +286,12 @@ func New(ctx context.Context, signer beecrypto.Signer, networkID uint64, overlay
 	h.Network().Notify(peerRegistry)       // update peer registry on network events
 	h.Network().Notify(s.handshakeService) // update handshake service on network events
 	return s, nil
+}
+
+func (s *Service) ApplyRoute(self boson.Address, rt routetab.RelayStream, mode aurora.Model) {
+	s.route = rt
+	s.self = self
+	s.nodeMode = mode
 }
 
 func (s *Service) handleIncoming(stream network.Stream) {
@@ -829,6 +841,128 @@ func (s *Service) Peers() []p2p.Peer {
 
 func (s *Service) BlocklistedPeers() ([]p2p.Peer, error) {
 	return s.blocklist.Peers()
+}
+
+func (s *Service) CallHandler(ctx context.Context, last p2p.Peer, stream p2p.Stream) (relayData *pb.RouteRelayReq, w p2p.WriterChan, r p2p.ReaderChan, forward bool, err error) {
+	reqCh := make(chan *pb.RouteRelayReq, 1)
+	w, r, done := s.route.PackRelayResp(ctx, stream, reqCh)
+	relayData = <-reqCh
+
+	name := string(relayData.ProtocolName)
+	version := string(relayData.ProtocolVersion)
+	streamName := string(relayData.StreamName)
+	md, err := aurora.NewModelFromBytes(relayData.SrcMode)
+	if err != nil {
+		return
+	}
+	src := p2p.Peer{
+		Address: boson.NewAddress(relayData.Src),
+		Mode:    md,
+	}
+	id := protocol.ID(p2p.NewAuroraStreamName(name, version, streamName))
+	matcher, err := s.protocolSemverMatcher(id)
+	if err != nil {
+		err = fmt.Errorf("protocol version match %s: %w", id, err)
+		if !relayData.MidCall {
+			forward = true
+		}
+		return
+	}
+	var spec p2p.StreamSpec
+	for _, ss := range s.protocols {
+		if ss.Name == name {
+			for _, v := range ss.StreamSpecs {
+				if matcher(p2p.NewAuroraStreamName(name, ss.Version, v.Name)) {
+					spec = v
+					break
+				}
+			}
+			break
+		}
+	}
+	if spec.Handler == nil && !relayData.MidCall {
+		forward = true
+		return
+	}
+
+	// tracing: get span tracing context and add it to the context
+	// silently ignore if the peer is not providing tracing
+	ctx, err = s.tracer.WithContextFromHeaders(ctx, stream.Headers())
+	if err != nil && !errors.Is(err, tracing.ErrContextNotFound) {
+		s.logger.Debugf("handle protocol %s/%s: stream %s: peer %s: get tracing context: %v", name, version, streamName, src.Address, err)
+		_ = stream.Reset()
+		return
+	}
+
+	logger := tracing.NewLoggerWithTraceID(ctx, s.logger)
+
+	s.metrics.HandledStreamCount.Inc()
+
+	err = spec.Handler(ctx, src, newVirtualStream(stream, w, r, done))
+	if err != nil {
+		var de *p2p.DisconnectError
+		if errors.As(err, &de) {
+			logger.Tracef("call libp2p handler(%s): disconnecting last %s", streamName, last.Address)
+			_ = stream.Reset()
+			_ = s.Disconnect(last.Address, de.Error())
+		}
+		// count unexpected requests
+		if errors.Is(err, p2p.ErrUnexpected) {
+			s.metrics.UnexpectedProtocolReqCount.Inc()
+		}
+		if !bytes.Equal(relayData.Dest, s.self.Bytes()) {
+			forward = true
+		}
+		logger.Debugf("could not call handle protocol %s/%s: realy stream %s: peer %s: error: %v, forward=%v", name, version, streamName, src.Address, err, forward)
+	}
+	return
+}
+
+func (s *Service) NewRelayStream(ctx context.Context, target boson.Address, headers p2p.Headers, protocolName, protocolVersion, streamName string, midCall bool) (p2p.Stream, error) {
+	next, err := s.route.GetNextHopRandomOrFind(ctx, target)
+	if err != nil {
+		return nil, err
+	}
+
+	peerID, found := s.peers.peerID(next)
+	if !found {
+		return nil, p2p.ErrPeerNotFound
+	}
+
+	streamlibp2p, err := s.newStreamForPeerID(ctx, peerID, routetab.ProtocolName, routetab.ProtocolVersion, routetab.StreamOnRelay)
+	if err != nil {
+		return nil, fmt.Errorf("new stream for peerid: %w", err)
+	}
+
+	stream := newStream(streamlibp2p)
+
+	// tracing: add span context header
+	if headers == nil {
+		headers = make(p2p.Headers)
+	}
+	if err := s.tracer.AddContextHeader(ctx, headers); err != nil && !errors.Is(err, tracing.ErrContextNotFound) {
+		return nil, err
+	}
+
+	// exchange headers
+	if err := sendHeaders(ctx, headers, stream); err != nil {
+		_ = stream.Reset()
+		return nil, fmt.Errorf("send headers: %w", err)
+	}
+
+	w, r, done := s.route.PackRelayReq(ctx, stream, &pb.RouteRelayReq{
+		Src:             s.self.Bytes(),
+		SrcMode:         s.nodeMode.Bv.Bytes(),
+		Dest:            target.Bytes(),
+		ProtocolName:    []byte(protocolName),
+		ProtocolVersion: []byte(protocolVersion),
+		StreamName:      []byte(streamName),
+		Data:            nil,
+		MidCall:         midCall,
+	})
+
+	relay := newVirtualStream(stream, w, r, done)
+	return relay, nil
 }
 
 func (s *Service) NewStream(ctx context.Context, overlay boson.Address, headers p2p.Headers, protocolName, protocolVersion, streamName string) (p2p.Stream, error) {

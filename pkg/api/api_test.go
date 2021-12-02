@@ -2,14 +2,8 @@ package api_test
 
 import (
 	"errors"
-	"io"
-	"net/http"
-	"net/http/httptest"
-	"net/url"
-	"testing"
-	"time"
-
 	"github.com/gauss-project/aurorafs/pkg/api"
+	mockauth "github.com/gauss-project/aurorafs/pkg/auth/mock"
 	"github.com/gauss-project/aurorafs/pkg/boson"
 	chunkinfo "github.com/gauss-project/aurorafs/pkg/chunkinfo/mock"
 	"github.com/gauss-project/aurorafs/pkg/logging"
@@ -19,7 +13,13 @@ import (
 	"github.com/gauss-project/aurorafs/pkg/storage"
 	"github.com/gauss-project/aurorafs/pkg/traversal"
 	"github.com/gorilla/websocket"
+	"io"
+	"net/http"
+	"net/http/httptest"
+	"net/url"
 	"resenje.org/web"
+	"testing"
+	"time"
 )
 
 type testServerOptions struct {
@@ -34,6 +34,8 @@ type testServerOptions struct {
 	PreventRedirect    bool
 	CORSAllowedOrigins []string
 	ChunkInfo          *chunkinfo.ChunkInfo
+	Authenticator      *mockauth.Auth
+	Restricted         bool
 }
 
 func newTestServer(t *testing.T, o testServerOptions) (*http.Client, *websocket.Conn, string) {
@@ -46,13 +48,16 @@ func newTestServer(t *testing.T, o testServerOptions) (*http.Client, *websocket.
 	if o.WsPingPeriod == 0 {
 		o.WsPingPeriod = 60 * time.Second
 	}
-
+	if o.Authenticator == nil {
+		o.Authenticator = &mockauth.Auth{}
+	}
 	serverAddress := boson.MustParseHexAddress("01")
 
-	s := api.New(o.Storer, o.Resolver, serverAddress, o.ChunkInfo, o.Traversal, o.Pinning, o.Logger, nil, api.Options{
+	s := api.New(o.Storer, o.Resolver, serverAddress, o.ChunkInfo, o.Traversal, o.Pinning, o.Authenticator, o.Logger, nil, api.Options{
 		CORSAllowedOrigins: o.CORSAllowedOrigins,
 		GatewayMode:        o.GatewayMode,
 		WsPingPeriod:       60 * time.Second,
+		Restricted:         o.Restricted,
 	})
 
 	ts := httptest.NewServer(s)
