@@ -606,11 +606,10 @@ func (s *Service) ReceiveCheque(ctx context.Context, peer boson.Address, cheque 
 	}
 
 	transferCheque, err := s.chequeStore.ReceiveCheque(ctx, cheque)
-	s.logger.Errorf("receive cheque %s", transferCheque.Int64())
 	if err != nil {
 		return err
 	}
-
+	s.logger.Errorf("receive cheque %s", transferCheque.Int64())
 	traffic, ok := s.trafficPeers.trafficPeers.Load(cheque.Beneficiary.String())
 	if ok {
 		localTraffic := traffic.(Traffic)
