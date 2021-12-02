@@ -24,8 +24,6 @@ const (
 type Interface interface {
 	// EmitCheque sends a signed cheque to a peer.
 	EmitCheque(ctx context.Context, peer boson.Address, cheque *cheque.SignedCheque) error
-
-	Init(ctx context.Context, peer boson.Address) error
 }
 
 type Traffic interface {
@@ -67,6 +65,7 @@ func (s *Service) Protocol() p2p.ProtocolSpec {
 				Handler: s.initHandler,
 			},
 		},
+		ConnectOut: s.init,
 	}
 }
 
@@ -108,11 +107,11 @@ func (s *Service) initHandler(ctx context.Context, p p2p.Peer, stream p2p.Stream
 	return nil
 }
 
-func (s *Service) Init(ctx context.Context, peer boson.Address) error {
+func (s *Service) init(ctx context.Context, p p2p.Peer) error {
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 
-	stream, err := s.streamer.NewStream(ctx, peer, nil, protocolName, protocolVersion, initStreamName)
+	stream, err := s.streamer.NewStream(ctx, p.Address, nil, protocolName, protocolVersion, initStreamName)
 	if err != nil {
 		return err
 	}
@@ -120,11 +119,11 @@ func (s *Service) Init(ctx context.Context, peer boson.Address) error {
 		if err != nil {
 			_ = stream.Reset()
 		} else {
-			_ = stream.FullClose() // wait for confirmation
+			go stream.FullClose() // wait for confirmation
 		}
 	}()
 
-	receiveCheque, _ := s.traffic.LastReceivedCheque(peer)
+	receiveCheque, _ := s.traffic.LastReceivedCheque(p.Address)
 
 	w, r := protobuf.NewWriterAndReader(stream)
 	signedCheque, err := json.Marshal(receiveCheque)
@@ -142,7 +141,7 @@ func (s *Service) Init(ctx context.Context, peer boson.Address) error {
 
 	var req pb.EmitCheque
 	if err := r.ReadMsgWithContext(ctx, &req); err != nil {
-		return fmt.Errorf("read request from peer %v: %w", peer, err)
+		return fmt.Errorf("read request from peer %v: %w", p.Address, err)
 	}
 
 	var c *cheque.SignedCheque
@@ -150,7 +149,7 @@ func (s *Service) Init(ctx context.Context, peer boson.Address) error {
 	if err != nil {
 		return err
 	}
-	return s.traffic.Handshake(peer, common.BytesToAddress(req.Address), c)
+	return s.traffic.Handshake(p.Address, common.BytesToAddress(req.Address), c)
 }
 
 func (s *Service) handler(ctx context.Context, p p2p.Peer, stream p2p.Stream) (err error) {
@@ -188,7 +187,7 @@ func (s *Service) EmitCheque(ctx context.Context, peer boson.Address, cheque *ch
 		if err != nil {
 			_ = stream.Reset()
 		} else {
-			_ = stream.FullClose()
+			go stream.FullClose()
 		}
 	}()
 

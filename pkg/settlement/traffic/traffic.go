@@ -450,7 +450,6 @@ func (s *Service) TransferTraffic(peer boson.Address) (traffic *big.Int, err err
 }
 
 func (s *Service) RetrieveTraffic(peer boson.Address) (traffic *big.Int, err error) {
-	s.protocol.Init(context.Background(), peer)
 	chainAddress, known := s.addressBook.Beneficiary(peer)
 
 	if !known {
@@ -539,7 +538,7 @@ func (s *Service) Handshake(peer boson.Address, beneficiary common.Address, cheq
 		return err
 	}
 
-	if cheque == nil {
+	if cheque == nil || cheque.Signature == nil {
 		return nil
 	}
 

@@ -36,7 +36,6 @@ type Interface interface {
 // Accounting is the main implementation of the accounting interface.
 type Accounting struct {
 	// Mutex for accessing the accountingPeers map.
-	accountingMu      sync.Mutex
 	accountingPeersMu sync.Mutex
 	accountingPeers   map[string]*accountingPeer
 	logger            logging.Logger
@@ -46,7 +45,6 @@ type Accounting struct {
 	settlement        settlement.Interface
 	metrics           metrics
 	payChan           chan payChan
-	reserveChan       chan bool
 }
 
 type payChan struct {
@@ -124,12 +122,12 @@ func (a *Accounting) Reserve(ctx context.Context, peer boson.Address, traffic ui
 // Credit increases the amount of credit we have with the given peer
 // (and decreases existing debt).
 func (a *Accounting) Credit(peer boson.Address, traffic uint64) error {
-	a.accountingMu.Lock()
-	defer a.accountingMu.Unlock()
 	accountingPeer, err := a.getAccountingPeer(peer)
 	if err != nil {
 		return err
 	}
+	a.accountingPeersMu.Lock()
+	defer a.accountingPeersMu.Unlock()
 	if err := a.settlement.PutRetrieveTraffic(peer, new(big.Int).SetUint64(traffic)); err != nil {
 		a.logger.Errorf("failed to modify retrieve traffic")
 		return err
@@ -162,9 +160,9 @@ func (a *Accounting) settle() {
 // Debit increases the amount of debt we have with the given peer (and decreases
 // existing credit).
 func (a *Accounting) Debit(peer boson.Address, traffic uint64) error {
-	a.accountingMu.Lock()
-	defer a.accountingMu.Unlock()
 
+	a.accountingPeersMu.Lock()
+	defer a.accountingPeersMu.Unlock()
 	tolerance := a.paymentTolerance
 	traff, err := a.settlement.TransferTraffic(peer)
 	if err != nil {
