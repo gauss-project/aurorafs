@@ -36,6 +36,7 @@ type Traffic struct {
 }
 
 type TrafficPeer struct {
+	trafficMu    sync.RWMutex
 	trafficPeers sync.Map
 	balance      *big.Int
 	totalPaidOut *big.Int
@@ -206,6 +207,8 @@ func (s *Service) getAllAddress(lastCheques map[common.Address]*chequePkg.Cheque
 }
 
 func (s *Service) replaceTraffic(addressList map[common.Address]Traffic, lastCheques map[common.Address]*chequePkg.Cheque, lastTransCheques map[common.Address]*chequePkg.SignedCheque) error {
+	s.trafficPeers.trafficMu.Lock()
+	defer s.trafficPeers.trafficMu.Unlock()
 	s.trafficPeers.totalPaidOut = new(big.Int).SetInt64(0)
 	for k := range addressList {
 		retrievedTotal, err := s.trafficChainService.TransAmount(k, s.chainAddress)
@@ -469,6 +472,9 @@ func (s *Service) RetrieveTraffic(peer boson.Address) (traffic *big.Int, err err
 }
 
 func (s *Service) PutRetrieveTraffic(peer boson.Address, traffic *big.Int) error {
+	s.trafficPeers.trafficMu.Lock()
+	defer s.trafficPeers.trafficMu.Unlock()
+
 	chainAddress, known := s.addressBook.Beneficiary(peer)
 	var localTraffic Traffic
 	if !known {
@@ -488,6 +494,9 @@ func (s *Service) PutRetrieveTraffic(peer boson.Address, traffic *big.Int) error
 }
 
 func (s *Service) PutTransferTraffic(peer boson.Address, traffic *big.Int) error {
+	s.trafficPeers.trafficMu.Lock()
+	defer s.trafficPeers.trafficMu.Unlock()
+
 	var localTraffic Traffic
 	chainAddress, known := s.addressBook.Beneficiary(peer)
 
@@ -570,6 +579,9 @@ func (s *Service) Handshake(peer boson.Address, beneficiary common.Address, cheq
 }
 
 func (s *Service) UpdatePeerBalance(peer boson.Address) error {
+	s.trafficPeers.trafficMu.Lock()
+	defer s.trafficPeers.trafficMu.Unlock()
+
 	chainAddress, known := s.addressBook.Beneficiary(peer)
 
 	if !known {
@@ -595,6 +607,7 @@ func (s *Service) UpdatePeerBalance(peer boson.Address) error {
 }
 
 func (s *Service) ReceiveCheque(ctx context.Context, peer boson.Address, cheque *chequePkg.SignedCheque) error {
+
 	chainAddress, known := s.addressBook.Beneficiary(peer)
 
 	if !known {
@@ -610,6 +623,10 @@ func (s *Service) ReceiveCheque(ctx context.Context, peer boson.Address, cheque 
 		return err
 	}
 	s.logger.Errorf("receive cheque %s", transferCheque.Int64())
+
+	s.trafficPeers.trafficMu.Lock()
+	defer s.trafficPeers.trafficMu.Unlock()
+
 	traffic, ok := s.trafficPeers.trafficPeers.Load(cheque.Beneficiary.String())
 	if ok {
 		localTraffic := traffic.(Traffic)
@@ -647,6 +664,9 @@ func (s *Service) GetPeerBalance(peer boson.Address) (*big.Int, error) {
 }
 
 func (s *Service) GetUnPaidBalance(peer boson.Address) (*big.Int, error) {
+	s.trafficPeers.trafficMu.RLock()
+	defer s.trafficPeers.trafficMu.RUnlock()
+
 	chainAddress, known := s.addressBook.Beneficiary(peer)
 
 	if !known {

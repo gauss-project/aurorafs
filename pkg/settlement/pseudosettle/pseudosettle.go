@@ -43,6 +43,7 @@ type Service struct {
 	store             storage.StateStorer
 	notifyPaymentFunc settlement.NotifyPaymentFunc
 	metrics           metrics
+	trafficMu         sync.RWMutex
 	trafficInfo       sync.Map
 }
 
@@ -234,7 +235,8 @@ func (s *Service) PutRetrieveTraffic(peer boson.Address, traffic *big.Int) error
 
 func (s *Service) putRetrieveTraffic(peer boson.Address, traffic *big.Int) (retrieveTraffic *big.Int, err error) {
 	var localTraffic trafficInfo
-
+	s.trafficMu.Lock()
+	defer s.trafficMu.Unlock()
 	chainTraffic, ok := s.trafficInfo.Load(peer.String())
 	if ok {
 		localTraffic = chainTraffic.(trafficInfo)
@@ -257,6 +259,9 @@ func (s *Service) PutTransferTraffic(peer boson.Address, traffic *big.Int) error
 }
 
 func (s *Service) putTransferTraffic(peer boson.Address, traffic *big.Int) (transferTraffic *big.Int, err error) {
+	s.trafficMu.Lock()
+	defer s.trafficMu.Unlock()
+
 	var localTraffic trafficInfo
 
 	chainTraffic, ok := s.trafficInfo.Load(peer.String())
@@ -373,7 +378,7 @@ func (s *Service) AvailableBalance() (*big.Int, error) {
 	//	return false, nil
 	//})
 
-	return big.NewInt(256 * 1024 * 8 * 50000), nil
+	return big.NewInt(256 * 1024 * 8 * 4 * 32000), nil
 }
 
 func (s *Service) UpdatePeerBalance(peer boson.Address) error {
@@ -402,7 +407,7 @@ func (s *Service) GetPeerBalance(peer boson.Address) (*big.Int, error) {
 
 	//balance = big.NewInt(0).Sub(receivedBalance, sendBalance)
 
-	return big.NewInt(256 * 1024 * 8 * 50000), nil
+	return big.NewInt(256 * 1024 * 8 * 4 * 32000), nil
 }
 
 func (s *Service) GetUnPaidBalance(peer boson.Address) (*big.Int, error) {
