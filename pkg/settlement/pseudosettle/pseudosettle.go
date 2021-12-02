@@ -161,7 +161,7 @@ func (s *Service) handler(ctx context.Context, p p2p.Peer, stream p2p.Stream) (e
 		return err
 	}
 
-	return s.notifyPaymentFunc(p.Address, new(big.Int).SetUint64(req.Amount))
+	return nil
 }
 
 // Pay initiates a payment to the given peer
@@ -217,11 +217,12 @@ func (s *Service) TransferTraffic(peer boson.Address) (traffic *big.Int, err err
 }
 
 func (s *Service) RetrieveTraffic(peer boson.Address) (traffic *big.Int, err error) {
-	//err = s.store.Get(totalKey(peer, SettlementReceivedPrefix), &traffic)
-	//if errors.Is(err, storage.ErrNotFound) {
-	//	return big.NewInt(0), nil
-	//}
-	return big.NewInt(0), err
+	err = s.store.Get(totalKey(peer, SettlementReceivedPrefix), &traffic)
+	if errors.Is(err, storage.ErrNotFound) {
+		return big.NewInt(0), nil
+	}
+
+	return traffic, err
 }
 
 func (s *Service) PutRetrieveTraffic(peer boson.Address, traffic *big.Int) error {
@@ -378,7 +379,7 @@ func (s *Service) AvailableBalance() (*big.Int, error) {
 	//	return false, nil
 	//})
 
-	return big.NewInt(256 * 1024 * 8 * 4 * 32000), nil
+	return big.NewInt(256 * 1024 * 8 * 4 * 33), nil
 }
 
 func (s *Service) UpdatePeerBalance(peer boson.Address) error {
@@ -407,7 +408,7 @@ func (s *Service) GetPeerBalance(peer boson.Address) (*big.Int, error) {
 
 	//balance = big.NewInt(0).Sub(receivedBalance, sendBalance)
 
-	return big.NewInt(256 * 1024 * 8 * 4 * 32000), nil
+	return big.NewInt(256 * 1024 * 8 * 4 * 33), nil
 }
 
 func (s *Service) GetUnPaidBalance(peer boson.Address) (*big.Int, error) {

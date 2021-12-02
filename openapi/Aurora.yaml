@@ -429,11 +429,11 @@ paths:
         default:
           description: Default response
 
-  "/chequebook/trafficInfo":
+  "/traffic/info":
     get:
       summary: Get the remaining flow and the total flow usage
       tags:
-        - ChequeBook
+        - Traffic
       responses:
         "200":
           description: Flow situation
@@ -448,11 +448,11 @@ paths:
         default:
           description: Default response
 
-  "/chequebook/address":
+  "/traffic/address":
     get:
       summary: Get the chain account address
       tags:
-        - ChequeBook
+        - Traffic
       responses:
         "200":
           description: address messages
@@ -467,11 +467,11 @@ paths:
         default:
           description: Default response
 
-  "/chequebook/trafficCheques":
+  "/traffic/cheques":
     get:
       summary: Acquire traffic interaction information of each node
       tags:
-        - ChequeBook
+        - Traffic
       responses:
         "200":
           description: traffic information
@@ -486,11 +486,11 @@ paths:
         default:
           description: Default response
 
-  "/chequebook/cashCheque/{address}":
+  "/traffic/cash/{address}":
     get:
       summary: cheque exchange
       tags:
-        - ChequeBook
+        - Traffic
       parameters:
         - in: path
           name: address

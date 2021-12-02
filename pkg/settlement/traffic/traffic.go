@@ -318,7 +318,7 @@ func (s *Service) TrafficCheques() ([]*TrafficCheque, error) {
 	var trafficCheques []*TrafficCheque
 	s.trafficPeers.trafficPeers.Range(func(chainAddress, v interface{}) bool {
 
-		peer, known := s.addressBook.BeneficiaryPeer(chainAddress.(common.Address))
+		peer, known := s.addressBook.BeneficiaryPeer(common.HexToAddress(chainAddress.(string)))
 		if known {
 			traffic := v.(Traffic)
 			trafficCheque := &TrafficCheque{
