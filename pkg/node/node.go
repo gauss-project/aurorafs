@@ -194,7 +194,7 @@ func NewAurora(addr string, bosonAddress boson.Address, publicKey ecdsa.PublicKe
 		return nil, fmt.Errorf("p2p service: %w", err)
 	}
 
-	oracleChain, settlement, err := InitChain(
+	oracleChain, settlement, apiInterface, err := InitChain(
 		p2pCtx,
 		logger,
 		o.OracleEndpoint,
@@ -356,7 +356,7 @@ func NewAurora(addr string, bosonAddress boson.Address, publicKey ecdsa.PublicKe
 			GatewayMode:        o.GatewayMode,
 			WsPingPeriod:       60 * time.Second,
 			BufferSizeMul:      o.ApiBufferSizeMul,
-		})
+		}, apiInterface)
 		apiListener, err := net.Listen("tcp", o.APIAddr)
 		if err != nil {
 			return nil, fmt.Errorf("api listener: %w", err)

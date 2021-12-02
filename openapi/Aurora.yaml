@@ -428,3 +428,86 @@ paths:
           $ref: "AuroraCommon.yaml#/components/responses/500"
         default:
           description: Default response
+
+  "/chequebook/trafficInfo":
+    get:
+      summary: Get the remaining flow and the total flow usage
+      tags:
+        - ChequeBook
+      responses:
+        "200":
+          description: Flow situation
+          content:
+            application/json:
+              schema:
+                $ref: "AuroraCommon.yaml#/components/schemas/ChequebookTrafficInfo"
+        "403":
+          $ref: "AuroraCommon.yaml#/components/responses/GatewayForbidden"
+        "500":
+          $ref: "AuroraCommon.yaml#/components/responses/500"
+        default:
+          description: Default response
+
+  "/chequebook/address":
+    get:
+      summary: Get the chain account address
+      tags:
+        - ChequeBook
+      responses:
+        "200":
+          description: address messages
+          content:
+            application/json:
+              schema:
+                $ref: "AuroraCommon.yaml#/components/schemas/ReferenceResponse"
+        "403":
+          $ref: "AuroraCommon.yaml#/components/responses/GatewayForbidden"
+        "500":
+          $ref: "AuroraCommon.yaml#/components/responses/500"
+        default:
+          description: Default response
+
+  "/chequebook/trafficCheques":
+    get:
+      summary: Acquire traffic interaction information of each node
+      tags:
+        - ChequeBook
+      responses:
+        "200":
+          description: traffic information
+          content:
+            application/json:
+              schema:
+                $ref: "AuroraCommon.yaml#/components/schemas/ChequebookTrafficCheque"
+        "403":
+          $ref: "AuroraCommon.yaml#/components/responses/GatewayForbidden"
+        "500":
+          $ref: "AuroraCommon.yaml#/components/responses/500"
+        default:
+          description: Default response
+
+  "/chequebook/cashCheque/{address}":
+    get:
+      summary: cheque exchange
+      tags:
+        - ChequeBook
+      parameters:
+        - in: path
+          name: address
+          schema:
+            $ref: "AuroraCommon.yaml#/components/schemas/BosonReference"
+          required: true
+          description: Boson address of content
+      responses:
+        "200":
+          description: Exchange code
+          content:
+            application/json:
+              schema:
+                $ref: "AuroraCommon.yaml#/components/schemas/ChequebookTrafficHash"
+        "403":
+          $ref: "AuroraCommon.yaml#/components/responses/GatewayForbidden"
+        "500":
+          $ref: "AuroraCommon.yaml#/components/responses/500"
+        default:
+          description: Default response
