@@ -84,7 +84,7 @@ func InitChain(
 	if err != nil {
 		return nil, nil, nil, err
 	}
-	err = trafficService.InitTraffic()
+	err = trafficService.Init()
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("InitChain: %w", err)
 	}
