@@ -20,7 +20,7 @@ type RouteTab interface {
 }
 
 type RelayStream interface {
-	GetNextHopRandomOrFind(ctx context.Context, target boson.Address) (next boson.Address, err error)
+	GetNextHopRandomOrFind(ctx context.Context, target boson.Address, skips ...boson.Address) (next boson.Address, err error)
 	PackRelayReq(ctx context.Context, stream p2p.Stream, req *pb.RouteRelayReq) (write p2p.WriterChan, read p2p.ReaderChan, done chan struct{})
 	PackRelayResp(ctx context.Context, stream p2p.Stream, req chan *pb.RouteRelayReq) (write p2p.WriterChan, read p2p.ReaderChan, done chan struct{})
 }

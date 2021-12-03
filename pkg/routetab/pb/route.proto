@@ -40,6 +40,7 @@ message RouteRelayReq {
   bytes StreamName = 6;
   bytes Data = 7;
   bool MidCall = 8;
+  repeated bytes Paths = 9;
 }
 
 message RouteRelayResp {
