@@ -642,7 +642,6 @@ func (s *Service) ReceiveCheque(ctx context.Context, peer boson.Address, cheque 
 	if err != nil {
 		return err
 	}
-	s.logger.Errorf("receive cheque %s", transferCheque.Int64())
 
 	s.trafficPeers.trafficMu.Lock()
 	defer s.trafficPeers.trafficMu.Unlock()
@@ -652,7 +651,6 @@ func (s *Service) ReceiveCheque(ctx context.Context, peer boson.Address, cheque 
 		localTraffic := traffic.(Traffic)
 		transChequeTraffic := localTraffic.transferChequeTraffic
 		transChequeTraffic = big.NewInt(0).Add(transChequeTraffic, transferCheque)
-		s.logger.Errorf("trans cheque traffic %s", transChequeTraffic.Int64())
 		localTraffic.transferChequeTraffic = transChequeTraffic
 		s.trafficPeers.trafficPeers.Store(cheque.Beneficiary.String(), localTraffic)
 	} else {
