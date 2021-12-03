@@ -49,6 +49,10 @@ type ChequeStore interface {
 
 	PutTransferTraffic(chainAddress common.Address, traffic *big.Int) error
 
+	GetRetrieveTraffic(chainAddress common.Address) (traffic *big.Int, err error)
+
+	GetTransferTraffic(chainAddress common.Address) (traffic *big.Int, err error)
+
 	PutReceivedCheques(chainAddress common.Address, cheque SignedCheque) error
 
 	VerifyCheque(cheque *SignedCheque, chaindID int64) (common.Address, error)
@@ -280,6 +284,30 @@ func (s *chequeStore) PutTransferTraffic(chainAddress common.Address, traffic *b
 
 func (s *chequeStore) PutReceivedCheques(chainAddress common.Address, cheque SignedCheque) error {
 	return s.store.Put(lastReceivedChequeKey(chainAddress), cheque)
+}
+
+func (s *chequeStore) GetRetrieveTraffic(chainAddress common.Address) (traffic *big.Int, err error) {
+	err = s.store.Get(retrievedTraffic(chainAddress), &traffic)
+	if err != nil {
+		if err != storage.ErrNotFound {
+			return big.NewInt(0), err
+		}
+		return big.NewInt(0), nil
+	}
+
+	return traffic, nil
+}
+
+func (s *chequeStore) GetTransferTraffic(chainAddress common.Address) (traffic *big.Int, err error) {
+	err = s.store.Get(transferredTraffic(chainAddress), &traffic)
+	if err != nil {
+		if err != storage.ErrNotFound {
+			return big.NewInt(0), err
+		}
+		return big.NewInt(0), nil
+	}
+
+	return traffic, nil
 }
 
 // RecoverCheque recovers the issuer ethereum address from a signed cheque

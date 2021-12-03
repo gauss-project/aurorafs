@@ -245,6 +245,18 @@ func (s *Service) replaceTraffic(addressList map[common.Address]Traffic, lastChe
 			traffic.transferChequeTraffic = s.maxBigint(traffic.retrieveChequeTraffic, cq.CumulativePayout)
 		}
 
+		retrieve, err := s.chequeStore.GetRetrieveTraffic(k)
+		if err != nil {
+			return err
+		}
+		traffic.retrieveTraffic = s.maxBigint(traffic.retrieveTraffic, retrieve)
+
+		transfer, err := s.chequeStore.GetTransferTraffic(k)
+		if err != nil {
+			return err
+		}
+		traffic.transferTraffic = s.maxBigint(traffic.transferTraffic, transfer)
+
 		s.trafficPeers.trafficPeers[k.String()] = traffic
 	}
 	return nil
