@@ -15,7 +15,9 @@ type chunkPyramid struct {
 	// rootCid: hash : data
 	mateData map[string]map[string][]byte
 	// rootCid: count
-	hashCount map[string]int
+	hashData map[string][]string
+
+	chunk map[string]uint
 }
 
 type pyramidCidCount struct {
@@ -30,7 +32,7 @@ type PyramidCidNum struct {
 }
 
 func newChunkPyramid() *chunkPyramid {
-	return &chunkPyramid{pyramid: make(map[string]map[string]pyramidCidCount), mateData: make(map[string]map[string][]byte), hashCount: make(map[string]int)}
+	return &chunkPyramid{pyramid: make(map[string]map[string]pyramidCidCount), mateData: make(map[string]map[string][]byte), hashData: make(map[string][]string), chunk: make(map[string]uint)}
 }
 
 func (ci *ChunkInfo) initChunkPyramid(ctx context.Context, rootCid boson.Address) error {
@@ -64,7 +66,7 @@ func (ci *ChunkInfo) updateChunkPyramid(rootCid boson.Address, pyramids [][][]by
 	ci.cp.Lock()
 	defer ci.cp.Unlock()
 	py := make(map[string]pyramidCidCount)
-	var i, max, hashMax int
+	var i, max int
 	for _, p := range pyramids {
 		for _, x := range p {
 			if v, ok := py[boson.NewAddress(x).String()]; !ok {
@@ -73,6 +75,7 @@ func (ci *ChunkInfo) updateChunkPyramid(rootCid boson.Address, pyramids [][][]by
 					count:  &max,
 					number: 1,
 				}
+				ci.cp.putChunk(boson.NewAddress(x))
 				i++
 			} else {
 				v.number = v.number + 1
@@ -81,14 +84,24 @@ func (ci *ChunkInfo) updateChunkPyramid(rootCid boson.Address, pyramids [][][]by
 			max++
 		}
 	}
+	hash := make([]string, 0)
 	for k := range trie {
 		if _, ok := py[k]; !ok {
-			hashMax++
+			hash = append(hash, k)
+			ci.cp.putChunk(boson.MustParseHexAddress(k))
 		}
 	}
 	ci.cp.pyramid[rootCid.String()] = py
-	ci.cp.hashCount[rootCid.String()] = hashMax
+	ci.cp.hashData[rootCid.String()] = hash
 	ci.cp.mateData[rootCid.String()] = trie
+}
+
+func (cp *chunkPyramid) putChunk(cid boson.Address) {
+	if v, ok := cp.chunk[cid.String()]; ok {
+		cp.chunk[cid.String()] = v + 1
+	} else {
+		cp.chunk[cid.String()] = 1
+	}
 }
 
 // getChunkPyramid
@@ -153,22 +166,29 @@ func (cp *chunkPyramid) getChunkCid(rootCid boson.Address) []*PyramidCidNum {
 	cp.RLock()
 	defer cp.RUnlock()
 	v := cp.pyramid[rootCid.String()]
-	//mate := cp.mateData[rootCid.String()]
-	//cids := make([]*PyramidCidNum, 0, len(v)+len(mate))
-	cids := make([]*PyramidCidNum, 0, len(v))
+	mate := cp.mateData[rootCid.String()]
+	cids := make([]*PyramidCidNum, 0, len(v)+len(mate))
 	for overlay, c := range v {
+		v := cp.chunk[overlay]
+		if v > 1 {
+			continue
+		}
 		over := boson.MustParseHexAddress(overlay)
 		pcn := PyramidCidNum{Cid: over, Number: c.number}
 		cids = append(cids, &pcn)
 	}
-	// pyramid data is not deleted when gc
-	//for overlay, _ := range mate {
-	//	over := boson.MustParseHexAddress(overlay)
-	//	if _, ok := cp.pyramid[rootCid.String()][overlay]; !ok {
-	//		pcn := PyramidCidNum{Cid: over, Number: 1}
-	//		cids = append(cids, &pcn)
-	//	}
-	//}
+
+	for overlay := range mate {
+		v := cp.chunk[overlay]
+		if v > 1 {
+			continue
+		}
+		over := boson.MustParseHexAddress(overlay)
+		if _, ok := cp.pyramid[rootCid.String()][overlay]; !ok {
+			pcn := PyramidCidNum{Cid: over, Number: 1}
+			cids = append(cids, &pcn)
+		}
+	}
 	return cids
 }
 
@@ -204,13 +224,32 @@ func (cp *chunkPyramid) getRootChunk(rootCid string) int {
 func (cp *chunkPyramid) getRootHash(rootCID string) int {
 	cp.RLock()
 	defer cp.RUnlock()
-	return cp.hashCount[rootCID]
+	return len(cp.hashData[rootCID])
 }
+
+func (cp *chunkPyramid) delChunk(cid boson.Address) {
+	v := cp.chunk[cid.String()]
+	if v > 1 {
+		cp.chunk[cid.String()] = v - 1
+	} else {
+		delete(cp.chunk, cid.String())
+	}
+}
+
 func (cp *chunkPyramid) delRootCid(rootCID boson.Address) bool {
 	cp.Lock()
 	defer cp.Unlock()
+	if cids, ok := cp.pyramid[rootCID.String()]; ok {
+		hashs := cp.hashData[rootCID.String()]
+		for _, cid := range hashs {
+			cp.delChunk(boson.MustParseHexAddress(cid))
+		}
+		for cid := range cids {
+			cp.delChunk(boson.MustParseHexAddress(cid))
+		}
+	}
 	delete(cp.pyramid, rootCID.String())
 	delete(cp.mateData, rootCID.String())
-	delete(cp.hashCount, rootCID.String())
+	delete(cp.hashData, rootCID.String())
 	return true
 }
