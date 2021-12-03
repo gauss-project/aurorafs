@@ -317,7 +317,7 @@ func (s *Service) retrieveChunk(ctx context.Context, route aco.Route, rootAddr, 
 		return nil, fmt.Errorf("read delivery: %w route %v,%v", err, route.LinkNode.String(), route.TargetNode.String())
 	}
 	s.metrics.TotalRetrieved.Inc()
-	dataSize = d.Size()
+	dataSize = len(d.Data)
 
 	chunk = boson.NewChunk(chunkAddr, d.Data)
 	if !cac.Valid(chunk) {

@@ -5,20 +5,16 @@ import (
 	"errors"
 	"fmt"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/gauss-project/aurorafs/pkg/settlement/traffic"
-	chequePkg "github.com/gauss-project/aurorafs/pkg/settlement/traffic/cheque"
-	"math/big"
-	"strings"
-	"sync"
-	"time"
-
 	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/logging"
 	"github.com/gauss-project/aurorafs/pkg/p2p"
-	"github.com/gauss-project/aurorafs/pkg/p2p/protobuf"
 	"github.com/gauss-project/aurorafs/pkg/settlement"
-	pb "github.com/gauss-project/aurorafs/pkg/settlement/pseudosettle/pb"
+	"github.com/gauss-project/aurorafs/pkg/settlement/traffic"
+	chequePkg "github.com/gauss-project/aurorafs/pkg/settlement/traffic/cheque"
 	"github.com/gauss-project/aurorafs/pkg/storage"
+	"math/big"
+	"strings"
+	"sync"
 )
 
 const (
@@ -132,88 +128,25 @@ func totalKeyPeer(key []byte, prefix string) (peer boson.Address, err error) {
 }
 
 func (s *Service) handler(ctx context.Context, p p2p.Peer, stream p2p.Stream) (err error) {
-	r := protobuf.NewReader(stream)
-	defer func() {
-		if err != nil {
-			_ = stream.Reset()
-		} else {
-			_ = stream.FullClose()
-		}
-	}()
-	var req pb.Payment
-	if err := r.ReadMsgWithContext(ctx, &req); err != nil {
-		return fmt.Errorf("read request from peer %v: %w", p.Address, err)
-	}
-
-	s.metrics.TotalReceivedPseudoSettlements.Add(float64(req.Amount))
-	s.logger.Tracef("received payment message from peer %v of %d", p.Address, req.Amount)
-
-	totalReceived, err := s.TotalReceived(p.Address)
-	if err != nil {
-		if !errors.Is(err, settlement.ErrPeerNoSettlements) {
-			return err
-		}
-		totalReceived = big.NewInt(0)
-	}
-
-	err = s.store.Put(totalKey(p.Address, SettlementReceivedPrefix), totalReceived.Add(totalReceived, new(big.Int).SetUint64(req.Amount)))
-	if err != nil {
-		return err
-	}
 
 	return nil
 }
 
 // Pay initiates a payment to the given peer
 func (s *Service) Pay(ctx context.Context, peer boson.Address, traffic, paymentThreshold *big.Int) error {
-	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
-	defer cancel()
 
-	stream, err := s.streamer.NewStream(ctx, peer, nil, protocolName, protocolVersion, streamName)
-	if err != nil {
-		return err
-	}
-	defer func() {
-		if err != nil {
-			_ = stream.Reset()
-		} else {
-			go stream.FullClose()
-		}
-	}()
-
-	s.logger.Tracef("sending payment message to peer %v of %d", peer, traffic)
-	w := protobuf.NewWriter(stream)
-	err = w.WriteMsgWithContext(ctx, &pb.Payment{
-		Amount: traffic.Uint64(),
-	})
-	if err != nil {
-		return err
-	}
-	totalSent, err := s.TotalSent(peer)
-	if err != nil {
-		if !errors.Is(err, settlement.ErrPeerNoSettlements) {
-			return err
-		}
-		totalSent = big.NewInt(0)
-	}
-	err = s.store.Put(totalKey(peer, SettlementSentPrefix), totalSent.Add(totalSent, traffic))
-	if err != nil {
-		return err
-	}
-
-	amountFloat, _ := new(big.Float).SetInt(traffic).Float64()
-	s.metrics.TotalSentPseudoSettlements.Add(amountFloat)
 	return s.notifyPaymentFunc(peer, traffic)
 
 }
 
 func (s *Service) TransferTraffic(peer boson.Address) (traffic *big.Int, err error) {
-	err = s.store.Get(totalKey(peer, SettlementSentPrefix), &traffic)
-	if errors.Is(err, storage.ErrNotFound) {
-		return big.NewInt(0), nil
-	}
+	//err = s.store.Get(totalKey(peer, SettlementSentPrefix), &traffic)
+	//if errors.Is(err, storage.ErrNotFound) {
+	//	return big.NewInt(0), nil
+	//}
 
-	return traffic, err
+	//return traffic, err
+	return big.NewInt(0), nil
 }
 
 func (s *Service) RetrieveTraffic(peer boson.Address) (traffic *big.Int, err error) {
@@ -366,20 +299,8 @@ func (s *Service) Balance() (*big.Int, error) {
 
 // AvailableBalance Get actual available balance
 func (s *Service) AvailableBalance() (*big.Int, error) {
-	//s.store.Put(totalKey(peer, SettlementReceivedPrefix), traffic)
-	//var availableBalance *big.Int
-	//availableBalance = new(big.Int).SetInt64(0)
-	//s.store.Iterate(SettlementReceivedPrefix, func(key, value []byte) (stop bool, err error) {
-	//	balance := new(big.Int).SetInt64(0)
-	//	keys := string(key)
-	//	if err := s.store.Get(keys, &balance); err != nil {
-	//		return true, err
-	//	}
-	//	availableBalance = new(big.Int).Add(availableBalance, balance)
-	//	return false, nil
-	//})
 
-	return big.NewInt(256 * 1024 * 8 * 4 * 33), nil
+	return big.NewInt(256 * 1024 * 8 * 4 * 101), nil
 }
 
 func (s *Service) UpdatePeerBalance(peer boson.Address) error {
@@ -393,22 +314,8 @@ func (s *Service) SetNotifyPaymentFunc(notifyPaymentFunc settlement.NotifyPaymen
 }
 
 func (s *Service) GetPeerBalance(peer boson.Address) (*big.Int, error) {
-	//receivedKey := totalKey(peer, SettlementReceivedPrefix)
-	//sendKey := totalKey(peer, SettlementSentPrefix)
-	//
-	//var balance, receivedBalance, sendBalance *big.Int
-	//err := s.store.Get(receivedKey, &receivedBalance)
-	//if err != nil {
-	//	return balance, err
-	//}
-	//err = s.store.Get(sendKey, &sendBalance)
-	//if err != nil {
-	//	return balance, err
-	//}
 
-	//balance = big.NewInt(0).Sub(receivedBalance, sendBalance)
-
-	return big.NewInt(256 * 1024 * 8 * 4 * 33), nil
+	return big.NewInt(256 * 1024 * 8 * 4 * 101), nil
 }
 
 func (s *Service) GetUnPaidBalance(peer boson.Address) (*big.Int, error) {
