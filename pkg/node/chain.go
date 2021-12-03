@@ -53,10 +53,6 @@ func InitChain(
 	}
 
 	if !trafficEnable {
-		protocol := pseudosettle.New(p2pService, logger, stateStore)
-		if err := p2pService.AddProtocol(protocol.Protocol()); err != nil {
-			return nil, nil, nil, fmt.Errorf("traffic local server :%v", err)
-		}
 		service := pseudosettle.New(p2pService, logger, stateStore)
 		if err = service.InitTraffic(); err != nil {
 			return nil, nil, nil, fmt.Errorf("InitTraffic:: %w", err)
