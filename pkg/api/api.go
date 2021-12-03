@@ -4,8 +4,12 @@ package api
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"github.com/gauss-project/aurorafs/pkg/auth"
+	"github.com/gauss-project/aurorafs/pkg/jsonhttp"
 	"io"
+	"io/ioutil"
 	"math"
 	"net/http"
 
@@ -75,17 +79,23 @@ type Service interface {
 	io.Closer
 }
 
-type server struct {
-	storer   storage.Storer
-	resolver resolver.Interface
+type authenticator interface {
+	Authorize(string) bool
+	GenerateKey(string, int) (string, error)
+	RefreshKey(string, int) (string, error)
+	Enforce(string, string, string) (bool, error)
+}
 
+type server struct {
+	auth      authenticator
+	storer    storage.Storer
+	resolver  resolver.Interface
 	overlay   boson.Address
 	chunkInfo chunkinfo.Interface
 	traversal traversal.Traverser
 	pinning   pinning.Interface
 	logger    logging.Logger
 	tracer    *tracing.Tracer
-
 	Options
 	http.Handler
 	metrics metrics
@@ -99,6 +109,7 @@ type Options struct {
 	GatewayMode        bool
 	WsPingPeriod       time.Duration
 	BufferSizeMul      int
+	Restricted         bool
 }
 
 const (
@@ -107,8 +118,9 @@ const (
 )
 
 // New will create a and initialize a new API service.
-func New(storer storage.Storer, resolver resolver.Interface, addr boson.Address, chunkInfo chunkinfo.Interface, traversalService traversal.Traverser, pinning pinning.Interface, logger logging.Logger, tracer *tracing.Tracer, o Options) Service {
+func New(storer storage.Storer, resolver resolver.Interface, addr boson.Address, chunkInfo chunkinfo.Interface, traversalService traversal.Traverser, pinning pinning.Interface, auth authenticator, logger logging.Logger, tracer *tracing.Tracer, o Options) Service {
 	s := &server{
+		auth:      auth,
 		storer:    storer,
 		resolver:  resolver,
 		overlay:   addr,
@@ -186,6 +198,119 @@ func requestModePut(r *http.Request) storage.ModePut {
 
 func requestEncrypt(r *http.Request) bool {
 	return strings.ToLower(r.Header.Get(AuroraEncryptHeader)) == "true"
+}
+
+type securityTokenRsp struct {
+	Key string `json:"key"`
+}
+
+type securityTokenReq struct {
+	Role   string `json:"role"`
+	Expiry int    `json:"expiry"`
+}
+
+func (s *server) authHandler(w http.ResponseWriter, r *http.Request) {
+	_, pass, ok := r.BasicAuth()
+
+	if !ok {
+		s.logger.Error("api: auth handler: missing basic auth")
+		w.Header().Set("WWW-Authenticate", `Basic realm="Restricted"`)
+		jsonhttp.Unauthorized(w, "Unauthorized")
+		return
+	}
+
+	if !s.auth.Authorize(pass) {
+		s.logger.Error("api: auth handler: unauthorized")
+		w.Header().Set("WWW-Authenticate", `Basic realm="Restricted"`)
+		jsonhttp.Unauthorized(w, "Unauthorized")
+		return
+	}
+
+	body, err := ioutil.ReadAll(r.Body)
+	if err != nil {
+		s.logger.Debugf("api: auth handler: read request body: %v", err)
+		s.logger.Error("api: auth handler: read request body")
+		jsonhttp.BadRequest(w, "Read request body")
+		return
+	}
+
+	var payload securityTokenReq
+	if err = json.Unmarshal(body, &payload); err != nil {
+		s.logger.Debugf("api: auth handler: unmarshal request body: %v", err)
+		s.logger.Error("api: auth handler: unmarshal request body")
+		jsonhttp.BadRequest(w, "Unmarshal json body")
+		return
+	}
+
+	key, err := s.auth.GenerateKey(payload.Role, payload.Expiry)
+	if errors.Is(err, auth.ErrExpiry) {
+		s.logger.Debugf("api: auth handler: generate key: %v", err)
+		s.logger.Error("api: auth handler: generate key")
+		jsonhttp.BadRequest(w, "Expiry duration must be a positive number")
+		return
+	}
+	if err != nil {
+		s.logger.Debugf("api: auth handler: add auth token: %v", err)
+		s.logger.Error("api: auth handler: add auth token")
+		jsonhttp.InternalServerError(w, "Error generating authorization token")
+		return
+	}
+
+	jsonhttp.Created(w, securityTokenRsp{
+		Key: key,
+	})
+}
+
+func (s *server) refreshHandler(w http.ResponseWriter, r *http.Request) {
+	reqToken := r.Header.Get("Authorization")
+	if !strings.HasPrefix(reqToken, "Bearer ") {
+		jsonhttp.Forbidden(w, "Missing bearer token")
+		return
+	}
+
+	keys := strings.Split(reqToken, "Bearer ")
+
+	if len(keys) != 2 || strings.Trim(keys[1], " ") == "" {
+		jsonhttp.Forbidden(w, "Missing security token")
+		return
+	}
+
+	authToken := keys[1]
+
+	body, err := ioutil.ReadAll(r.Body)
+	if err != nil {
+		s.logger.Debugf("api: auth handler: read request body: %v", err)
+		s.logger.Error("api: auth handler: read request body")
+		jsonhttp.BadRequest(w, "Read request body")
+		return
+	}
+
+	var payload securityTokenReq
+	if err = json.Unmarshal(body, &payload); err != nil {
+		s.logger.Debugf("api: auth handler: unmarshal request body: %v", err)
+		s.logger.Error("api: auth handler: unmarshal request body")
+		jsonhttp.BadRequest(w, "Unmarshal json body")
+		return
+	}
+
+	key, err := s.auth.RefreshKey(authToken, payload.Expiry)
+	if errors.Is(err, auth.ErrTokenExpired) {
+		s.logger.Debugf("api: auth handler: refresh key: %v", err)
+		s.logger.Error("api: auth handler: refresh key")
+		jsonhttp.BadRequest(w, "Token expired")
+		return
+	}
+
+	if err != nil {
+		s.logger.Debugf("api: auth handler: refresh token: %v", err)
+		s.logger.Error("api: auth handler: refresh token")
+		jsonhttp.InternalServerError(w, "Error refreshing authorization token")
+		return
+	}
+
+	jsonhttp.Created(w, securityTokenRsp{
+		Key: key,
+	})
 }
 
 func (s *server) newTracingHandler(spanName string) func(h http.Handler) http.Handler {

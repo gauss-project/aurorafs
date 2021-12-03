@@ -640,6 +640,8 @@ func (c *mockClient) TryDownloadChunk(route Route, chunkId int, routeBandwidth i
 
 func (c *mockClient) isUsingThisRoute(route Route) bool {
 	routeKey := fmt.Sprintf("%v:%v", route.LinkNode.String(), route.TargetNode.String())
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
 	if v, exist := c.usingRouteMap[routeKey]; exist {
 		return v
 	} else {

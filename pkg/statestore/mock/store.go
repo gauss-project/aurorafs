@@ -66,7 +66,8 @@ func (s *store) Put(key string, i interface{}) (err error) {
 }
 
 func (s *store) Delete(key string) (err error) {
-
+	s.mtx.Lock()
+	defer s.mtx.Unlock()
 	delete(s.store, key)
 	return nil
 }

@@ -9,6 +9,8 @@ type (
 	ChunkAddressResponse = chunkAddressResponse
 	SocPostResponse      = socPostResponse
 	AuroraUploadResponse = auroraUploadResponse
+	SecurityTokenResponse = securityTokenRsp
+	SecurityTokenRequest  = securityTokenReq
 )
 
 var (

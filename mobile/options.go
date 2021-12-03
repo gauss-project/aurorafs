@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"reflect"
 
-	"github.com/gauss-project/aurorafs/pkg/aurora"
 	"github.com/gauss-project/aurorafs/pkg/node"
 )
 
@@ -96,12 +95,6 @@ func (o Options) Bootnodes(c *node.Options) {
 
 func (o Options) IsDev(c *node.Options) {
 	c.IsDev = o.EnableDevNode
-}
-
-func (o Options) FullNode(c *node.Options) {
-	if o.EnableFullNode {
-		c.NodeMode.SetMode(aurora.FullNode)
-	}
 }
 
 func (o Options) KadBinMaxPeers(c *node.Options) {
