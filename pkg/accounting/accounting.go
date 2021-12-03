@@ -48,9 +48,9 @@ type Accounting struct {
 }
 
 type payChan struct {
-	ctx                       context.Context
-	peer                      boson.Address
-	balance, paymentThreshold *big.Int
+	ctx              context.Context
+	peer             boson.Address
+	paymentThreshold *big.Int
 }
 
 type accountingPeer struct {
@@ -135,12 +135,10 @@ func (a *Accounting) Credit(ctx context.Context, peer boson.Address, traffic uin
 		return err
 	}
 	balance, err := a.settlement.RetrieveTraffic(peer)
-	balance = new(big.Int).Add(balance, new(big.Int).SetUint64(traffic))
 	if balance.Cmp(accountingPeer.paymentThreshold) >= 0 {
 		a.payChan <- payChan{
 			ctx:              ctx,
 			peer:             peer,
-			balance:          balance,
 			paymentThreshold: accountingPeer.paymentThreshold,
 		}
 	}
@@ -154,7 +152,7 @@ func (a *Accounting) settle() {
 
 	for {
 		pay := <-a.payChan
-		if err := a.settlement.Pay(pay.ctx, pay.peer, pay.balance, pay.paymentThreshold); err != nil {
+		if err := a.settlement.Pay(pay.ctx, pay.peer, pay.paymentThreshold); err != nil {
 			a.logger.Errorf("generating check errors %v", err)
 		}
 	}
@@ -187,7 +185,6 @@ func (a *Accounting) Debit(peer boson.Address, traffic uint64) error {
 		return err
 	}
 	if balance.Cmp(unPaid) < 0 {
-		a.logger.Errorf("low node traffic balance: %s  -> %s -> %s ", peer.String(), balance, unPaid)
 		return fmt.Errorf("low node traffic balance: %s ", peer.String())
 	}
 	if err := a.settlement.PutTransferTraffic(peer, new(big.Int).SetUint64(traffic)); err != nil {

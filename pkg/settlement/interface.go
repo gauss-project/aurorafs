@@ -16,7 +16,7 @@ var (
 type Interface interface {
 	// Pay initiates a payment to the given peer
 	// It should return without error it is likely that the payment worked
-	Pay(ctx context.Context, peer boson.Address, traffic, paymentThreshold *big.Int) error
+	Pay(ctx context.Context, peer boson.Address, paymentThreshold *big.Int) error
 
 	TransferTraffic(peer boson.Address) (traffic *big.Int, err error)
 

@@ -343,7 +343,7 @@ func (s *Service) TrafficCheques() ([]*TrafficCheque, error) {
 	return trafficCheques, nil
 }
 
-func (s *Service) Pay(ctx context.Context, peer boson.Address, traffic, paymentThreshold *big.Int) error {
+func (s *Service) Pay(ctx context.Context, peer boson.Address, paymentThreshold *big.Int) error {
 
 	recipient, known := s.addressBook.Beneficiary(peer)
 	if !known {
@@ -360,9 +360,8 @@ func (s *Service) Pay(ctx context.Context, peer boson.Address, traffic, paymentT
 	if err != nil {
 		return err
 	}
-	balance = balance.Add(balance, traffic)
 	if balance.Cmp(paymentThreshold) >= 0 {
-		if err := s.Issue(ctx, peer, recipient, s.chainAddress, traffic); err != nil {
+		if err := s.Issue(ctx, peer, recipient, s.chainAddress, balance); err != nil {
 			return err
 		}
 	}
@@ -371,14 +370,18 @@ func (s *Service) Pay(ctx context.Context, peer boson.Address, traffic, paymentT
 }
 
 func (s *Service) Issue(ctx context.Context, peer boson.Address, recipient, beneficiary common.Address, traffic *big.Int) error {
+
 	defer func() {
 		_ = s.notifyPaymentFunc(peer, traffic)
 	}()
+
 	available, err := s.AvailableBalance()
 	if err != nil {
 		return err
 	}
 
+	s.trafficPeers.trafficMu.Lock()
+	defer s.trafficPeers.trafficMu.Unlock()
 	if available.Cmp(traffic) < 0 {
 		return ErrInsufficientFunds
 	}
@@ -412,8 +415,6 @@ func (s *Service) Issue(ctx context.Context, peer boson.Address, recipient, bene
 	if err := s.protocol.EmitCheque(ctx, peer, signedCheque); err != nil {
 		return err
 	}
-	s.trafficPeers.trafficMu.RLock()
-	defer s.trafficPeers.trafficMu.RUnlock()
 	return s.putSendCheque(ctx, &c, recipient)
 }
 
@@ -579,7 +580,9 @@ func (s *Service) Handshake(peer boson.Address, beneficiary common.Address, cheq
 
 	if !known {
 		s.logger.Tracef("initial swap handshake peer: %v beneficiary: %x", peer, beneficiary)
-		return s.addressBook.PutBeneficiary(peer, beneficiary)
+		if err := s.addressBook.PutBeneficiary(peer, beneficiary); err != nil {
+			return err
+		}
 	}
 	err := s.UpdatePeerBalance(peer)
 	if err != nil {
@@ -695,13 +698,11 @@ func (s *Service) GetPeerBalance(peer boson.Address) (*big.Int, error) {
 	if !known {
 		return big.NewInt(0), chequePkg.ErrNoCheque
 	}
-	var trafficPeerBalance *big.Int
+	trafficPeerBalance := big.NewInt(0)
 
 	tra, ok := s.trafficPeers.trafficPeers[chainAddress.String()]
 	if ok {
 		trafficPeerBalance = tra.trafficPeerBalance
-	} else {
-		trafficPeerBalance = big.NewInt(0)
 	}
 	return trafficPeerBalance, nil
 }

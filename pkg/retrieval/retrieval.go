@@ -258,7 +258,7 @@ func (s *Service) retrieveChunk(ctx context.Context, route aco.Route, rootAddr, 
 	defer func() {
 		if err != nil && (ctx.Err() == nil || !errors.Is(ctx.Err(), context.Canceled)) {
 			go func() {
-				_, _ = s.routeTab.FindRoute(ctx, route.TargetNode)
+				_, _ = s.routeTab.FindRoute(context.Background(), route.TargetNode)
 			}()
 		}
 		if err == nil || (err != nil && (ctx.Err() == nil || !errors.Is(ctx.Err(), context.Canceled))) {
@@ -327,7 +327,7 @@ func (s *Service) retrieveChunk(ctx context.Context, route aco.Route, rootAddr, 
 			return nil, boson.ErrInvalidChunk
 		}
 	}
-	if err := s.accounting.Credit(ctx, route.LinkNode, uint64(dataSize*8)); err != nil {
+	if err := s.accounting.Credit(context.Background(), route.LinkNode, 256*1024*8); err != nil {
 		return nil, err
 	}
 
