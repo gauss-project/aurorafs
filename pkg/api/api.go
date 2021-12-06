@@ -6,17 +6,18 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"github.com/gauss-project/aurorafs/pkg/auth"
-	"github.com/gauss-project/aurorafs/pkg/jsonhttp"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"math"
 	"net/http"
-
 	"strings"
 	"sync"
 	"time"
 	"unicode/utf8"
+
+	"github.com/gauss-project/aurorafs/pkg/auth"
+	"github.com/gauss-project/aurorafs/pkg/jsonhttp"
 
 	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/chunkinfo"
@@ -169,22 +170,21 @@ func (s *server) resolveNameOrAddress(str string) (boson.Address, error) {
 		log.Tracef("name resolve: valid aurora address %q", str)
 		return addr, nil
 	}
-	return boson.ZeroAddress, err
 
-	//// If no resolver is not available, return an error.
-	//if s.resolver == nil {
-	//	return boson.ZeroAddress, errNoResolver
-	//}
-	//
-	//// Try and resolve the name using the provided resolver.
-	//log.Debugf("name resolve: attempting to resolve %s to aurora address", str)
-	//addr, err = s.resolver.Resolve(str)
-	//if err == nil {
-	//	log.Tracef("name resolve: resolved name %s to %s", str, addr)
-	//	return addr, nil
-	//}
-	//
-	//return boson.ZeroAddress, fmt.Errorf("%w: %v", errInvalidNameOrAddress, err)
+	// If no resolver is not available, return an error.
+	if s.resolver == nil {
+		return boson.ZeroAddress, errNoResolver
+	}
+
+	// Try and resolve the name using the provided resolver.
+	log.Debugf("name resolve: attempting to resolve %s to aurora address", str)
+	addr, err = s.resolver.Resolve(str)
+	if err == nil {
+		log.Tracef("name resolve: resolved name %s to %s", str, addr)
+		return addr, nil
+	}
+
+	return boson.ZeroAddress, fmt.Errorf("%w: %v", errInvalidNameOrAddress, err)
 }
 
 // requestModePut returns the desired storage.ModePut for this request based on the request headers.

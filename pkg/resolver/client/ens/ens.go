@@ -16,7 +16,7 @@ import (
 
 const (
 	defaultENSContractAddress = "00000000000C2E074eC69A0dFb2997BA6C7d2e1e"
-	auroraContentHashPrefix   = "/boson/"
+	auroraContentHashPrefix   = "bzz://"
 )
 
 // Address is the boson aurora address.
