@@ -439,6 +439,7 @@ func (s *Service) putSendCheque(ctx context.Context, cheque *chequePkg.Cheque, r
 		trafficCheque = lockCheque
 	}
 	trafficCheque.retrieveChequeTraffic = cheque.CumulativePayout
+	trafficCheque.retrieveTraffic = s.maxBigint(trafficCheque.retrieveTraffic, cheque.CumulativePayout)
 	s.trafficPeers.trafficPeers[recipient.String()] = trafficCheque
 	return s.chequeStore.PutSendCheque(ctx, cheque, recipient)
 }
@@ -587,15 +588,24 @@ func (s *Service) AvailableBalance() (*big.Int, error) {
 	return new(big.Int).Add(s.trafficPeers.balance, new(big.Int).Sub(cashed, transfer)), nil
 }
 
-func (s *Service) Handshake(peer boson.Address, beneficiary common.Address, cheque *chequePkg.SignedCheque) error {
-	_, known := s.addressBook.Beneficiary(peer)
+func (s *Service) Handshake(peer boson.Address, recipient common.Address, cheque *chequePkg.SignedCheque) error {
+	recipientLocal, known := s.addressBook.Beneficiary(peer)
 
 	if !known {
-		s.logger.Tracef("initial swap handshake peer: %v beneficiary: %x", peer, beneficiary)
-		if err := s.addressBook.PutBeneficiary(peer, beneficiary); err != nil {
+		s.logger.Tracef("initial swap handshake peer: %v recipient: %x", peer, recipient)
+		_, known := s.addressBook.BeneficiaryPeer(recipient)
+		if known {
+			return fmt.Errorf("overlay is exists")
+		}
+		if err := s.addressBook.PutBeneficiary(peer, recipient); err != nil {
 			return err
 		}
+	} else {
+		if cheque.Recipient != recipientLocal {
+			return fmt.Errorf("error in verifying check receiver ")
+		}
 	}
+
 	err := s.UpdatePeerBalance(peer)
 	if err != nil {
 		return err
@@ -615,7 +625,7 @@ func (s *Service) Handshake(peer boson.Address, beneficiary common.Address, cheq
 		return chequePkg.ErrChequeInvalid
 	}
 
-	singCheque, err := s.chequeStore.LastReceivedCheque(beneficiary)
+	singCheque, err := s.chequeStore.LastReceivedCheque(recipient)
 	if err != nil && err != chequePkg.ErrNoCheque {
 		return err
 	}
@@ -628,7 +638,7 @@ func (s *Service) Handshake(peer boson.Address, beneficiary common.Address, cheq
 	}
 
 	if cheque.CumulativePayout.Cmp(singCheque.CumulativePayout) > 0 {
-		return s.putSendCheque(context.Background(), &cheque.Cheque, beneficiary)
+		return s.putSendCheque(context.Background(), &cheque.Cheque, recipient)
 	}
 
 	return nil
