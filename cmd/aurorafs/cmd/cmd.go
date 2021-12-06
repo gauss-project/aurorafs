@@ -221,7 +221,7 @@ func (c *command) setAllFlags(cmd *cobra.Command) {
 	cmd.Flags().Bool(optionNameGatewayMode, false, "disable a set of sensitive features in the api")
 	cmd.Flags().Bool(optionNameBootnodeMode, false, "cause the node to always accept incoming connections")
 	cmd.Flags().String(optionNameTrafficContractAddr, "", "link to traffic contract")
-	cmd.Flags().Bool(optionNameTrafficEnable, true, "enable traffic")
+	cmd.Flags().Bool(optionNameTrafficEnable, false, "enable traffic")
 	cmd.Flags().Bool(optionNameFullNode, true, "full node")
 	cmd.Flags().Int(optionNameLightMaxPeers, 100, "connected light node max limit")
 	cmd.Flags().Int(optionNameBinMaxPeers, 20, "kademlia every k bucket connected peers max limit")

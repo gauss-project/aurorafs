@@ -17,12 +17,6 @@ import (
 	"sync"
 )
 
-const (
-	protocolName    = "pseudosettle"
-	protocolVersion = "1.0.0"
-	streamName      = "traffic"
-)
-
 var (
 	SettlementReceivedPrefix = "pseudosettle_total_received_"
 	SettlementSentPrefix     = "pseudosettle_total_sent_"
@@ -59,20 +53,7 @@ func newTraffic() *trafficInfo {
 	}
 }
 
-func (s *Service) Protocol() p2p.ProtocolSpec {
-	return p2p.ProtocolSpec{
-		Name:    protocolName,
-		Version: protocolVersion,
-		StreamSpecs: []p2p.StreamSpec{
-			{
-				Name:    streamName,
-				Handler: s.handler,
-			},
-		},
-	}
-}
-
-func (s *Service) InitTraffic() error {
+func (s *Service) Init() error {
 
 	if err := s.store.Iterate(SettlementReceivedPrefix, func(key, val []byte) (stop bool, err error) {
 		addr, err := totalKeyPeer(key, SettlementReceivedPrefix)
@@ -125,11 +106,6 @@ func totalKeyPeer(key []byte, prefix string) (peer boson.Address, err error) {
 		return boson.ZeroAddress, errors.New("no peer in key")
 	}
 	return boson.ParseHexAddress(split[1])
-}
-
-func (s *Service) handler(ctx context.Context, p p2p.Peer, stream p2p.Stream) (err error) {
-
-	return nil
 }
 
 // Pay initiates a payment to the given peer

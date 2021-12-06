@@ -32,8 +32,6 @@ func InitChain(
 	trafficEnable bool,
 	trafficContractAddr string,
 	p2pService *libp2p.Service) (chain.Resolver, settlement.Interface, traffic.ApiInterface, error) {
-	var settlement settlement.Interface
-	var apiInterface traffic.ApiInterface
 	backend, err := ethclient.Dial(endpoint)
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("dial eth client: %w", err)
@@ -54,12 +52,11 @@ func InitChain(
 
 	if !trafficEnable {
 		service := pseudosettle.New(p2pService, logger, stateStore)
-		if err = service.InitTraffic(); err != nil {
+		if err = service.Init(); err != nil {
 			return nil, nil, nil, fmt.Errorf("InitTraffic:: %w", err)
 		}
-		settlement = service
-		apiInterface = service
-		return oracleServer, settlement, apiInterface, nil
+
+		return oracleServer, service, service, nil
 	}
 	beneficiary, err := signer.EthereumAddress()
 	logger.Infof("address  %s", beneficiary.String())
@@ -84,10 +81,8 @@ func InitChain(
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("InitChain: %w", err)
 	}
-	settlement = trafficService
-	apiInterface = trafficService
 
-	return oracleServer, settlement, apiInterface, nil
+	return oracleServer, trafficService, trafficService, nil
 }
 
 func InitTraffic(store storage.StateStorer, beneficiary common.Address, trafficChainService chain.Traffic,

@@ -248,7 +248,7 @@ func NewAurora(addr string, bosonAddress boson.Address, publicKey ecdsa.PublicKe
 		}
 	}
 
-	paymentThreshold := new(big.Int).SetUint64(256 * 1024 * 8 * 8)
+	paymentThreshold := new(big.Int).SetUint64(256 * 1024 * 8 * 4)
 	paymentTolerance := new(big.Int).Mul(paymentThreshold, new(big.Int).SetUint64(32))
 
 	acc := accounting.NewAccounting(
