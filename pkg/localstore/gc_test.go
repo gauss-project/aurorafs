@@ -67,16 +67,9 @@ func testDBCollectGarbageWorker(t *testing.T) {
 
 	var closed chan struct{}
 	testHookCollectGarbageChan := make(chan uint64)
-	testHookRecycleGarbageChan := make(chan uint64)
 	t.Cleanup(setTestHook(&testHookCollectGarbage, func(collectedCount uint64) {
 		select {
 		case testHookCollectGarbageChan <- collectedCount:
-		case <-closed:
-		}
-	}))
-	t.Cleanup(setTestHook(&testHookRecycleGarbage, func(recycledCount uint64) {
-		select {
-		case testHookRecycleGarbageChan <- recycledCount:
 		case <-closed:
 		}
 	}))
@@ -121,27 +114,6 @@ func testDBCollectGarbageWorker(t *testing.T) {
 		}
 	})
 
-	var prevChunkSize int
-
-	for {
-		select {
-		case <-testHookRecycleGarbageChan:
-		case <-time.After(10 * time.Second):
-			t.Error("recycle garbage timeout")
-		}
-		chunkSize, err := db.retrievalDataIndex.Count()
-		if err != nil {
-			t.Fatal(err)
-		}
-		prevChunkSize = chunkSize
-		if chunkSize == 0 {
-			break
-		}
-		if prevChunkSize > 0 && prevChunkSize < chunkSize {
-			t.Errorf("got current chunk size %d, but prev chunk size (%d) small than this\n", chunkSize, prevChunkSize)
-		}
-	}
-
 	t.Run("file related chunks should be removed", func(t *testing.T) {
 		for i := 0; i < chunkCount; i++ {
 			_, err := db.Get(context.Background(), storage.ModeGetRequest, chunks[i])
@@ -161,16 +133,9 @@ func TestPinGC(t *testing.T) {
 
 	var closed chan struct{}
 	testHookCollectGarbageChan := make(chan uint64)
-	testHookRecycleGarbageChan := make(chan uint64)
 	t.Cleanup(setTestHook(&testHookCollectGarbage, func(collectedCount uint64) {
 		select {
 		case testHookCollectGarbageChan <- collectedCount:
-		case <-closed:
-		}
-	}))
-	t.Cleanup(setTestHook(&testHookRecycleGarbage, func(collectedCount uint64) {
-		select {
-		case testHookRecycleGarbageChan <- collectedCount:
 		case <-closed:
 		}
 	}))
@@ -226,12 +191,6 @@ func TestPinGC(t *testing.T) {
 			t.Errorf("got gc size %v, want %v", got, len(chunksB))
 		}
 	})
-
-	select {
-	case <-testHookRecycleGarbageChan:
-	case <-time.After(10 * time.Second):
-		t.Error("recycle garbage timeout")
-	}
 
 	t.Run("first upload chunk was removed from gc index", func(t *testing.T) {
 		for _, hash := range chunksA {
@@ -445,7 +404,7 @@ func TestDB_gcSize(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	db.Config(ci)
+	db.WithChunkInfo(ci)
 	count := 100
 
 	for i := 0; i < count; i++ {
@@ -465,7 +424,7 @@ func TestDB_gcSize(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	db.Config(ci)
+	db.WithChunkInfo(ci)
 	defer db.Close()
 
 	t.Run("gc index size", newIndexGCSizeTest(db))
@@ -761,7 +720,9 @@ func addRandomFile(t *testing.T, count int, db *DB, ci *chunkinfo.ChunkInfo, pin
 		t.Fatal(err)
 	}
 	for i, chunk := range chunkHashes {
-		ci.PutChunkPyramid(reference, chunk, i)
+		if !chunk.Equal(reference) {
+			ci.PutChunkPyramid(reference, chunk, i)
+		}
 	}
 	if !pin {
 		addGc = func(t2 *testing.T) {
@@ -950,16 +911,9 @@ func TestPinAndUnpinChunk(t *testing.T) {
 		closed chan struct{}
 	)
 	testHookCollectGarbageChan := make(chan uint64)
-	testHookRecycleGarbageChan := make(chan uint64)
 	t.Cleanup(setTestHook(&testHookCollectGarbage, func(collectedCount uint64) {
 		select {
 		case testHookCollectGarbageChan <- collectedCount:
-		case <-closed:
-		}
-	}))
-	t.Cleanup(setTestHook(&testHookRecycleGarbage, func(recycledCount uint64) {
-		select {
-		case testHookRecycleGarbageChan <- recycledCount:
 		case <-closed:
 		}
 	}))
@@ -970,10 +924,6 @@ func TestPinAndUnpinChunk(t *testing.T) {
 
 	// upload random file
 	reference, chunks, addGc := addRandomFile(t, chunkCount, db, ci, false)
-
-	for i, chunk := range chunks {
-		ci.PutChunkPyramid(reference, chunk, i)
-	}
 
 	rctx := sctx.SetRootCID(context.Background(), reference)
 	addGc(t)
@@ -988,9 +938,6 @@ func TestPinAndUnpinChunk(t *testing.T) {
 
 	chunkCount = 16
 	reference1, chunks1, addGc1 := addRandomFile(t, chunkCount, db, ci, false)
-	for i, chunk := range chunks1 {
-		ci.PutChunkPyramid(reference1, chunk, i)
-	}
 
 	rctx = sctx.SetRootCID(context.Background(), reference1)
 	for _, v := range chunks1 {
@@ -1011,9 +958,9 @@ func TestPinAndUnpinChunk(t *testing.T) {
 	// trigger gc
 	db.triggerGarbageCollection()
 	select {
-	case <-testHookRecycleGarbageChan:
+	case <-testHookCollectGarbageChan:
 	case <-time.After(10 * time.Second):
-		t.Error("recycle garbage timeout")
+		t.Error("collect garbage timeout")
 	}
 
 	for _, v := range chunks1 {

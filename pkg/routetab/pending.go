@@ -1,6 +1,7 @@
 package routetab
 
 import (
+	"github.com/ethereum/go-ethereum/common"
 	"sync"
 	"time"
 
@@ -21,21 +22,23 @@ type PendCallResItem struct {
 type PendingCallResArray []*PendCallResItem
 
 type pendCallResTab struct {
-	items  sync.Map
-	reqLog sync.Map
+	respList map[common.Hash]PendingCallResArray
+	reqList  sync.Map // key common.Hash = dest+next
+	mu       sync.RWMutex
 }
 
 func newPendCallResTab() *pendCallResTab {
 	return &pendCallResTab{
-		items:  sync.Map{},
-		reqLog: sync.Map{},
+		respList: make(map[common.Hash]PendingCallResArray),
 	}
 }
 
 func (pend *pendCallResTab) Delete(target, next boson.Address) {
-	key := target.ByteString()
-	pend.items.Delete(key)
-	pend.reqLog.Delete(key + next.ByteString())
+	key := getTargetKey(target)
+	pend.mu.Lock()
+	delete(pend.respList, key)
+	pend.mu.Unlock()
+	pend.reqList.Delete(getPendingReqKey(target, next))
 }
 
 func (pend *pendCallResTab) Add(target, src, next boson.Address, resCh chan struct{}) (has bool) {
@@ -45,52 +48,56 @@ func (pend *pendCallResTab) Add(target, src, next boson.Address, resCh chan stru
 		ResCh:      resCh,
 	}
 
-	key := target.ByteString()
+	key := getTargetKey(target)
 
-	res, ok := pend.items.Load(key)
+	pend.mu.Lock()
+	res, ok := pend.respList[key]
 	if ok {
-		list := res.(PendingCallResArray)
-		list = append(list, pending)
-		pend.items.Store(key, list)
+		pend.respList[key] = append(res, pending)
 	} else {
-		pend.items.Store(key, PendingCallResArray{pending})
+		pend.respList[key] = PendingCallResArray{pending}
 	}
+	pend.mu.Unlock()
 	// If a find route already exists, no forwarding is required
-	reqKey := key + next.ByteString()
-	_, has = pend.reqLog.Load(reqKey)
+	reqKey := getPendingReqKey(target, next)
+	_, has = pend.reqList.Load(reqKey)
 	if !has {
-		pend.reqLog.Store(reqKey, time.Now())
+		pend.reqList.Store(reqKey, time.Now())
 	}
 	return
 }
 
 func (pend *pendCallResTab) Get(target, next boson.Address) PendingCallResArray {
-	key := target.ByteString()
-	res, ok := pend.items.Load(key)
+	key := getTargetKey(target)
+	pend.mu.Lock()
+	defer pend.mu.Unlock()
+	res, ok := pend.respList[key]
 	if ok {
-		pend.items.Delete(key)
-		pend.reqLog.Delete(key + next.ByteString())
-		return res.(PendingCallResArray)
+		delete(pend.respList, key)
+		pend.reqList.Delete(getPendingReqKey(target, next))
+		return res
 	}
 	return nil
 }
 
 func (pend *pendCallResTab) GcReqLog(expire time.Duration) {
-	pend.reqLog.Range(func(key, value interface{}) bool {
+	pend.reqList.Range(func(key, value interface{}) bool {
 		t := value.(time.Time)
 		if time.Since(t).Milliseconds() >= expire.Milliseconds() {
-			pend.reqLog.Delete(key)
+			pend.reqList.Delete(key)
 		}
 		return true
 	})
 }
 
 func (pend *pendCallResTab) GcResItems(expire time.Duration) {
-	pend.items.Range(func(key, value interface{}) bool {
-		item := value.(PendingCallResArray)
+	pend.mu.Lock()
+	list := pend.respList
+	defer pend.mu.Unlock()
+	for key, item := range list {
 		if time.Since(item[0].CreateTime).Milliseconds() < expire.Milliseconds() {
 			// If the first one doesn't expire, then the next ones don't expire
-			return true
+			continue
 		}
 		expireK := 0
 		for k, v := range item {
@@ -100,10 +107,9 @@ func (pend *pendCallResTab) GcResItems(expire time.Duration) {
 			}
 		}
 		if expireK == 0 {
-			pend.items.Delete(key)
+			delete(pend.respList, key)
 		} else {
-			pend.items.Store(key, item[expireK:])
+			pend.respList[key] = item[expireK:]
 		}
-		return true
-	})
+	}
 }

@@ -1,6 +1,6 @@
 openapi: 3.0.3
 info:
-  version: 1.1.4
+  version: 1.2.0
   title: Common Data Types
   description: |
 
@@ -10,6 +10,16 @@ externalDocs:
 
 paths: { }
 components:
+  securitySchemes:
+    basicAuth:
+      type: http
+      scheme: basic
+
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: SecurityToken
+
   schemas:
     Address:
       type: object
@@ -243,12 +253,14 @@ components:
     RoutePath:
       type: object
       properties:
-        createTime:
-          type: integer
         sign:
           type: string
-        item:
+        bodys:
           type: array
+        items:
+          type: array
+        createTime:
+          $ref: "#/components/schemas/DateTime"
         usedTime:
           $ref: "#/components/schemas/DateTime"
 
@@ -366,6 +378,23 @@ components:
       properties:
         welcome_message:
           type: string
+
+    SecurityTokenRequest:
+      type: object
+      properties:
+        Role:
+          type: string
+          nullable: false
+        Expiry:
+          type: integer
+          nullable: false
+
+    SecurityTokenResponse:
+      type: object
+      properties:
+        Key:
+          type: string
+          nullable: false
 
   headers:
     AuroraFeedIndex:

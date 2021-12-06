@@ -84,7 +84,6 @@ func (m *UnderlayResp) GetSignature() []byte {
 
 type UnderlayReq struct {
 	Dest []byte `protobuf:"bytes,1,opt,name=Dest,proto3" json:"Dest,omitempty"`
-	Sign []byte `protobuf:"bytes,2,opt,name=Sign,proto3" json:"Sign,omitempty"`
 }
 
 func (m *UnderlayReq) Reset()         { *m = UnderlayReq{} }
@@ -123,13 +122,6 @@ var xxx_messageInfo_UnderlayReq proto.InternalMessageInfo
 func (m *UnderlayReq) GetDest() []byte {
 	if m != nil {
 		return m.Dest
-	}
-	return nil
-}
-
-func (m *UnderlayReq) GetSign() []byte {
-	if m != nil {
-		return m.Sign
 	}
 	return nil
 }
@@ -187,9 +179,9 @@ func (m *RouteResp) GetPaths() []*Path {
 }
 
 type RouteReq struct {
-	Dest  []byte `protobuf:"bytes,1,opt,name=Dest,proto3" json:"Dest,omitempty"`
-	Alpha int32  `protobuf:"varint,2,opt,name=Alpha,proto3" json:"Alpha,omitempty"`
-	Path  *Path  `protobuf:"bytes,3,opt,name=Path,proto3" json:"Path,omitempty"`
+	Dest  []byte  `protobuf:"bytes,1,opt,name=Dest,proto3" json:"Dest,omitempty"`
+	Alpha int32   `protobuf:"varint,2,opt,name=Alpha,proto3" json:"Alpha,omitempty"`
+	Paths []*Path `protobuf:"bytes,3,rep,name=Paths,proto3" json:"Paths,omitempty"`
 }
 
 func (m *RouteReq) Reset()         { *m = RouteReq{} }
@@ -239,16 +231,17 @@ func (m *RouteReq) GetAlpha() int32 {
 	return 0
 }
 
-func (m *RouteReq) GetPath() *Path {
+func (m *RouteReq) GetPaths() []*Path {
 	if m != nil {
-		return m.Path
+		return m.Paths
 	}
 	return nil
 }
 
 type Path struct {
-	Sign []byte   `protobuf:"bytes,1,opt,name=Sign,proto3" json:"Sign,omitempty"`
-	Item [][]byte `protobuf:"bytes,2,rep,name=Item,proto3" json:"Item,omitempty"`
+	Sign  []byte   `protobuf:"bytes,1,opt,name=Sign,proto3" json:"Sign,omitempty"`
+	Bodys [][]byte `protobuf:"bytes,2,rep,name=Bodys,proto3" json:"Bodys,omitempty"`
+	Items [][]byte `protobuf:"bytes,3,rep,name=Items,proto3" json:"Items,omitempty"`
 }
 
 func (m *Path) Reset()         { *m = Path{} }
@@ -291,9 +284,160 @@ func (m *Path) GetSign() []byte {
 	return nil
 }
 
-func (m *Path) GetItem() [][]byte {
+func (m *Path) GetBodys() [][]byte {
 	if m != nil {
-		return m.Item
+		return m.Bodys
+	}
+	return nil
+}
+
+func (m *Path) GetItems() [][]byte {
+	if m != nil {
+		return m.Items
+	}
+	return nil
+}
+
+type RouteRelayReq struct {
+	Src             []byte `protobuf:"bytes,1,opt,name=Src,proto3" json:"Src,omitempty"`
+	SrcMode         []byte `protobuf:"bytes,2,opt,name=SrcMode,proto3" json:"SrcMode,omitempty"`
+	Dest            []byte `protobuf:"bytes,3,opt,name=Dest,proto3" json:"Dest,omitempty"`
+	ProtocolName    []byte `protobuf:"bytes,4,opt,name=ProtocolName,proto3" json:"ProtocolName,omitempty"`
+	ProtocolVersion []byte `protobuf:"bytes,5,opt,name=ProtocolVersion,proto3" json:"ProtocolVersion,omitempty"`
+	StreamName      []byte `protobuf:"bytes,6,opt,name=StreamName,proto3" json:"StreamName,omitempty"`
+	Data            []byte `protobuf:"bytes,7,opt,name=Data,proto3" json:"Data,omitempty"`
+	MidCall         bool   `protobuf:"varint,8,opt,name=MidCall,proto3" json:"MidCall,omitempty"`
+}
+
+func (m *RouteRelayReq) Reset()         { *m = RouteRelayReq{} }
+func (m *RouteRelayReq) String() string { return proto.CompactTextString(m) }
+func (*RouteRelayReq) ProtoMessage()    {}
+func (*RouteRelayReq) Descriptor() ([]byte, []int) {
+	return fileDescriptor_0984d49a362b6b9f, []int{5}
+}
+func (m *RouteRelayReq) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *RouteRelayReq) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_RouteRelayReq.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalToSizedBuffer(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+	}
+}
+func (m *RouteRelayReq) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_RouteRelayReq.Merge(m, src)
+}
+func (m *RouteRelayReq) XXX_Size() int {
+	return m.Size()
+}
+func (m *RouteRelayReq) XXX_DiscardUnknown() {
+	xxx_messageInfo_RouteRelayReq.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_RouteRelayReq proto.InternalMessageInfo
+
+func (m *RouteRelayReq) GetSrc() []byte {
+	if m != nil {
+		return m.Src
+	}
+	return nil
+}
+
+func (m *RouteRelayReq) GetSrcMode() []byte {
+	if m != nil {
+		return m.SrcMode
+	}
+	return nil
+}
+
+func (m *RouteRelayReq) GetDest() []byte {
+	if m != nil {
+		return m.Dest
+	}
+	return nil
+}
+
+func (m *RouteRelayReq) GetProtocolName() []byte {
+	if m != nil {
+		return m.ProtocolName
+	}
+	return nil
+}
+
+func (m *RouteRelayReq) GetProtocolVersion() []byte {
+	if m != nil {
+		return m.ProtocolVersion
+	}
+	return nil
+}
+
+func (m *RouteRelayReq) GetStreamName() []byte {
+	if m != nil {
+		return m.StreamName
+	}
+	return nil
+}
+
+func (m *RouteRelayReq) GetData() []byte {
+	if m != nil {
+		return m.Data
+	}
+	return nil
+}
+
+func (m *RouteRelayReq) GetMidCall() bool {
+	if m != nil {
+		return m.MidCall
+	}
+	return false
+}
+
+type RouteRelayResp struct {
+	Data []byte `protobuf:"bytes,1,opt,name=Data,proto3" json:"Data,omitempty"`
+}
+
+func (m *RouteRelayResp) Reset()         { *m = RouteRelayResp{} }
+func (m *RouteRelayResp) String() string { return proto.CompactTextString(m) }
+func (*RouteRelayResp) ProtoMessage()    {}
+func (*RouteRelayResp) Descriptor() ([]byte, []int) {
+	return fileDescriptor_0984d49a362b6b9f, []int{6}
+}
+func (m *RouteRelayResp) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *RouteRelayResp) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_RouteRelayResp.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalToSizedBuffer(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+	}
+}
+func (m *RouteRelayResp) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_RouteRelayResp.Merge(m, src)
+}
+func (m *RouteRelayResp) XXX_Size() int {
+	return m.Size()
+}
+func (m *RouteRelayResp) XXX_DiscardUnknown() {
+	xxx_messageInfo_RouteRelayResp.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_RouteRelayResp proto.InternalMessageInfo
+
+func (m *RouteRelayResp) GetData() []byte {
+	if m != nil {
+		return m.Data
 	}
 	return nil
 }
@@ -304,28 +448,38 @@ func init() {
 	proto.RegisterType((*RouteResp)(nil), "routetab.RouteResp")
 	proto.RegisterType((*RouteReq)(nil), "routetab.RouteReq")
 	proto.RegisterType((*Path)(nil), "routetab.Path")
+	proto.RegisterType((*RouteRelayReq)(nil), "routetab.RouteRelayReq")
+	proto.RegisterType((*RouteRelayResp)(nil), "routetab.RouteRelayResp")
 }
 
 func init() { proto.RegisterFile("route.proto", fileDescriptor_0984d49a362b6b9f) }
 
 var fileDescriptor_0984d49a362b6b9f = []byte{
-	// 253 bytes of a gzipped FileDescriptorProto
-	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xe2, 0xe2, 0x2e, 0xca, 0x2f, 0x2d,
-	0x49, 0xd5, 0x2b, 0x28, 0xca, 0x2f, 0xc9, 0x17, 0xe2, 0x00, 0x73, 0x4a, 0x12, 0x93, 0x94, 0x62,
-	0xb8, 0x78, 0x42, 0xf3, 0x52, 0x52, 0x8b, 0x72, 0x12, 0x2b, 0x83, 0x52, 0x8b, 0x0b, 0x84, 0x84,
-	0xb8, 0x58, 0x5c, 0x52, 0x8b, 0x4b, 0x24, 0x18, 0x15, 0x18, 0x35, 0x78, 0x82, 0xc0, 0x6c, 0x21,
-	0x29, 0x2e, 0x0e, 0x98, 0x1a, 0x09, 0x26, 0xb0, 0x38, 0x9c, 0x2f, 0x24, 0xc3, 0xc5, 0x19, 0x9c,
-	0x99, 0x9e, 0x97, 0x58, 0x52, 0x5a, 0x94, 0x2a, 0xc1, 0x0c, 0x96, 0x44, 0x08, 0x28, 0x99, 0x72,
-	0x71, 0x23, 0x4c, 0x2f, 0xc4, 0x6a, 0xb8, 0x10, 0x17, 0x0b, 0x48, 0x3d, 0xd4, 0x60, 0x30, 0x5b,
-	0xc9, 0x95, 0x8b, 0x33, 0x08, 0xe4, 0x40, 0x9c, 0x2e, 0x52, 0xe1, 0x62, 0x0d, 0x48, 0x2c, 0xc9,
-	0x28, 0x96, 0x60, 0x52, 0x60, 0xd6, 0xe0, 0x36, 0xe2, 0xd3, 0x83, 0xf9, 0x47, 0x0f, 0x24, 0x1c,
-	0x04, 0x91, 0x54, 0x8a, 0xe0, 0xe2, 0x80, 0x1a, 0x83, 0xdd, 0x6a, 0x11, 0x2e, 0x56, 0xc7, 0x9c,
-	0x82, 0x8c, 0x44, 0xb0, 0xdd, 0xac, 0x41, 0x10, 0x8e, 0x90, 0x12, 0x17, 0x0b, 0x48, 0x3b, 0xd8,
-	0x33, 0x98, 0x46, 0x83, 0xe5, 0x94, 0xf4, 0x20, 0x6a, 0xe0, 0x8e, 0x67, 0x44, 0x38, 0x1e, 0x24,
-	0xe6, 0x59, 0x92, 0x9a, 0x0b, 0x76, 0x1a, 0x4f, 0x10, 0x98, 0xed, 0x24, 0x73, 0xe2, 0x91, 0x1c,
-	0xe3, 0x85, 0x47, 0x72, 0x8c, 0x0f, 0x1e, 0xc9, 0x31, 0x4e, 0x78, 0x2c, 0xc7, 0x70, 0xe1, 0xb1,
-	0x1c, 0xc3, 0x8d, 0xc7, 0x72, 0x0c, 0x51, 0x4c, 0x05, 0x49, 0x49, 0x6c, 0xe0, 0x48, 0x31, 0x06,
-	0x04, 0x00, 0x00, 0xff, 0xff, 0x36, 0x75, 0x4d, 0x55, 0xa3, 0x01, 0x00, 0x00,
+	// 379 bytes of a gzipped FileDescriptorProto
+	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x7c, 0x92, 0xbf, 0x6e, 0xea, 0x30,
+	0x14, 0xc6, 0x31, 0x21, 0x10, 0x0e, 0xb9, 0xdc, 0x2b, 0xeb, 0x0e, 0x56, 0x85, 0x22, 0x1a, 0x31,
+	0x64, 0x62, 0x68, 0x9f, 0xa0, 0xf4, 0x8f, 0xd4, 0x81, 0x0a, 0x39, 0x6a, 0x07, 0xd4, 0xc5, 0x10,
+	0xab, 0x20, 0x05, 0x92, 0x3a, 0x66, 0xe0, 0x2d, 0xfa, 0x58, 0x1d, 0x19, 0x3b, 0x56, 0x30, 0xf6,
+	0x25, 0x2a, 0x3b, 0x0e, 0xa1, 0x15, 0xed, 0x76, 0xbe, 0xef, 0x9c, 0xfc, 0xfc, 0x1d, 0x3b, 0xd0,
+	0x12, 0xc9, 0x4a, 0xf2, 0x7e, 0x2a, 0x12, 0x99, 0x60, 0x47, 0x0b, 0xc9, 0x26, 0xfe, 0x23, 0xb8,
+	0xf7, 0xcb, 0x88, 0x8b, 0x98, 0xad, 0x29, 0xcf, 0x52, 0x8c, 0xa1, 0x76, 0xc5, 0x33, 0x49, 0x50,
+	0x17, 0x05, 0x2e, 0xd5, 0x35, 0x3e, 0x01, 0xa7, 0x98, 0x21, 0x55, 0xed, 0xef, 0x35, 0xee, 0x40,
+	0x33, 0x9c, 0x3f, 0x2d, 0x99, 0x5c, 0x09, 0x4e, 0x2c, 0xdd, 0x2c, 0x0d, 0xff, 0x14, 0x5a, 0x25,
+	0xfd, 0xf9, 0x18, 0xdc, 0xbf, 0x86, 0x26, 0x55, 0x61, 0x7e, 0x3c, 0xbd, 0x07, 0xf6, 0x88, 0xc9,
+	0x59, 0x46, 0xaa, 0x5d, 0x2b, 0x68, 0x9d, 0xb5, 0xfb, 0x45, 0xf6, 0xbe, 0xb2, 0x69, 0xde, 0xf4,
+	0xc7, 0xe0, 0x18, 0xcc, 0xd1, 0x63, 0xf0, 0x7f, 0xb0, 0x2f, 0xe2, 0x74, 0xc6, 0xf4, 0x02, 0x36,
+	0xcd, 0x45, 0xc9, 0xb6, 0x7e, 0x63, 0xdf, 0x40, 0x4d, 0x15, 0x8a, 0xab, 0x56, 0x2b, 0xb8, 0xaa,
+	0x56, 0xdc, 0x41, 0x12, 0xad, 0xf3, 0x74, 0x2e, 0xcd, 0x85, 0x72, 0x6f, 0x25, 0x5f, 0xe4, 0x5c,
+	0x97, 0xe6, 0xc2, 0xff, 0x40, 0xf0, 0xc7, 0x84, 0x34, 0x17, 0xf2, 0x0f, 0xac, 0x50, 0x4c, 0x0d,
+	0x50, 0x95, 0x98, 0x40, 0x23, 0x14, 0xd3, 0x61, 0x12, 0x71, 0x73, 0xd5, 0x85, 0xdc, 0x6f, 0x65,
+	0x1d, 0x6c, 0xe5, 0x83, 0x3b, 0x52, 0x0f, 0x3a, 0x4d, 0xe2, 0x3b, 0xb6, 0xe0, 0xa4, 0xa6, 0x7b,
+	0x5f, 0x3c, 0x1c, 0xc0, 0xdf, 0x42, 0x3f, 0x70, 0x91, 0xcd, 0x93, 0x25, 0xb1, 0xf5, 0xd8, 0x77,
+	0x1b, 0x7b, 0x00, 0xa1, 0x14, 0x9c, 0x2d, 0x34, 0xab, 0xae, 0x87, 0x0e, 0x1c, 0x9d, 0x80, 0x49,
+	0x46, 0x1a, 0x26, 0x01, 0x93, 0x4c, 0xe5, 0x1d, 0xce, 0xa3, 0x4b, 0x16, 0xc7, 0xc4, 0xe9, 0xa2,
+	0xc0, 0xa1, 0x85, 0xf4, 0x7b, 0xd0, 0x3e, 0x5c, 0xd6, 0xbc, 0xae, 0xfa, 0x1e, 0x95, 0xdf, 0x0f,
+	0x3a, 0xaf, 0x5b, 0x0f, 0x6d, 0xb6, 0x1e, 0x7a, 0xdf, 0x7a, 0xe8, 0x65, 0xe7, 0x55, 0x36, 0x3b,
+	0xaf, 0xf2, 0xb6, 0xf3, 0x2a, 0xe3, 0x6a, 0x3a, 0x99, 0xd4, 0xf5, 0xef, 0x7a, 0xfe, 0x19, 0x00,
+	0x00, 0xff, 0xff, 0x51, 0x18, 0x8c, 0x1d, 0xbd, 0x02, 0x00, 0x00,
 }
 
 func (m *UnderlayResp) Marshal() (dAtA []byte, err error) {
@@ -392,13 +546,6 @@ func (m *UnderlayReq) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 	_ = i
 	var l int
 	_ = l
-	if len(m.Sign) > 0 {
-		i -= len(m.Sign)
-		copy(dAtA[i:], m.Sign)
-		i = encodeVarintRoute(dAtA, i, uint64(len(m.Sign)))
-		i--
-		dAtA[i] = 0x12
-	}
 	if len(m.Dest) > 0 {
 		i -= len(m.Dest)
 		copy(dAtA[i:], m.Dest)
@@ -473,17 +620,19 @@ func (m *RouteReq) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 	_ = i
 	var l int
 	_ = l
-	if m.Path != nil {
-		{
-			size, err := m.Path.MarshalToSizedBuffer(dAtA[:i])
-			if err != nil {
-				return 0, err
+	if len(m.Paths) > 0 {
+		for iNdEx := len(m.Paths) - 1; iNdEx >= 0; iNdEx-- {
+			{
+				size, err := m.Paths[iNdEx].MarshalToSizedBuffer(dAtA[:i])
+				if err != nil {
+					return 0, err
+				}
+				i -= size
+				i = encodeVarintRoute(dAtA, i, uint64(size))
 			}
-			i -= size
-			i = encodeVarintRoute(dAtA, i, uint64(size))
+			i--
+			dAtA[i] = 0x1a
 		}
-		i--
-		dAtA[i] = 0x1a
 	}
 	if m.Alpha != 0 {
 		i = encodeVarintRoute(dAtA, i, uint64(m.Alpha))
@@ -520,11 +669,20 @@ func (m *Path) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 	_ = i
 	var l int
 	_ = l
-	if len(m.Item) > 0 {
-		for iNdEx := len(m.Item) - 1; iNdEx >= 0; iNdEx-- {
-			i -= len(m.Item[iNdEx])
-			copy(dAtA[i:], m.Item[iNdEx])
-			i = encodeVarintRoute(dAtA, i, uint64(len(m.Item[iNdEx])))
+	if len(m.Items) > 0 {
+		for iNdEx := len(m.Items) - 1; iNdEx >= 0; iNdEx-- {
+			i -= len(m.Items[iNdEx])
+			copy(dAtA[i:], m.Items[iNdEx])
+			i = encodeVarintRoute(dAtA, i, uint64(len(m.Items[iNdEx])))
+			i--
+			dAtA[i] = 0x1a
+		}
+	}
+	if len(m.Bodys) > 0 {
+		for iNdEx := len(m.Bodys) - 1; iNdEx >= 0; iNdEx-- {
+			i -= len(m.Bodys[iNdEx])
+			copy(dAtA[i:], m.Bodys[iNdEx])
+			i = encodeVarintRoute(dAtA, i, uint64(len(m.Bodys[iNdEx])))
 			i--
 			dAtA[i] = 0x12
 		}
@@ -533,6 +691,118 @@ func (m *Path) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 		i -= len(m.Sign)
 		copy(dAtA[i:], m.Sign)
 		i = encodeVarintRoute(dAtA, i, uint64(len(m.Sign)))
+		i--
+		dAtA[i] = 0xa
+	}
+	return len(dAtA) - i, nil
+}
+
+func (m *RouteRelayReq) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *RouteRelayReq) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *RouteRelayReq) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	if m.MidCall {
+		i--
+		if m.MidCall {
+			dAtA[i] = 1
+		} else {
+			dAtA[i] = 0
+		}
+		i--
+		dAtA[i] = 0x40
+	}
+	if len(m.Data) > 0 {
+		i -= len(m.Data)
+		copy(dAtA[i:], m.Data)
+		i = encodeVarintRoute(dAtA, i, uint64(len(m.Data)))
+		i--
+		dAtA[i] = 0x3a
+	}
+	if len(m.StreamName) > 0 {
+		i -= len(m.StreamName)
+		copy(dAtA[i:], m.StreamName)
+		i = encodeVarintRoute(dAtA, i, uint64(len(m.StreamName)))
+		i--
+		dAtA[i] = 0x32
+	}
+	if len(m.ProtocolVersion) > 0 {
+		i -= len(m.ProtocolVersion)
+		copy(dAtA[i:], m.ProtocolVersion)
+		i = encodeVarintRoute(dAtA, i, uint64(len(m.ProtocolVersion)))
+		i--
+		dAtA[i] = 0x2a
+	}
+	if len(m.ProtocolName) > 0 {
+		i -= len(m.ProtocolName)
+		copy(dAtA[i:], m.ProtocolName)
+		i = encodeVarintRoute(dAtA, i, uint64(len(m.ProtocolName)))
+		i--
+		dAtA[i] = 0x22
+	}
+	if len(m.Dest) > 0 {
+		i -= len(m.Dest)
+		copy(dAtA[i:], m.Dest)
+		i = encodeVarintRoute(dAtA, i, uint64(len(m.Dest)))
+		i--
+		dAtA[i] = 0x1a
+	}
+	if len(m.SrcMode) > 0 {
+		i -= len(m.SrcMode)
+		copy(dAtA[i:], m.SrcMode)
+		i = encodeVarintRoute(dAtA, i, uint64(len(m.SrcMode)))
+		i--
+		dAtA[i] = 0x12
+	}
+	if len(m.Src) > 0 {
+		i -= len(m.Src)
+		copy(dAtA[i:], m.Src)
+		i = encodeVarintRoute(dAtA, i, uint64(len(m.Src)))
+		i--
+		dAtA[i] = 0xa
+	}
+	return len(dAtA) - i, nil
+}
+
+func (m *RouteRelayResp) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *RouteRelayResp) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *RouteRelayResp) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	if len(m.Data) > 0 {
+		i -= len(m.Data)
+		copy(dAtA[i:], m.Data)
+		i = encodeVarintRoute(dAtA, i, uint64(len(m.Data)))
 		i--
 		dAtA[i] = 0xa
 	}
@@ -581,10 +851,6 @@ func (m *UnderlayReq) Size() (n int) {
 	if l > 0 {
 		n += 1 + l + sovRoute(uint64(l))
 	}
-	l = len(m.Sign)
-	if l > 0 {
-		n += 1 + l + sovRoute(uint64(l))
-	}
 	return n
 }
 
@@ -620,9 +886,11 @@ func (m *RouteReq) Size() (n int) {
 	if m.Alpha != 0 {
 		n += 1 + sovRoute(uint64(m.Alpha))
 	}
-	if m.Path != nil {
-		l = m.Path.Size()
-		n += 1 + l + sovRoute(uint64(l))
+	if len(m.Paths) > 0 {
+		for _, e := range m.Paths {
+			l = e.Size()
+			n += 1 + l + sovRoute(uint64(l))
+		}
 	}
 	return n
 }
@@ -637,11 +905,70 @@ func (m *Path) Size() (n int) {
 	if l > 0 {
 		n += 1 + l + sovRoute(uint64(l))
 	}
-	if len(m.Item) > 0 {
-		for _, b := range m.Item {
+	if len(m.Bodys) > 0 {
+		for _, b := range m.Bodys {
 			l = len(b)
 			n += 1 + l + sovRoute(uint64(l))
 		}
+	}
+	if len(m.Items) > 0 {
+		for _, b := range m.Items {
+			l = len(b)
+			n += 1 + l + sovRoute(uint64(l))
+		}
+	}
+	return n
+}
+
+func (m *RouteRelayReq) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	l = len(m.Src)
+	if l > 0 {
+		n += 1 + l + sovRoute(uint64(l))
+	}
+	l = len(m.SrcMode)
+	if l > 0 {
+		n += 1 + l + sovRoute(uint64(l))
+	}
+	l = len(m.Dest)
+	if l > 0 {
+		n += 1 + l + sovRoute(uint64(l))
+	}
+	l = len(m.ProtocolName)
+	if l > 0 {
+		n += 1 + l + sovRoute(uint64(l))
+	}
+	l = len(m.ProtocolVersion)
+	if l > 0 {
+		n += 1 + l + sovRoute(uint64(l))
+	}
+	l = len(m.StreamName)
+	if l > 0 {
+		n += 1 + l + sovRoute(uint64(l))
+	}
+	l = len(m.Data)
+	if l > 0 {
+		n += 1 + l + sovRoute(uint64(l))
+	}
+	if m.MidCall {
+		n += 2
+	}
+	return n
+}
+
+func (m *RouteRelayResp) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	l = len(m.Data)
+	if l > 0 {
+		n += 1 + l + sovRoute(uint64(l))
 	}
 	return n
 }
@@ -867,40 +1194,6 @@ func (m *UnderlayReq) Unmarshal(dAtA []byte) error {
 				m.Dest = []byte{}
 			}
 			iNdEx = postIndex
-		case 2:
-			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field Sign", wireType)
-			}
-			var byteLen int
-			for shift := uint(0); ; shift += 7 {
-				if shift >= 64 {
-					return ErrIntOverflowRoute
-				}
-				if iNdEx >= l {
-					return io.ErrUnexpectedEOF
-				}
-				b := dAtA[iNdEx]
-				iNdEx++
-				byteLen |= int(b&0x7F) << shift
-				if b < 0x80 {
-					break
-				}
-			}
-			if byteLen < 0 {
-				return ErrInvalidLengthRoute
-			}
-			postIndex := iNdEx + byteLen
-			if postIndex < 0 {
-				return ErrInvalidLengthRoute
-			}
-			if postIndex > l {
-				return io.ErrUnexpectedEOF
-			}
-			m.Sign = append(m.Sign[:0], dAtA[iNdEx:postIndex]...)
-			if m.Sign == nil {
-				m.Sign = []byte{}
-			}
-			iNdEx = postIndex
 		default:
 			iNdEx = preIndex
 			skippy, err := skipRoute(dAtA[iNdEx:])
@@ -1124,7 +1417,7 @@ func (m *RouteReq) Unmarshal(dAtA []byte) error {
 			}
 		case 3:
 			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field Path", wireType)
+				return fmt.Errorf("proto: wrong wireType = %d for field Paths", wireType)
 			}
 			var msglen int
 			for shift := uint(0); ; shift += 7 {
@@ -1151,10 +1444,8 @@ func (m *RouteReq) Unmarshal(dAtA []byte) error {
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			if m.Path == nil {
-				m.Path = &Path{}
-			}
-			if err := m.Path.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+			m.Paths = append(m.Paths, &Path{})
+			if err := m.Paths[len(m.Paths)-1].Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
 				return err
 			}
 			iNdEx = postIndex
@@ -1244,7 +1535,7 @@ func (m *Path) Unmarshal(dAtA []byte) error {
 			iNdEx = postIndex
 		case 2:
 			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field Item", wireType)
+				return fmt.Errorf("proto: wrong wireType = %d for field Bodys", wireType)
 			}
 			var byteLen int
 			for shift := uint(0); ; shift += 7 {
@@ -1271,8 +1562,432 @@ func (m *Path) Unmarshal(dAtA []byte) error {
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.Item = append(m.Item, make([]byte, postIndex-iNdEx))
-			copy(m.Item[len(m.Item)-1], dAtA[iNdEx:postIndex])
+			m.Bodys = append(m.Bodys, make([]byte, postIndex-iNdEx))
+			copy(m.Bodys[len(m.Bodys)-1], dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 3:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Items", wireType)
+			}
+			var byteLen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowRoute
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				byteLen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if byteLen < 0 {
+				return ErrInvalidLengthRoute
+			}
+			postIndex := iNdEx + byteLen
+			if postIndex < 0 {
+				return ErrInvalidLengthRoute
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Items = append(m.Items, make([]byte, postIndex-iNdEx))
+			copy(m.Items[len(m.Items)-1], dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		default:
+			iNdEx = preIndex
+			skippy, err := skipRoute(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if (skippy < 0) || (iNdEx+skippy) < 0 {
+				return ErrInvalidLengthRoute
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *RouteRelayReq) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowRoute
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: RouteRelayReq: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: RouteRelayReq: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Src", wireType)
+			}
+			var byteLen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowRoute
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				byteLen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if byteLen < 0 {
+				return ErrInvalidLengthRoute
+			}
+			postIndex := iNdEx + byteLen
+			if postIndex < 0 {
+				return ErrInvalidLengthRoute
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Src = append(m.Src[:0], dAtA[iNdEx:postIndex]...)
+			if m.Src == nil {
+				m.Src = []byte{}
+			}
+			iNdEx = postIndex
+		case 2:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field SrcMode", wireType)
+			}
+			var byteLen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowRoute
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				byteLen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if byteLen < 0 {
+				return ErrInvalidLengthRoute
+			}
+			postIndex := iNdEx + byteLen
+			if postIndex < 0 {
+				return ErrInvalidLengthRoute
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.SrcMode = append(m.SrcMode[:0], dAtA[iNdEx:postIndex]...)
+			if m.SrcMode == nil {
+				m.SrcMode = []byte{}
+			}
+			iNdEx = postIndex
+		case 3:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Dest", wireType)
+			}
+			var byteLen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowRoute
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				byteLen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if byteLen < 0 {
+				return ErrInvalidLengthRoute
+			}
+			postIndex := iNdEx + byteLen
+			if postIndex < 0 {
+				return ErrInvalidLengthRoute
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Dest = append(m.Dest[:0], dAtA[iNdEx:postIndex]...)
+			if m.Dest == nil {
+				m.Dest = []byte{}
+			}
+			iNdEx = postIndex
+		case 4:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field ProtocolName", wireType)
+			}
+			var byteLen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowRoute
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				byteLen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if byteLen < 0 {
+				return ErrInvalidLengthRoute
+			}
+			postIndex := iNdEx + byteLen
+			if postIndex < 0 {
+				return ErrInvalidLengthRoute
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.ProtocolName = append(m.ProtocolName[:0], dAtA[iNdEx:postIndex]...)
+			if m.ProtocolName == nil {
+				m.ProtocolName = []byte{}
+			}
+			iNdEx = postIndex
+		case 5:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field ProtocolVersion", wireType)
+			}
+			var byteLen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowRoute
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				byteLen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if byteLen < 0 {
+				return ErrInvalidLengthRoute
+			}
+			postIndex := iNdEx + byteLen
+			if postIndex < 0 {
+				return ErrInvalidLengthRoute
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.ProtocolVersion = append(m.ProtocolVersion[:0], dAtA[iNdEx:postIndex]...)
+			if m.ProtocolVersion == nil {
+				m.ProtocolVersion = []byte{}
+			}
+			iNdEx = postIndex
+		case 6:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field StreamName", wireType)
+			}
+			var byteLen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowRoute
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				byteLen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if byteLen < 0 {
+				return ErrInvalidLengthRoute
+			}
+			postIndex := iNdEx + byteLen
+			if postIndex < 0 {
+				return ErrInvalidLengthRoute
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.StreamName = append(m.StreamName[:0], dAtA[iNdEx:postIndex]...)
+			if m.StreamName == nil {
+				m.StreamName = []byte{}
+			}
+			iNdEx = postIndex
+		case 7:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Data", wireType)
+			}
+			var byteLen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowRoute
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				byteLen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if byteLen < 0 {
+				return ErrInvalidLengthRoute
+			}
+			postIndex := iNdEx + byteLen
+			if postIndex < 0 {
+				return ErrInvalidLengthRoute
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Data = append(m.Data[:0], dAtA[iNdEx:postIndex]...)
+			if m.Data == nil {
+				m.Data = []byte{}
+			}
+			iNdEx = postIndex
+		case 8:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field MidCall", wireType)
+			}
+			var v int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowRoute
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				v |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			m.MidCall = bool(v != 0)
+		default:
+			iNdEx = preIndex
+			skippy, err := skipRoute(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if (skippy < 0) || (iNdEx+skippy) < 0 {
+				return ErrInvalidLengthRoute
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *RouteRelayResp) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowRoute
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: RouteRelayResp: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: RouteRelayResp: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Data", wireType)
+			}
+			var byteLen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowRoute
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				byteLen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if byteLen < 0 {
+				return ErrInvalidLengthRoute
+			}
+			postIndex := iNdEx + byteLen
+			if postIndex < 0 {
+				return ErrInvalidLengthRoute
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Data = append(m.Data[:0], dAtA[iNdEx:postIndex]...)
+			if m.Data == nil {
+				m.Data = []byte{}
+			}
 			iNdEx = postIndex
 		default:
 			iNdEx = preIndex

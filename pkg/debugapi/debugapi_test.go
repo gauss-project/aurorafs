@@ -56,7 +56,7 @@ func newTestServer(t *testing.T, o testServerOptions) *testServer {
 	//swapserv := swapmock.NewApiInterface(o.SwapOpts...)
 	ln := lightnode.NewContainer(o.Overlay)
 	bn := bootnode.NewContainer(o.Overlay)
-	s := debugapi.New(o.Overlay, o.PublicKey, logging.New(io.Discard, 0), nil, o.CORSAllowedOrigins, debugapi.Options{NodeMode: aurora.NewModel()})
+	s := debugapi.New(o.Overlay, o.PublicKey, logging.New(io.Discard, 0), nil, o.CORSAllowedOrigins, false, nil, debugapi.Options{NodeMode: aurora.NewModel()})
 	s.Configure(o.P2P, o.Pingpong, topologyDriver, ln, bn, o.Storer, nil, nil, nil)
 	ts := httptest.NewServer(s)
 	t.Cleanup(ts.Close)
@@ -117,7 +117,7 @@ func TestServer_Configure(t *testing.T) {
 	//swapserv := swapmock.NewApiInterface(o.SwapOpts...)
 	ln := lightnode.NewContainer(o.Overlay)
 	bn := bootnode.NewContainer(o.Overlay)
-	s := debugapi.New(o.Overlay, o.PublicKey, logger, nil, nil, debugapi.Options{
+	s := debugapi.New(o.Overlay, o.PublicKey, logger, nil, nil, false, nil, debugapi.Options{
 		NodeMode: aurora.NewModel(),
 	})
 	ts := httptest.NewServer(s)

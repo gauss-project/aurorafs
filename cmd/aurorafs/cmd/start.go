@@ -106,7 +106,7 @@ func (c *command) initStartCmd() (err error) {
 				logger.Info("Start node mode light.")
 			}
 
-			b, err := node.NewAurora(c.config.GetString(optionNameP2PAddr), signerConfig.address, *signerConfig.publicKey, signerConfig.signer, c.config.GetUint64(optionNameNetworkID), logger, signerConfig.libp2pPrivateKey, node.Options{
+			b, err := node.NewAurora(mode, c.config.GetString(optionNameP2PAddr), signerConfig.address, *signerConfig.publicKey, signerConfig.signer, c.config.GetUint64(optionNameNetworkID), logger, signerConfig.libp2pPrivateKey, node.Options{
 				DataDir:                  c.config.GetString(optionNameDataDir),
 				CacheCapacity:            c.config.GetUint64(optionNameCacheCapacity),
 				DBOpenFilesLimit:         c.config.GetUint64(optionNameDBOpenFilesLimit),
@@ -121,7 +121,6 @@ func (c *command) initStartCmd() (err error) {
 				EnableQUIC:               c.config.GetBool(optionNameP2PQUICEnable),
 				WelcomeMessage:           c.config.GetString(optionWelcomeMessage),
 				Bootnodes:                c.config.GetStringSlice(optionNameBootnodes),
-				NodeMode:                 mode,
 				OracleEndpoint:           c.config.GetString(optionNameOracleEndpoint),
 				OracleContractAddress:    c.config.GetString(optionNameOracleContractAddr),
 				CORSAllowedOrigins:       c.config.GetStringSlice(optionCORSAllowedOrigins),
@@ -142,6 +141,9 @@ func (c *command) initStartCmd() (err error) {
 				KadBinMaxPeers:         c.config.GetInt(optionNameBinMaxPeers),
 				LightNodeMaxPeers:      c.config.GetInt(optionNameLightMaxPeers),
 				AllowPrivateCIDRs:      c.config.GetBool(optionNameAllowPrivateCIDRs),
+				Restricted:             c.config.GetBool(optionNameRestrictedAPI),
+				TokenEncryptionKey:     c.config.GetString(optionNameTokenEncryptionKey),
+				AdminPasswordHash:      c.config.GetString(optionNameAdminPasswordHash),
 			})
 			if err != nil {
 				return err

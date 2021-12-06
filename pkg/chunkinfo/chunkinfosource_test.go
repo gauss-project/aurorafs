@@ -34,6 +34,10 @@ func TestChunkInfoSource(t *testing.T) {
 
 	a := mockChunkInfo(s, recorder, clientAddress)
 
+	err := a.cs.updatePyramidSource(rootCid, clientAddress)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if err := a.UpdateChunkInfoSource(rootCid, clientAddress, cid); err != nil {
 		t.Fatal(err)
 	}
@@ -42,7 +46,7 @@ func TestChunkInfoSource(t *testing.T) {
 	if len(source.ChunkSource) == 0 {
 		t.Fatal(" Get chunk source to zero.")
 	}
-	err := a.InitChunkInfo()
+	err = a.InitChunkInfo()
 	if err != nil {
 		t.Fatal("ChunkInfo Init Failed:", err.Error())
 	}

@@ -8,6 +8,7 @@ import (
 	"crypto/ecdsa"
 	"fmt"
 	"github.com/gauss-project/aurorafs/pkg/accounting"
+	"github.com/gauss-project/aurorafs/pkg/auth"
 	"io"
 	"log"
 	"math/big"
@@ -99,9 +100,12 @@ type Options struct {
 	KadBinMaxPeers         int
 	LightNodeMaxPeers      int
 	AllowPrivateCIDRs      bool
+	Restricted             bool
+	TokenEncryptionKey     string
+	AdminPasswordHash      string
 }
 
-func NewAurora(addr string, bosonAddress boson.Address, publicKey ecdsa.PublicKey, signer crypto.Signer, networkID uint64, logger logging.Logger, libp2pPrivateKey *ecdsa.PrivateKey, o Options) (b *Aurora, err error) {
+func NewAurora(nodeMode aurora.Model, addr string, bosonAddress boson.Address, publicKey ecdsa.PublicKey, signer crypto.Signer, networkID uint64, logger logging.Logger, libp2pPrivateKey *ecdsa.PrivateKey, o Options) (b *Aurora, err error) {
 	tracer, tracerCloser, err := tracing.NewTracer(&tracing.Options{
 		Enabled:     o.TracingEnabled,
 		Endpoint:    o.TracingEndpoint,
@@ -127,16 +131,26 @@ func NewAurora(addr string, bosonAddress boson.Address, publicKey ecdsa.PublicKe
 		tracerCloser:   tracerCloser,
 	}
 
+	var authenticator *auth.Authenticator
+
+	if o.Restricted {
+		if authenticator, err = auth.New(o.TokenEncryptionKey, o.AdminPasswordHash, logger); err != nil {
+			return nil, fmt.Errorf("authenticator: %w", err)
+		}
+		logger.Info("starting with restricted APIs")
+	}
+
 	var debugAPIService *debugapi.Service
+
 	if o.DebugAPIAddr != "" {
 		// set up basic debug api endpoints for debugging and /health endpoint
-		debugAPIService = debugapi.New(bosonAddress, publicKey, logger, tracer, o.CORSAllowedOrigins, debugapi.Options{
+		debugAPIService = debugapi.New(bosonAddress, publicKey, logger, tracer, o.CORSAllowedOrigins, o.Restricted, authenticator, debugapi.Options{
 			PrivateKey:     libp2pPrivateKey,
 			NATAddr:        o.NATAddr,
 			NetworkID:      networkID,
 			EnableWS:       o.EnableWS,
 			EnableQUIC:     o.EnableQUIC,
-			NodeMode:       o.NodeMode,
+			NodeMode:       nodeMode,
 			WelcomeMessage: o.WelcomeMessage,
 			LightNodeLimit: o.LightNodeMaxPeers,
 		})
@@ -186,7 +200,7 @@ func NewAurora(addr string, bosonAddress boson.Address, publicKey ecdsa.PublicKe
 		EnableWS:       o.EnableWS,
 		EnableQUIC:     o.EnableQUIC,
 		WelcomeMessage: o.WelcomeMessage,
-		NodeMode:       o.NodeMode,
+		NodeMode:       nodeMode,
 		LightNodeLimit: o.LightNodeMaxPeers,
 	})
 
@@ -272,7 +286,7 @@ func NewAurora(addr string, bosonAddress boson.Address, publicKey ecdsa.PublicKe
 
 	kad, err := kademlia.New(bosonAddress, addressBook, hiveObj, p2ps, bootNodes, metricsDB, logger, kademlia.Options{
 		Bootnodes:   bootnodes,
-		NodeMode:    o.NodeMode,
+		NodeMode:    nodeMode,
 		BinMaxPeers: o.KadBinMaxPeers,
 	})
 	if err != nil {
@@ -303,6 +317,8 @@ func NewAurora(addr string, bosonAddress boson.Address, publicKey ecdsa.PublicKe
 		Stream:      p2ps,
 	})
 
+	p2ps.ApplyRoute(bosonAddress, route, nodeMode)
+
 	var path string
 
 	if o.DataDir != "" {
@@ -321,7 +337,7 @@ func NewAurora(addr string, bosonAddress boson.Address, publicKey ecdsa.PublicKe
 	}
 	b.localstoreCloser = storer
 
-	retrieve := retrieval.New(bosonAddress, p2ps, route, storer, o.NodeMode.IsFull(), logger, tracer, acc)
+	retrieve := retrieval.New(bosonAddress, p2ps, route, storer, nodeMode.IsFull(), logger, tracer, acc)
 	if err = p2ps.AddProtocol(retrieve.Protocol()); err != nil {
 		return nil, fmt.Errorf("retrieval service: %w", err)
 	}
@@ -339,7 +355,7 @@ func NewAurora(addr string, bosonAddress boson.Address, publicKey ecdsa.PublicKe
 	if err = p2ps.AddProtocol(chunkInfo.Protocol()); err != nil {
 		return nil, fmt.Errorf("chunkInfo service: %w", err)
 	}
-	storer.Config(chunkInfo)
+	storer.WithChunkInfo(chunkInfo)
 	retrieve.Config(chunkInfo)
 
 	//multiResolver := multiresolver.NewMultiResolver(
@@ -351,12 +367,13 @@ func NewAurora(addr string, bosonAddress boson.Address, publicKey ecdsa.PublicKe
 	var apiService api.Service
 	if o.APIAddr != "" {
 		// API server
-		apiService = api.New(ns, nil, bosonAddress, chunkInfo, traversalService, pinningService, logger, tracer, api.Options{
+		apiService = api.New(ns, nil, bosonAddress, chunkInfo, traversalService, pinningService, authenticator, logger, tracer, apiInterface, api.Options{
 			CORSAllowedOrigins: o.CORSAllowedOrigins,
 			GatewayMode:        o.GatewayMode,
 			WsPingPeriod:       60 * time.Second,
 			BufferSizeMul:      o.ApiBufferSizeMul,
-		}, apiInterface)
+			Restricted:         o.Restricted,
+		})
 		apiListener, err := net.Listen("tcp", o.APIAddr)
 		if err != nil {
 			return nil, fmt.Errorf("api listener: %w", err)

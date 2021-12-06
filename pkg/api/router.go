@@ -2,6 +2,7 @@ package api
 
 import (
 	"fmt"
+	"github.com/gauss-project/aurorafs/pkg/auth"
 	"net/http"
 	"strings"
 
@@ -23,8 +24,11 @@ func (s *server) setupRouting() {
 	router := mux.NewRouter()
 
 	handle := func(path string, handler http.Handler) {
+		if s.Restricted {
+			handler = web.ChainHandlers(auth.PermissionCheckHandler(s.auth), web.FinalHandler(handler))
+		}
 		router.Handle(path, handler)
-		router.Handle("/"+apiVersion+path, handler)
+		router.Handle(rootPath+path, handler)
 	}
 
 	router.NotFoundHandler = http.HandlerFunc(jsonhttp.NotFoundHandler)
@@ -36,6 +40,23 @@ func (s *server) setupRouting() {
 	router.HandleFunc("/robots.txt", func(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprintln(w, "User-agent: *\nDisallow: /")
 	})
+
+	if s.Restricted {
+		router.Handle("/auth", jsonhttp.MethodHandler{
+			"POST": web.ChainHandlers(
+				s.newTracingHandler("auth"),
+				jsonhttp.NewMaxBodyBytesHandler(512),
+				web.FinalHandlerFunc(s.authHandler),
+			),
+		})
+		router.Handle("/refresh", jsonhttp.MethodHandler{
+			"POST": web.ChainHandlers(
+				s.newTracingHandler("auth"),
+				jsonhttp.NewMaxBodyBytesHandler(512),
+				web.FinalHandlerFunc(s.refreshHandler),
+			),
+		})
+	}
 
 	handle("/bytes", jsonhttp.MethodHandler{
 		"POST": web.ChainHandlers(
@@ -169,7 +190,7 @@ func (s *server) setupRouting() {
 				if o := r.Header.Get("Origin"); o != "" && s.checkOrigin(r) {
 					w.Header().Set("Access-Control-Allow-Credentials", "true")
 					w.Header().Set("Access-Control-Allow-Origin", o)
-					w.Header().Set("Access-Control-Allow-Headers", "Origin, Accept, Authorization, Content-Type, X-Requested-With, Access-Control-Request-Headers, Access-Control-Request-Method, Aurora-Tag, Aurora-Pin, Aurora-Encrypt, Aurora-Index-Document, Aurora-Error-Document, Aurora-Collection, Aurora-Collection-Name")
+					w.Header().Set("Access-Control-Allow-Headers", "User-Agent, Origin, Accept, Authorization, Content-Type, X-Requested-With, Access-Control-Request-Headers, Access-Control-Request-Method, Aurora-Tag, Aurora-Pin, Aurora-Encrypt, Aurora-Index-Document, Aurora-Error-Document, Aurora-Collection, Aurora-Collection-Name")
 					w.Header().Set("Access-Control-Allow-Methods", "GET, HEAD, OPTIONS, POST, PUT, DELETE")
 					w.Header().Set("Access-Control-Max-Age", "3600")
 				}

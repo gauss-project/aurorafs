@@ -44,9 +44,7 @@ type Interface interface {
 
 	DelDiscover(rootCid boson.Address)
 
-	DelPyramid(rootCid boson.Address) bool
-
-	OnChunkRecordSource(cid, rootCid, sourceOverlay boson.Address) error
+	OnChunkRetrieved(cid, rootCid, sourceOverlay boson.Address) error
 
 	GetChunkInfoSource(rootCid boson.Address) aurora.ChunkInfoSourceApi
 }
@@ -137,10 +135,10 @@ func (ci *ChunkInfo) Init(ctx context.Context, authInfo []byte, rootCid boson.Ad
 
 	key := fmt.Sprintf("%s%s", rootCid, "chunkinfo")
 	v, _, _ := ci.singleflight.Do(ctx, key, func(ctx context.Context) (interface{}, error) {
-		if ci.ct.isExists(rootCid, ci.addr) {
+		if ci.cd.isExists(rootCid) {
 			return true, nil
 		}
-		if ci.cd.isExists(rootCid) {
+		if ci.ct.isDownload(rootCid, ci.addr) {
 			return true, nil
 		}
 		overlays := ci.oracleChain.GetNodesFromCid(rootCid.Bytes())
@@ -165,7 +163,7 @@ func (ci *ChunkInfo) FindChunkInfo(ctx context.Context, authInfo []byte, rootCid
 		msgChan      = make(chan bool, 1)
 	)
 	for {
-		if ci.cp.isExists(rootCid) {
+		if ci.ct.isExists(rootCid) {
 			ticker.Stop()
 			ci.syncLk.Lock()
 			ci.syncMsg[rootCid.String()] = msgChan
@@ -281,6 +279,8 @@ func (ci *ChunkInfo) GetFileList(overlay boson.Address) (fileListInfo map[string
 }
 
 func (ci *ChunkInfo) DelFile(rootCid boson.Address) bool {
+	ci.syncLk.Lock()
+	defer ci.syncLk.Unlock()
 	ci.queuesLk.Lock()
 	ci.CancelFindChunkInfo(rootCid)
 	delete(ci.queues, rootCid.String())
@@ -292,24 +292,33 @@ func (ci *ChunkInfo) DelFile(rootCid boson.Address) bool {
 	if !ci.DelChunkInfoSource(rootCid) {
 		return false
 	}
+	if !ci.cp.delRootCid(rootCid) {
+		return false
+	}
 	return ci.delPresence(rootCid)
 }
 
 func (ci *ChunkInfo) DelDiscover(rootCid boson.Address) {
+	ci.syncLk.Lock()
+	defer ci.syncLk.Unlock()
 	ci.queuesLk.Lock()
 	ci.CancelFindChunkInfo(rootCid)
 	delete(ci.queues, rootCid.String())
 	ci.queuesLk.Unlock()
 	ci.delDiscoverPresence(rootCid)
-	ci.DelChunkInfoSource(rootCid)
-}
-
-func (ci *ChunkInfo) DelPyramid(rootCid boson.Address) bool {
-	return ci.cp.delRootCid(rootCid)
 }
 
 //Record every chunk source.
-func (ci *ChunkInfo) OnChunkRecordSource(cid, rootCid, sourceOverlay boson.Address) error {
+func (ci *ChunkInfo) OnChunkRetrieved(cid, rootCid, sourceOverlay boson.Address) error {
+	ci.syncLk.Lock()
+	defer ci.syncLk.Unlock()
+	if err := ci.updateNeighborChunkInfo(rootCid, cid, ci.addr, sourceOverlay); err != nil {
+		return err
+	}
+	err := ci.cs.updatePyramidSource(rootCid, sourceOverlay)
+	if err != nil {
+		return err
+	}
 	return ci.UpdateChunkInfoSource(rootCid, sourceOverlay, cid)
 }
 

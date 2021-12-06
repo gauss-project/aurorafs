@@ -24,8 +24,16 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 )
 
+type authenticator interface {
+	Authorize(string) bool
+	GenerateKey(string, int) (string, error)
+	Enforce(string, string, string) (bool, error)
+}
+
 // Service implements http.Handler interface to be used in HTTP server.
 type Service struct {
+	restricted     bool
+	auth           authenticator
 	overlay        boson.Address
 	publicKey      ecdsa.PublicKey
 	p2p            p2p.DebugService
@@ -68,8 +76,10 @@ type Options struct {
 // to expose /addresses, /health endpoints, Go metrics and pprof. It is useful to expose
 // these endpoints before all dependencies are configured and injected to have
 // access to basic debugging tools and /health endpoint.
-func New(overlay boson.Address, publicKey ecdsa.PublicKey, logger logging.Logger, tracer *tracing.Tracer, corsAllowedOrigins []string, o Options) *Service {
+func New(overlay boson.Address, publicKey ecdsa.PublicKey, logger logging.Logger, tracer *tracing.Tracer, corsAllowedOrigins []string, restrict bool, auth authenticator, o Options) *Service {
 	s := new(Service)
+	s.auth = auth
+	s.restricted = restrict
 	s.overlay = overlay
 	s.publicKey = publicKey
 	s.logger = logger

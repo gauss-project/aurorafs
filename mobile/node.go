@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/ecdsa"
 	"fmt"
+	"github.com/gauss-project/aurorafs/pkg/aurora"
 	"io"
 	"os"
 	"time"
@@ -47,7 +48,9 @@ func NewNode(o *Options) (*Node, error) {
 
 	logger.Infof("version: %v", Version())
 
+	mode := aurora.NewModel()
 	if o.EnableFullNode {
+		mode.SetMode(aurora.FullNode)
 		logger.Info("start node mode full.")
 	} else {
 		logger.Info("start node mode light.")
@@ -56,12 +59,12 @@ func NewNode(o *Options) (*Node, error) {
 	config := o.export()
 	p2pAddr := fmt.Sprintf("%s:%d", listenAddress, o.P2PPort)
 
-	aurora, err := node.NewAurora(p2pAddr, signerConfig.address, *signerConfig.publicKey, signerConfig.signer, uint64(o.NetworkID), logger, signerConfig.libp2pPrivateKey, config)
+	auroraNode, err := node.NewAurora(mode, p2pAddr, signerConfig.address, *signerConfig.publicKey, signerConfig.signer, uint64(o.NetworkID), logger, signerConfig.libp2pPrivateKey, config)
 	if err != nil {
 		return nil, err
 	}
 
-	return &Node{node: aurora, opts: o, logger: logger}, nil
+	return &Node{node: auroraNode, opts: o, logger: logger}, nil
 }
 
 func (n *Node) Stop() error {

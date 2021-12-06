@@ -153,12 +153,22 @@ func (cp *chunkPyramid) getChunkCid(rootCid boson.Address) []*PyramidCidNum {
 	cp.RLock()
 	defer cp.RUnlock()
 	v := cp.pyramid[rootCid.String()]
+	//mate := cp.mateData[rootCid.String()]
+	//cids := make([]*PyramidCidNum, 0, len(v)+len(mate))
 	cids := make([]*PyramidCidNum, 0, len(v))
 	for overlay, c := range v {
 		over := boson.MustParseHexAddress(overlay)
 		pcn := PyramidCidNum{Cid: over, Number: c.number}
 		cids = append(cids, &pcn)
 	}
+	// pyramid data is not deleted when gc
+	//for overlay, _ := range mate {
+	//	over := boson.MustParseHexAddress(overlay)
+	//	if _, ok := cp.pyramid[rootCid.String()][overlay]; !ok {
+	//		pcn := PyramidCidNum{Cid: over, Number: 1}
+	//		cids = append(cids, &pcn)
+	//	}
+	//}
 	return cids
 }
 
