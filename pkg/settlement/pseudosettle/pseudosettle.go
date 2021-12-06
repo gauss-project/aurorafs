@@ -110,8 +110,11 @@ func totalKeyPeer(key []byte, prefix string) (peer boson.Address, err error) {
 
 // Pay initiates a payment to the given peer
 func (s *Service) Pay(ctx context.Context, peer boson.Address, paymentThreshold *big.Int) error {
-
-	return nil
+	traffic, err := s.RetrieveTraffic(peer)
+	if err != nil {
+		return err
+	}
+	return s.notifyPaymentFunc(peer, traffic)
 
 }
 
