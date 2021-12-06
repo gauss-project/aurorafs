@@ -15,9 +15,7 @@ import (
 )
 
 var (
-	_                     Interface = (*Accounting)(nil)
-	balancesPrefix        string    = "accounting_balance_"
-	balancesSurplusPrefix string    = "accounting_surplusbalance_"
+	_ Interface = (*Accounting)(nil)
 
 	// ErrDisconnectThresholdExceeded denotes a peer has exceeded the disconnect threshold.
 	ErrDisconnectThresholdExceeded = errors.New("disconnect threshold exceeded")
@@ -56,7 +54,7 @@ type payChan struct {
 type accountingPeer struct {
 	lock             sync.Mutex
 	paymentThreshold *big.Int
-	unPayTraffic     *big.Int
+	unPaidTraffic    *big.Int
 }
 
 // NewAccounting creates a new Accounting instance with the provided options.
@@ -90,17 +88,16 @@ func (a *Accounting) Reserve(peer boson.Address, traffic uint64) (err error) {
 	}
 	accountingPeer.lock.Lock()
 	defer accountingPeer.lock.Unlock()
+	retrieve := accountingPeer.unPaidTraffic
+
+	if retrieve.Cmp(big.NewInt(0)) == 0 {
+		retrieve, err = a.settlement.RetrieveTraffic(peer)
+		if err != nil {
+			a.logger.Errorf("retrieve %s", retrieve)
+			return err
+		}
+	}
 	for {
-		retrieve := accountingPeer.unPayTraffic
-
-		//if retrieve.Cmp(big.NewInt(0)) == 0 {
-		//	retrieve, err = a.settlement.RetrieveTraffic(peer)
-		//	if err != nil {
-		//		a.logger.Errorf("retrieve %s", retrieve)
-		//		return err
-		//	}
-		//}
-
 		ret := big.NewInt(0).Add(retrieve, new(big.Int).SetUint64(traffic))
 		available, err := a.settlement.AvailableBalance()
 		if err != nil {
@@ -112,7 +109,7 @@ func (a *Accounting) Reserve(peer boson.Address, traffic uint64) (err error) {
 		}
 		if retrieve.Cmp(a.paymentTolerance) < 0 {
 			// todo prevent frequent loop logic
-			accountingPeer.unPayTraffic = ret
+			accountingPeer.unPaidTraffic = ret
 			break
 		}
 
@@ -134,8 +131,8 @@ func (a *Accounting) Credit(ctx context.Context, peer boson.Address, traffic uin
 		a.logger.Errorf("failed to modify retrieve traffic")
 		return err
 	}
-	balance, err := a.settlement.RetrieveTraffic(peer)
-	if balance.Cmp(accountingPeer.paymentThreshold) >= 0 {
+	unPaid := accountingPeer.unPaidTraffic
+	if unPaid.Cmp(accountingPeer.paymentThreshold) >= 0 {
 		a.payChan <- payChan{
 			ctx:              ctx,
 			peer:             peer,
@@ -202,7 +199,7 @@ func (a *Accounting) getAccountingPeer(peer boson.Address) (*accountingPeer, err
 	if !ok {
 		peerData = &accountingPeer{
 			paymentThreshold: a.paymentThreshold,
-			unPayTraffic:     big.NewInt(0),
+			unPaidTraffic:    big.NewInt(0),
 		}
 		a.accountingPeers[peer.String()] = peerData
 	}
@@ -217,14 +214,14 @@ func (a *Accounting) NotifyPayment(peer boson.Address, traffic *big.Int) error {
 
 	accountingPeer.lock.Lock()
 	defer accountingPeer.lock.Unlock()
-	unPay := accountingPeer.unPayTraffic
+	unPay := accountingPeer.unPaidTraffic
 	if unPay.Cmp(big.NewInt(0)) <= 0 {
 		return nil
 	}
 	if unPay.Cmp(traffic) < 0 {
-		accountingPeer.unPayTraffic = big.NewInt(0)
+		accountingPeer.unPaidTraffic = big.NewInt(0)
 	} else {
-		accountingPeer.unPayTraffic = new(big.Int).Sub(unPay, traffic)
+		accountingPeer.unPaidTraffic = new(big.Int).Sub(unPay, traffic)
 	}
 	return nil
 }
