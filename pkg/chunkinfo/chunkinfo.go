@@ -237,7 +237,7 @@ func (ci *ChunkInfo) OnChunkTransferred(cid, rootCid boson.Address, overlay, tar
 }
 
 func (ci *ChunkInfo) GetChunkPyramid(rootCid boson.Address) []*PyramidCidNum {
-	return ci.cp.getChunkCid(rootCid)
+	return ci.cp.getUnRepeatChunk(rootCid)
 }
 
 func (ci *ChunkInfo) IsDiscover(rootCid boson.Address) bool {
