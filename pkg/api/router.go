@@ -175,7 +175,7 @@ func (s *server) setupRouting() {
 	handle("/traffic/cash/{address}", web.ChainHandlers(
 		s.gatewayModeForbidEndpointHandler,
 		web.FinalHandler(jsonhttp.MethodHandler{
-			"GET": http.HandlerFunc(s.cashCheque),
+			"POST": http.HandlerFunc(s.cashCheque),
 		})),
 	)
 

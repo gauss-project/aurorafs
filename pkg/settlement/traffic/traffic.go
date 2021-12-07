@@ -319,7 +319,7 @@ func (s *Service) TrafficInfo() (*TrafficInfo, error) {
 	for _, v := range s.trafficPeers.trafficPeers {
 		traffic := v
 		cashed = new(big.Int).Add(cashed, traffic.retrieveChainTraffic)
-		transfer = new(big.Int).Add(transfer, traffic.retrieveTraffic)
+		transfer = new(big.Int).Add(transfer, traffic.retrieveChequeTraffic)
 		respTraffic.TotalSendTraffic = new(big.Int).Add(respTraffic.TotalSendTraffic, traffic.transferChequeTraffic)
 		respTraffic.ReceivedTraffic = new(big.Int).Add(respTraffic.ReceivedTraffic, traffic.retrieveChequeTraffic)
 	}
@@ -343,7 +343,7 @@ func (s *Service) TrafficCheques() ([]*TrafficCheque, error) {
 				OutstandingTraffic: new(big.Int).Sub(traffic.transferChequeTraffic, traffic.retrieveChequeTraffic),
 				SendTraffic:        traffic.transferChequeTraffic,
 				ReceivedTraffic:    traffic.retrieveChequeTraffic,
-				Total:              new(big.Int).Sub(traffic.transferTraffic, traffic.retrieveTraffic),
+				Total:              new(big.Int).Sub(traffic.transferChequeTraffic, traffic.retrieveChequeTraffic),
 				Uncashed:           new(big.Int).Sub(traffic.transferChequeTraffic, traffic.transferChainTraffic),
 			}
 			trafficCheques = append(trafficCheques, trafficCheque)
