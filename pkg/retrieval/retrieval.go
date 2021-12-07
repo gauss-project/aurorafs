@@ -389,9 +389,7 @@ func (s *Service) handler(ctx context.Context, p p2p.Peer, stream p2p.Stream) (e
 			return fmt.Errorf("get from store: %w", err)
 		}
 	}
-	// todo
-	var dataSize = uint64(len(chunk.Data()) * 8)
-	if err := s.accounting.Debit(p.Address, dataSize); err != nil {
+	if err := s.accounting.Debit(p.Address, 256*1024*8); err != nil {
 		return err
 	}
 	if err := w.WriteMsgWithContext(ctx, &pb.Delivery{
