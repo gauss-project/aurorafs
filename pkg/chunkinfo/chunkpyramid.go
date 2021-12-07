@@ -162,7 +162,7 @@ func (ci *ChunkInfo) doFindChunkPyramid(ctx context.Context, authInfo []byte, ro
 	return ci.sendPyramids(ctx, overlay, streamPyramidName, req)
 }
 
-func (cp *chunkPyramid) getChunkCid(rootCid boson.Address) []*PyramidCidNum {
+func (cp *chunkPyramid) getUnRepeatChunk(rootCid boson.Address) []*PyramidCidNum {
 	cp.RLock()
 	defer cp.RUnlock()
 	v := cp.pyramid[rootCid.String()]
@@ -188,6 +188,19 @@ func (cp *chunkPyramid) getChunkCid(rootCid boson.Address) []*PyramidCidNum {
 			pcn := PyramidCidNum{Cid: over, Number: 1}
 			cids = append(cids, &pcn)
 		}
+	}
+	return cids
+}
+
+func (cp *chunkPyramid) getChunkCid(rootCid boson.Address) []*PyramidCidNum {
+	cp.RLock()
+	defer cp.RUnlock()
+	v := cp.pyramid[rootCid.String()]
+	cids := make([]*PyramidCidNum, 0, len(v))
+	for overlay, c := range v {
+		over := boson.MustParseHexAddress(overlay)
+		pcn := PyramidCidNum{Cid: over, Number: c.number}
+		cids = append(cids, &pcn)
 	}
 	return cids
 }
