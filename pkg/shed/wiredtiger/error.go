@@ -13,22 +13,22 @@ import (
 
 type Error struct {
 	code int
-	s    *session
+	err  error
 }
 
 func NewError(code int, s ...*session) Error {
 	e := Error{code: code}
 
 	if len(s) > 0 {
-		e.s = s[0]
+		e.err = s[0].strerror(code)
 	}
 
 	return e
 }
 
 func (e Error) Error() string {
-	if e.s != nil {
-		return e.s.strerror(e.code).Error()
+	if e.err != nil {
+		return e.err.Error()
 	}
 
 	err := C.wiredtiger_strerror(C.int(e.code))

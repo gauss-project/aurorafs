@@ -49,7 +49,7 @@ func (t *transaction) Put(key driver.Key, value driver.Value) (err error) {
 		return ErrInvalidArgument
 	}
 
-	c, err := t.s.openCursor(obj, nil)
+	c, err := t.s.openCursor(obj, &cursorOption{Overwrite: true})
 	if err != nil {
 		return err
 	}
@@ -84,7 +84,12 @@ func (t *transaction) Delete(key driver.Key) (err error) {
 		}
 	}()
 
-	return c.remove(k)
+	err = c.remove(k)
+	if err != nil && IsNotFound(err) {
+		return driver.ErrNotFound
+	}
+
+	return
 }
 
 func (t *transaction) Commit() (err error) {
@@ -96,6 +101,10 @@ func (t *transaction) Commit() (err error) {
 
 	if t.sync {
 		config = C.CString("sync=on")
+	}
+
+	if !t.stat.commitTime.IsZero() {
+		return nil
 	}
 
 	// if commit successful, put session back
@@ -117,13 +126,17 @@ func (t *transaction) Commit() (err error) {
 }
 
 func (t *transaction) Rollback() error {
+	if !t.s.txn {
+		return nil
+	}
 	if !t.stat.commitTime.IsZero() {
 		return nil
 	}
 
+	t.s.txn = false
+
 	// always put it back
 	defer func() {
-		t.s.txn = false
 		t.db.pool.PutLock(t.s, t.txnId)
 	}()
 

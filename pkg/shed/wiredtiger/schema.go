@@ -94,11 +94,12 @@ func (db *DB) CreateIndex(spec driver.IndexSpec) ([]byte, error) {
 		return nil, err
 	}
 	key := append([]byte(indexMetadataKeyPrefix), []byte(spec.Name)...)
+	prefix := indexKeyPrefix
 	err = c.insert(key, []byte(indexMetadataPlaceholder))
 	switch {
 	case err == nil:
 		// create index table
-		err = s.create(dataSource{dataType: tableSource, sourceName: string(append([]byte(indexTablePrefix), indexKeyPrefix))}, &createOption{
+		err = s.create(dataSource{dataType: tableSource, sourceName: string(append([]byte(indexTablePrefix), prefix))}, &createOption{
 			SourceType:        "file",
 			MemoryPageMax:     10485760, // 10M
 			SplitPct:          90,
@@ -118,7 +119,7 @@ func (db *DB) CreateIndex(spec driver.IndexSpec) ([]byte, error) {
 		indexKeyPrefix++
 		fallthrough
 	case IsDuplicateKey(err):
-		return []byte{indexKeyPrefix}, nil
+		return []byte{prefix}, nil
 	}
 	return nil, err
 }

@@ -9,10 +9,22 @@ type batch struct {
 }
 
 func (b *batch) Put(key driver.Key, value driver.Value) (err error) {
+	defer func() {
+		if err != nil {
+			b.transaction.err = err
+			_ = b.Rollback()
+		}
+	}()
 	return b.transaction.Put(key, value)
 }
 
 func (b *batch) Delete(key driver.Key) (err error) {
+	defer func() {
+		if err != nil {
+			b.transaction.err = err
+			_ = b.Rollback()
+		}
+	}()
 	return b.transaction.Delete(key)
 }
 

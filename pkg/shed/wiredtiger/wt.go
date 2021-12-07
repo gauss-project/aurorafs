@@ -156,7 +156,7 @@ func (db *DB) Put(key driver.Key, value driver.Value) error {
 		return ErrInvalidArgument
 	}
 
-	c, err := s.openCursor(obj, nil)
+	c, err := s.openCursor(obj, &cursorOption{Overwrite: true})
 	if err != nil {
 		return err
 	}
