@@ -88,7 +88,10 @@ func (s *Service) initHandler(ctx context.Context, p p2p.Peer, stream p2p.Stream
 	if err != nil {
 		return err
 	}
-	s.traffic.Handshake(p.Address, common.BytesToAddress(req.Address), c)
+	err = s.traffic.Handshake(p.Address, common.BytesToAddress(req.Address), c)
+	if err != nil {
+		s.logging.Error(err)
+	}
 
 	receiveCheque, _ := s.traffic.LastReceivedCheque(p.Address)
 

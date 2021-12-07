@@ -601,7 +601,7 @@ func (s *Service) Handshake(peer boson.Address, recipient common.Address, cheque
 			return err
 		}
 	} else {
-		if cheque.Recipient != recipientLocal {
+		if cheque.Signature != nil && cheque.Recipient != recipientLocal {
 			return fmt.Errorf("error in verifying check receiver ")
 		}
 	}
