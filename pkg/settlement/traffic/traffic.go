@@ -71,6 +71,8 @@ type ApiInterface interface {
 	Address() common.Address
 
 	TrafficInfo() (*TrafficInfo, error)
+
+	TrafficInit() error
 }
 
 type Service struct {
@@ -747,4 +749,8 @@ func (s *Service) GetUnPaidBalance(peer boson.Address) (*big.Int, error) {
 	}
 
 	return transferTraffic, nil
+}
+
+func (s *Service) TrafficInit() error {
+	return s.Init()
 }

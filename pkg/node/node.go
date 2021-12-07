@@ -426,6 +426,9 @@ func NewAurora(nodeMode aurora.Model, addr string, bosonAddress boson.Address, p
 
 		// inject dependencies and configure full debug api http path routes
 		debugAPIService.Configure(p2ps, pingPong, kad, lightNodes, bootNodes, storer, route, chunkInfo, retrieve)
+		if apiInterface != nil {
+			debugAPIService.MustRegisterTraffic(apiInterface)
+		}
 	}
 
 	if err := kad.Start(p2pCtx); err != nil {

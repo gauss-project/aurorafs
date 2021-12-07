@@ -339,3 +339,7 @@ func (s *Service) TrafficInfo() (*traffic.TrafficInfo, error) {
 
 	return respTraffic, nil
 }
+
+func (s *Service) TrafficInit() error {
+	return nil
+}
