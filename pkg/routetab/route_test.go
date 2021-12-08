@@ -117,13 +117,7 @@ func newTestNode(t *testing.T) *Node {
 	p2ps.SetPickyNotifier(kad)
 
 	stream := streamtest.New(streamtest.WithBaseAddr(base.Overlay))
-	service := routetab.New(base.Overlay, context.Background(), p2ps, kad, mockstate.NewStateStore(), noopLogger)
-	service.SetConfig(routetab.Config{
-		AddressBook: ab,
-		NetworkID:   networkId,
-		LightNodes:  lightnode.NewContainer(base.Overlay),
-		Stream:      stream,
-	})
+	service := routetab.New(base.Overlay, context.Background(), p2ps, stream, ab, networkId, lightnode.NewContainer(base.Overlay), kad, mockstate.NewStateStore(), noopLogger, routetab.Options{})
 
 	return &Node{
 		overlay: base.Overlay,
@@ -168,6 +162,7 @@ func (s *Node) addOne(t *testing.T, peer *aurora.Address, connect bool) {
 }
 
 func TestService_FindUnderlay(t *testing.T) {
+	t.Skipf("test new relayStream")
 	ctx := context.Background()
 
 	// connect 0--1--2--3--4--5
@@ -185,57 +180,80 @@ func TestService_FindUnderlay(t *testing.T) {
 	if len(route) != 1 {
 		t.Fatalf("expect dest 4 route path len 1,got %d", len(route))
 	}
-	t.Run("find route", func(t *testing.T) {
-		// check route
-		for i := 0; i < 3; i++ {
-			_, err = nodes[0].GetRoute(ctx, nodes[4].overlay)
-			if err != nil {
-				t.Fatalf("i=%d %s", i, err)
-			}
-		}
-		for i := 0; i < 2; i++ {
-			_, err = nodes[i].GetRoute(ctx, nodes[3].overlay)
-			if err != nil {
-				t.Fatal(err)
-			}
-		}
-		_, err = nodes[0].GetRoute(ctx, nodes[2].overlay)
-		if err != nil {
-			t.Fatal(err)
-		}
-		_, err = nodes[0].GetRoute(ctx, nodes[1].overlay)
-		if !errors.Is(err, routetab.ErrNotFound) {
-			t.Fatalf("node 0 expect dest 1 not found")
-		}
-		_, err = nodes[1].GetRoute(ctx, nodes[2].overlay)
-		if !errors.Is(err, routetab.ErrNotFound) {
-			t.Fatalf("node 1 expect dest 2 not found")
-		}
-	})
 
-	t.Run("find underlay", func(t *testing.T) {
-		t.Skipf("test new relayStream")
-		// check find underlay
-		_, err = nodes[0].book.Get(nodes[3].overlay)
-		if !errors.Is(err, addressbook.ErrNotFound) {
-			t.Fatalf("node 0 expect dest 3 underlay not found")
-		}
-		if nodes[0].IsNeighbor(nodes[3].overlay) {
-			t.Fatalf("node 0 expect dest 3 not neighbor")
-		}
-		err = nodes[0].Connect(ctx, nodes[3].overlay)
-		if err != nil {
-			t.Fatal(err)
-		}
-		addr, err := nodes[0].book.Get(nodes[3].overlay)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if !nodes[3].addr.Equal(addr) {
-			t.Fatalf("expect address equal")
-		}
-	})
+	// check find underlay
+	_, err = nodes[0].book.Get(nodes[3].overlay)
+	if !errors.Is(err, addressbook.ErrNotFound) {
+		t.Fatalf("node 0 expect dest 3 underlay not found")
+	}
+	if nodes[0].IsNeighbor(nodes[3].overlay) {
+		t.Fatalf("node 0 expect dest 3 not neighbor")
+	}
+	err = nodes[0].Connect(ctx, nodes[3].overlay)
+	if err != nil {
+		t.Fatal(err)
+	}
+	addr, err := nodes[0].book.Get(nodes[3].overlay)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !nodes[3].addr.Equal(addr) {
+		t.Fatalf("expect address equal")
+	}
+}
 
+func TestService_FindRoute(t *testing.T) {
+	ctx := context.Background()
+
+	// connect 0--1--2--3--4--5
+	nodes := createTopology(t, 6)
+
+	// find dest 4
+	_, err := nodes[0].GetRoute(ctx, nodes[4].overlay)
+	if !errors.Is(err, routetab.ErrNotFound) {
+		t.Fatalf("expect dest 4 route not found")
+	}
+	route, err := nodes[0].FindRoute(ctx, nodes[4].overlay)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(route) != 1 {
+		t.Fatalf("expect dest 4 route path len 1,got %d", len(route))
+	}
+
+	// check underlay
+	underlay, err := nodes[0].kad.GetAuroraAddress(nodes[4].overlay)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !underlay.Overlay.Equal(nodes[4].overlay) {
+		t.Fatal(err)
+	}
+	// check route
+	for i := 0; i < 3; i++ {
+		_, err = nodes[0].GetRoute(ctx, nodes[4].overlay)
+		if err != nil {
+			t.Fatalf("i=%d %s", i, err)
+		}
+	}
+	for i := 0; i < 2; i++ {
+		_, err = nodes[i].GetRoute(ctx, nodes[3].overlay)
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	_, err = nodes[0].GetRoute(ctx, nodes[2].overlay)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = nodes[0].GetRoute(ctx, nodes[1].overlay)
+	if !errors.Is(err, routetab.ErrNotFound) {
+		t.Fatalf("node 0 expect dest 1 not found")
+	}
+	_, err = nodes[1].GetRoute(ctx, nodes[2].overlay)
+	if !errors.Is(err, routetab.ErrNotFound) {
+		t.Fatalf("node 1 expect dest 2 not found")
+	}
 }
 
 func TestService_FindRouteLoopBack(t *testing.T) {
@@ -272,8 +290,8 @@ func TestService_FindRouteLoopBack(t *testing.T) {
 		t.Fatalf("expect node 0 connected 3")
 	}
 
-	routetab.DefaultNeighborAlpha = 4
-	atomic.StoreInt32(&routetab.MaxTTL,4)
+	routetab.NeighborAlpha = 4
+	atomic.StoreInt32(&routetab.MaxTTL, 4)
 	// find dest 4
 	_, err := nodes[0].GetRoute(ctx, nodes[4].overlay)
 	if !errors.Is(err, routetab.ErrNotFound) {
@@ -299,7 +317,7 @@ func TestService_FindRouteMaxTTL(t *testing.T) {
 	// connect 0--1--2--3--4
 	nodes := createTopology(t, 5)
 
-	atomic.StoreInt32(&routetab.MaxTTL,3)
+	atomic.StoreInt32(&routetab.MaxTTL, 3)
 	// find dest 4
 	_, err := nodes[0].GetRoute(ctx, nodes[4].overlay)
 	if !errors.Is(err, routetab.ErrNotFound) {
@@ -376,7 +394,7 @@ func TestService_GetTargetNeighbor(t *testing.T) {
 	// connect 0--1--2--3--4
 	nodes := createTopology(t, 5)
 
-	atomic.StoreInt32(&routetab.MaxTTL,5)
+	atomic.StoreInt32(&routetab.MaxTTL, 5)
 	neighbor, err := nodes[0].GetTargetNeighbor(ctx, nodes[4].overlay, 2)
 	if err != nil {
 		t.Fatal(err)

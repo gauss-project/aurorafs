@@ -29,41 +29,51 @@ const (
 	streamOnRouteReq     = "onRouteReq"
 	streamOnRouteResp    = "onRouteResp"
 	streamOnFindUnderlay = "onFindUnderlay"
-
-	peerConnectionAttemptTimeout = 5 * time.Second // Timeout for establishing a new connection with peer.
 )
 
 var (
-	errOverlayMismatch = errors.New("overlay mismatch")
-	errPruneEntry      = errors.New("prune entry")
+	MaxTTL        int32 = 10
+	NeighborAlpha int32 = 2
+	gcTime              = time.Minute * 10
+	gcInterval          = time.Minute
+	findTimeOut         = time.Second * 2 // find route timeout
+)
 
-	MaxTTL               int32 = 10
-	DefaultNeighborAlpha int32 = 2
-	gcTime                     = time.Minute * 10
-	gcInterval                 = time.Minute
-	findTimeOut                = time.Second * 2 // find route timeout
+const (
+	uTypeZero int32 = iota // Don't do anything
+	uTypeTarget
 )
 
 type Service struct {
 	self         boson.Address
 	p2ps         p2p.Service
+	stream       p2p.Streamer
 	logger       logging.Logger
 	metrics      metrics
 	pendingCalls *pendCallResTab
 	routeTable   *Table
 	kad          *kademlia.Kad
-	config       Config
+	lightNodes   *lightnode.Container
 	singleflight singleflight.Group
+	networkID    uint64
+	addressbook  addressbook.Interface
 }
 
-type Config struct {
-	AddressBook addressbook.Interface
-	NetworkID   uint64
-	LightNodes  *lightnode.Container
-	Stream      p2p.Streamer
+type Options struct {
+	Alpha int32
 }
 
-func New(self boson.Address, ctx context.Context, p2ps p2p.Service, kad *kademlia.Kad, store storage.StateStorer, logger logging.Logger) *Service {
+func New(self boson.Address,
+	ctx context.Context,
+	p2ps p2p.Service,
+	stream p2p.Streamer,
+	addressbook addressbook.Interface,
+	networkID uint64,
+	lightNodes *lightnode.Container,
+	kad *kademlia.Kad,
+	store storage.StateStorer,
+	logger logging.Logger,
+	o Options) *Service {
 	// load route table from db only those valid item will be loaded
 
 	met := newMetrics()
@@ -71,19 +81,24 @@ func New(self boson.Address, ctx context.Context, p2ps p2p.Service, kad *kademli
 	service := &Service{
 		self:         self,
 		p2ps:         p2ps,
+		stream:       stream,
 		logger:       logger,
+		addressbook:  addressbook,
+		networkID:    networkID,
+		lightNodes:   lightNodes,
 		kad:          kad,
 		pendingCalls: newPendCallResTab(),
 		routeTable:   newRouteTable(self, store),
 		metrics:      met,
 	}
+
+	if o.Alpha > 0 {
+		NeighborAlpha = o.Alpha
+	}
+
 	// start route service
 	service.start(ctx)
 	return service
-}
-
-func (s *Service) SetConfig(cfg Config) {
-	s.config = cfg
 }
 
 // Close implement for Closer Interface
@@ -184,6 +199,7 @@ func (s *Service) onRouteReq(ctx context.Context, p p2p.Peer, stream p2p.Stream)
 	s.metrics.FindRouteReqReceivedCount.Inc()
 	// passive route save
 	s.routeTable.SavePaths(req.Paths)
+	s.saveUnderlay(req.UList)
 
 	for _, v := range req.Paths {
 		items := v.Items // request path only one
@@ -201,7 +217,7 @@ func (s *Service) onRouteReq(ctx context.Context, p p2p.Peer, stream p2p.Stream)
 
 	if s.self.Equal(target) {
 		// resp
-		s.doRouteResp(ctx, p.Address, target, nil, nil)
+		s.doRouteResp(ctx, p.Address, target, boson.ZeroAddress, nil, nil, req.UType)
 		return nil
 	}
 	if s.IsNeighbor(target) {
@@ -214,9 +230,19 @@ func (s *Service) onRouteReq(ctx context.Context, p p2p.Peer, stream p2p.Stream)
 	paths, err := s.GetRoute(ctx, target)
 	if err == nil && len(paths) > 0 {
 		// have route resp
-		s.logger.Tracef("route:%s onRouteReq target=%s in route table", s.self.String(), target.String())
-		s.doRouteResp(ctx, p.Address, target, nil, paths)
-		return nil
+		switch req.UType {
+		case uTypeTarget:
+			addr, _ := s.addressbook.Get(target)
+			if addr != nil {
+				s.logger.Tracef("route:%s onRouteReq target=%s in route table,uType=%d", s.self, target, req.UType)
+				s.doRouteResp(ctx, p.Address, target, target, nil, paths, req.UType)
+				return nil
+			}
+		case uTypeZero:
+			s.logger.Tracef("route:%s onRouteReq target=%s in route table,uType=%d", s.self, target, req.UType)
+			s.doRouteResp(ctx, p.Address, target, boson.ZeroAddress, nil, paths, req.UType)
+			return nil
+		}
 	}
 
 	// forward
@@ -255,20 +281,21 @@ func (s *Service) onRouteResp(ctx context.Context, peer p2p.Peer, stream p2p.Str
 	s.metrics.FindRouteRespReceivedCount.Inc()
 
 	s.routeTable.SavePaths(resp.Paths)
+	s.saveUnderlay(resp.UList)
 
 	// doing forward resp
 	s.respForward(ctx, target, peer.Address, &resp)
 	return nil
 }
 
-func (s *Service) respForward(ctx context.Context, target, next boson.Address, resp *pb.RouteResp) {
-	res := s.pendingCalls.Get(target, next)
+func (s *Service) respForward(ctx context.Context, target, last boson.Address, resp *pb.RouteResp) {
+	res := s.pendingCalls.Get(target, last)
 	skip := make([]boson.Address, 0)
 	for _, v := range res {
 		if !v.Src.Equal(s.self) {
 			if !v.Src.MemberOf(skip) {
 				// forward
-				s.doRouteResp(ctx, v.Src, target, resp, nil)
+				s.doRouteResp(ctx, v.Src, target, last, resp, nil)
 				skip = append(skip, v.Src)
 			}
 		} else if v.ResCh != nil {
@@ -282,11 +309,13 @@ func (s *Service) doRouteReq(ctx context.Context, next []boson.Address, src, tar
 	if req != nil {
 		// forward add sign
 		req.Paths = s.routeTable.generatePaths(req.Paths)
+		req.UList = s.convUnderlayList(req.UType, target, src, req.UList)
 	} else {
 		req = &pb.RouteReq{
 			Dest:  target.Bytes(),
-			Alpha: DefaultNeighborAlpha,
+			Alpha: NeighborAlpha,
 			Paths: s.routeTable.generatePaths(nil),
+			UType: uTypeTarget,
 		}
 	}
 	for _, v := range next {
@@ -298,18 +327,28 @@ func (s *Service) doRouteReq(ctx context.Context, next []boson.Address, src, tar
 	}
 }
 
-func (s *Service) doRouteResp(ctx context.Context, src, target boson.Address, resp *pb.RouteResp, paths []*Path) {
+func (s *Service) doRouteResp(ctx context.Context, src, target, last boson.Address, resp *pb.RouteResp, paths []*Path, uType ...int32) {
+	ut := func() int32 {
+		if len(uType) > 0 {
+			return uType[0]
+		}
+		return 0
+	}
 	if resp != nil {
 		resp.Paths = s.routeTable.generatePaths(resp.Paths)
+		resp.UList = s.convUnderlayList(resp.UType, target, last, resp.UList)
 	} else if len(paths) > 0 {
 		resp = &pb.RouteResp{
 			Dest:  target.Bytes(),
 			Paths: s.routeTable.convertPathsToPbPaths(paths),
+			UType: ut(),
 		}
+		resp.UList = s.convUnderlayList(resp.UType, target, last, resp.UList)
 	} else {
 		resp = &pb.RouteResp{
 			Dest:  target.Bytes(),
 			Paths: s.routeTable.generatePaths(nil),
+			UType: ut(),
 		}
 	}
 	s.sendDataToNode(ctx, src, streamOnRouteResp, resp)
@@ -318,7 +357,7 @@ func (s *Service) doRouteResp(ctx context.Context, src, target boson.Address, re
 
 func (s *Service) sendDataToNode(ctx context.Context, peer boson.Address, streamName string, msg protobuf.Message) {
 	s.logger.Tracef("route:%s sendDataToNode to %s %s", s.self.String(), peer.String(), streamName)
-	stream, err1 := s.config.Stream.NewStream(ctx, peer, nil, ProtocolName, ProtocolVersion, streamName)
+	stream, err1 := s.stream.NewStream(ctx, peer, nil, ProtocolName, ProtocolVersion, streamName)
 	if err1 != nil {
 		s.metrics.TotalErrors.Inc()
 		s.logger.Errorf("route: sendDataToNode NewStream, err1=%s", err1)
@@ -342,7 +381,7 @@ func (s *Service) sendDataToNode(ctx context.Context, peer boson.Address, stream
 
 func (s *Service) getNeighbor(target boson.Address, alpha int32, skip ...boson.Address) (forward []boson.Address) {
 	if alpha <= 0 {
-		alpha = DefaultNeighborAlpha
+		alpha = NeighborAlpha
 	}
 	depth := s.kad.NeighborhoodDepth()
 	po := boson.Proximity(s.self.Bytes(), target.Bytes())
@@ -390,7 +429,7 @@ func (s *Service) FindRoute(ctx context.Context, target boson.Address, timeout .
 		err = fmt.Errorf("target=%s is self", target.String())
 		return
 	}
-	forward := s.getNeighbor(target, DefaultNeighborAlpha, target)
+	forward := s.getNeighbor(target, NeighborAlpha, target)
 	if len(forward) > 0 {
 		if len(timeout) > 0 {
 			findTimeOut = timeout[0]
@@ -424,7 +463,7 @@ func (s *Service) FindRoute(ctx context.Context, target boson.Address, timeout .
 	return
 }
 
-func (s *Service) DelRoute(ctx context.Context, target boson.Address) error {
+func (s *Service) DelRoute(_ context.Context, target boson.Address) error {
 	route, err := s.routeTable.Get(target)
 	if err != nil {
 		return err
@@ -512,7 +551,7 @@ func (s *Service) Connect(ctx context.Context, target boson.Address) error {
 	return err
 }
 
-func (s *Service) isConnected(ctx context.Context, target boson.Address) bool {
+func (s *Service) isConnected(_ context.Context, target boson.Address) bool {
 	var isConnected bool
 	findFun := func(address boson.Address, u uint8) (stop, jumpToNext bool, err error) {
 		if target.Equal(address) {
@@ -526,7 +565,7 @@ func (s *Service) isConnected(ctx context.Context, target boson.Address) bool {
 		s.logger.Debugf("route: connect target in neighbor")
 		return true
 	}
-	_ = s.config.LightNodes.EachPeer(findFun)
+	_ = s.lightNodes.EachPeer(findFun)
 	if isConnected {
 		s.logger.Debugf("route: connect target(light) in neighbor")
 		return true
@@ -535,64 +574,14 @@ func (s *Service) isConnected(ctx context.Context, target boson.Address) bool {
 }
 
 func (s *Service) connect(ctx context.Context, peer boson.Address) (err error) {
-	needFindUnderlay := false
-	auroraAddr, err := s.config.AddressBook.Get(peer)
-	switch {
-	case errors.Is(err, addressbook.ErrNotFound):
-		s.logger.Debugf("route: empty address book entry for peer %s", peer)
-		s.kad.KnownPeers().Remove(peer)
-		needFindUnderlay = true
-	case err != nil:
-		s.logger.Debugf("route: failed to get address book entry for peer %s: %v", peer, err)
-		needFindUnderlay = true
-	default:
-	}
-
-	if needFindUnderlay {
-		auroraAddr, err = s.FindUnderlay(ctx, peer)
+	addr, err := s.kad.GetAuroraAddress(peer)
+	if err != nil {
+		addr, err = s.FindUnderlay(ctx, peer)
 		if err != nil {
 			return err
 		}
 	}
-
-	remove := func(peer boson.Address) {
-		s.kad.KnownPeers().Remove(peer)
-		if err := s.config.AddressBook.Remove(peer); err != nil {
-			s.logger.Debugf("route: could not remove peer %s from addressBook", peer)
-		}
-	}
-
-	ctx, cancel := context.WithTimeout(ctx, peerConnectionAttemptTimeout)
-	defer cancel()
-
-	s.logger.Tracef("route: connect to overlay=%s,underlay=%s", peer, auroraAddr.Underlay.String())
-
-	i, err := s.p2ps.Connect(ctx, auroraAddr.Underlay)
-	switch {
-	case errors.Is(err, p2p.ErrDialLightNode):
-		return errPruneEntry
-	case errors.Is(err, p2p.ErrAlreadyConnected):
-		if !i.Address.Equal(peer) {
-			return errOverlayMismatch
-		}
-		return nil
-	case errors.Is(err, context.Canceled):
-		return err
-	case err != nil:
-		s.logger.Debugf("route: could not connect to peer %s: %v", peer, err)
-		s.metrics.TotalOutboundConnectionFailedAttempts.Inc()
-		remove(peer)
-		return err
-	case !i.Address.Equal(peer):
-		_ = s.p2ps.Disconnect(peer, errOverlayMismatch.Error())
-		_ = s.p2ps.Disconnect(i.Address, errOverlayMismatch.Error())
-		return errOverlayMismatch
-	}
-
-	s.metrics.TotalOutboundConnections.Inc()
-	s.kad.Outbound(*i)
-
-	return nil
+	return s.kad.Connection(ctx, addr)
 }
 
 func (s *Service) getOrFindRoute(ctx context.Context, target boson.Address) (paths []*Path, err error) {
@@ -603,140 +592,8 @@ func (s *Service) getOrFindRoute(ctx context.Context, target boson.Address) (pat
 	return
 }
 
-// Deprecated
-func (s *Service) onFindUnderlayOld(ctx context.Context, p p2p.Peer, stream p2p.Stream) (err error) {
-	w, r := protobuf.NewWriterAndReader(stream)
-	defer func() {
-		go func() {
-			if err != nil {
-				_ = stream.Reset()
-			} else {
-				go stream.FullClose()
-			}
-		}()
-	}()
-
-	req := pb.UnderlayReq{}
-	if err = r.ReadMsgWithContext(ctx, &req); err != nil {
-		content := fmt.Sprintf("route: onFindUnderlay read msg: %s", err.Error())
-		s.logger.Errorf(content)
-		return fmt.Errorf(content)
-	}
-	target := boson.NewAddress(req.Dest)
-	s.logger.Tracef("find underlay dest %s receive: from %s", target.String(), p.Address.String())
-
-	address, err := s.config.AddressBook.Get(target)
-	if err == nil {
-		err = w.WriteMsgWithContext(ctx, &pb.UnderlayResp{
-			Dest:      req.Dest,
-			Underlay:  address.Underlay.Bytes(),
-			Signature: address.Signature,
-		})
-		if err != nil {
-			return err
-		}
-		s.logger.Tracef("find underlay dest %s send: to %s", target.String(), p.Address.String())
-		return nil
-	}
-	// get route
-	next, err := s.GetNextHopRandomOrFind(ctx, target)
-	if err != nil {
-		return err
-	}
-	stream2, err := s.config.Stream.NewStream(ctx, next, nil, ProtocolName, ProtocolVersion, streamOnFindUnderlay)
-	if err != nil {
-		return err
-	}
-	defer func() {
-		go func() {
-			if err != nil {
-				_ = stream2.Reset()
-			} else {
-				go stream2.FullClose()
-			}
-		}()
-	}()
-	w2, r2 := protobuf.NewWriterAndReader(stream2)
-	err = w2.WriteMsgWithContext(ctx, &req)
-	if err != nil {
-		return err
-	}
-	s.logger.Tracef("find underlay dest %s forward: to %s", target, next)
-	resp := &pb.UnderlayResp{}
-	if err = r2.ReadMsgWithContext(ctx, resp); err != nil {
-		content := fmt.Sprintf("route: onFindUnderlay read resp msg: %s", err.Error())
-		s.logger.Errorf(content)
-		return fmt.Errorf(content)
-	}
-	s.logger.Tracef("find underlay dest %s receive2: from %s", target, next)
-
-	address, err = aurora.ParseAddress(resp.Underlay, resp.Dest, resp.Signature, s.config.NetworkID)
-	if err != nil {
-		s.logger.Errorf("find underlay dest %s parse err %s", target.String(), err.Error())
-		return err
-	}
-	err = w.WriteMsgWithContext(ctx, resp)
-	if err != nil {
-		return err
-	}
-	s.logger.Tracef("find underlay dest %s send2: to %s", target.String(), p.Address.String())
-	err = s.config.AddressBook.Put(address.Overlay, *address)
-	return err
-}
-
-// Deprecated
-func (s *Service) findUnderlayOld(ctx context.Context, target boson.Address) (addr *aurora.Address, err error) {
-	next, err := s.GetNextHopRandomOrFind(ctx, target)
-	if err != nil {
-		return nil, err
-	}
-	stream, err := s.config.Stream.NewStream(ctx, next, nil, ProtocolName, ProtocolVersion, streamOnFindUnderlay)
-	if err != nil {
-		return nil, err
-	}
-
-	defer func() {
-		if err != nil {
-			_ = stream.Reset()
-		} else {
-			go stream.FullClose()
-		}
-	}()
-
-	w, r := protobuf.NewWriterAndReader(stream)
-	req := pb.UnderlayReq{
-		Dest: target.Bytes(),
-	}
-	if err = w.WriteMsgWithContext(ctx, &req); err != nil {
-		s.logger.Errorf("find underlay dest %s req err %s", target.String(), err.Error())
-		return nil, err
-	}
-
-	s.routeTable.updateUsedTime(target, next)
-
-	s.logger.Tracef("find underlay dest %s send to %s", target, next)
-
-	resp := &pb.UnderlayResp{}
-	if err = r.ReadMsgWithContext(ctx, resp); err != nil {
-		s.logger.Errorf("find underlay dest %s read msg: %s", target, err.Error())
-		return nil, err
-	}
-	s.logger.Tracef("find underlay dest %s receive: from %s", target, next)
-
-	addr, err = aurora.ParseAddress(resp.Underlay, resp.Dest, resp.Signature, s.config.NetworkID)
-	if err != nil {
-		s.logger.Errorf("find underlay dest %s parse err %s", target.String(), err.Error())
-		return nil, err
-	}
-	err = s.config.AddressBook.Put(addr.Overlay, *addr)
-	if err != nil {
-		return nil, err
-	}
-	return addr, nil
-}
-
 func (s *Service) FindUnderlay(ctx context.Context, target boson.Address) (addr *aurora.Address, err error) {
-	stream, err := s.config.Stream.NewRelayStream(ctx, target, nil, ProtocolName, ProtocolVersion, streamOnFindUnderlay, true)
+	stream, err := s.stream.NewRelayStream(ctx, target, nil, ProtocolName, ProtocolVersion, streamOnFindUnderlay, true)
 	if err != nil {
 		return nil, err
 	}
@@ -764,12 +621,12 @@ func (s *Service) FindUnderlay(ctx context.Context, target boson.Address) (addr 
 		return nil, err
 	}
 
-	addr, err = aurora.ParseAddress(resp.Underlay, resp.Dest, resp.Signature, s.config.NetworkID)
+	addr, err = aurora.ParseAddress(resp.Underlay, resp.Dest, resp.Signature, s.networkID)
 	if err != nil {
 		s.logger.Errorf("find underlay dest %s parse err %s", target.String(), err.Error())
 		return nil, err
 	}
-	err = s.config.AddressBook.Put(addr.Overlay, *addr)
+	err = s.addressbook.Put(addr.Overlay, *addr)
 	if err != nil {
 		return nil, err
 	}
@@ -793,7 +650,7 @@ func (s *Service) onFindUnderlay(ctx context.Context, p p2p.Peer, stream p2p.Str
 	}
 	target := boson.NewAddress(req.Dest)
 	s.logger.Tracef("find underlay dest %s receive: from %s", target.String(), p.Address.String())
-	address, err := s.config.AddressBook.Get(target)
+	address, err := s.addressbook.Get(target)
 	if err == nil {
 		err = w.WriteMsgWithContext(ctx, &pb.UnderlayResp{
 			Dest:      req.Dest,
@@ -915,7 +772,7 @@ func (s *Service) onRelay(ctx context.Context, p p2p.Peer, stream p2p.Stream) (e
 						break
 					}
 				}
-				forwardStream, err = s.config.Stream.NewStream(ctx, next, stream.Headers(), ProtocolName, ProtocolVersion, StreamOnRelay)
+				forwardStream, err = s.stream.NewStream(ctx, next, stream.Headers(), ProtocolName, ProtocolVersion, StreamOnRelay)
 				if err != nil {
 					errChan <- err
 					break
@@ -1049,4 +906,37 @@ func (s *Service) PackRelayResp(ctx context.Context, stream p2p.Stream, reqCh ch
 		}
 	}()
 	return
+}
+
+func (s *Service) convUnderlayList(uType int32, target, last boson.Address, old []*pb.UnderlayResp) (out []*pb.UnderlayResp) {
+	switch uType {
+	case uTypeTarget:
+		if target.Equal(last) {
+			addr, _ := s.addressbook.Get(target)
+			if addr != nil {
+				out = []*pb.UnderlayResp{{
+					Dest:      target.Bytes(),
+					Underlay:  addr.Underlay.Bytes(),
+					Signature: addr.Signature,
+				}}
+				return
+			}
+		}
+		return old
+	}
+	return
+}
+
+func (s *Service) saveUnderlay(uList []*pb.UnderlayResp) {
+	for _, v := range uList {
+		addr, err := aurora.ParseAddress(v.Underlay, v.Dest, v.Signature, s.networkID)
+		if err != nil {
+			s.logger.Errorf("route: parse aurora address %s", err.Error())
+		} else {
+			err = s.addressbook.Put(addr.Overlay, *addr)
+			if err != nil {
+				s.logger.Errorf("route: address book put %s", err.Error())
+			}
+		}
+	}
 }

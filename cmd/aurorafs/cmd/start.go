@@ -146,6 +146,7 @@ func (c *command) initStartCmd() (err error) {
 				Restricted:         c.config.GetBool(optionNameRestrictedAPI),
 				TokenEncryptionKey: c.config.GetString(optionNameTokenEncryptionKey),
 				AdminPasswordHash:  c.config.GetString(optionNameAdminPasswordHash),
+				RouteAlpha:         c.config.GetInt32(optionNameRouteAlpha),
 			})
 			if err != nil {
 				return err

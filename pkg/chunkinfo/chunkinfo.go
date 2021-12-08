@@ -147,6 +147,9 @@ func (ci *ChunkInfo) Init(ctx context.Context, authInfo []byte, rootCid boson.Ad
 		}
 		return ci.FindChunkInfo(context.Background(), authInfo, rootCid, overlays), nil
 	})
+	if v == nil {
+		return false
+	}
 	return v.(bool)
 }
 

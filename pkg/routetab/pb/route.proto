@@ -17,12 +17,16 @@ message UnderlayReq {
 message RouteResp {
   bytes Dest = 1;
   repeated Path Paths = 2;
+  int32 UType = 3;
+  repeated UnderlayResp UList = 4;
 }
 
 message RouteReq {
   bytes Dest = 1;
   int32 Alpha = 2;
   repeated Path Paths = 3;
+  int32 UType = 4;
+  repeated UnderlayResp UList = 5;
 }
 
 message Path {
