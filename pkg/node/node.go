@@ -7,8 +7,6 @@ import (
 	"context"
 	"crypto/ecdsa"
 	"fmt"
-	"github.com/gauss-project/aurorafs/pkg/accounting"
-	"github.com/gauss-project/aurorafs/pkg/auth"
 	"io"
 	"log"
 	"math/big"
@@ -17,9 +15,11 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/gauss-project/aurorafs/pkg/accounting"
 	"github.com/gauss-project/aurorafs/pkg/addressbook"
 	"github.com/gauss-project/aurorafs/pkg/api"
 	"github.com/gauss-project/aurorafs/pkg/aurora"
+	"github.com/gauss-project/aurorafs/pkg/auth"
 	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/chunkinfo"
 	"github.com/gauss-project/aurorafs/pkg/crypto"
@@ -353,16 +353,16 @@ func NewAurora(nodeMode aurora.Model, addr string, bosonAddress boson.Address, p
 	storer.WithChunkInfo(chunkInfo)
 	retrieve.Config(chunkInfo)
 
-	//multiResolver := multiresolver.NewMultiResolver(
-	//	multiresolver.WithConnectionConfigs(o.ResolverConnectionCfgs),
-	//	multiresolver.WithLogger(o.Logger),
-	//)
-	//b.resolverCloser = multiResolver
+	multiResolver := multiresolver.NewMultiResolver(
+		multiresolver.WithConnectionConfigs(o.ResolverConnectionCfgs),
+		multiresolver.WithLogger(o.Logger),
+	)
+	b.resolverCloser = multiResolver
 
 	var apiService api.Service
 	if o.APIAddr != "" {
 		// API server
-		apiService = api.New(ns, nil, bosonAddress, chunkInfo, traversalService, pinningService, authenticator, logger, tracer, apiInterface, api.Options{
+		apiService = api.New(ns, multiResolver, bosonAddress, chunkInfo, traversalService, pinningService, authenticator, logger, tracer, apiInterface, api.Options{
 			CORSAllowedOrigins: o.CORSAllowedOrigins,
 			GatewayMode:        o.GatewayMode,
 			WsPingPeriod:       60 * time.Second,
