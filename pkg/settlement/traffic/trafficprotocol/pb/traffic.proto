@@ -1,0 +1,14 @@
+
+
+syntax = "proto3";
+
+package traffic;
+
+option go_package = "pb";
+
+message EmitCheque {
+  bytes address = 1;
+  bytes SignedCheque = 2;
+}
+
+

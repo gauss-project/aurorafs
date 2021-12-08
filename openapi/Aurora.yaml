@@ -486,3 +486,86 @@ paths:
           $ref: "AuroraCommon.yaml#/components/responses/500"
         default:
           description: Default response
+
+  "/traffic/info":
+    get:
+      summary: Get the remaining flow and the total flow usage
+      tags:
+        - Traffic
+      responses:
+        "200":
+          description: Flow situation
+          content:
+            application/json:
+              schema:
+                $ref: "AuroraCommon.yaml#/components/schemas/ChequeTrafficInfo"
+        "403":
+          $ref: "AuroraCommon.yaml#/components/responses/GatewayForbidden"
+        "500":
+          $ref: "AuroraCommon.yaml#/components/responses/500"
+        default:
+          description: Default response
+
+  "/traffic/address":
+    get:
+      summary: Get the chain account address
+      tags:
+        - Traffic
+      responses:
+        "200":
+          description: address messages
+          content:
+            application/json:
+              schema:
+                $ref: "AuroraCommon.yaml#/components/schemas/ReferenceResponse"
+        "403":
+          $ref: "AuroraCommon.yaml#/components/responses/GatewayForbidden"
+        "500":
+          $ref: "AuroraCommon.yaml#/components/responses/500"
+        default:
+          description: Default response
+
+  "/traffic/cheques":
+    get:
+      summary: Acquire traffic interaction information of each node
+      tags:
+        - Traffic
+      responses:
+        "200":
+          description: traffic information
+          content:
+            application/json:
+              schema:
+                $ref: "AuroraCommon.yaml#/components/schemas/ChequeTrafficCheque"
+        "403":
+          $ref: "AuroraCommon.yaml#/components/responses/GatewayForbidden"
+        "500":
+          $ref: "AuroraCommon.yaml#/components/responses/500"
+        default:
+          description: Default response
+
+  "/traffic/cash/{address}":
+    get:
+      summary: cheque exchange
+      tags:
+        - Traffic
+      parameters:
+        - in: path
+          name: address
+          schema:
+            $ref: "AuroraCommon.yaml#/components/schemas/BosonReference"
+          required: true
+          description: Boson address of content
+      responses:
+        "200":
+          description: Exchange code
+          content:
+            application/json:
+              schema:
+                $ref: "AuroraCommon.yaml#/components/schemas/ChequeTrafficHash"
+        "403":
+          $ref: "AuroraCommon.yaml#/components/responses/GatewayForbidden"
+        "500":
+          $ref: "AuroraCommon.yaml#/components/responses/500"
+        default:
+          description: Default response

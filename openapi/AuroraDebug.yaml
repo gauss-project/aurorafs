@@ -576,3 +576,22 @@ paths:
           $ref: "AuroraCommon.yaml#/components/responses/404"
         default:
           description: Default response
+
+  "/traffic/init":
+    post:
+      summary: Initialize traffic information
+      tags:
+        - Traffic
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "AuroraCommon.yaml#/components/schemas/Response"
+        "400":
+          $ref: "AuroraCommon.yaml#/components/responses/400"
+        "404":
+          $ref: "AuroraCommon.yaml#/components/responses/404"
+        default:
+          description: Default response

@@ -5,6 +5,7 @@ package debugapi
 
 import (
 	"crypto/ecdsa"
+	"github.com/gauss-project/aurorafs/pkg/settlement/traffic"
 	"net/http"
 	"sync"
 
@@ -47,6 +48,7 @@ type Service struct {
 	routetab       routetab.RouteTab
 	chunkInfo      chunkinfo.Interface
 	retrieval      retrieval.Interface
+	traffic        traffic.ApiInterface
 	//accounting         accounting.Interface
 	//settlement         settlement.Interface
 	//chequebookEnabled  bool

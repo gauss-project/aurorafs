@@ -115,7 +115,7 @@ func (s *Service) newRouter() *mux.Router {
 		"DELETE": http.HandlerFunc(s.delRouteHandel),
 	})
 	handle("/route/findunderlay/{peer-id}", jsonhttp.MethodHandler{
-		"GET":    http.HandlerFunc(s.findUnderlayHandel),
+		"GET": http.HandlerFunc(s.findUnderlayHandel),
 	})
 	handle("/welcome-message", jsonhttp.MethodHandler{
 		"GET": http.HandlerFunc(s.getWelcomeMessageHandler),
@@ -139,7 +139,9 @@ func (s *Service) newRouter() *mux.Router {
 	handle("/aco/{timestamp}", jsonhttp.MethodHandler{
 		"GET": http.HandlerFunc(s.getRouteScoreHandle),
 	})
-
+	handle("/traffic/init", jsonhttp.MethodHandler{
+		"POST": http.HandlerFunc(s.trafficInit),
+	})
 	//handle("/balances", jsonhttp.MethodHandler{
 	//	"GET": http.HandlerFunc(s.compensatedBalancesHandler),
 	//})
