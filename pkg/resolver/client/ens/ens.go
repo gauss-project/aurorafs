@@ -2,21 +2,22 @@ package ens
 
 import (
 	"bytes"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"strings"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethclient"
-	goens "github.com/wealdtech/go-ens/v3"
-
 	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/resolver/client"
+	"github.com/multiformats/go-multihash"
+	goens "github.com/wealdtech/go-ens/v3"
 )
 
 const (
-	defaultENSContractAddress = "00000000000C2E074eC69A0dFb2997BA6C7d2e1e"
-	auroraContentHashPrefix   = "bzz://"
+	defaultENSContractAddress = "173C66717598C3B65b55C7a4B21F300C94d9c4ed"
+	auroraContentHashPrefix   = "aurora://"
 )
 
 // Address is the boson aurora address.
@@ -116,7 +117,7 @@ func (c *Client) Resolve(name string) (Address, error) {
 	}
 
 	// Ensure that the content hash string is in a valid format, eg.
-	// "/boson/<address>".
+	// "aurora://<address>".
 	if !strings.HasPrefix(hash, auroraContentHashPrefix) {
 		return boson.ZeroAddress, fmt.Errorf("contenthash %s: %w", hash, ErrInvalidContentHash)
 	}
@@ -183,5 +184,18 @@ func wrapResolve(registry *goens.Registry, addr common.Address, name string) (st
 		return "", fmt.Errorf("contenthash: %w", err)
 	}
 
-	return goens.ContenthashToString(ch)
+	decodedMHash, err := multihash.Decode(ch)
+	if err != nil {
+		return "", err
+	}
+
+	prefixIndex := bytes.LastIndexByte(decodedMHash.Digest, '/')
+	if prefixIndex == -1 {
+		return "", fmt.Errorf("only support aurora-format contenthash")
+	}
+
+	contentHash := hex.EncodeToString(decodedMHash.Digest[prefixIndex+1:])
+	prefix := string(decodedMHash.Digest[:prefixIndex+1])
+
+	return prefix + contentHash, nil
 }
