@@ -498,7 +498,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "AuroraCommon.yaml#/components/schemas/ChequebookTrafficInfo"
+                $ref: "AuroraCommon.yaml#/components/schemas/ChequeTrafficInfo"
         "403":
           $ref: "AuroraCommon.yaml#/components/responses/GatewayForbidden"
         "500":
@@ -536,7 +536,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "AuroraCommon.yaml#/components/schemas/ChequebookTrafficCheque"
+                $ref: "AuroraCommon.yaml#/components/schemas/ChequeTrafficCheque"
         "403":
           $ref: "AuroraCommon.yaml#/components/responses/GatewayForbidden"
         "500":
@@ -562,7 +562,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "AuroraCommon.yaml#/components/schemas/ChequebookTrafficHash"
+                $ref: "AuroraCommon.yaml#/components/schemas/ChequeTrafficHash"
         "403":
           $ref: "AuroraCommon.yaml#/components/responses/GatewayForbidden"
         "500":

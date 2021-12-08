@@ -336,7 +336,7 @@ components:
         chunkCount:
           $ref: "#/components/schemas/DataCount"
 
-    ChequebookTrafficInfo:
+    ChequeTrafficInfo:
       type: object
       properties:
         balance:
@@ -348,7 +348,7 @@ components:
         receivedTraffic:
           type: integer
 
-    ChequebookTrafficCheque:
+    ChequeTrafficCheque:
       type: object
       properties:
         peer:
@@ -364,7 +364,7 @@ components:
         unCashed:
           type: integer
 
-    ChequebookTrafficHash:
+    ChequeTrafficHash:
         type: object
         properties:
           hash:
