@@ -110,11 +110,8 @@ func totalKeyPeer(key []byte, prefix string) (peer boson.Address, err error) {
 
 // Pay initiates a payment to the given peer
 func (s *Service) Pay(ctx context.Context, peer boson.Address, paymentThreshold *big.Int) error {
-	traffic, err := s.RetrieveTraffic(peer)
-	if err != nil {
-		return err
-	}
-	return s.notifyPaymentFunc(peer, traffic)
+
+	return s.notifyPaymentFunc(peer, paymentThreshold)
 
 }
 
@@ -129,12 +126,12 @@ func (s *Service) TransferTraffic(peer boson.Address) (traffic *big.Int, err err
 }
 
 func (s *Service) RetrieveTraffic(peer boson.Address) (traffic *big.Int, err error) {
-	err = s.store.Get(totalKey(peer, SettlementReceivedPrefix), &traffic)
-	if errors.Is(err, storage.ErrNotFound) {
-		return big.NewInt(0), nil
-	}
+	//err = s.store.Get(totalKey(peer, SettlementReceivedPrefix), &traffic)
+	//if errors.Is(err, storage.ErrNotFound) {
+	//	return big.NewInt(0), nil
+	//}
 
-	return traffic, err
+	return big.NewInt(256 * 1024 * 8), err
 }
 
 func (s *Service) PutRetrieveTraffic(peer boson.Address, traffic *big.Int) error {
@@ -279,7 +276,7 @@ func (s *Service) Balance() (*big.Int, error) {
 // AvailableBalance Get actual available balance
 func (s *Service) AvailableBalance() (*big.Int, error) {
 
-	return big.NewInt(256 * 1024 * 8 * 4 * 101), nil
+	return big.NewInt(256 * 1024 * 8 * 4 * 33), nil
 }
 
 func (s *Service) UpdatePeerBalance(peer boson.Address) error {
@@ -294,7 +291,7 @@ func (s *Service) SetNotifyPaymentFunc(notifyPaymentFunc settlement.NotifyPaymen
 
 func (s *Service) GetPeerBalance(peer boson.Address) (*big.Int, error) {
 
-	return big.NewInt(256 * 1024 * 8 * 4 * 101), nil
+	return big.NewInt(256 * 1024 * 8 * 4 * 33), nil
 }
 
 func (s *Service) GetUnPaidBalance(peer boson.Address) (*big.Int, error) {
