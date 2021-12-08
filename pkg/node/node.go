@@ -103,6 +103,7 @@ type Options struct {
 	Restricted             bool
 	TokenEncryptionKey     string
 	AdminPasswordHash      string
+	RouteAlpha             int32
 }
 
 func NewAurora(nodeMode aurora.Model, addr string, bosonAddress boson.Address, publicKey ecdsa.PublicKey, signer crypto.Signer, networkID uint64, logger logging.Logger, libp2pPrivateKey *ecdsa.PrivateKey, o Options) (b *Aurora, err error) {
@@ -306,16 +307,10 @@ func NewAurora(nodeMode aurora.Model, addr string, bosonAddress boson.Address, p
 		logger.Debugf("p2p address: %s", addr)
 	}
 
-	route := routetab.New(bosonAddress, p2pCtx, p2ps, kad, stateStore, logger)
+	route := routetab.New(bosonAddress, p2pCtx, p2ps, p2ps, addressBook, networkID, lightNodes, kad, stateStore, logger, routetab.Options{Alpha: o.RouteAlpha})
 	if err = p2ps.AddProtocol(route.Protocol()); err != nil {
 		return nil, fmt.Errorf("routetab service: %w", err)
 	}
-	route.SetConfig(routetab.Config{
-		AddressBook: addressBook,
-		NetworkID:   networkID,
-		LightNodes:  lightNodes,
-		Stream:      p2ps,
-	})
 
 	p2ps.ApplyRoute(bosonAddress, route, nodeMode)
 

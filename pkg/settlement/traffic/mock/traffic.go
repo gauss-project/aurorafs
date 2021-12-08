@@ -24,7 +24,7 @@ type TraafficMock struct {
 
 	trafficInfo func() (*traffic.TrafficInfo, error)
 
-	pay func(ctx context.Context, peer boson.Address, traffic, paymentThreshold *big.Int) error
+	pay func(ctx context.Context, peer boson.Address, paymentThreshold *big.Int) error
 
 	transferTraffic func(peer boson.Address) (traffic *big.Int, err error)
 
@@ -43,6 +43,10 @@ type TraafficMock struct {
 	getPeerBalance func(peer boson.Address) (*big.Int, error)
 
 	getUnPaidBalance func(peer boson.Address) (*big.Int, error)
+}
+
+func (s *TraafficMock) TrafficInit() error {
+	panic("implement me")
 }
 
 // WithsettlementFunc sets the mock settlement function
@@ -76,7 +80,7 @@ func WithAddress(f func() common.Address) Option {
 	})
 }
 
-func WithPay(f func(ctx context.Context, peer boson.Address, traffic, paymentThreshold *big.Int) error) Option {
+func WithPay(f func(ctx context.Context, peer boson.Address, paymentThreshold *big.Int) error) Option {
 	return optionFunc(func(s *TraafficMock) {
 		s.pay = f
 	})
@@ -140,7 +144,7 @@ func NewSettlement(opts ...Option) settlement.Interface {
 }
 
 // NewChequeStore creates the mock chequeStore implementation
-func NewTraffic(opts ...Option) traffic.Interface {
+func NewTraffic(opts ...Option) traffic.ApiInterface {
 	mock := new(TraafficMock)
 	for _, o := range opts {
 		o.apply(mock)
@@ -175,8 +179,8 @@ func (s *TraafficMock) TrafficInfo() (*traffic.TrafficInfo, error) {
 	return s.trafficInfo()
 }
 
-func (s *TraafficMock) Pay(ctx context.Context, peer boson.Address, traffic, paymentThreshold *big.Int) error {
-	return s.pay(ctx, peer, traffic, paymentThreshold)
+func (s *TraafficMock) Pay(ctx context.Context, peer boson.Address, paymentThreshold *big.Int) error {
+	return s.pay(ctx, peer, paymentThreshold)
 }
 
 func (s *TraafficMock) TransferTraffic(peer boson.Address) (traffic *big.Int, err error) {

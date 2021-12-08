@@ -74,12 +74,9 @@ func TestAccountingCredit(t *testing.T) {
 			}
 			return big.NewInt(0), nil
 		}),
-		traMock.WithPay(func(ctx context.Context, peer boson.Address, traffic, paymentThreshold *big.Int) error {
+		traMock.WithPay(func(ctx context.Context, peer boson.Address, paymentThreshold *big.Int) error {
 			if !bytes.Equal(peer.Bytes(), peer1Addr.Bytes()) {
 				t.Fatal("Connection address verification failed.")
-			}
-			if traffic.Cmp(testPaymentThreshold) != 0 {
-				t.Fatal("Check flow error")
 			}
 			if paymentThreshold.Cmp(testPaymentThreshold) != 0 {
 				t.Fatal("Wrong threshold value")

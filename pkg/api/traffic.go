@@ -90,9 +90,8 @@ func (s *server) cashCheque(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	jsonhttp.OK(w, struct {
-		hash common.Hash `json:"hash"`
-	}{
-		hash: hash,
-	})
+	type out struct {
+		Hash common.Hash `json:"hash"`
+	}
+	jsonhttp.OK(w, out{Hash: hash})
 }

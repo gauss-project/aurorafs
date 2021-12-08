@@ -60,6 +60,7 @@ const (
 	optionNameRestrictedAPI      = "restricted"
 	optionNameTokenEncryptionKey = "token-encryption-key"
 	optionNameAdminPasswordHash  = "admin-password"
+	optionNameRouteAlpha         = "route-alpha"
 )
 
 func init() {
@@ -232,6 +233,7 @@ func (c *command) setAllFlags(cmd *cobra.Command) {
 	cmd.Flags().Bool(optionNameRestrictedAPI, false, "enable permission check on the http APIs")
 	cmd.Flags().String(optionNameTokenEncryptionKey, "", "admin username to get the security token")
 	cmd.Flags().String(optionNameAdminPasswordHash, "", "bcrypt hash of the admin password to get the security token")
+	cmd.Flags().Int32(optionNameRouteAlpha, 2, "each find route will return alpha routes")
 }
 
 func newLogger(cmd *cobra.Command, verbosity string) (logging.Logger, error) {

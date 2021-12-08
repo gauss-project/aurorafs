@@ -49,7 +49,6 @@ func TestPayment(t *testing.T) {
 	peerID := boson.MustParseHexAddress("9ee7add7")
 
 	recorder := streamtest.New(
-		streamtest.WithProtocols(recipient.Protocol()),
 		streamtest.WithBaseAddr(peerID),
 	)
 

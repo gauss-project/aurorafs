@@ -29,6 +29,14 @@ type ChequeStoreMock struct {
 	putReceivedCheques func(chainAddress common.Address, cheque cheque.SignedCheque) error
 }
 
+func (s *ChequeStoreMock) GetRetrieveTraffic(chainAddress common.Address) (traffic *big.Int, err error) {
+	panic("implement me")
+}
+
+func (s *ChequeStoreMock) GetTransferTraffic(chainAddress common.Address) (traffic *big.Int, err error) {
+	panic("implement me")
+}
+
 func WithRetrieveChequeFunc(f func(ctx context.Context, cheque *cheque.SignedCheque) (*big.Int, error)) Option {
 	return optionFunc(func(s *ChequeStoreMock) {
 		s.receiveCheque = f

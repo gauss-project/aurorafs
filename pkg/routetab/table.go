@@ -55,13 +55,22 @@ func newRouteTable(self boson.Address, store storage.StateStorer) *Table {
 func (t *Table) convertPathsToPbPaths(path []*Path) []*pb.Path {
 	body := gconv.Bytes(time.Now().Unix())
 	out := make([]*pb.Path, 0)
-	for _, v := range path {
-		out = append(out, &pb.Path{
-			Sign:  bls.Sign(body, v.Sign),
-			Bodys: append(v.Bodys, body),
-			Items: append(convItemsToBytes(v.Items), t.self.Bytes()),
-		})
+	var minTTL, key int
+	for k, v := range path {
+		if k == 0 {
+			minTTL = len(v.Items)
+		} else {
+			if len(v.Items) < minTTL {
+				minTTL = len(v.Items)
+				key = k
+			}
+		}
 	}
+	out = append(out, &pb.Path{
+		Sign:  bls.Sign(body, path[key].Sign),
+		Bodys: append(path[key].Bodys, body),
+		Items: append(convItemsToBytes(path[key].Items), t.self.Bytes()),
+	})
 	return out
 }
 
@@ -183,14 +192,21 @@ func (t *Table) updateUsedTime(target, neighbor boson.Address) {
 	}
 }
 
-func (t *Table) GetNextHop(target boson.Address) (next []boson.Address) {
+func (t *Table) GetNextHop(target boson.Address, skips ...boson.Address) (next []boson.Address) {
 	targetKey := getTargetKey(target)
 	t.mu.RLock()
 	routes, ok := t.routes[targetKey]
 	t.mu.RUnlock()
 	if ok {
+		// remove duplication next
+		list := make(map[string]boson.Address, len(routes))
 		for _, v := range routes {
-			next = append(next, v.Neighbor)
+			if !v.Neighbor.MemberOf(skips) {
+				list[v.Neighbor.String()] = v.Neighbor
+			}
+		}
+		for _, v := range list {
+			next = append(next, v)
 		}
 	}
 	return
@@ -262,5 +278,3 @@ func (t *Table) ResumeRoutes() {
 		return false, nil
 	})
 }
-
-

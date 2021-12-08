@@ -15,8 +15,8 @@ import (
 type Service struct {
 	lock        sync.Mutex
 	balances    map[string]*big.Int
-	reserveFunc func(ctx context.Context, peer boson.Address, price uint64) error
-	creditFunc  func(peer boson.Address, price uint64) error
+	reserveFunc func(peer boson.Address, price uint64) error
+	creditFunc  func(ctx context.Context, peer boson.Address, price uint64) error
 	debitFunc   func(peer boson.Address, price uint64) error
 }
 
@@ -31,17 +31,17 @@ func NewAccounting(opts ...Option) accounting.Interface {
 }
 
 // Reserve is the mock function wrapper that calls the set implementation
-func (s *Service) Reserve(ctx context.Context, peer boson.Address, traffic uint64) error {
+func (s *Service) Reserve(peer boson.Address, traffic uint64) error {
 	if s.reserveFunc != nil {
-		return s.reserveFunc(ctx, peer, traffic)
+		return s.reserveFunc(peer, traffic)
 	}
 	return nil
 }
 
 // Credit is the mock function wrapper that calls the set implementation
-func (s *Service) Credit(peer boson.Address, traffic uint64) error {
+func (s *Service) Credit(ctx context.Context, peer boson.Address, traffic uint64) error {
 	if s.creditFunc != nil {
-		return s.creditFunc(peer, traffic)
+		return s.creditFunc(ctx, peer, traffic)
 	}
 	s.lock.Lock()
 	defer s.lock.Unlock()
