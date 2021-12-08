@@ -336,6 +336,40 @@ components:
         chunkCount:
           $ref: "#/components/schemas/DataCount"
 
+    ChequeTrafficInfo:
+      type: object
+      properties:
+        balance:
+          type: integer
+        availableBalance:
+          type: integer
+        totalSendTraffic:
+          type: integer
+        receivedTraffic:
+          type: integer
+
+    ChequeTrafficCheque:
+      type: object
+      properties:
+        peer:
+          $ref: "#/components/schemas/BosonAddress"
+        outstandingTraffic:
+          type: integer
+        sendTraffic:
+          type: integer
+        receivedTraffic:
+          type: integer
+        total:
+          type: integer
+        unCashed:
+          type: integer
+
+    ChequeTrafficHash:
+        type: object
+        properties:
+          hash:
+            $ref: "#/components/schemas/BosonAddress"
+
     Uid:
       type: integer
 

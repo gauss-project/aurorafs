@@ -8,6 +8,7 @@ import (
 	"errors"
 	"github.com/gauss-project/aurorafs/pkg/auth"
 	"github.com/gauss-project/aurorafs/pkg/jsonhttp"
+	"github.com/gauss-project/aurorafs/pkg/settlement/traffic"
 	"io"
 	"io/ioutil"
 	"math"
@@ -96,6 +97,7 @@ type server struct {
 	pinning   pinning.Interface
 	logger    logging.Logger
 	tracer    *tracing.Tracer
+	traffic   traffic.ApiInterface
 	Options
 	http.Handler
 	metrics metrics
@@ -118,7 +120,7 @@ const (
 )
 
 // New will create a and initialize a new API service.
-func New(storer storage.Storer, resolver resolver.Interface, addr boson.Address, chunkInfo chunkinfo.Interface, traversalService traversal.Traverser, pinning pinning.Interface, auth authenticator, logger logging.Logger, tracer *tracing.Tracer, o Options) Service {
+func New(storer storage.Storer, resolver resolver.Interface, addr boson.Address, chunkInfo chunkinfo.Interface, traversalService traversal.Traverser, pinning pinning.Interface, auth authenticator, logger logging.Logger, tracer *tracing.Tracer, traffic traffic.ApiInterface, o Options) Service {
 	s := &server{
 		auth:      auth,
 		storer:    storer,
@@ -132,6 +134,7 @@ func New(storer storage.Storer, resolver resolver.Interface, addr boson.Address,
 		tracer:    tracer,
 		metrics:   newMetrics(),
 		quit:      make(chan struct{}),
+		traffic:   traffic,
 	}
 
 	BufferSizeMul = o.BufferSizeMul

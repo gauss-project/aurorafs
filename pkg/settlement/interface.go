@@ -16,17 +16,25 @@ var (
 type Interface interface {
 	// Pay initiates a payment to the given peer
 	// It should return without error it is likely that the payment worked
-	Pay(ctx context.Context, peer boson.Address, amount *big.Int) error
-	// TotalSent returns the total amount sent to a peer
-	TotalSent(peer boson.Address) (totalSent *big.Int, err error)
-	// TotalReceived returns the total amount received from a peer
-	TotalReceived(peer boson.Address) (totalSent *big.Int, err error)
-	// SettlementsSent returns sent settlements for each individual known peer
-	SettlementsSent() (map[string]*big.Int, error)
-	// SettlementsReceived returns received settlements for each individual known peer
-	SettlementsReceived() (map[string]*big.Int, error)
+	Pay(ctx context.Context, peer boson.Address, paymentThreshold *big.Int) error
+
+	TransferTraffic(peer boson.Address) (traffic *big.Int, err error)
+
+	RetrieveTraffic(peer boson.Address) (traffic *big.Int, err error)
+
+	PutRetrieveTraffic(peer boson.Address, traffic *big.Int) error
+
+	PutTransferTraffic(peer boson.Address, traffic *big.Int) error
+
+	// AvailableBalance Get actual available balance
+	AvailableBalance() (*big.Int, error)
+
 	// SetNotifyPaymentFunc sets the NotifyPaymentFunc to notify
 	SetNotifyPaymentFunc(notifyPaymentFunc NotifyPaymentFunc)
+
+	GetPeerBalance(peer boson.Address) (*big.Int, error)
+
+	GetUnPaidBalance(peer boson.Address) (*big.Int, error)
 }
 
 // NotifyPaymentFunc is called when a payment from peer was successfully received
