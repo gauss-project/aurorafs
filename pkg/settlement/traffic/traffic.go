@@ -59,11 +59,10 @@ type TrafficInfo struct {
 }
 
 type ApiInterface interface {
-	// LastSentCheque returns the last sent cheque for the peer
 	LastSentCheque(peer boson.Address) (*chequePkg.Cheque, error)
-	// LastReceivedCheques returns the list of last received cheques for all peers
+
 	LastReceivedCheque(peer boson.Address) (*chequePkg.SignedCheque, error)
-	// CashCheque sends a cashing transaction for the last cheque of the peer
+
 	CashCheque(ctx context.Context, peer boson.Address) (common.Hash, error)
 
 	TrafficCheques() ([]*TrafficCheque, error)

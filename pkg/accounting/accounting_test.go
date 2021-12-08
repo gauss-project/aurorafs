@@ -46,7 +46,7 @@ func TestAccountingReserve(t *testing.T) {
 	}
 
 	// it should allow to cross the threshold one time
-	err = acc.Reserve(context.Background(), peer1Addr, testPaymentThreshold.Uint64()+1)
+	err = acc.Reserve(peer1Addr, testPaymentThreshold.Uint64()+1)
 	if err == nil {
 		t.Fatal("expected error from reserve")
 	}
@@ -97,7 +97,7 @@ func TestAccountingCredit(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	err = acc.Credit(peer1Addr, testPaymentThreshold.Uint64())
+	err = acc.Credit(context.Background(), peer1Addr, testPaymentThreshold.Uint64())
 	time.Sleep(3 * time.Second)
 	if !chequeSend {
 		t.Fatal("Sending check failed.")
@@ -179,7 +179,7 @@ func TestAccountingNotifyPayment(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	err = acc.Reserve(context.Background(), peer1Addr, testPayment.Uint64())
+	err = acc.Reserve(peer1Addr, testPayment.Uint64())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -189,7 +189,7 @@ func TestAccountingNotifyPayment(t *testing.T) {
 		t.Fatal(err)
 	}
 	balance = new(big.Int).SetUint64(debtAmount)
-	err = acc.Reserve(context.Background(), peer1Addr, debtAmount)
+	err = acc.Reserve(peer1Addr, debtAmount)
 	if err != nil {
 		t.Fatal(err)
 	}
