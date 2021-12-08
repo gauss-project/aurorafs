@@ -116,20 +116,11 @@ func (s *Service) Pay(ctx context.Context, peer boson.Address, paymentThreshold 
 }
 
 func (s *Service) TransferTraffic(peer boson.Address) (traffic *big.Int, err error) {
-	//err = s.store.Get(totalKey(peer, SettlementSentPrefix), &traffic)
-	//if errors.Is(err, storage.ErrNotFound) {
-	//	return big.NewInt(0), nil
-	//}
 
-	//return traffic, err
 	return big.NewInt(0), nil
 }
 
 func (s *Service) RetrieveTraffic(peer boson.Address) (traffic *big.Int, err error) {
-	//err = s.store.Get(totalKey(peer, SettlementReceivedPrefix), &traffic)
-	//if errors.Is(err, storage.ErrNotFound) {
-	//	return big.NewInt(0), nil
-	//}
 
 	return big.NewInt(256 * 1024 * 8), err
 }
@@ -298,17 +289,14 @@ func (s *Service) GetUnPaidBalance(peer boson.Address) (*big.Int, error) {
 	return big.NewInt(0), nil
 }
 
-// LastSentCheque returns the last sent cheque for the peer
 func (s *Service) LastSentCheque(peer boson.Address) (*chequePkg.Cheque, error) {
 	return nil, nil
 }
 
-// LastReceivedCheques returns the list of last received cheques for all peers
 func (s *Service) LastReceivedCheque(peer boson.Address) (*chequePkg.SignedCheque, error) {
 	return nil, nil
 }
 
-// CashCheque sends a cashing transaction for the last cheque of the peer
 func (s *Service) CashCheque(ctx context.Context, peer boson.Address) (common.Hash, error) {
 	return common.Hash{}, nil
 }
