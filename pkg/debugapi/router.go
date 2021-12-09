@@ -142,9 +142,12 @@ func (s *Service) newRouter() *mux.Router {
 	handle("/traffic/init", jsonhttp.MethodHandler{
 		"POST": http.HandlerFunc(s.trafficInit),
 	})
-	handle("/privatekey", jsonhttp.MethodHandler{
-		"GET": http.HandlerFunc(s.privateKeyHandler),
-	})
+
+	if s.restricted {
+		handle("/privatekey", jsonhttp.MethodHandler{
+			"GET": http.HandlerFunc(s.privateKeyHandler),
+		})
+	}
 
 	return router
 }
