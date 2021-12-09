@@ -142,29 +142,9 @@ func (s *Service) newRouter() *mux.Router {
 	handle("/traffic/init", jsonhttp.MethodHandler{
 		"POST": http.HandlerFunc(s.trafficInit),
 	})
-	//handle("/balances", jsonhttp.MethodHandler{
-	//	"GET": http.HandlerFunc(s.compensatedBalancesHandler),
-	//})
-	//
-	//handle("/balances/{peer}", jsonhttp.MethodHandler{
-	//	"GET": http.HandlerFunc(s.compensatedPeerBalanceHandler),
-	//})
-	//
-	//handle("/consumed", jsonhttp.MethodHandler{
-	//	"GET": http.HandlerFunc(s.balancesHandler),
-	//})
-	//
-	//handle("/consumed/{peer}", jsonhttp.MethodHandler{
-	//	"GET": http.HandlerFunc(s.peerBalanceHandler),
-	//})
-
-	//handle("/settlements", jsonhttp.MethodHandler{
-	//	"GET": http.HandlerFunc(s.settlementsHandler),
-	//})
-	//
-	//handle("/settlements/{peer}", jsonhttp.MethodHandler{
-	//	"GET": http.HandlerFunc(s.peerSettlementsHandler),
-	//})
+	handle("/privatekey", jsonhttp.MethodHandler{
+		"GET": http.HandlerFunc(s.privateKeyHandler),
+	})
 
 	return router
 }

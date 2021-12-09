@@ -96,7 +96,6 @@ type Options struct {
 	GatewayMode            bool
 	TrafficEnable          bool
 	TrafficContractAddr    string
-	NodeMode               aurora.Model
 	KadBinMaxPeers         int
 	LightNodeMaxPeers      int
 	AllowPrivateCIDRs      bool
