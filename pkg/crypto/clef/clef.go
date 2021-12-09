@@ -41,6 +41,10 @@ type clefSigner struct {
 	pubKey  *ecdsa.PublicKey // the public key for the account
 }
 
+func (c *clefSigner) PrivateKey() *ecdsa.PrivateKey {
+	panic("implement me")
+}
+
 // DefaultIpcPath returns the os-dependent default ipc path for clef.
 func DefaultIpcPath() (string, error) {
 	socket := "clef.ipc"

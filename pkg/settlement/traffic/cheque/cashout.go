@@ -43,12 +43,12 @@ func (s *cashoutService) CashCheque(ctx context.Context, beneficiary, recipient 
 		return common.Hash{}, errors.New("exchange failed")
 	}
 
-	txData, err := s.cashTrafficService.CashChequeBeneficiary(beneficiary, recipient, cheque.CumulativePayout, cheque.Signature)
+	_, err = s.cashTrafficService.CashChequeBeneficiary(beneficiary, recipient, cheque.CumulativePayout, cheque.Signature)
 	if err != nil {
 		return common.Hash{}, err
 	}
 
-	txHash, err := s.transactionService.Send(ctx, txData)
+	txHash, err := s.transactionService.Send(ctx, &chain.TxRequest{})
 	if err != nil {
 		return common.Hash{}, err
 	}

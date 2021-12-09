@@ -16,6 +16,10 @@ type signerMock struct {
 	ethereumAddress func() (common.Address, error)
 }
 
+func (m *signerMock) PrivateKey() *ecdsa.PrivateKey {
+	panic("implement me")
+}
+
 func (m *signerMock) EthereumAddress() (common.Address, error) {
 	if m.ethereumAddress != nil {
 		return m.ethereumAddress()

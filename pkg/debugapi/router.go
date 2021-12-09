@@ -3,17 +3,15 @@ package debugapi
 import (
 	"expvar"
 	"github.com/gauss-project/aurorafs/pkg/auth"
-	"net/http"
-	"net/http/pprof"
-
+	"github.com/gauss-project/aurorafs/pkg/jsonhttp"
+	"github.com/gauss-project/aurorafs/pkg/logging/httpaccess"
 	"github.com/gorilla/handlers"
 	"github.com/gorilla/mux"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/sirupsen/logrus"
+	"net/http"
+	"net/http/pprof"
 	"resenje.org/web"
-
-	"github.com/gauss-project/aurorafs/pkg/jsonhttp"
-	"github.com/gauss-project/aurorafs/pkg/logging/httpaccess"
 )
 
 // newBasicRouter constructs only the routes that do not depend on the injected dependencies:
@@ -142,31 +140,26 @@ func (s *Service) newRouter() *mux.Router {
 	handle("/traffic/init", jsonhttp.MethodHandler{
 		"POST": http.HandlerFunc(s.trafficInit),
 	})
-	//handle("/balances", jsonhttp.MethodHandler{
-	//	"GET": http.HandlerFunc(s.compensatedBalancesHandler),
-	//})
-	//
-	//handle("/balances/{peer}", jsonhttp.MethodHandler{
-	//	"GET": http.HandlerFunc(s.compensatedPeerBalanceHandler),
-	//})
-	//
-	//handle("/consumed", jsonhttp.MethodHandler{
-	//	"GET": http.HandlerFunc(s.balancesHandler),
-	//})
-	//
-	//handle("/consumed/{peer}", jsonhttp.MethodHandler{
-	//	"GET": http.HandlerFunc(s.peerBalanceHandler),
-	//})
 
-	//handle("/settlements", jsonhttp.MethodHandler{
-	//	"GET": http.HandlerFunc(s.settlementsHandler),
-	//})
-	//
-	//handle("/settlements/{peer}", jsonhttp.MethodHandler{
-	//	"GET": http.HandlerFunc(s.peerSettlementsHandler),
-	//})
+	s.newLoopbackRouter(router)
 
 	return router
+}
+
+func (s *Service) newLoopbackRouter(router *mux.Router) {
+	var handle = func(path string, handler http.Handler) {
+		handler = web.ChainHandlers(
+			auth.AllowLoopbackIP(),
+			web.FinalHandler(handler),
+		)
+		router.Handle(path, handler)
+	}
+	handle("/privatekey", jsonhttp.MethodHandler{
+		"GET": http.HandlerFunc(s.privateKeyHandler),
+	})
+	handle("/transaction", jsonhttp.MethodHandler{
+		"POST": http.HandlerFunc(s.transactionHandler),
+	})
 }
 
 // setRouter sets the base Debug API handler with common middlewares.

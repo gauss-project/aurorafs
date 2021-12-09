@@ -96,7 +96,6 @@ type Options struct {
 	GatewayMode            bool
 	TrafficEnable          bool
 	TrafficContractAddr    string
-	NodeMode               aurora.Model
 	KadBinMaxPeers         int
 	LightNodeMaxPeers      int
 	AllowPrivateCIDRs      bool
@@ -146,7 +145,7 @@ func NewAurora(nodeMode aurora.Model, addr string, bosonAddress boson.Address, p
 	if o.DebugAPIAddr != "" {
 		// set up basic debug api endpoints for debugging and /health endpoint
 		debugAPIService = debugapi.New(bosonAddress, publicKey, logger, tracer, o.CORSAllowedOrigins, o.Restricted, authenticator, debugapi.Options{
-			PrivateKey:     libp2pPrivateKey,
+			PrivateKey:     signer.PrivateKey(),
 			NATAddr:        o.NATAddr,
 			NetworkID:      networkID,
 			EnableWS:       o.EnableWS,
@@ -209,7 +208,7 @@ func NewAurora(nodeMode aurora.Model, addr string, bosonAddress boson.Address, p
 		return nil, fmt.Errorf("p2p service: %w", err)
 	}
 
-	oracleChain, settlement, apiInterface, err := InitChain(
+	oracleChain, settlement, apiInterface, transaction, err := InitChain(
 		p2pCtx,
 		logger,
 		o.OracleEndpoint,
@@ -420,7 +419,7 @@ func NewAurora(nodeMode aurora.Model, addr string, bosonAddress boson.Address, p
 		//}
 
 		// inject dependencies and configure full debug api http path routes
-		debugAPIService.Configure(p2ps, pingPong, kad, lightNodes, bootNodes, storer, route, chunkInfo, retrieve)
+		debugAPIService.Configure(p2ps, pingPong, kad, lightNodes, bootNodes, storer, route, chunkInfo, retrieve, transaction)
 		if apiInterface != nil {
 			debugAPIService.MustRegisterTraffic(apiInterface)
 		}

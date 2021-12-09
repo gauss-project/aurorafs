@@ -287,6 +287,8 @@ components:
           type: boolean
         bootNodeMode:
           type: boolean
+        auth:
+          type: boolean
 
     BosonAddress:
       type: string

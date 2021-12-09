@@ -35,14 +35,16 @@ type Service struct {
 	metrics           metrics
 	trafficMu         sync.RWMutex
 	trafficInfo       sync.Map
+	address           common.Address
 }
 
-func New(streamer p2p.Streamer, logger logging.Logger, store storage.StateStorer) *Service {
+func New(streamer p2p.Streamer, logger logging.Logger, store storage.StateStorer, address common.Address) *Service {
 	return &Service{
 		streamer: streamer,
 		logger:   logger,
 		metrics:  newMetrics(),
 		store:    store,
+		address:  address,
 	}
 }
 
@@ -307,7 +309,7 @@ func (s *Service) TrafficCheques() ([]*traffic.TrafficCheque, error) {
 }
 
 func (s *Service) Address() common.Address {
-	return common.Address{}
+	return s.address
 }
 
 func (s *Service) TrafficInfo() (*traffic.TrafficInfo, error) {

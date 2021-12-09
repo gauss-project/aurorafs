@@ -18,14 +18,14 @@ import (
 )
 
 type transactionServiceMock struct {
-	send           func(ctx context.Context, tx *types.Transaction) (txHash common.Hash, err error)
+	send           func(ctx context.Context, request *chain.TxRequest) (txHash common.Hash, err error)
 	waitForReceipt func(ctx context.Context, txHash common.Hash) (receipt *types.Receipt, err error)
 	call           func(ctx context.Context, request *chain.TxRequest) (result []byte, err error)
 }
 
-func (m *transactionServiceMock) Send(ctx context.Context, tx *types.Transaction) (txHash common.Hash, err error) {
+func (m *transactionServiceMock) Send(ctx context.Context, request *chain.TxRequest) (txHash common.Hash, err error) {
 	if m.send != nil {
-		return m.send(ctx, tx)
+		return m.send(ctx, request)
 	}
 	return common.Hash{}, errors.New("not implemented")
 }
@@ -53,7 +53,7 @@ type optionFunc func(*transactionServiceMock)
 
 func (f optionFunc) apply(r *transactionServiceMock) { f(r) }
 
-func WithSendFunc(f func(ctx context.Context, tx *types.Transaction) (txHash common.Hash, err error)) Option {
+func WithSendFunc(f func(ctx context.Context, request *chain.TxRequest) (txHash common.Hash, err error)) Option {
 	return optionFunc(func(s *transactionServiceMock) {
 		s.send = f
 	})
@@ -126,7 +126,7 @@ func WithABICall(abi *abi.ABI, result []byte, method string, params ...interface
 
 func WithABISend(abi *abi.ABI, txHash common.Hash, expectedAddress common.Address, expectedValue *big.Int, method string, params ...interface{}) Option {
 	return optionFunc(func(s *transactionServiceMock) {
-		s.send = func(ctx context.Context, tx *types.Transaction) (common.Hash, error) {
+		s.send = func(ctx context.Context, request *chain.TxRequest) (common.Hash, error) {
 			data, err := abi.Pack(method, params...)
 			if err != nil {
 				return common.Hash{}, err

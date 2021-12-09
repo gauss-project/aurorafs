@@ -62,7 +62,7 @@ type Traffic interface {
 // limit and nonce management.
 type Transaction interface {
 	// Send creates a transaction based on the request and sends it.
-	Send(ctx context.Context, tx *types.Transaction) (txHash common.Hash, err error)
+	Send(ctx context.Context, request *TxRequest) (txHash common.Hash, err error)
 	// Call simulate a transaction based on the request.
 	Call(ctx context.Context, request *TxRequest) (result []byte, err error)
 	// WaitForReceipt waits until either the transaction with the given hash has been mined or the context is cancelled.

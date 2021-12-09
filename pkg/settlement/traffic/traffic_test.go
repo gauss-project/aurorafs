@@ -31,13 +31,6 @@ import (
 	"testing"
 )
 
-const (
-	protocolName    = "pseudosettle"
-	protocolVersion = "1.0.0"
-	streamName      = "traffic" // stream for cheques
-	initStreamName  = "init"    // stream for handshake
-)
-
 type libp2pServiceOpts struct {
 	Logger      logging.Logger
 	Addressbook addressbook.Interface
@@ -345,7 +338,7 @@ func TestPayIssueError(t *testing.T) {
 	}
 
 	trafficService.trafficPeers.balance = new(big.Int).SetInt64(120)
-	err = trafficService.Pay(context.Background(), peerAddress,  new(big.Int).SetInt64(80))
+	err = trafficService.Pay(context.Background(), peerAddress, new(big.Int).SetInt64(80))
 	if err != nil {
 		t.Fatal(err)
 	}

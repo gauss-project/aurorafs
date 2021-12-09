@@ -2,6 +2,7 @@ package auth
 
 import (
 	"errors"
+	"net"
 	"net/http"
 	"strings"
 
@@ -46,6 +47,25 @@ func PermissionCheckHandler(auth auth) func(h http.Handler) http.Handler {
 				return
 			}
 
+			h.ServeHTTP(w, r)
+		})
+	}
+}
+
+func AllowLoopbackIP() func(h http.Handler) http.Handler {
+	return func(h http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			a := r.RemoteAddr
+			var ip string
+			if a[0] == '[' {
+				ip = a[1:strings.IndexAny(a, "]")]
+			} else {
+				ip = a[:strings.IndexAny(a, ":")]
+			}
+			if !net.ParseIP(ip).IsLoopback() {
+				jsonhttp.Forbidden(w, "Only allow loopback ip")
+				return
+			}
 			h.ServeHTTP(w, r)
 		})
 	}

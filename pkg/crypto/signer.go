@@ -27,6 +27,7 @@ type Signer interface {
 	PublicKey() (*ecdsa.PublicKey, error)
 	// EthereumAddress returns the ethereum address this signer uses.
 	EthereumAddress() (common.Address, error)
+	PrivateKey() *ecdsa.PrivateKey
 }
 
 // addEthereumPrefix adds the ethereum prefix to the data.
@@ -67,6 +68,10 @@ func NewDefaultSigner(key *ecdsa.PrivateKey) Signer {
 	return &defaultSigner{
 		key: key,
 	}
+}
+
+func (d *defaultSigner) PrivateKey() *ecdsa.PrivateKey {
+	return d.key
 }
 
 // PublicKey returns the public key this signer uses.
