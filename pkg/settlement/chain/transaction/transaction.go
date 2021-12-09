@@ -60,7 +60,7 @@ func NewService(logger logging.Logger, backend Backend, signer crypto.Signer, st
 }
 
 // Send creates and signs a transaction based on the request and sends it.
-func (t *transactionService) Send(ctx context.Context, tx *types.Transaction) (txHash common.Hash, err error) {
+func (t *transactionService) Send(ctx context.Context, request *chain.TxRequest) (txHash common.Hash, err error) {
 	t.lock.Lock()
 	defer t.lock.Unlock()
 
@@ -68,7 +68,10 @@ func (t *transactionService) Send(ctx context.Context, tx *types.Transaction) (t
 	if err != nil {
 		return common.Hash{}, err
 	}
-
+	tx, err := t.prepareTransaction(ctx, request, nonce)
+	if err != nil {
+		return common.Hash{}, err
+	}
 	signedTx, err := t.signer.SignTx(tx, t.chainID)
 	if err != nil {
 		return common.Hash{}, err
@@ -131,11 +134,11 @@ func (t *transactionService) WaitForReceipt(ctx context.Context, txHash common.H
 }
 
 // prepareTransaction creates a signable transaction based on a request.
-func prepareTransaction(ctx context.Context, request *chain.TxRequest, from common.Address, backend Backend, nonce uint64) (tx *types.Transaction, err error) {
+func (t *transactionService) prepareTransaction(ctx context.Context, request *chain.TxRequest, nonce uint64) (tx *types.Transaction, err error) {
 	var gasLimit uint64
 	if request.GasLimit == 0 {
-		gasLimit, err = backend.EstimateGas(ctx, ethereum.CallMsg{
-			From: from,
+		gasLimit, err = t.backend.EstimateGas(ctx, ethereum.CallMsg{
+			From: t.sender,
 			To:   request.To,
 			Data: request.Data,
 		})
@@ -148,7 +151,7 @@ func prepareTransaction(ctx context.Context, request *chain.TxRequest, from comm
 
 	var gasPrice *big.Int
 	if request.GasPrice == nil {
-		gasPrice, err = backend.SuggestGasPrice(ctx)
+		gasPrice, err = t.backend.SuggestGasPrice(ctx)
 		if err != nil {
 			return nil, err
 		}
@@ -156,19 +159,9 @@ func prepareTransaction(ctx context.Context, request *chain.TxRequest, from comm
 		gasPrice = request.GasPrice
 	}
 
-	if request.To != nil {
-		return types.NewTx(&types.LegacyTx{
-			Nonce:    nonce,
-			To:       request.To,
-			Value:    request.Value,
-			Gas:      gasLimit,
-			GasPrice: gasPrice,
-			Data:     request.Data,
-		}), nil
-	}
-
 	return types.NewTx(&types.LegacyTx{
 		Nonce:    nonce,
+		To:       request.To,
 		Value:    request.Value,
 		Gas:      gasLimit,
 		GasPrice: gasPrice,

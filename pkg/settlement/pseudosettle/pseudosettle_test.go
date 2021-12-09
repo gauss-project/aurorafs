@@ -3,6 +3,7 @@ package pseudosettle_test
 import (
 	"bytes"
 	"context"
+	"github.com/ethereum/go-ethereum/common"
 	"io"
 	"math/big"
 	"testing"
@@ -43,7 +44,7 @@ func TestPayment(t *testing.T) {
 	defer storeRecipient.Close()
 
 	observer := newTestObserver()
-	recipient := pseudosettle.New(nil, logger, storeRecipient)
+	recipient := pseudosettle.New(nil, logger, storeRecipient, common.Address{})
 	recipient.SetNotifyPaymentFunc(observer.NotifyPayment)
 
 	peerID := boson.MustParseHexAddress("9ee7add7")
@@ -55,7 +56,7 @@ func TestPayment(t *testing.T) {
 	storePayer := mock.NewStateStore()
 	defer storePayer.Close()
 
-	payer := pseudosettle.New(recorder, logger, storePayer)
+	payer := pseudosettle.New(recorder, logger, storePayer, common.Address{})
 
 	amount := big.NewInt(10000)
 

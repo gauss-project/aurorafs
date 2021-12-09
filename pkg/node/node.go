@@ -208,7 +208,7 @@ func NewAurora(nodeMode aurora.Model, addr string, bosonAddress boson.Address, p
 		return nil, fmt.Errorf("p2p service: %w", err)
 	}
 
-	oracleChain, settlement, apiInterface, err := InitChain(
+	oracleChain, settlement, apiInterface, transaction, err := InitChain(
 		p2pCtx,
 		logger,
 		o.OracleEndpoint,
@@ -419,7 +419,7 @@ func NewAurora(nodeMode aurora.Model, addr string, bosonAddress boson.Address, p
 		//}
 
 		// inject dependencies and configure full debug api http path routes
-		debugAPIService.Configure(p2ps, pingPong, kad, lightNodes, bootNodes, storer, route, chunkInfo, retrieve)
+		debugAPIService.Configure(p2ps, pingPong, kad, lightNodes, bootNodes, storer, route, chunkInfo, retrieve, transaction)
 		if apiInterface != nil {
 			debugAPIService.MustRegisterTraffic(apiInterface)
 		}

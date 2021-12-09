@@ -30,6 +30,27 @@ func NewAccounting(opts ...Option) accounting.Interface {
 	return mock
 }
 
+// WithReserveFunc sets the mock Reserve function
+func WithReserveFunc(f func(peer boson.Address, traffic uint64) error) Option {
+	return optionFunc(func(s *Service) {
+		s.reserveFunc = f
+	})
+}
+
+// WithCreditFunc sets the mock Credit function
+func WithCreditFunc(f func(ctx context.Context, peer boson.Address, traffic uint64) error) Option {
+	return optionFunc(func(s *Service) {
+		s.creditFunc = f
+	})
+}
+
+// WithDebitFunc sets the mock Debit function
+func WithDebitFunc(f func(peer boson.Address, traffic uint64) error) Option {
+	return optionFunc(func(s *Service) {
+		s.debitFunc = f
+	})
+}
+
 // Reserve is the mock function wrapper that calls the set implementation
 func (s *Service) Reserve(peer boson.Address, traffic uint64) error {
 	if s.reserveFunc != nil {

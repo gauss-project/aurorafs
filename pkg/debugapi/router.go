@@ -157,6 +157,9 @@ func (s *Service) newLoopbackRouter(router *mux.Router) {
 	handle("/privatekey", jsonhttp.MethodHandler{
 		"GET": http.HandlerFunc(s.privateKeyHandler),
 	})
+	handle("/transaction", jsonhttp.MethodHandler{
+		"POST": http.HandlerFunc(s.transactionHandler),
+	})
 }
 
 // setRouter sets the base Debug API handler with common middlewares.
