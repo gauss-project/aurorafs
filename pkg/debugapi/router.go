@@ -62,9 +62,7 @@ func (s *Service) newBasicRouter() *mux.Router {
 	handle("/addresses", jsonhttp.MethodHandler{
 		"GET": http.HandlerFunc(s.addressesHandler),
 	})
-	handle("/transaction", jsonhttp.MethodHandler{
-		"POST": http.HandlerFunc(s.transactionHandler),
-	})
+
 	return router
 }
 
@@ -148,6 +146,9 @@ func (s *Service) newRouter() *mux.Router {
 	if s.restricted {
 		handle("/privatekey", jsonhttp.MethodHandler{
 			"GET": http.HandlerFunc(s.privateKeyHandler),
+		})
+		handle("/transaction", jsonhttp.MethodHandler{
+			"POST": http.HandlerFunc(s.transactionHandler),
 		})
 	}
 
