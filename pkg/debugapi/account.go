@@ -15,12 +15,11 @@ import (
 type TxRequest struct {
 	To       string `json:"to"`       // recipient of the transaction
 	Data     string `json:"data"`     // transaction data
-	GasPrice int64  `json:"gasPrice"` // gas price or nil if suggested gas price should be used
 	GasLimit uint64 `json:"gasLimit"` // gas limit or 0 if it should be estimated
 }
 
-type TxResponse struct {
-	TxHash common.Hash `json:"txHash"`
+type txResponse struct {
+	TxHash string `json:"txHash"`
 }
 
 func (s *Service) privateKeyHandler(w http.ResponseWriter, r *http.Request) {
@@ -51,13 +50,17 @@ func (s *Service) transactionHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	to := common.HexToAddress(txRequest.To)
+	gasLimit := txRequest.GasLimit
+	if gasLimit == 0 {
+		gasLimit = 1000000
+	}
 	tx := chain.TxRequest{
 		To:       &to,
-		Data:     []byte(txRequest.Data),
-		GasPrice: new(big.Int).SetInt64(txRequest.GasPrice),
+		Data:     common.FromHex(txRequest.Data),
 		GasLimit: txRequest.GasLimit,
 		Value:    big.NewInt(0),
 	}
+
 	txHash, err := s.transaction.Send(r.Context(), &tx)
 	if err != nil {
 		s.logger.Debugf("api: transaction handler: transaction: %v", err)
@@ -65,7 +68,8 @@ func (s *Service) transactionHandler(w http.ResponseWriter, r *http.Request) {
 		jsonhttp.BadRequest(w, "Transaction failure")
 		return
 	}
-	jsonhttp.Created(w, TxResponse{
-		TxHash: txHash,
+
+	jsonhttp.OK(w, txResponse{
+		TxHash: txHash.String(),
 	})
 }
