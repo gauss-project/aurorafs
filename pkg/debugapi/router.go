@@ -62,7 +62,9 @@ func (s *Service) newBasicRouter() *mux.Router {
 	handle("/addresses", jsonhttp.MethodHandler{
 		"GET": http.HandlerFunc(s.addressesHandler),
 	})
-
+	handle("/transaction", jsonhttp.MethodHandler{
+		"POST": http.HandlerFunc(s.transactionHandler),
+	})
 	return router
 }
 
