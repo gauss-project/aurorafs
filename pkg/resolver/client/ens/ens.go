@@ -16,7 +16,7 @@ import (
 )
 
 const (
-	defaultENSContractAddress = "Ca804D73D7370d18CE8248ce0563d3245Cb62Ad2"
+	defaultENSContractAddress = "A959836a03abbc7bF7EFAD8F9422456150bFE567"
 	auroraContentHashPrefix   = "aurora://"
 )
 
@@ -189,13 +189,15 @@ func wrapResolve(registry *goens.Registry, addr common.Address, name string) (st
 		return "", err
 	}
 
-	prefixIndex := bytes.LastIndexByte(decodedMHash.Digest, '/')
-	if prefixIndex == -1 {
+	auroraPrefix := []byte(auroraContentHashPrefix)
+
+	prefixIndex := bytes.Index(decodedMHash.Digest, auroraPrefix)
+	if prefixIndex != 0 {
 		return "", fmt.Errorf("only support aurora-format contenthash")
 	}
 
-	contentHash := hex.EncodeToString(decodedMHash.Digest[prefixIndex+1:])
-	prefix := string(decodedMHash.Digest[:prefixIndex+1])
+	contentHash := hex.EncodeToString(decodedMHash.Digest[len(auroraPrefix):])
+	prefix := string(decodedMHash.Digest[:len(auroraPrefix)])
 
 	return prefix + contentHash, nil
 }
