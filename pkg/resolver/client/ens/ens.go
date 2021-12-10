@@ -16,7 +16,7 @@ import (
 )
 
 const (
-	defaultENSContractAddress = "173C66717598C3B65b55C7a4B21F300C94d9c4ed"
+	defaultENSContractAddress = "Ca804D73D7370d18CE8248ce0563d3245Cb62Ad2"
 	auroraContentHashPrefix   = "aurora://"
 )
 
