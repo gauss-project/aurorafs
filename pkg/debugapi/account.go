@@ -3,13 +3,14 @@ package debugapi
 import (
 	"encoding/json"
 	"fmt"
+	"io"
+	"math/big"
+	"net/http"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/gauss-project/aurorafs/pkg/crypto"
 	"github.com/gauss-project/aurorafs/pkg/jsonhttp"
 	"github.com/gauss-project/aurorafs/pkg/settlement/chain"
-	"io"
-	"math/big"
-	"net/http"
 )
 
 type TxRequest struct {
@@ -65,7 +66,7 @@ func (s *Service) transactionHandler(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		s.logger.Debugf("api: transaction handler: transaction: %v", err)
 		s.logger.Errorf("api: transaction handler: transaction")
-		jsonhttp.BadRequest(w, "Transaction failure")
+		jsonhttp.BadRequest(w, err.Error())
 		return
 	}
 
