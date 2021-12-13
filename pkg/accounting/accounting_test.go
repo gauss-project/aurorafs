@@ -17,6 +17,7 @@ import (
 
 var (
 	testPaymentTolerance = big.NewInt(1000)
+	testPaymentEarly     = big.NewInt(1000)
 	testPaymentThreshold = big.NewInt(10000)
 )
 
@@ -83,6 +84,9 @@ func TestAccountingCredit(t *testing.T) {
 			chequeSend = true
 			return nil
 		}),
+		traMock.WithAvailableBalance(func() (*big.Int, error) {
+			return new(big.Int).Add(testPaymentThreshold, big.NewInt(100)), nil
+		}),
 	)
 
 	defer store.Close()
@@ -94,6 +98,8 @@ func TestAccountingCredit(t *testing.T) {
 	}
 
 	_ = acc.Credit(context.Background(), peer1Addr, testPaymentThreshold.Uint64())
+	acc.Reserve(peer1Addr, new(big.Int).Add(testPaymentThreshold, big.NewInt(1)).Uint64())
+	err = acc.Credit(context.Background(), peer1Addr, testPaymentThreshold.Uint64())
 	time.Sleep(3 * time.Second)
 	if !chequeSend {
 		t.Fatal("Sending check failed.")
@@ -191,10 +197,10 @@ func TestAccountingNotifyPayment(t *testing.T) {
 	}
 
 	err = acc.NotifyPayment(peer1Addr, new(big.Int).SetUint64(debtAmount+testPaymentTolerance.Uint64()+1))
-	if err == nil {
+	if err != nil { //When the deduction is insufficient, the open check flow becomes zero.
 		t.Fatal(err)
 	}
-	if !strings.Contains(err.Error(), "unpaid traffic is less than paid traffic") {
-		t.Fatal("Balance check failed.")
-	}
+	//if !strings.Contains(err.Error(), "unpaid traffic is less than paid traffic") {
+	//	t.Fatal("Balance check failed.")
+	//}
 }

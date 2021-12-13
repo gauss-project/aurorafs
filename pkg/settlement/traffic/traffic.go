@@ -95,6 +95,7 @@ type Service struct {
 func New(logger logging.Logger, chainAddress common.Address, store storage.StateStorer, trafficChainService chain.Traffic,
 	chequeStore chequePkg.ChequeStore, cashout chequePkg.CashoutService, p2pService p2p.Service, addressBook Addressbook,
 	chequeSigner chequePkg.ChequeSigner, protocol trafficprotocol.Interface, chainID int64) *Service {
+
 	return &Service{
 		logger:              logger,
 		store:               store,
@@ -108,16 +109,16 @@ func New(logger logging.Logger, chainAddress common.Address, store storage.State
 		chequeSigner:        chequeSigner,
 		protocol:            protocol,
 		chainID:             chainID,
+		trafficPeers: TrafficPeer{
+			trafficPeers: make(map[string]Traffic),
+			balance:      big.NewInt(0),
+			totalPaidOut: big.NewInt(0),
+		},
 	}
+
 }
 
 func (s *Service) Init() error {
-	s.trafficPeers = TrafficPeer{
-		trafficPeers: make(map[string]Traffic),
-		balance:      big.NewInt(0),
-		totalPaidOut: big.NewInt(0),
-	}
-
 	s.trafficPeers.trafficMu.Lock()
 	defer s.trafficPeers.trafficMu.Unlock()
 	lastCheques, err := s.chequeStore.LastSendCheques()
@@ -589,7 +590,7 @@ func (s *Service) AvailableBalance() (*big.Int, error) {
 	return new(big.Int).Add(s.trafficPeers.balance, new(big.Int).Sub(cashed, transfer)), nil
 }
 
-func (s *Service) Handshake(peer boson.Address, recipient common.Address, cheque *chequePkg.SignedCheque) error {
+func (s *Service) Handshake(peer boson.Address, recipient common.Address, signedCheque *chequePkg.SignedCheque) error {
 	recipientLocal, known := s.addressBook.Beneficiary(peer)
 
 	if !known {
@@ -602,7 +603,7 @@ func (s *Service) Handshake(peer boson.Address, recipient common.Address, cheque
 			return err
 		}
 	} else {
-		if cheque.Signature != nil && cheque.Recipient != recipientLocal {
+		if signedCheque.Signature != nil && signedCheque.Recipient != recipientLocal {
 			return fmt.Errorf("error in verifying check receiver ")
 		}
 	}
@@ -612,13 +613,13 @@ func (s *Service) Handshake(peer boson.Address, recipient common.Address, cheque
 		return err
 	}
 
-	if cheque == nil || cheque.Signature == nil {
+	if signedCheque == nil || signedCheque.Signature == nil {
 		return nil
 	}
 	s.trafficPeers.trafficMu.Lock()
 	defer s.trafficPeers.trafficMu.Unlock()
 
-	isUser, err := s.chequeStore.VerifyCheque(cheque, s.chainID) //chequePkg.RecoverCheque(cheque, s.chainID)
+	isUser, err := s.chequeStore.VerifyCheque(signedCheque, s.chainID) //chequePkg.RecoverCheque(cheque, s.chainID)
 	if err != nil {
 		return err
 	}
@@ -626,20 +627,19 @@ func (s *Service) Handshake(peer boson.Address, recipient common.Address, cheque
 		return chequePkg.ErrChequeInvalid
 	}
 
-	singCheque, err := s.chequeStore.LastReceivedCheque(recipient)
+	cheque, err := s.chequeStore.LastSendCheque(recipient)
 	if err != nil && err != chequePkg.ErrNoCheque {
 		return err
 	}
 	if err == chequePkg.ErrNoCheque {
-		singCheque = &chequePkg.SignedCheque{
-			Cheque: chequePkg.Cheque{
-				CumulativePayout: new(big.Int).SetInt64(0),
-			},
+		cheque = &chequePkg.Cheque{
+			CumulativePayout: new(big.Int).SetInt64(0),
 		}
+
 	}
 
-	if cheque.CumulativePayout.Cmp(singCheque.CumulativePayout) > 0 {
-		return s.putSendCheque(context.Background(), &cheque.Cheque, recipient)
+	if signedCheque.CumulativePayout.Cmp(cheque.CumulativePayout) > 0 {
+		return s.putSendCheque(context.Background(), &signedCheque.Cheque, recipient)
 	}
 
 	return nil
