@@ -10,7 +10,6 @@ import (
 	"github.com/gauss-project/aurorafs/pkg/statestore/mock"
 	"io/ioutil"
 	"math/big"
-	"strings"
 	"testing"
 	"time"
 )
