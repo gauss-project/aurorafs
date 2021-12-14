@@ -26,6 +26,7 @@ import (
 	m "github.com/gauss-project/aurorafs/pkg/metrics"
 	"github.com/gauss-project/aurorafs/pkg/pinning"
 	"github.com/gauss-project/aurorafs/pkg/resolver"
+	"github.com/gauss-project/aurorafs/pkg/settlement/chain"
 	"github.com/gauss-project/aurorafs/pkg/settlement/traffic"
 	"github.com/gauss-project/aurorafs/pkg/storage"
 	"github.com/gauss-project/aurorafs/pkg/tracing"
@@ -88,16 +89,17 @@ type authenticator interface {
 }
 
 type server struct {
-	auth      authenticator
-	storer    storage.Storer
-	resolver  resolver.Interface
-	overlay   boson.Address
-	chunkInfo chunkinfo.Interface
-	traversal traversal.Traverser
-	pinning   pinning.Interface
-	logger    logging.Logger
-	tracer    *tracing.Tracer
-	traffic   traffic.ApiInterface
+	auth        authenticator
+	storer      storage.Storer
+	resolver    resolver.Interface
+	overlay     boson.Address
+	chunkInfo   chunkinfo.Interface
+	traversal   traversal.Traverser
+	pinning     pinning.Interface
+	logger      logging.Logger
+	tracer      *tracing.Tracer
+	traffic     traffic.ApiInterface
+	commonChain chain.Common
 	Options
 	http.Handler
 	metrics metrics
@@ -120,21 +122,24 @@ const (
 )
 
 // New will create a and initialize a new API service.
-func New(storer storage.Storer, resolver resolver.Interface, addr boson.Address, chunkInfo chunkinfo.Interface, traversalService traversal.Traverser, pinning pinning.Interface, auth authenticator, logger logging.Logger, tracer *tracing.Tracer, traffic traffic.ApiInterface, o Options) Service {
+func New(storer storage.Storer, resolver resolver.Interface, addr boson.Address, chunkInfo chunkinfo.Interface,
+	traversalService traversal.Traverser, pinning pinning.Interface, auth authenticator, logger logging.Logger,
+	tracer *tracing.Tracer, traffic traffic.ApiInterface, commonChain chain.Common, o Options) Service {
 	s := &server{
-		auth:      auth,
-		storer:    storer,
-		resolver:  resolver,
-		overlay:   addr,
-		chunkInfo: chunkInfo,
-		traversal: traversalService,
-		pinning:   pinning,
-		Options:   o,
-		logger:    logger,
-		tracer:    tracer,
-		metrics:   newMetrics(),
-		quit:      make(chan struct{}),
-		traffic:   traffic,
+		auth:        auth,
+		storer:      storer,
+		resolver:    resolver,
+		overlay:     addr,
+		chunkInfo:   chunkInfo,
+		traversal:   traversalService,
+		pinning:     pinning,
+		Options:     o,
+		logger:      logger,
+		tracer:      tracer,
+		commonChain: commonChain,
+		metrics:     newMetrics(),
+		quit:        make(chan struct{}),
+		traffic:     traffic,
 	}
 
 	BufferSizeMul = o.BufferSizeMul

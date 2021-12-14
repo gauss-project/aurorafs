@@ -178,6 +178,7 @@ func (s *server) setupRouting() {
 			"POST": http.HandlerFunc(s.cashCheque),
 		})),
 	)
+	s.newLoopbackRouter(router)
 
 	s.Handler = web.ChainHandlers(
 		httpaccess.NewHTTPAccessLogHandler(s.logger, logrus.InfoLevel, s.tracer, "api access"),
@@ -201,7 +202,22 @@ func (s *server) setupRouting() {
 		web.FinalHandler(router),
 	)
 }
+func (s *server) newLoopbackRouter(router *mux.Router) {
+	var handle = func(path string, handler http.Handler) {
+		handler = web.ChainHandlers(
+			//auth.AllowLoopbackIP(),
+			web.FinalHandler(handler),
+		)
+		router.Handle(path, handler)
+	}
 
+	handle("/chain", web.ChainHandlers(
+		web.FinalHandler(jsonhttp.MethodHandler{
+			"POST": http.HandlerFunc(s.chainHandler),
+		})),
+	)
+
+}
 func (s *server) gatewayModeForbidEndpointHandler(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if s.GatewayMode {
