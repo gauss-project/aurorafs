@@ -23,6 +23,15 @@ type TxRequest struct {
 	Value    *big.Int        // amount of wei to send
 }
 
+type AllRequest struct {
+	Method string
+	Params []interface{}
+}
+
+type AllResponse struct {
+	Result interface{}
+}
+
 type Resolver interface {
 	// GetCid Resolve cid from  uri
 	GetCid(aufsUri string) []byte
@@ -67,4 +76,8 @@ type Transaction interface {
 	Call(ctx context.Context, request *TxRequest) (result []byte, err error)
 	// WaitForReceipt waits until either the transaction with the given hash has been mined or the context is cancelled.
 	WaitForReceipt(ctx context.Context, txHash common.Hash) (receipt *types.Receipt, err error)
+}
+
+type Common interface {
+	All(ctx context.Context, request *AllRequest) (*AllResponse, error)
 }

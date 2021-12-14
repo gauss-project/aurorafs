@@ -149,16 +149,13 @@ func (s *Service) newRouter() *mux.Router {
 func (s *Service) newLoopbackRouter(router *mux.Router) {
 	var handle = func(path string, handler http.Handler) {
 		handler = web.ChainHandlers(
-			auth.AllowLoopbackIP(),
+			//auth.AllowLoopbackIP(),
 			web.FinalHandler(handler),
 		)
 		router.Handle(path, handler)
 	}
 	handle("/privatekey", jsonhttp.MethodHandler{
 		"GET": http.HandlerFunc(s.privateKeyHandler),
-	})
-	handle("/transaction", jsonhttp.MethodHandler{
-		"POST": http.HandlerFunc(s.transactionHandler),
 	})
 }
 
