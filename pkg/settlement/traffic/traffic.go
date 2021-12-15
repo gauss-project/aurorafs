@@ -700,6 +700,7 @@ func (s *Service) ReceiveCheque(ctx context.Context, peer boson.Address, cheque 
 		transChequeTraffic := localTraffic.transferChequeTraffic
 		transChequeTraffic = big.NewInt(0).Add(transChequeTraffic, transferCheque)
 		localTraffic.transferChequeTraffic = transChequeTraffic
+		localTraffic.transferTraffic = s.maxBigint(localTraffic.transferTraffic, localTraffic.transferChequeTraffic)
 		s.trafficPeers.trafficPeers[cheque.Beneficiary.String()] = localTraffic
 	} else {
 		traffic := newTraffic()
