@@ -327,7 +327,7 @@ func (s *Service) retrieveChunk(ctx context.Context, route aco.Route, rootAddr, 
 	if exists[0] {
 		s.logger.Errorf("cid %s storer is exists", chunkAddr.String())
 	} else {
-		s.logger.Errorf("store put %s", chunkAddr.String())
+		s.logger.Tracef("store put %s", chunkAddr.String())
 	}
 	return
 }
