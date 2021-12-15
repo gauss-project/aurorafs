@@ -351,7 +351,6 @@ func (s *server) downloadHandler(w http.ResponseWriter, r *http.Request, referen
 	reader, l, err := joiner.New(r.Context(), s.storer, reference)
 	if err != nil {
 		if errors.Is(err, storage.ErrNotFound) {
-			s.chunkInfo.Init(r.Context(), nil, sctx.GetRootCID(r.Context()))
 			logger.Debugf("api download: not found %s: %v", reference, err)
 			logger.Error("api download: not found")
 			jsonhttp.NotFound(w, nil)

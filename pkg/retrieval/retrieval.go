@@ -4,9 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/gauss-project/aurorafs/pkg/accounting"
 	"time"
 
+	"github.com/gauss-project/aurorafs/pkg/accounting"
 	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/cac"
 	"github.com/gauss-project/aurorafs/pkg/chunkinfo"
@@ -61,7 +61,7 @@ type retrievalResult struct {
 
 const (
 	retrieveChunkTimeout          = 10 * time.Second
-	retrieveRetryIntervalDuration = 5 * time.Second
+	retrieveRetryIntervalDuration = 10 * time.Second
 	totalRouteCount               = 5
 )
 
@@ -102,16 +102,20 @@ func (s *Service) Protocol() p2p.ProtocolSpec {
 func (s *Service) RetrieveChunk(ctx context.Context, rootAddr, chunkAddr boson.Address) (chunk boson.Chunk, err error) {
 	s.metrics.RequestCounter.Inc()
 
-	flightRoute := fmt.Sprintf("%v,%v", rootAddr, chunkAddr)
-
+	flightRoute := fmt.Sprintf("%s,%s", rootAddr, chunkAddr)
 	topCtx := ctx
 
-	v, _, err := s.singleflight.Do(ctx, flightRoute, func(ctx context.Context) (interface{}, error) {
+	v, _, err := s.singleflight.Do(context.Background(), flightRoute, func(ctx context.Context) (interface{}, error) {
 		var (
-			maxRequestAttemp int = 2
-			resultC              = make(chan retrievalResult, totalRouteCount)
+			maxRequestAttempt = 2
+			requestAttempt    int
+			resultC           = make(chan retrievalResult, totalRouteCount)
 		)
-
+		ctx = tracing.WithContext(context.Background(), tracing.FromContext(topCtx))
+		// get the tracing span
+		span, _, ctx := s.tracer.StartSpanFromContext(ctx, "retrieve-chunk", s.logger,
+			opentracing.Tag{Key: "rootAddr,chunkAddr", Value: flightRoute})
+		defer span.Finish()
 		ticker := time.NewTicker(retrieveRetryIntervalDuration)
 		defer ticker.Stop()
 
@@ -120,33 +124,21 @@ func (s *Service) RetrieveChunk(ctx context.Context, rootAddr, chunkAddr boson.A
 			return nil, fmt.Errorf("no route available")
 		}
 
-		requestAttemp := 0
-		for requestAttemp < maxRequestAttemp {
-			requestAttemp++
-
+		for requestAttempt < maxRequestAttempt {
+			requestAttempt++
 			for _, retrievalRoute := range routeList {
 				s.metrics.PeerRequestCounter.Inc()
 
-				// create a new context without cancelation but
-				// set the tracing span to the new context from the context of the first caller
-				ctx1 := tracing.WithContext(topCtx, tracing.FromContext(topCtx))
-
-				// get the tracing span
-				span, _, ctx1 := s.tracer.StartSpanFromContext(ctx1, "retrieve-chunk", s.logger,
-					opentracing.Tag{Key: "rootAddr,chunkAddr", Value: rootAddr.String() + "," + chunkAddr.String()})
-				defer span.Finish()
-
 				go func() {
-					ctx1, cancel := context.WithTimeout(ctx1, retrieveChunkTimeout)
+					ctx, cancel := context.WithCancel(ctx)
 					defer cancel()
-
-					chunk, err := s.retrieveChunk(ctx1, retrievalRoute, rootAddr, chunkAddr)
+					chunk, err := s.retrieveChunk(ctx, retrievalRoute, rootAddr, chunkAddr)
 					select {
 					case resultC <- retrievalResult{
 						chunk: chunk,
 						err:   err,
 					}:
-					case <-ctx1.Done():
+					case <-ctx.Done():
 					}
 				}()
 
@@ -179,45 +171,38 @@ func (s *Service) RetrieveChunk(ctx context.Context, rootAddr, chunkAddr boson.A
 func (s *Service) RetrieveChunkFromNode(ctx context.Context, targetNode boson.Address, rootAddr, chunkAddr boson.Address) (boson.Chunk, error) {
 	s.metrics.RequestCounter.Inc()
 
-	flightRoute := fmt.Sprintf("%v,%v", targetNode.String(), chunkAddr.String())
-
+	flightRoute := fmt.Sprintf("%s,%s", targetNode.String(), chunkAddr.String())
 	topCtx := ctx
-
-	v, _, err := s.singleflight.Do(ctx, flightRoute, func(ctx context.Context) (interface{}, error) {
+	v, _, err := s.singleflight.Do(context.Background(), flightRoute, func(ctx context.Context) (interface{}, error) {
+		// get the tracing span
+		ctx = tracing.WithContext(context.Background(), tracing.FromContext(topCtx))
+		span, logger, ctx := s.tracer.StartSpanFromContext(ctx, "retrieve-chunk", s.logger,
+			opentracing.Tag{Key: "targetNode,rootAddr,chunkAddr", Value: flightRoute})
+		defer span.Finish()
 		retrievalRoute := aco.NewRoute(targetNode, targetNode)
 		var (
-			maxRequestAttemp int = 1
-			resultC              = make(chan retrievalResult, maxRequestAttemp)
+			maxRequestAttempt = 1
+			requestAttempt    = 0
+			resultC           = make(chan retrievalResult, maxRequestAttempt)
 		)
 		ticker := time.NewTicker(retrieveRetryIntervalDuration)
 		defer ticker.Stop()
 
-		requestAttemp := 0
-		for requestAttemp < maxRequestAttemp {
-			requestAttemp++
-
-			// create a new context without cancelation but
-			// set the tracing span to the new context from the context of the first caller
-			ctx1 := tracing.WithContext(context.Background(), tracing.FromContext(topCtx))
-
-			// get the tracing span
-			span, _, ctx1 := s.tracer.StartSpanFromContext(ctx1, "retrieve-chunk", s.logger,
-				opentracing.Tag{Key: "rootAddr,chunkAddr", Value: rootAddr.String() + "," + chunkAddr.String()})
-			defer span.Finish()
-
+		for {
+			requestAttempt++
 			s.metrics.PeerRequestCounter.Inc()
 			go func() {
-				// cancel the goroutine just with the timeout
-				ctx1, cancel := context.WithTimeout(ctx1, retrieveChunkTimeout)
+
+				ctx, cancel := context.WithCancel(ctx)
 				defer cancel()
 
-				chunk, err := s.retrieveChunk(ctx1, retrievalRoute, rootAddr, chunkAddr)
+				chunk, err := s.retrieveChunk(ctx, retrievalRoute, rootAddr, chunkAddr)
 				select {
 				case resultC <- retrievalResult{
 					chunk: chunk,
 					err:   err,
 				}:
-				case <-ctx1.Done():
+				case <-ctx.Done():
 				}
 			}()
 
@@ -226,20 +211,19 @@ func (s *Service) RetrieveChunkFromNode(ctx context.Context, targetNode boson.Ad
 				// continu next for route
 			case result := <-resultC:
 				if result.err != nil {
-					s.logger.Debugf("retrieval: failed to get chunk (%s,%s) from route %s: %v",
+					logger.Debugf("retrieval: failed to get chunk (%s,%s) from route %s: %v",
 						rootAddr, chunkAddr, retrievalRoute, result.err)
-					continue
 				} else {
 					return result.chunk, nil
 				}
 			case <-ctx.Done():
-				s.logger.Tracef("retrieval: failed to get chunk: ctx.Done() (%s:%s): %v", rootAddr, chunkAddr, ctx.Err())
+				logger.Tracef("retrieval: failed to get chunk: ctx.Done() (%s:%s): %v", rootAddr, chunkAddr, ctx.Err())
 				return nil, fmt.Errorf("retrieval: %w", ctx.Err())
 			}
+			if requestAttempt >= maxRequestAttempt {
+				return nil, storage.ErrNotFound
+			}
 		}
-
-		// return s.retrieveChunk(ctx, route, rootAddr, chunkAddr)
-		return nil, storage.ErrNotFound
 	})
 	if err != nil {
 		return nil, err
@@ -336,11 +320,15 @@ func (s *Service) retrieveChunk(ctx context.Context, route aco.Route, rootAddr, 
 	if err != nil {
 		return nil, fmt.Errorf("retrieval: report chunk source: %v", err)
 	}
-	_, err = s.storer.Put(sctx.SetRootCID(ctx, rootAddr), storage.ModePutRequest, chunk)
+	exists, err := s.storer.Put(sctx.SetRootCID(ctx, rootAddr), storage.ModePutRequest, chunk)
 	if err != nil {
 		return nil, fmt.Errorf("retrieval: storage put cache:%v", err)
 	}
-
+	if exists[0] {
+		s.logger.Errorf("cid %s storer is exists", chunkAddr.String())
+	} else {
+		s.logger.Errorf("store put %s", chunkAddr.String())
+	}
 	return
 }
 
@@ -370,7 +358,6 @@ func (s *Service) handler(ctx context.Context, p p2p.Peer, stream p2p.Stream) (e
 	)
 	defer span.Finish()
 
-	forward := false
 	chunk, err := s.storer.Get(ctx, storage.ModeGetRequest, chunkAddr)
 	if err != nil {
 		if errors.Is(err, storage.ErrNotFound) {
@@ -380,24 +367,21 @@ func (s *Service) handler(ctx context.Context, p p2p.Peer, stream p2p.Stream) (e
 				if chunk, err = s.RetrieveChunkFromNode(ctx, targetAddr, rootAddr, chunkAddr); err != nil {
 					return fmt.Errorf("retrieve chunk: %w", err)
 				}
-				// if chunk, err = s.RetrieveChunk(ctx, rootAddr, chunkAddr); err!= nil{
-				// 	return fmt.Errorf("retrieve chunk: %w", err)
-				// }
-				forward = true
 			}
 		} else {
 			return fmt.Errorf("get from store: %w", err)
 		}
 	}
-	if err := s.accounting.Debit(p.Address, 256*1024*8); err != nil {
-		return err
-	}
+
 	if err := w.WriteMsgWithContext(ctx, &pb.Delivery{
 		Data: chunk.Data(),
 	}); err != nil {
 		return fmt.Errorf("write delivery: %w peer %s", err, p.Address.String())
 	}
 
+	if err := s.accounting.Debit(p.Address, 256*1024*8); err != nil {
+		return err
+	}
 	if s.chunkinfo != nil && p.Mode.IsFull() {
 		s.logger.Tracef("retrieval: chunk %s transfer to node %s", chunkAddr, p.Address)
 		err := s.chunkinfo.OnChunkTransferred(chunkAddr, rootAddr, p.Address, targetAddr)
@@ -406,13 +390,6 @@ func (s *Service) handler(ctx context.Context, p p2p.Peer, stream p2p.Stream) (e
 		}
 	}
 
-	if forward {
-		_, err = s.storer.Put(sctx.SetRootCID(ctx, rootAddr), storage.ModePutRequest, chunk)
-		if err != nil {
-			return fmt.Errorf("retrieve cache put :%w", err)
-		}
-	}
-	// s.logger.Tracef("retrieval protocol debiting peer %s", p.Address.String())
 	s.metrics.TotalTransferred.Inc()
 	return nil
 }
