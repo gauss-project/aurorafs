@@ -208,7 +208,7 @@ func NewAurora(nodeMode aurora.Model, addr string, bosonAddress boson.Address, p
 		return nil, fmt.Errorf("p2p service: %w", err)
 	}
 
-	oracleChain, settlement, apiInterface, transaction, err := InitChain(
+	oracleChain, settlement, apiInterface, commonChain, err := InitChain(
 		p2pCtx,
 		logger,
 		o.OracleEndpoint,
@@ -361,13 +361,15 @@ func NewAurora(nodeMode aurora.Model, addr string, bosonAddress boson.Address, p
 	var apiService api.Service
 	if o.APIAddr != "" {
 		// API server
-		apiService = api.New(ns, multiResolver, bosonAddress, chunkInfo, traversalService, pinningService, authenticator, logger, tracer, apiInterface, api.Options{
-			CORSAllowedOrigins: o.CORSAllowedOrigins,
-			GatewayMode:        o.GatewayMode,
-			WsPingPeriod:       60 * time.Second,
-			BufferSizeMul:      o.ApiBufferSizeMul,
-			Restricted:         o.Restricted,
-		})
+		apiService = api.New(ns, multiResolver, bosonAddress, chunkInfo, traversalService, pinningService,
+			authenticator, logger, tracer, apiInterface, commonChain,
+			api.Options{
+				CORSAllowedOrigins: o.CORSAllowedOrigins,
+				GatewayMode:        o.GatewayMode,
+				WsPingPeriod:       60 * time.Second,
+				BufferSizeMul:      o.ApiBufferSizeMul,
+				Restricted:         o.Restricted,
+			})
 		apiListener, err := net.Listen("tcp", o.APIAddr)
 		if err != nil {
 			return nil, fmt.Errorf("api listener: %w", err)
@@ -419,7 +421,7 @@ func NewAurora(nodeMode aurora.Model, addr string, bosonAddress boson.Address, p
 		//}
 
 		// inject dependencies and configure full debug api http path routes
-		debugAPIService.Configure(p2ps, pingPong, kad, lightNodes, bootNodes, storer, route, chunkInfo, retrieve, transaction)
+		debugAPIService.Configure(p2ps, pingPong, kad, lightNodes, bootNodes, storer, route, chunkInfo, retrieve)
 		if apiInterface != nil {
 			debugAPIService.MustRegisterTraffic(apiInterface)
 		}

@@ -10,6 +10,7 @@ import (
 	"github.com/gauss-project/aurorafs/pkg/p2p/libp2p"
 	"github.com/gauss-project/aurorafs/pkg/settlement"
 	"github.com/gauss-project/aurorafs/pkg/settlement/chain"
+	chainCommon "github.com/gauss-project/aurorafs/pkg/settlement/chain/common"
 	"github.com/gauss-project/aurorafs/pkg/settlement/chain/oracle"
 	chainTraffic "github.com/gauss-project/aurorafs/pkg/settlement/chain/traffic"
 	"github.com/gauss-project/aurorafs/pkg/settlement/chain/transaction"
@@ -31,7 +32,7 @@ func InitChain(
 	signer crypto.Signer,
 	trafficEnable bool,
 	trafficContractAddr string,
-	p2pService *libp2p.Service) (chain.Resolver, settlement.Interface, traffic.ApiInterface, chain.Transaction, error) {
+	p2pService *libp2p.Service) (chain.Resolver, settlement.Interface, traffic.ApiInterface, chain.Common, error) {
 	backend, err := ethclient.Dial(endpoint)
 	if err != nil {
 		return nil, nil, nil, nil, fmt.Errorf("dial eth client: %w", err)
@@ -59,13 +60,17 @@ func InitChain(
 	if err != nil {
 		return nil, nil, nil, nil, fmt.Errorf("new transaction service: %w", err)
 	}
+	cc, err := chainCommon.New(logger, signer, chainID, endpoint)
+	if err != nil {
+		return nil, nil, nil, nil, fmt.Errorf("new common serveice: %v", err)
+	}
 	if !trafficEnable {
 		service := pseudosettle.New(p2pService, logger, stateStore, address)
 		if err = service.Init(); err != nil {
 			return nil, nil, nil, nil, fmt.Errorf("InitTraffic:: %w", err)
 		}
 
-		return oracleServer, service, service, transactionService, nil
+		return oracleServer, service, service, cc, nil
 	}
 	trafficChainService, err := chainTraffic.NewServer(logger, backend, trafficContractAddr)
 	if err != nil {
@@ -81,7 +86,7 @@ func InitChain(
 		return nil, nil, nil, nil, fmt.Errorf("InitChain: %w", err)
 	}
 
-	return oracleServer, trafficService, trafficService, transactionService, nil
+	return oracleServer, trafficService, trafficService, cc, nil
 }
 
 func InitTraffic(store storage.StateStorer, address common.Address, trafficChainService chain.Traffic,
