@@ -119,7 +119,7 @@ func (s *Service) RetrieveChunk(ctx context.Context, rootAddr, chunkAddr boson.A
 		ticker := time.NewTicker(retrieveRetryIntervalDuration)
 		defer ticker.Stop()
 
-		routeList := s.getRetrievalRouteList(ctx, rootAddr, chunkAddr)
+		routeList := s.getRetrievalRouteList(rootAddr, chunkAddr)
 		if len(routeList) == 0 {
 			return nil, fmt.Errorf("no route available")
 		}
@@ -176,7 +176,7 @@ func (s *Service) RetrieveChunkFromNode(ctx context.Context, targetNode boson.Ad
 	v, _, err := s.singleflight.Do(context.Background(), flightRoute, func(ctx context.Context) (interface{}, error) {
 		// get the tracing span
 		ctx = tracing.WithContext(context.Background(), tracing.FromContext(topCtx))
-		span, logger, ctx := s.tracer.StartSpanFromContext(ctx, "retrieve-chunk", s.logger,
+		span, _, ctx := s.tracer.StartSpanFromContext(ctx, "retrieve-chunk", s.logger,
 			opentracing.Tag{Key: "targetNode,rootAddr,chunkAddr", Value: flightRoute})
 		defer span.Finish()
 		retrievalRoute := aco.NewRoute(targetNode, targetNode)
@@ -211,13 +211,13 @@ func (s *Service) RetrieveChunkFromNode(ctx context.Context, targetNode boson.Ad
 				// continu next for route
 			case result := <-resultC:
 				if result.err != nil {
-					logger.Debugf("retrieval: failed to get chunk (%s,%s) from route %s: %v",
+					s.logger.Debugf("retrieval: failed to get chunk (%s,%s) from route %s: %v",
 						rootAddr, chunkAddr, retrievalRoute, result.err)
 				} else {
 					return result.chunk, nil
 				}
 			case <-ctx.Done():
-				logger.Tracef("retrieval: failed to get chunk: ctx.Done() (%s:%s): %v", rootAddr, chunkAddr, ctx.Err())
+				s.logger.Tracef("retrieval: failed to get chunk: ctx.Done() (%s:%s): %v", rootAddr, chunkAddr, ctx.Err())
 				return nil, fmt.Errorf("retrieval: %w", ctx.Err())
 			}
 			if requestAttempt >= maxRequestAttempt {
@@ -281,7 +281,9 @@ func (s *Service) retrieveChunk(ctx context.Context, route aco.Route, rootAddr, 
 		if err != nil {
 			_ = stream.Reset()
 		} else {
-			go stream.FullClose()
+			go func() {
+				_ = stream.FullClose()
+			}()
 		}
 	}()
 
@@ -325,9 +327,7 @@ func (s *Service) retrieveChunk(ctx context.Context, route aco.Route, rootAddr, 
 		return nil, fmt.Errorf("retrieval: storage put cache:%v", err)
 	}
 	if exists[0] {
-		s.logger.Errorf("cid %s storer is exists", chunkAddr.String())
-	} else {
-		s.logger.Tracef("store put %s", chunkAddr.String())
+		s.logger.Warningf("cid %s store is exists", chunkAddr.String())
 	}
 	return
 }
@@ -339,7 +339,9 @@ func (s *Service) handler(ctx context.Context, p p2p.Peer, stream p2p.Stream) (e
 			s.metrics.ChunkTransferredError.Inc()
 			_ = stream.Reset()
 		} else {
-			go stream.FullClose()
+			go func() {
+				_ = stream.FullClose()
+			}()
 		}
 	}()
 	s.logger.Tracef("handler %v recv msg from: %v", s.addr.String(), p.Address.String())
@@ -394,7 +396,7 @@ func (s *Service) handler(ctx context.Context, p p2p.Peer, stream p2p.Stream) (e
 	return nil
 }
 
-func (s *Service) getRetrievalRouteList(ctx context.Context, rootAddr, chunkAddr boson.Address) []aco.Route {
+func (s *Service) getRetrievalRouteList(rootAddr, chunkAddr boson.Address) []aco.Route {
 	chunkResult := s.chunkinfo.GetChunkInfo(rootAddr, chunkAddr)
 	if len(chunkResult) == 0 {
 		// return nil, fmt.Errorf("no result from chunkinfo")
