@@ -79,13 +79,13 @@ func (s *server) cashCheque(w http.ResponseWriter, r *http.Request) {
 	nameOrHex := mux.Vars(r)["address"]
 	peer, err := s.resolveNameOrAddress(nameOrHex)
 	if err != nil {
-		s.logger.Error("api cashCheque: parse address %s: %v", nameOrHex, err)
+		s.logger.Errorf("api cashCheque: parse address %s: %v", nameOrHex, err)
 		jsonhttp.NotFound(w, nil)
 		return
 	}
 	hash, err := s.traffic.CashCheque(context.Background(), peer)
 	if err != nil {
-		s.logger.Error("api cashCheque: query failed %s: %v", nameOrHex, err)
+		s.logger.Errorf("api cashCheque: query failed %s: %v", nameOrHex, err)
 		jsonhttp.NotFound(w, nil)
 		return
 	}

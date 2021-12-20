@@ -328,7 +328,7 @@ func TestPayIssueError(t *testing.T) {
 	p2pStream := &trafficProtocolMock{}
 
 	logger := logging.New(ioutil.Discard, 0)
-	transactionService, err := chainTraffic.NewServer(logger, nil, "") //transaction.NewService(logger, nil, Signer, nil, new(big.Int).SetInt64(10))
+	transactionService, err := chainTraffic.NewServer(logger, nil, nil, nil, nil, "") //transaction.NewService(logger, nil, Signer, nil, new(big.Int).SetInt64(10))
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -1,6 +1,7 @@
 package mock
 
 import (
+	"context"
 	"errors"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -66,7 +67,7 @@ func (m *ChainTrafficMock) TransAmount(beneficiary, recipient common.Address) (*
 	return big.NewInt(0), errors.New("not implemented")
 }
 
-func (m *ChainTrafficMock) CashChequeBeneficiary(beneficiary, recipient common.Address, cumulativePayout *big.Int, signature []byte) (*types.Transaction, error) {
+func (m *ChainTrafficMock) CashChequeBeneficiary(ctx context.Context, beneficiary, recipient common.Address, cumulativePayout *big.Int, signature []byte) (*types.Transaction, error) {
 	if m.cashChequeBeneficiary != nil {
 		return m.cashChequeBeneficiary(beneficiary, recipient, cumulativePayout, signature)
 	}

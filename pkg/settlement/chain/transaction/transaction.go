@@ -64,7 +64,7 @@ func (t *transactionService) Send(ctx context.Context, request *chain.TxRequest)
 	t.lock.Lock()
 	defer t.lock.Unlock()
 
-	nonce, err := t.nextNonce(ctx)
+	nonce, err := t.NextNonce(ctx)
 	if err != nil {
 		return common.Hash{}, err
 	}
@@ -173,7 +173,7 @@ func (t *transactionService) nonceKey() string {
 	return fmt.Sprintf("%s%x", noncePrefix, t.sender)
 }
 
-func (t *transactionService) nextNonce(ctx context.Context) (uint64, error) {
+func (t *transactionService) NextNonce(ctx context.Context) (uint64, error) {
 	onchainNonce, err := t.backend.PendingNonceAt(ctx, t.sender)
 	if err != nil {
 		return 0, err
