@@ -75,7 +75,7 @@ type ApiInterface interface {
 	TrafficInit() error
 }
 
-const trafficChainRefreshDuration = 24 * 60 * time.Minute
+const trafficChainRefreshDuration = 24 * time.Hour
 
 type Service struct {
 	logger              logging.Logger
