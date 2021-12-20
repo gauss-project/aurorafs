@@ -13,6 +13,7 @@ import (
 	chequePkg "github.com/gauss-project/aurorafs/pkg/settlement/traffic/cheque"
 	"github.com/gauss-project/aurorafs/pkg/settlement/traffic/trafficprotocol"
 	"github.com/gauss-project/aurorafs/pkg/storage"
+	"time"
 
 	"math/big"
 	"sync"
@@ -74,6 +75,8 @@ type ApiInterface interface {
 	TrafficInit() error
 }
 
+const trafficChainRefreshDuration = 24 * 60 * time.Minute
+
 type Service struct {
 	logger              logging.Logger
 	chainAddress        common.Address
@@ -96,7 +99,7 @@ func New(logger logging.Logger, chainAddress common.Address, store storage.State
 	chequeStore chequePkg.ChequeStore, cashout chequePkg.CashoutService, p2pService p2p.Service, addressBook Addressbook,
 	chequeSigner chequePkg.ChequeSigner, protocol trafficprotocol.Interface, chainID int64) *Service {
 
-	return &Service{
+	service := &Service{
 		logger:              logger,
 		store:               store,
 		chainAddress:        chainAddress,
@@ -115,48 +118,31 @@ func New(logger logging.Logger, chainAddress common.Address, store storage.State
 			totalPaidOut: big.NewInt(0),
 		},
 	}
-
+	service.triggerRefreshInit()
+	return service
 }
 
 func (s *Service) Init() error {
-	s.trafficPeers.trafficMu.Lock()
-	defer s.trafficPeers.trafficMu.Unlock()
-	lastCheques, err := s.chequeStore.LastSendCheques()
+	err := s.trafficInit()
 	if err != nil {
-		s.logger.Errorf("Traffic failed to obtain local check information. ")
 		return err
 	}
-
-	lastTransCheques, err := s.chequeStore.LastReceivedCheques()
-	if err != nil {
-		s.logger.Errorf("Traffic failed to obtain local check information. ")
-		return err
-	}
-
-	addressList, err := s.getAllAddress(lastCheques, lastTransCheques)
-	if err != nil {
-		return fmt.Errorf("traffic: Failed to get chain node information:%v ", err)
-	}
-
-	err = s.replaceTraffic(addressList, lastCheques, lastTransCheques)
-	if err != nil {
-		return fmt.Errorf("traffic: Update of local traffic data failed. ")
-	}
-
-	//transferTotal, err := s.trafficChainService.TransferredTotal(k)
-	balance, err := s.trafficChainService.BalanceOf(s.chainAddress)
-	if err != nil {
-		return fmt.Errorf("failed to get the chain balance")
-	}
-	s.trafficPeers.balance = balance
-
-	paiOut, err := s.trafficChainService.TransferredTotal(s.chainAddress)
-	if err != nil {
-		return fmt.Errorf("failed to get the chain totalPaidOut")
-	}
-	s.trafficPeers.totalPaidOut = paiOut
 
 	return s.addressBook.InitAddressBook()
+}
+
+func (s *Service) triggerRefreshInit() {
+	ticker := time.NewTicker(trafficChainRefreshDuration)
+	go func(t *time.Ticker) {
+		for {
+			<-t.C
+			err := s.trafficInit()
+			if err != nil {
+				s.logger.Errorf("traffic-InitChain: %w", err)
+				//os.Exit(1)
+			}
+		}
+	}(ticker)
 }
 
 func newTraffic() *Traffic {
@@ -215,6 +201,45 @@ func (s *Service) getAllAddress(lastCheques map[common.Address]*chequePkg.Cheque
 	return chanResp, err
 }
 
+func (s *Service) trafficInit() error {
+	s.trafficPeers.trafficMu.Lock()
+	defer s.trafficPeers.trafficMu.Unlock()
+	lastCheques, err := s.chequeStore.LastSendCheques()
+	if err != nil {
+		s.logger.Errorf("Traffic failed to obtain local check information. ")
+		return err
+	}
+
+	lastTransCheques, err := s.chequeStore.LastReceivedCheques()
+	if err != nil {
+		s.logger.Errorf("Traffic failed to obtain local check information. ")
+		return err
+	}
+
+	addressList, err := s.getAllAddress(lastCheques, lastTransCheques)
+	if err != nil {
+		return fmt.Errorf("traffic: Failed to get chain node information:%v ", err)
+	}
+
+	err = s.replaceTraffic(addressList, lastCheques, lastTransCheques)
+	if err != nil {
+		return fmt.Errorf("traffic: Update of local traffic data failed. ")
+	}
+
+	//transferTotal, err := s.trafficChainService.TransferredTotal(k)
+	balance, err := s.trafficChainService.BalanceOf(s.chainAddress)
+	if err != nil {
+		return fmt.Errorf("failed to get the chain balance")
+	}
+	s.trafficPeers.balance = balance
+
+	paiOut, err := s.trafficChainService.TransferredTotal(s.chainAddress)
+	if err != nil {
+		return fmt.Errorf("failed to get the chain totalPaidOut")
+	}
+	s.trafficPeers.totalPaidOut = paiOut
+	return nil
+}
 func (s *Service) replaceTraffic(addressList map[common.Address]Traffic, lastCheques map[common.Address]*chequePkg.Cheque, lastTransCheques map[common.Address]*chequePkg.SignedCheque) error {
 
 	s.trafficPeers.totalPaidOut = new(big.Int).SetInt64(0)
