@@ -269,7 +269,7 @@ func (s *Service) replaceTraffic(addressList map[common.Address]Traffic, lastChe
 
 		if cq, ok := lastTransCheques[k]; ok {
 			traffic.transferTraffic = s.maxBigint(traffic.transferTraffic, cq.CumulativePayout)
-			traffic.transferChequeTraffic = s.maxBigint(traffic.retrieveChequeTraffic, cq.CumulativePayout)
+			traffic.transferChequeTraffic = s.maxBigint(traffic.transferChequeTraffic, cq.CumulativePayout)
 		}
 
 		retrieve, err := s.chequeStore.GetRetrieveTraffic(k)
@@ -426,14 +426,12 @@ func (s *Service) Issue(ctx context.Context, peer boson.Address, recipient, bene
 	}
 
 	var cumulativePayout *big.Int
-	lastCheque, err := s.LastSentCheque(peer)
-	if err != nil {
-		if err != chequePkg.ErrNoCheque {
-			return err
-		}
+
+	lastCheques, ok := s.trafficPeers.trafficPeers[recipient.String()]
+	if !ok {
 		cumulativePayout = big.NewInt(0)
 	} else {
-		cumulativePayout = lastCheque.CumulativePayout
+		cumulativePayout = lastCheques.retrieveChequeTraffic
 	}
 	// increase cumulativePayout by amount
 	cumulativePayout = cumulativePayout.Add(cumulativePayout, traffic)
@@ -722,9 +720,7 @@ func (s *Service) ReceiveCheque(ctx context.Context, peer boson.Address, cheque 
 	traffic, ok := s.trafficPeers.trafficPeers[cheque.Beneficiary.String()]
 	if ok {
 		localTraffic := traffic
-		transChequeTraffic := localTraffic.transferChequeTraffic
-		transChequeTraffic = big.NewInt(0).Add(transChequeTraffic, transferCheque)
-		localTraffic.transferChequeTraffic = transChequeTraffic
+		localTraffic.transferChequeTraffic = cheque.CumulativePayout
 		localTraffic.transferTraffic = s.maxBigint(localTraffic.transferTraffic, localTraffic.transferChequeTraffic)
 		s.trafficPeers.trafficPeers[cheque.Beneficiary.String()] = localTraffic
 	} else {
