@@ -12,6 +12,8 @@ import (
 type CashoutService interface {
 	// CashCheque
 	CashCheque(ctx context.Context, beneficiary common.Address, recipient common.Address) (common.Hash, error)
+	//WaitForReceipt
+	WaitForReceipt(ctx context.Context, ctxHash common.Hash) (uint64, error)
 }
 
 type cashoutService struct {
@@ -55,4 +57,11 @@ func (s *cashoutService) CashCheque(ctx context.Context, beneficiary, recipient 
 	}
 
 	return tx.Hash(), nil
+}
+
+func (s *cashoutService) WaitForReceipt(ctx context.Context, ctxHash common.Hash) (uint64, error) {
+	receipt, err := s.transactionService.WaitForReceipt(ctx, ctxHash)
+
+	return receipt.Status, err
+
 }
