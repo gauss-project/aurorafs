@@ -49,7 +49,7 @@ func (chainTraffic *ChainTraffic) RetrievedAddress(address common.Address) ([]co
 }
 
 func (chainTraffic *ChainTraffic) BalanceOf(account common.Address) (*big.Int, error) {
-	out0, err := chainTraffic.traffic.GetTraffic(nil, account)
+	out0, err := chainTraffic.traffic.BalanceOf(nil, account)
 	return out0, err
 }
 

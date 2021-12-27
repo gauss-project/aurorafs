@@ -265,7 +265,7 @@ func (s *Service) retrieveChunk(ctx context.Context, route aco.Route, rootAddr, 
 		return nil, fmt.Errorf("connect failed, peer: %v", route.LinkNode.String())
 	}
 
-	if err := s.accounting.Reserve(route.LinkNode, 256*1024*8); err != nil {
+	if err := s.accounting.Reserve(route.LinkNode, 256); err != nil {
 		return nil, err
 	}
 
@@ -313,7 +313,7 @@ func (s *Service) retrieveChunk(ctx context.Context, route aco.Route, rootAddr, 
 			return nil, boson.ErrInvalidChunk
 		}
 	}
-	if err := s.accounting.Credit(context.Background(), route.LinkNode, 256*1024*8); err != nil {
+	if err := s.accounting.Credit(context.Background(), route.LinkNode, 256); err != nil {
 		return nil, err
 	}
 
@@ -381,7 +381,7 @@ func (s *Service) handler(ctx context.Context, p p2p.Peer, stream p2p.Stream) (e
 		return fmt.Errorf("write delivery: %w peer %s", err, p.Address.String())
 	}
 
-	if err := s.accounting.Debit(p.Address, 256*1024*8); err != nil {
+	if err := s.accounting.Debit(p.Address, 256); err != nil {
 		return err
 	}
 	if s.chunkinfo != nil && p.Mode.IsFull() {
