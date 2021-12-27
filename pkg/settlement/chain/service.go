@@ -64,7 +64,7 @@ type Traffic interface {
 
 	TransAmount(beneficiary, recipient common.Address) (*big.Int, error)
 
-	CashChequeBeneficiary(beneficiary, recipient common.Address, cumulativePayout *big.Int, signature []byte) (*types.Transaction, error)
+	CashChequeBeneficiary(ctx context.Context, beneficiary, recipient common.Address, cumulativePayout *big.Int, signature []byte) (*types.Transaction, error)
 }
 
 // Service is the service to send transactions. It takes care of gas price, gas
@@ -76,6 +76,8 @@ type Transaction interface {
 	Call(ctx context.Context, request *TxRequest) (result []byte, err error)
 	// WaitForReceipt waits until either the transaction with the given hash has been mined or the context is cancelled.
 	WaitForReceipt(ctx context.Context, txHash common.Hash) (receipt *types.Receipt, err error)
+
+	NextNonce(ctx context.Context) (uint64, error)
 }
 
 type Common interface {

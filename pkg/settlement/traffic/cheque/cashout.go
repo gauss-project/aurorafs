@@ -12,21 +12,25 @@ import (
 type CashoutService interface {
 	// CashCheque
 	CashCheque(ctx context.Context, beneficiary common.Address, recipient common.Address) (common.Hash, error)
+	//WaitForReceipt
+	WaitForReceipt(ctx context.Context, ctxHash common.Hash) (uint64, error)
 }
 
 type cashoutService struct {
 	store               storage.StateStorer
 	transactionService  chain.Transaction
-	cashTrafficService  chain.Traffic
+	trafficService      chain.Traffic
 	chequeStore         ChequeStore
 	trafficContractAddr common.Address
 }
 
 // NewCashoutService creates a new CashoutService
-func NewCashoutService(store storage.StateStorer, transactionService chain.Transaction, chequeStore ChequeStore, trafficContractAddr common.Address) CashoutService {
+func NewCashoutService(store storage.StateStorer, transactionService chain.Transaction, trafficService chain.Traffic, chequeStore ChequeStore, trafficContractAddr common.Address) CashoutService {
+
 	return &cashoutService{
 		store:               store,
 		transactionService:  transactionService,
+		trafficService:      trafficService,
 		chequeStore:         chequeStore,
 		trafficContractAddr: trafficContractAddr,
 	}
@@ -43,15 +47,21 @@ func (s *cashoutService) CashCheque(ctx context.Context, beneficiary, recipient 
 		return common.Hash{}, errors.New("exchange failed")
 	}
 
-	_, err = s.cashTrafficService.CashChequeBeneficiary(beneficiary, recipient, cheque.CumulativePayout, cheque.Signature)
+	tx, err := s.trafficService.CashChequeBeneficiary(ctx, beneficiary, recipient, cheque.CumulativePayout, cheque.Signature)
 	if err != nil {
 		return common.Hash{}, err
 	}
 
-	txHash, err := s.transactionService.Send(ctx, &chain.TxRequest{})
 	if err != nil {
 		return common.Hash{}, err
 	}
 
-	return txHash, nil
+	return tx.Hash(), nil
+}
+
+func (s *cashoutService) WaitForReceipt(ctx context.Context, ctxHash common.Hash) (uint64, error) {
+	receipt, err := s.transactionService.WaitForReceipt(ctx, ctxHash)
+
+	return receipt.Status, err
+
 }

@@ -44,6 +44,10 @@ func (m *transactionServiceMock) Call(ctx context.Context, request *chain.TxRequ
 	return nil, errors.New("not implemented")
 }
 
+func (m *transactionServiceMock) NextNonce(ctx context.Context) (uint64, error) {
+	return 1, nil
+}
+
 // Option is the option passed to the mock Chequebook service
 type Option interface {
 	apply(*transactionServiceMock)

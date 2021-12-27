@@ -18,6 +18,7 @@ import (
 	mockp2p "github.com/gauss-project/aurorafs/pkg/p2p/mock"
 	"github.com/gauss-project/aurorafs/pkg/settlement/chain"
 	chainTraffic "github.com/gauss-project/aurorafs/pkg/settlement/chain/traffic"
+	chainTrafficMock "github.com/gauss-project/aurorafs/pkg/settlement/chain/traffic/mock"
 	chequePkg "github.com/gauss-project/aurorafs/pkg/settlement/traffic/cheque"
 	mockchequestore "github.com/gauss-project/aurorafs/pkg/settlement/traffic/cheque/mock"
 	"github.com/gauss-project/aurorafs/pkg/settlement/traffic/trafficprotocol"
@@ -29,6 +30,13 @@ import (
 	"io/ioutil"
 	"math/big"
 	"testing"
+)
+
+const (
+	protocolName    = "pseudosettle"
+	protocolVersion = "1.0.0"
+	streamName      = "traffic" // stream for cheques
+	initStreamName  = "init"    // stream for handshake
 )
 
 type libp2pServiceOpts struct {
@@ -104,20 +112,22 @@ func TestHandSake(t *testing.T) {
 	chainID := int64(1)
 	peerAddress := boson.MustParseHexAddress("03")
 	chainAddress := common.HexToAddress("0xab")
-	Recipient := common.HexToAddress("0xcd")
-	sig := common.Hex2Bytes(Recipient.String())
+	Beneficiary := common.HexToAddress("0xcd")
+	sig := common.Hex2Bytes(Beneficiary.String())
 	p2pStream := &trafficProtocolMock{}
 
 	logger := logging.New(ioutil.Discard, 0)
-	transactionService, err := chainTraffic.NewServer(logger, nil, "") //transaction.NewService(logger, nil, Signer, nil, new(big.Int).SetInt64(10))
-	if err != nil {
-		t.Fatal(err)
-	}
+	//transactionService, err := chainTraffic.NewServer(logger, nil, "") //transaction.NewService(logger, nil, Signer, nil, new(big.Int).SetInt64(10))
+	transactionService := chainTrafficMock.New(
+		chainTrafficMock.WithBalanceOf(func(account common.Address) (*big.Int, error) {
+			return new(big.Int).SetInt64(0), nil
+		}))
+
 	chequeStore := chequePkg.NewChequeStore(
 		store,
 		chainAddress,
 		func(cheque *chequePkg.SignedCheque, chaindID int64) (common.Address, error) {
-			return Recipient, nil
+			return chainAddress, nil
 		},
 		chainID)
 
@@ -127,7 +137,11 @@ func TestHandSake(t *testing.T) {
 		return nil
 	}
 	addressBook.beneficiary = func(peer boson.Address) (beneficiary common.Address, known bool) {
-		return common.Address{}, false
+		return Beneficiary, true
+	}
+
+	addressBook.beneficiaryPeer = func(beneficiary common.Address) (peer boson.Address, known bool) {
+		return peerAddress, false
 	}
 	chequeSigner := chequeSignerMock{}
 	chequeSigner.sign = func(cheque *chequePkg.Cheque) ([]byte, error) {
@@ -135,7 +149,7 @@ func TestHandSake(t *testing.T) {
 	}
 
 	c := chequePkg.Cheque{
-		Recipient:        Recipient,
+		Recipient:        Beneficiary,
 		Beneficiary:      chainAddress,
 		CumulativePayout: big.NewInt(10),
 	}
@@ -148,9 +162,9 @@ func TestHandSake(t *testing.T) {
 		Signature: sin,
 	}
 
-	trafficService := newTrafficTest(t, store, logger, p2pStream, Recipient, transactionService, chequeStore, &cashOut, addressBook, &chequeSigner, chainID)
+	trafficService := newTrafficTest(t, store, logger, p2pStream, chainAddress, transactionService, chequeStore, &cashOut, addressBook, &chequeSigner, chainID)
 
-	err = trafficService.Handshake(peerAddress, Recipient, signedCheque)
+	err = trafficService.Handshake(peerAddress, Beneficiary, signedCheque)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -271,7 +285,7 @@ func TestPay(t *testing.T) {
 				if c.Cheque.Recipient != beneficiary {
 					t.Fatal("sending wrong cheque")
 				}
-				if c.Cheque.CumulativePayout.Cmp(new(big.Int).SetInt64(10)) != 0 {
+				if c.Cheque.CumulativePayout.Cmp(new(big.Int).SetInt64(11)) != 0 {
 					t.Fatal("sending wrong cheque")
 				}
 				emitCalled = true
@@ -281,6 +295,15 @@ func TestPay(t *testing.T) {
 		chainID,
 	)
 	tra.trafficPeers.balance = new(big.Int).SetInt64(120)
+	tra.trafficPeers.trafficPeers[beneficiary.String()] = Traffic{
+		trafficPeerBalance:    big.NewInt(0),
+		retrieveChainTraffic:  big.NewInt(0),
+		transferChainTraffic:  big.NewInt(0),
+		retrieveChequeTraffic: big.NewInt(0),
+		transferChequeTraffic: big.NewInt(0),
+		retrieveTraffic:       big.NewInt(11),
+		transferTraffic:       big.NewInt(0),
+	}
 	tra.SetNotifyPaymentFunc(func(peer boson.Address, amount *big.Int) error {
 		return nil
 	})
@@ -300,12 +323,12 @@ func TestPayIssueError(t *testing.T) {
 	chainID := int64(1)
 	peerAddress := boson.MustParseHexAddress("03")
 	chainAddress := common.HexToAddress("0xab")
-	Recipient := common.HexToAddress("0xcd")
-	sig := common.Hex2Bytes(Recipient.String())
+	beneficiarys := common.HexToAddress("0xcd")
+	sig := common.Hex2Bytes(beneficiarys.String())
 	p2pStream := &trafficProtocolMock{}
 
 	logger := logging.New(ioutil.Discard, 0)
-	transactionService, err := chainTraffic.NewServer(logger, nil, "") //transaction.NewService(logger, nil, Signer, nil, new(big.Int).SetInt64(10))
+	transactionService, err := chainTraffic.NewServer(logger, nil, nil, nil, nil, "") //transaction.NewService(logger, nil, Signer, nil, new(big.Int).SetInt64(10))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -313,15 +336,16 @@ func TestPayIssueError(t *testing.T) {
 		store,
 		chainAddress,
 		func(cheque *chequePkg.SignedCheque, chaindID int64) (common.Address, error) {
-			return Recipient, nil
+			return beneficiarys, nil
 		},
 		chainID)
 
 	cashOut := cashOutMock{}         //chequePkg.NewCashoutService(store, transactionService, chequeStore)
 	addressBook := addressBookMock{} //NewAddressBook(store)
 	addressBook.beneficiary = func(peer boson.Address) (beneficiary common.Address, known bool) {
-		return Recipient, true
+		return beneficiarys, true
 	}
+
 	chequeSigner := chequeSignerMock{}
 	chequeSigner.sign = func(cheque *chequePkg.Cheque) ([]byte, error) {
 		return sig, nil
@@ -332,12 +356,21 @@ func TestPayIssueError(t *testing.T) {
 	trafficService.SetNotifyPaymentFunc(func(peer boson.Address, amount *big.Int) error {
 		return nil
 	})
+	trafficService.trafficPeers.trafficPeers[beneficiarys.String()] = Traffic{
+		trafficPeerBalance:    big.NewInt(0),
+		retrieveChainTraffic:  big.NewInt(0),
+		transferChainTraffic:  big.NewInt(0),
+		retrieveChequeTraffic: big.NewInt(0),
+		transferChequeTraffic: big.NewInt(0),
+		retrieveTraffic:       big.NewInt(81),
+		transferTraffic:       big.NewInt(0),
+	}
 	err = trafficService.Pay(context.Background(), peerAddress, new(big.Int).SetInt64(80))
 	if err == nil {
 		t.Fatal(err)
 	}
 
-	trafficService.trafficPeers.balance = new(big.Int).SetInt64(120)
+	trafficService.trafficPeers.balance = new(big.Int).SetInt64(200)
 	err = trafficService.Pay(context.Background(), peerAddress, new(big.Int).SetInt64(80))
 	if err != nil {
 		t.Fatal(err)

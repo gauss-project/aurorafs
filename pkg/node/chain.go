@@ -72,7 +72,7 @@ func InitChain(
 
 		return oracleServer, service, service, cc, nil
 	}
-	trafficChainService, err := chainTraffic.NewServer(logger, backend, trafficContractAddr)
+	trafficChainService, err := chainTraffic.NewServer(logger, chainID, backend, signer, transactionService, trafficContractAddr)
 	if err != nil {
 		return nil, nil, nil, nil, fmt.Errorf("new traffic service: %w", err)
 	}
@@ -92,7 +92,7 @@ func InitChain(
 func InitTraffic(store storage.StateStorer, address common.Address, trafficChainService chain.Traffic,
 	transactionService chain.Transaction, logger logging.Logger, p2pService *libp2p.Service, signer crypto.Signer, chainID int64, trafficContractAddr string) (*traffic.Service, error) {
 	chequeStore := chequePkg.NewChequeStore(store, address, chequePkg.RecoverCheque, chainID)
-	cashOut := chequePkg.NewCashoutService(store, transactionService, chequeStore, common.HexToAddress(trafficContractAddr))
+	cashOut := chequePkg.NewCashoutService(store, transactionService, trafficChainService, chequeStore, common.HexToAddress(trafficContractAddr))
 	addressBook := traffic.NewAddressBook(store)
 	protocol := trafficprotocol.New(p2pService, logger, address)
 	if err := p2pService.AddProtocol(protocol.Protocol()); err != nil {
