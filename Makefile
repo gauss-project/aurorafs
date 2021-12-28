@@ -17,23 +17,19 @@ CLEAN_COMMIT ?= "$(shell git describe --long --always --match "" || true)"
 COMMIT_TIME ?= "$(shell git show -s --format=%ct $(CLEAN_COMMIT) || true)"
 LDFLAGS ?= -s -w -X github.com/gauss-project/aurorafs.commitHash="$(COMMIT_HASH)" -X github.com/gauss-project/aurorafs.commitTime="$(COMMIT_TIME)"
 
-GOOS ?= "$(shell go env GOOS)"
-ifeq ($(GOOS),"windows")
-BINARY_NAME ?= aurora.exe
-else
-BINARY_NAME ?= aurora
-endif
-
-SHELL=bash
-
 .PHONY: all
 all: build lint vet test-race binary
 
 .PHONY: binary
-binary: export CGO_ENABLED=0
 binary: dist FORCE
 	$(GO) version
-	$(GO) build -trimpath -ldflags "$(LDFLAGS)" -o dist/$(BINARY_NAME) ./cmd/aurorafs
+ifeq ("$(shell go env GOOS)", "windows")
+	set CGO_ENABLED=0
+	$(GO) build -trimpath -ldflags "$(LDFLAGS)" -o dist/aurora.exe ./cmd/aurorafs
+else
+	export CGO_ENABLED=0
+	$(GO) build -trimpath -ldflags "$(LDFLAGS)" -o dist/aurora ./cmd/aurorafs
+endif
 
 dist:
 	mkdir $@
