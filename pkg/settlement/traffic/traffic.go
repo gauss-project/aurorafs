@@ -401,7 +401,7 @@ func (s *Service) TrafficCheques() ([]*TrafficCheque, error) {
 		if known {
 			traffic := v
 			trans := new(big.Int).Sub(traffic.transferTraffic, traffic.transferChequeTraffic)
-			retrieve := new(big.Int).Sub(traffic.retrieveTraffic, traffic.retrieveChainTraffic)
+			retrieve := new(big.Int).Sub(traffic.retrieveTraffic, traffic.retrieveChequeTraffic)
 			trafficCheque := &TrafficCheque{
 				Peer:                peer,
 				OutstandingTraffic:  new(big.Int).Sub(trans, retrieve),
