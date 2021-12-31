@@ -133,27 +133,10 @@ func (ci *ChunkInfo) UpdateChunkInfoSource(rootCid, sourceOverlay boson.Address,
 
 }
 
-func (ci *ChunkInfo) UpdatePyramidSource(ctx context.Context, rootCid, sourceOverlay boson.Address) error {
-	size, err := ci.getChunkSize(ctx, rootCid)
+func (ci *ChunkInfo) UpdatePyramidSource(rootCid, sourceOverlay boson.Address) error {
+	err := ci.cs.updatePyramidSource(rootCid, sourceOverlay)
 	if err != nil {
 		return err
-	}
-	err = ci.cs.updatePyramidSource(rootCid, sourceOverlay)
-	if err != nil {
-		return err
-	}
-
-	if size == 1 {
-		cids := ci.cp.getChunkCid(rootCid)
-		if len(cids) == 0 {
-			ci.logger.Errorf("chunk source: The current cid should not be 0 ")
-			return fmt.Errorf("chunk source: The current cid should not be 0 ")
-		}
-		cid := cids[0].Cid
-		err = ci.UpdateChunkInfoSource(rootCid, sourceOverlay, cid)
-		if err != nil {
-			return err
-		}
 	}
 
 	return nil
