@@ -8,10 +8,12 @@ import (
 	"fmt"
 	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/logging"
+	"github.com/gauss-project/aurorafs/pkg/p2p"
 	"github.com/gauss-project/aurorafs/pkg/settlement"
 	"github.com/gauss-project/aurorafs/pkg/storage"
 	"math/big"
 	"sync"
+	"time"
 )
 
 var (
@@ -169,8 +171,8 @@ func (a *Accounting) Debit(peer boson.Address, traffic uint64) error {
 	if tolerance.Cmp(traff) <= 0 {
 		a.metrics.AccountingDisconnectsCount.Inc()
 		a.logger.Errorf("block list %s", peer.String())
-		return ErrDisconnectThresholdExceeded
-		//return p2p.NewBlockPeerError(10000*time.Hour, ErrDisconnectThresholdExceeded)
+		//return ErrDisconnectThresholdExceeded
+		return p2p.NewBlockPeerError(10000*time.Hour, ErrDisconnectThresholdExceeded)
 	}
 
 	balance, err := a.settlement.GetPeerBalance(peer)

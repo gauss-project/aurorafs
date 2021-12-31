@@ -44,12 +44,12 @@ type TrafficPeer struct {
 }
 
 type TrafficCheque struct {
-	Peer               boson.Address
-	OutstandingTraffic *big.Int
-	SendTraffic        *big.Int
-	ReceivedTraffic    *big.Int
-	Total              *big.Int
-	Uncashed           *big.Int
+	Peer                boson.Address
+	OutstandingTraffic  *big.Int
+	SentSettlements     *big.Int
+	ReceivedSettlements *big.Int
+	Total               *big.Int
+	Uncashed            *big.Int
 }
 
 type cashCheque struct {
@@ -400,13 +400,18 @@ func (s *Service) TrafficCheques() ([]*TrafficCheque, error) {
 		peer, known := s.addressBook.BeneficiaryPeer(common.HexToAddress(chainaddress))
 		if known {
 			traffic := v
+			trans := new(big.Int).Sub(traffic.transferTraffic, traffic.transferChequeTraffic)
+			retrieve := new(big.Int).Sub(traffic.retrieveTraffic, traffic.retrieveChainTraffic)
 			trafficCheque := &TrafficCheque{
-				Peer:               peer,
-				OutstandingTraffic: new(big.Int).Sub(traffic.transferChequeTraffic, traffic.retrieveChequeTraffic),
-				SendTraffic:        traffic.transferChequeTraffic,
-				ReceivedTraffic:    traffic.retrieveChequeTraffic,
-				Total:              new(big.Int).Sub(traffic.transferChequeTraffic, traffic.retrieveChequeTraffic),
-				Uncashed:           new(big.Int).Sub(traffic.transferChequeTraffic, traffic.transferChainTraffic),
+				Peer:                peer,
+				OutstandingTraffic:  new(big.Int).Sub(trans, retrieve),
+				SentSettlements:     traffic.retrieveChequeTraffic,
+				ReceivedSettlements: traffic.transferChequeTraffic,
+				Total:               new(big.Int).Sub(traffic.transferTraffic, traffic.retrieveTraffic),
+				Uncashed:            new(big.Int).Sub(traffic.transferChequeTraffic, traffic.transferChainTraffic),
+			}
+			if trafficCheque.OutstandingTraffic.Cmp(big.NewInt(0)) == 0 && trafficCheque.SentSettlements.Cmp(big.NewInt(0)) == 0 && trafficCheque.ReceivedSettlements.Cmp(big.NewInt(0)) == 0 {
+				continue
 			}
 			trafficCheques = append(trafficCheques, trafficCheque)
 		} else {

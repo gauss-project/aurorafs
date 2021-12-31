@@ -8,6 +8,7 @@ import (
 	"github.com/gorilla/mux"
 	"math/big"
 	"net/http"
+	"sort"
 )
 
 type trafficInfo struct {
@@ -18,12 +19,12 @@ type trafficInfo struct {
 }
 
 type trafficCheque struct {
-	Peer               boson.Address `json:"peer"`
-	OutstandingTraffic *big.Int      `json:"outstandingTraffic"`
-	SendTraffic        *big.Int      `json:"sendTraffic"`
-	ReceivedTraffic    *big.Int      `json:"receivedTraffic"`
-	Total              *big.Int      `json:"total"`
-	UnCashed           *big.Int      `json:"unCashed"`
+	Peer                boson.Address `json:"peer"`
+	OutstandingTraffic  *big.Int      `json:"outstandingTraffic"`
+	SentSettlements     *big.Int      `json:"sentSettlements"`
+	ReceivedSettlements *big.Int      `json:"receivedSettlements"`
+	Total               *big.Int      `json:"total"`
+	UnCashed            *big.Int      `json:"unCashed"`
 }
 
 func (s *server) trafficInfo(w http.ResponseWriter, r *http.Request) {
@@ -62,16 +63,23 @@ func (s *server) trafficCheques(w http.ResponseWriter, r *http.Request) {
 
 	for _, v := range list {
 		cheque := &trafficCheque{
-			Peer:               v.Peer,
-			OutstandingTraffic: v.OutstandingTraffic,
-			SendTraffic:        v.SendTraffic,
-			ReceivedTraffic:    v.ReceivedTraffic,
-			Total:              v.Total,
-			UnCashed:           v.Uncashed,
+			Peer:                v.Peer,
+			OutstandingTraffic:  v.OutstandingTraffic,
+			SentSettlements:     v.SentSettlements,
+			ReceivedSettlements: v.ReceivedSettlements,
+			Total:               v.Total,
+			UnCashed:            v.Uncashed,
 		}
 		chequeList = append(chequeList, cheque)
 	}
 
+	sort.Slice(chequeList, func(i, j int) bool {
+		if chequeList[i].UnCashed.Cmp(chequeList[j].UnCashed) != 0 {
+			return chequeList[i].UnCashed.Cmp(chequeList[j].UnCashed) > 0
+		} else {
+			return chequeList[i].OutstandingTraffic.Cmp(chequeList[j].OutstandingTraffic) > 0
+		}
+	})
 	jsonhttp.OK(w, chequeList)
 }
 
