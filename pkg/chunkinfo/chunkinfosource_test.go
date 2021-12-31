@@ -61,7 +61,7 @@ func TestChunkInfoSource(t *testing.T) {
 		t.Fatal("Failed to delete source record.")
 	}
 
-	if err := a.UpdatePyramidSource(context.Background(), rootCid, clientAddress); err != nil {
+	if err := a.UpdatePyramidSource(rootCid, clientAddress); err != nil {
 		t.Fatal(err)
 	}
 
