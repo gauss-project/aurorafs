@@ -62,10 +62,11 @@ func (ci *ChunkInfo) initChunkPyramid(ctx context.Context, rootCid boson.Address
 //}
 
 // updateChunkPyramid
-func (ci *ChunkInfo) updateChunkPyramid(rootCid boson.Address, pyramids [][][]byte, trie map[string][]byte) {
+func (ci *ChunkInfo) updateChunkPyramid(rootCid boson.Address, pyramids [][][]byte, trie map[string][]byte) [][]byte {
 	ci.cp.Lock()
 	defer ci.cp.Unlock()
 	py := make(map[string]pyramidCidCount)
+	cids := make([][]byte, 0)
 	var i, max int
 	for _, p := range pyramids {
 		for _, x := range p {
@@ -75,7 +76,9 @@ func (ci *ChunkInfo) updateChunkPyramid(rootCid boson.Address, pyramids [][][]by
 					count:  &max,
 					number: 1,
 				}
-				ci.cp.putChunk(boson.NewAddress(x))
+				if ci.cp.putChunk(boson.NewAddress(x)) {
+					cids = append(cids, x)
+				}
 				i++
 			} else {
 				v.number = v.number + 1
@@ -94,14 +97,17 @@ func (ci *ChunkInfo) updateChunkPyramid(rootCid boson.Address, pyramids [][][]by
 	ci.cp.pyramid[rootCid.String()] = py
 	ci.cp.hashData[rootCid.String()] = hash
 	ci.cp.mateData[rootCid.String()] = trie
+	return cids
 }
 
-func (cp *chunkPyramid) putChunk(cid boson.Address) {
+func (cp *chunkPyramid) putChunk(cid boson.Address) bool {
 	if v, ok := cp.chunk[cid.String()]; ok {
 		cp.chunk[cid.String()] = v + 1
+		return true
 	} else {
 		cp.chunk[cid.String()] = 1
 	}
+	return false
 }
 
 // getChunkPyramid
