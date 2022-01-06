@@ -359,7 +359,9 @@ func (s *Service) handler(ctx context.Context, p p2p.Peer, stream p2p.Stream) (e
 		s.logger, opentracing.Tag{Key: "address", Value: fmt.Sprintf("%s,%s", rootAddr, chunkAddr)},
 	)
 	defer span.Finish()
-
+	if err := s.accounting.Debit(p.Address, 256); err != nil {
+		return err
+	}
 	chunk, err := s.storer.Get(ctx, storage.ModeGetRequest, chunkAddr)
 	if err != nil {
 		if errors.Is(err, storage.ErrNotFound) {
@@ -373,9 +375,6 @@ func (s *Service) handler(ctx context.Context, p p2p.Peer, stream p2p.Stream) (e
 		} else {
 			return fmt.Errorf("get from store: %w", err)
 		}
-	}
-	if err := s.accounting.Debit(p.Address, 256); err != nil {
-		return err
 	}
 
 	if err := w.WriteMsgWithContext(ctx, &pb.Delivery{
