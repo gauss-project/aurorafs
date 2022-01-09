@@ -88,13 +88,13 @@ func (s *server) cashCheque(w http.ResponseWriter, r *http.Request) {
 	peer, err := s.resolveNameOrAddress(nameOrHex)
 	if err != nil {
 		s.logger.Errorf("api cashCheque: parse address %s: %v", nameOrHex, err)
-		jsonhttp.NotFound(w, nil)
+		jsonhttp.NotFound(w, err)
 		return
 	}
 	hash, err := s.traffic.CashCheque(context.Background(), peer)
 	if err != nil {
 		s.logger.Errorf("api cashCheque: query failed %s: %v", nameOrHex, err)
-		jsonhttp.NotFound(w, nil)
+		jsonhttp.NotFound(w, err)
 		return
 	}
 
