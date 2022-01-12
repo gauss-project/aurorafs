@@ -362,7 +362,7 @@ func NewAurora(nodeMode aurora.Model, addr string, bosonAddress boson.Address, p
 	if o.APIAddr != "" {
 		// API server
 		apiService = api.New(ns, multiResolver, bosonAddress, chunkInfo, traversalService, pinningService,
-			authenticator, logger, tracer, apiInterface, commonChain,
+			authenticator, logger, tracer, apiInterface, commonChain, oracleChain,
 			api.Options{
 				CORSAllowedOrigins: o.CORSAllowedOrigins,
 				GatewayMode:        o.GatewayMode,

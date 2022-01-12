@@ -47,6 +47,9 @@ type Resolver interface {
 
 	// DataStoreFinished when data retrieved and saved, use this function to report onchain
 	DataStoreFinished(cid boson.Address, dataLen uint64, salt uint64, proof []byte, resCh chan ChainResult)
+	RegisterCidAndNode(ctx context.Context, rootCid boson.Address, address boson.Address) (common.Hash, error)
+	RemoveCidAndNode(ctx context.Context, rootCid boson.Address, address boson.Address) (common.Hash, error)
+	GetRegisterState(ctx context.Context, rootCid boson.Address, address boson.Address) (bool, error)
 }
 
 type Traffic interface {

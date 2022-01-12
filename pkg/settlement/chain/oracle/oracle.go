@@ -30,7 +30,7 @@ var (
 
 // OracleMetaData contains all meta data concerning the Oracle contract.
 var OracleMetaData = &bind.MetaData{
-	ABI: "[{\"inputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"constructor\"},{\"inputs\":[{\"internalType\":\"bytes32\",\"name\":\"fileHash\",\"type\":\"bytes32\"}],\"name\":\"clear\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"bytes32\",\"name\":\"fileHash\",\"type\":\"bytes32\"}],\"name\":\"get\",\"outputs\":[{\"internalType\":\"bytes32[]\",\"name\":\"\",\"type\":\"bytes32[]\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"owner\",\"outputs\":[{\"internalType\":\"address\",\"name\":\"\",\"type\":\"address\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"bytes32\",\"name\":\"fileHash\",\"type\":\"bytes32\"},{\"internalType\":\"bytes32\",\"name\":\"adr\",\"type\":\"bytes32\"}],\"name\":\"remove\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"bytes32\",\"name\":\"fileHash\",\"type\":\"bytes32\"},{\"internalType\":\"bytes32\",\"name\":\"adr\",\"type\":\"bytes32\"}],\"name\":\"set\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"}]",
+	ABI: "[{\"inputs\":[{\"internalType\":\"bytes32\",\"name\":\"\",\"type\":\"bytes32\"}],\"name\":\"hashIMap\",\"outputs\":[{\"internalType\":\"uint256\",\"name\":\"\",\"type\":\"uint256\"}],\"stateMutability\":\"view\",\"type\":\"function\",\"constant\":true},{\"inputs\":[{\"internalType\":\"bytes32\",\"name\":\"\",\"type\":\"bytes32\"},{\"internalType\":\"bytes32\",\"name\":\"\",\"type\":\"bytes32\"}],\"name\":\"oracleIMap\",\"outputs\":[{\"internalType\":\"uint256\",\"name\":\"\",\"type\":\"uint256\"}],\"stateMutability\":\"view\",\"type\":\"function\",\"constant\":true},{\"inputs\":[],\"name\":\"owner\",\"outputs\":[{\"internalType\":\"address\",\"name\":\"\",\"type\":\"address\"}],\"stateMutability\":\"view\",\"type\":\"function\",\"constant\":true},{\"inputs\":[],\"name\":\"start\",\"outputs\":[{\"internalType\":\"bool\",\"name\":\"\",\"type\":\"bool\"}],\"stateMutability\":\"view\",\"type\":\"function\",\"constant\":true},{\"inputs\":[],\"name\":\"initialize\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"bool\",\"name\":\"value\",\"type\":\"bool\"}],\"name\":\"setStart\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"bytes32\",\"name\":\"hash\",\"type\":\"bytes32\"}],\"name\":\"get\",\"outputs\":[{\"internalType\":\"bytes32[]\",\"name\":\"\",\"type\":\"bytes32[]\"}],\"stateMutability\":\"view\",\"type\":\"function\",\"constant\":true},{\"inputs\":[{\"internalType\":\"bytes32\",\"name\":\"hash\",\"type\":\"bytes32\"},{\"internalType\":\"bytes32\",\"name\":\"addr\",\"type\":\"bytes32\"}],\"name\":\"set\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"bytes32\",\"name\":\"hash\",\"type\":\"bytes32\"},{\"internalType\":\"bytes32\",\"name\":\"addr\",\"type\":\"bytes32\"}],\"name\":\"remove\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"bytes32\",\"name\":\"hash\",\"type\":\"bytes32\"}],\"name\":\"clear\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"getFileList\",\"outputs\":[{\"internalType\":\"bytes32[]\",\"name\":\"\",\"type\":\"bytes32[]\"}],\"stateMutability\":\"view\",\"type\":\"function\",\"constant\":true}]",
 }
 
 // OracleABI is the input ABI used to generate the binding from.
@@ -181,10 +181,10 @@ func (_Oracle *OracleTransactorRaw) Transact(opts *bind.TransactOpts, method str
 
 // Get is a free data retrieval call binding the contract method 0x8eaa6ac0.
 //
-// Solidity: function get(bytes32 fileHash) view returns(bytes32[])
-func (_Oracle *OracleCaller) Get(opts *bind.CallOpts, fileHash [32]byte) ([][32]byte, error) {
+// Solidity: function get(bytes32 hash) view returns(bytes32[])
+func (_Oracle *OracleCaller) Get(opts *bind.CallOpts, hash [32]byte) ([][32]byte, error) {
 	var out []interface{}
-	err := _Oracle.contract.Call(opts, &out, "get", fileHash)
+	err := _Oracle.contract.Call(opts, &out, "get", hash)
 
 	if err != nil {
 		return *new([][32]byte), err
@@ -198,16 +198,109 @@ func (_Oracle *OracleCaller) Get(opts *bind.CallOpts, fileHash [32]byte) ([][32]
 
 // Get is a free data retrieval call binding the contract method 0x8eaa6ac0.
 //
-// Solidity: function get(bytes32 fileHash) view returns(bytes32[])
-func (_Oracle *OracleSession) Get(fileHash [32]byte) ([][32]byte, error) {
-	return _Oracle.Contract.Get(&_Oracle.CallOpts, fileHash)
+// Solidity: function get(bytes32 hash) view returns(bytes32[])
+func (_Oracle *OracleSession) Get(hash [32]byte) ([][32]byte, error) {
+	return _Oracle.Contract.Get(&_Oracle.CallOpts, hash)
 }
 
 // Get is a free data retrieval call binding the contract method 0x8eaa6ac0.
 //
-// Solidity: function get(bytes32 fileHash) view returns(bytes32[])
-func (_Oracle *OracleCallerSession) Get(fileHash [32]byte) ([][32]byte, error) {
-	return _Oracle.Contract.Get(&_Oracle.CallOpts, fileHash)
+// Solidity: function get(bytes32 hash) view returns(bytes32[])
+func (_Oracle *OracleCallerSession) Get(hash [32]byte) ([][32]byte, error) {
+	return _Oracle.Contract.Get(&_Oracle.CallOpts, hash)
+}
+
+// GetFileList is a free data retrieval call binding the contract method 0x4cedee48.
+//
+// Solidity: function getFileList() view returns(bytes32[])
+func (_Oracle *OracleCaller) GetFileList(opts *bind.CallOpts) ([][32]byte, error) {
+	var out []interface{}
+	err := _Oracle.contract.Call(opts, &out, "getFileList")
+
+	if err != nil {
+		return *new([][32]byte), err
+	}
+
+	out0 := *abi.ConvertType(out[0], new([][32]byte)).(*[][32]byte)
+
+	return out0, err
+
+}
+
+// GetFileList is a free data retrieval call binding the contract method 0x4cedee48.
+//
+// Solidity: function getFileList() view returns(bytes32[])
+func (_Oracle *OracleSession) GetFileList() ([][32]byte, error) {
+	return _Oracle.Contract.GetFileList(&_Oracle.CallOpts)
+}
+
+// GetFileList is a free data retrieval call binding the contract method 0x4cedee48.
+//
+// Solidity: function getFileList() view returns(bytes32[])
+func (_Oracle *OracleCallerSession) GetFileList() ([][32]byte, error) {
+	return _Oracle.Contract.GetFileList(&_Oracle.CallOpts)
+}
+
+// HashIMap is a free data retrieval call binding the contract method 0x64f32492.
+//
+// Solidity: function hashIMap(bytes32 ) view returns(uint256)
+func (_Oracle *OracleCaller) HashIMap(opts *bind.CallOpts, arg0 [32]byte) (*big.Int, error) {
+	var out []interface{}
+	err := _Oracle.contract.Call(opts, &out, "hashIMap", arg0)
+
+	if err != nil {
+		return *new(*big.Int), err
+	}
+
+	out0 := *abi.ConvertType(out[0], new(*big.Int)).(**big.Int)
+
+	return out0, err
+
+}
+
+// HashIMap is a free data retrieval call binding the contract method 0x64f32492.
+//
+// Solidity: function hashIMap(bytes32 ) view returns(uint256)
+func (_Oracle *OracleSession) HashIMap(arg0 [32]byte) (*big.Int, error) {
+	return _Oracle.Contract.HashIMap(&_Oracle.CallOpts, arg0)
+}
+
+// HashIMap is a free data retrieval call binding the contract method 0x64f32492.
+//
+// Solidity: function hashIMap(bytes32 ) view returns(uint256)
+func (_Oracle *OracleCallerSession) HashIMap(arg0 [32]byte) (*big.Int, error) {
+	return _Oracle.Contract.HashIMap(&_Oracle.CallOpts, arg0)
+}
+
+// OracleIMap is a free data retrieval call binding the contract method 0xce9972f9.
+//
+// Solidity: function oracleIMap(bytes32 , bytes32 ) view returns(uint256)
+func (_Oracle *OracleCaller) OracleIMap(opts *bind.CallOpts, arg0 [32]byte, arg1 [32]byte) (*big.Int, error) {
+	var out []interface{}
+	err := _Oracle.contract.Call(opts, &out, "oracleIMap", arg0, arg1)
+
+	if err != nil {
+		return *new(*big.Int), err
+	}
+
+	out0 := *abi.ConvertType(out[0], new(*big.Int)).(**big.Int)
+
+	return out0, err
+
+}
+
+// OracleIMap is a free data retrieval call binding the contract method 0xce9972f9.
+//
+// Solidity: function oracleIMap(bytes32 , bytes32 ) view returns(uint256)
+func (_Oracle *OracleSession) OracleIMap(arg0 [32]byte, arg1 [32]byte) (*big.Int, error) {
+	return _Oracle.Contract.OracleIMap(&_Oracle.CallOpts, arg0, arg1)
+}
+
+// OracleIMap is a free data retrieval call binding the contract method 0xce9972f9.
+//
+// Solidity: function oracleIMap(bytes32 , bytes32 ) view returns(uint256)
+func (_Oracle *OracleCallerSession) OracleIMap(arg0 [32]byte, arg1 [32]byte) (*big.Int, error) {
+	return _Oracle.Contract.OracleIMap(&_Oracle.CallOpts, arg0, arg1)
 }
 
 // Owner is a free data retrieval call binding the contract method 0x8da5cb5b.
@@ -241,65 +334,138 @@ func (_Oracle *OracleCallerSession) Owner() (common.Address, error) {
 	return _Oracle.Contract.Owner(&_Oracle.CallOpts)
 }
 
-// Clear is a paid mutator transaction binding the contract method 0x97040a45.
+// Start is a free data retrieval call binding the contract method 0xbe9a6555.
 //
-// Solidity: function clear(bytes32 fileHash) returns()
-func (_Oracle *OracleTransactor) Clear(opts *bind.TransactOpts, fileHash [32]byte) (*types.Transaction, error) {
-	return _Oracle.contract.Transact(opts, "clear", fileHash)
+// Solidity: function start() view returns(bool)
+func (_Oracle *OracleCaller) Start(opts *bind.CallOpts) (bool, error) {
+	var out []interface{}
+	err := _Oracle.contract.Call(opts, &out, "start")
+
+	if err != nil {
+		return *new(bool), err
+	}
+
+	out0 := *abi.ConvertType(out[0], new(bool)).(*bool)
+
+	return out0, err
+
+}
+
+// Start is a free data retrieval call binding the contract method 0xbe9a6555.
+//
+// Solidity: function start() view returns(bool)
+func (_Oracle *OracleSession) Start() (bool, error) {
+	return _Oracle.Contract.Start(&_Oracle.CallOpts)
+}
+
+// Start is a free data retrieval call binding the contract method 0xbe9a6555.
+//
+// Solidity: function start() view returns(bool)
+func (_Oracle *OracleCallerSession) Start() (bool, error) {
+	return _Oracle.Contract.Start(&_Oracle.CallOpts)
 }
 
 // Clear is a paid mutator transaction binding the contract method 0x97040a45.
 //
-// Solidity: function clear(bytes32 fileHash) returns()
-func (_Oracle *OracleSession) Clear(fileHash [32]byte) (*types.Transaction, error) {
-	return _Oracle.Contract.Clear(&_Oracle.TransactOpts, fileHash)
+// Solidity: function clear(bytes32 hash) returns()
+func (_Oracle *OracleTransactor) Clear(opts *bind.TransactOpts, hash [32]byte) (*types.Transaction, error) {
+	return _Oracle.contract.Transact(opts, "clear", hash)
 }
 
 // Clear is a paid mutator transaction binding the contract method 0x97040a45.
 //
-// Solidity: function clear(bytes32 fileHash) returns()
-func (_Oracle *OracleTransactorSession) Clear(fileHash [32]byte) (*types.Transaction, error) {
-	return _Oracle.Contract.Clear(&_Oracle.TransactOpts, fileHash)
+// Solidity: function clear(bytes32 hash) returns()
+func (_Oracle *OracleSession) Clear(hash [32]byte) (*types.Transaction, error) {
+	return _Oracle.Contract.Clear(&_Oracle.TransactOpts, hash)
+}
+
+// Clear is a paid mutator transaction binding the contract method 0x97040a45.
+//
+// Solidity: function clear(bytes32 hash) returns()
+func (_Oracle *OracleTransactorSession) Clear(hash [32]byte) (*types.Transaction, error) {
+	return _Oracle.Contract.Clear(&_Oracle.TransactOpts, hash)
+}
+
+// Initialize is a paid mutator transaction binding the contract method 0x8129fc1c.
+//
+// Solidity: function initialize() returns()
+func (_Oracle *OracleTransactor) Initialize(opts *bind.TransactOpts) (*types.Transaction, error) {
+	return _Oracle.contract.Transact(opts, "initialize")
+}
+
+// Initialize is a paid mutator transaction binding the contract method 0x8129fc1c.
+//
+// Solidity: function initialize() returns()
+func (_Oracle *OracleSession) Initialize() (*types.Transaction, error) {
+	return _Oracle.Contract.Initialize(&_Oracle.TransactOpts)
+}
+
+// Initialize is a paid mutator transaction binding the contract method 0x8129fc1c.
+//
+// Solidity: function initialize() returns()
+func (_Oracle *OracleTransactorSession) Initialize() (*types.Transaction, error) {
+	return _Oracle.Contract.Initialize(&_Oracle.TransactOpts)
 }
 
 // Remove is a paid mutator transaction binding the contract method 0xb10e4172.
 //
-// Solidity: function remove(bytes32 fileHash, bytes32 adr) returns()
-func (_Oracle *OracleTransactor) Remove(opts *bind.TransactOpts, fileHash [32]byte, adr [32]byte) (*types.Transaction, error) {
-	return _Oracle.contract.Transact(opts, "remove", fileHash, adr)
+// Solidity: function remove(bytes32 hash, bytes32 addr) returns()
+func (_Oracle *OracleTransactor) Remove(opts *bind.TransactOpts, hash [32]byte, addr [32]byte) (*types.Transaction, error) {
+	return _Oracle.contract.Transact(opts, "remove", hash, addr)
 }
 
 // Remove is a paid mutator transaction binding the contract method 0xb10e4172.
 //
-// Solidity: function remove(bytes32 fileHash, bytes32 adr) returns()
-func (_Oracle *OracleSession) Remove(fileHash [32]byte, adr [32]byte) (*types.Transaction, error) {
-	return _Oracle.Contract.Remove(&_Oracle.TransactOpts, fileHash, adr)
+// Solidity: function remove(bytes32 hash, bytes32 addr) returns()
+func (_Oracle *OracleSession) Remove(hash [32]byte, addr [32]byte) (*types.Transaction, error) {
+	return _Oracle.Contract.Remove(&_Oracle.TransactOpts, hash, addr)
 }
 
 // Remove is a paid mutator transaction binding the contract method 0xb10e4172.
 //
-// Solidity: function remove(bytes32 fileHash, bytes32 adr) returns()
-func (_Oracle *OracleTransactorSession) Remove(fileHash [32]byte, adr [32]byte) (*types.Transaction, error) {
-	return _Oracle.Contract.Remove(&_Oracle.TransactOpts, fileHash, adr)
+// Solidity: function remove(bytes32 hash, bytes32 addr) returns()
+func (_Oracle *OracleTransactorSession) Remove(hash [32]byte, addr [32]byte) (*types.Transaction, error) {
+	return _Oracle.Contract.Remove(&_Oracle.TransactOpts, hash, addr)
 }
 
 // Set is a paid mutator transaction binding the contract method 0xf71f7a25.
 //
-// Solidity: function set(bytes32 fileHash, bytes32 adr) returns()
-func (_Oracle *OracleTransactor) Set(opts *bind.TransactOpts, fileHash [32]byte, adr [32]byte) (*types.Transaction, error) {
-	return _Oracle.contract.Transact(opts, "set", fileHash, adr)
+// Solidity: function set(bytes32 hash, bytes32 addr) returns()
+func (_Oracle *OracleTransactor) Set(opts *bind.TransactOpts, hash [32]byte, addr [32]byte) (*types.Transaction, error) {
+	return _Oracle.contract.Transact(opts, "set", hash, addr)
 }
 
 // Set is a paid mutator transaction binding the contract method 0xf71f7a25.
 //
-// Solidity: function set(bytes32 fileHash, bytes32 adr) returns()
-func (_Oracle *OracleSession) Set(fileHash [32]byte, adr [32]byte) (*types.Transaction, error) {
-	return _Oracle.Contract.Set(&_Oracle.TransactOpts, fileHash, adr)
+// Solidity: function set(bytes32 hash, bytes32 addr) returns()
+func (_Oracle *OracleSession) Set(hash [32]byte, addr [32]byte) (*types.Transaction, error) {
+	return _Oracle.Contract.Set(&_Oracle.TransactOpts, hash, addr)
 }
 
 // Set is a paid mutator transaction binding the contract method 0xf71f7a25.
 //
-// Solidity: function set(bytes32 fileHash, bytes32 adr) returns()
-func (_Oracle *OracleTransactorSession) Set(fileHash [32]byte, adr [32]byte) (*types.Transaction, error) {
-	return _Oracle.Contract.Set(&_Oracle.TransactOpts, fileHash, adr)
+// Solidity: function set(bytes32 hash, bytes32 addr) returns()
+func (_Oracle *OracleTransactorSession) Set(hash [32]byte, addr [32]byte) (*types.Transaction, error) {
+	return _Oracle.Contract.Set(&_Oracle.TransactOpts, hash, addr)
+}
+
+// SetStart is a paid mutator transaction binding the contract method 0x68e24327.
+//
+// Solidity: function setStart(bool value) returns()
+func (_Oracle *OracleTransactor) SetStart(opts *bind.TransactOpts, value bool) (*types.Transaction, error) {
+	return _Oracle.contract.Transact(opts, "setStart", value)
+}
+
+// SetStart is a paid mutator transaction binding the contract method 0x68e24327.
+//
+// Solidity: function setStart(bool value) returns()
+func (_Oracle *OracleSession) SetStart(value bool) (*types.Transaction, error) {
+	return _Oracle.Contract.SetStart(&_Oracle.TransactOpts, value)
+}
+
+// SetStart is a paid mutator transaction binding the contract method 0x68e24327.
+//
+// Solidity: function setStart(bool value) returns()
+func (_Oracle *OracleTransactorSession) SetStart(value bool) (*types.Transaction, error) {
+	return _Oracle.Contract.SetStart(&_Oracle.TransactOpts, value)
 }

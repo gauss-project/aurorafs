@@ -1,6 +1,8 @@
 package mock
 
 import (
+	"context"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/settlement/chain"
 )
@@ -34,4 +36,15 @@ func (ora *ChainOracle) OnStoreMatched(cid boson.Address, dataLen uint64, salt u
 
 func (ora *ChainOracle) DataStoreFinished(cid boson.Address, dataLen uint64, salt uint64, proof []byte, resCh chan chain.ChainResult) {
 
+}
+
+func (ora *ChainOracle) RegisterCidAndNode(ctx context.Context, rootCid boson.Address, address boson.Address) (common.Hash, error) {
+	return common.Hash{}, nil
+}
+func (ora *ChainOracle) RemoveCidAndNode(ctx context.Context, rootCid boson.Address, address boson.Address) (common.Hash, error) {
+	return common.Hash{}, nil
+}
+
+func (ora *ChainOracle) GetRegisterState(ctx context.Context, rootCid boson.Address, address boson.Address) (bool, error) {
+	return false, nil
 }

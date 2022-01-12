@@ -100,6 +100,7 @@ type server struct {
 	tracer      *tracing.Tracer
 	traffic     traffic.ApiInterface
 	commonChain chain.Common
+	oracleChain chain.Resolver
 	Options
 	http.Handler
 	metrics metrics
@@ -124,7 +125,7 @@ const (
 // New will create a and initialize a new API service.
 func New(storer storage.Storer, resolver resolver.Interface, addr boson.Address, chunkInfo chunkinfo.Interface,
 	traversalService traversal.Traverser, pinning pinning.Interface, auth authenticator, logger logging.Logger,
-	tracer *tracing.Tracer, traffic traffic.ApiInterface, commonChain chain.Common, o Options) Service {
+	tracer *tracing.Tracer, traffic traffic.ApiInterface, commonChain chain.Common, oracleChain chain.Resolver, o Options) Service {
 	s := &server{
 		auth:        auth,
 		storer:      storer,
@@ -137,6 +138,7 @@ func New(storer storage.Storer, resolver resolver.Interface, addr boson.Address,
 		logger:      logger,
 		tracer:      tracer,
 		commonChain: commonChain,
+		oracleChain: oracleChain,
 		metrics:     newMetrics(),
 		quit:        make(chan struct{}),
 		traffic:     traffic,

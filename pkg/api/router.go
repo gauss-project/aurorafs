@@ -178,6 +178,18 @@ func (s *server) setupRouting() {
 			"POST": http.HandlerFunc(s.cashCheque),
 		})),
 	)
+
+	handle("/fileRegister/{address}", jsonhttp.MethodHandler{
+		"POST": web.ChainHandlers(
+			s.newTracingHandler("aurora-Register"),
+			web.FinalHandlerFunc(s.fileRegister),
+		),
+		"DELETE": web.ChainHandlers(
+			s.newTracingHandler("aurora-RegisterRemove"),
+			web.FinalHandlerFunc(s.fileRegisterRemove),
+		),
+	})
+
 	s.newLoopbackRouter(router)
 
 	s.Handler = web.ChainHandlers(
