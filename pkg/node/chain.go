@@ -46,7 +46,7 @@ func InitChain(
 	if oracleContractAddress == "" {
 		return nil, nil, nil, nil, fmt.Errorf("oracle contract address is empty")
 	}
-	oracleServer, err := oracle.NewServer(logger, backend, oracleContractAddress)
+	oracleServer, err := oracle.NewServer(logger, backend, oracleContractAddress, signer)
 	if err != nil {
 		return nil, nil, nil, nil, fmt.Errorf("new oracle service: %w", err)
 	}

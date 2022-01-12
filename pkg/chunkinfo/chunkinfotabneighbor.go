@@ -115,6 +115,7 @@ func (ci *ChunkInfo) putChunkInfoNeighbor(rootCid, overlay boson.Address) error 
 	if !ok {
 		b, _ := bitvector.New(v)
 		ci.ct.putChunkInfoTabNeighbor(rootCid, overlay, *b)
+		return ci.storer.Put(generateKey(keyPrefix, rootCid, overlay), &bitVector{B: b.Bytes(), Len: b.Len()})
 	}
 	return nil
 }
@@ -122,23 +123,26 @@ func (ci *ChunkInfo) putChunkInfoNeighbor(rootCid, overlay boson.Address) error 
 func (ci *ChunkInfo) initNeighborChunkInfo(rootCid, peer boson.Address, cids [][]byte) {
 	ci.ct.Lock()
 	rc := rootCid.String()
-	over := ci.addr.String()
-	if _, ok := ci.ct.presence[rc]; !ok {
-		ci.ct.presence[rc] = make(map[string]*bitvector.BitVector)
-		ci.ct.overlays[rc] = []boson.Address{ci.addr}
-		b, _ := ci.getChunkSize(context.Background(), rootCid)
-		vb, _ := bitvector.New(b)
-		ci.ct.presence[rc][over] = vb
-	}
+	_, ok := ci.ct.presence[rc]
 	ci.ct.Unlock()
+	if !ok {
+		err := ci.putChunkInfoNeighbor(rootCid, ci.addr)
+		if err != nil {
+			ci.logger.Errorf("chunkInfo:putChunkInfoNeighbor error:%v", err)
+			return
+		}
+	}
+
 	for _, cid := range cids {
 		c := boson.NewAddress(cid)
 		err := ci.UpdateChunkInfoSource(rootCid, peer, c)
 		if err != nil {
+			ci.logger.Errorf("chunkInfo:UpdateChunkInfoSource error:%v", err)
 			return
 		}
 		err = ci.updateNeighborChunkInfo(rootCid, c, ci.addr, boson.ZeroAddress)
 		if err != nil {
+			ci.logger.Errorf("chunkInfo:updateNeighborChunkInfo error:%v", err)
 			return
 		}
 	}

@@ -74,7 +74,7 @@ func NewAccounting(
 		logger:           logger,
 		store:            store,
 		settlement:       settlement,
-		payChan:          make(chan payChan, 100),
+		payChan:          make(chan payChan, 1000),
 		metrics:          newMetrics(),
 	}
 	go acc.settle()

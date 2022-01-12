@@ -181,6 +181,12 @@ components:
       properties:
         reference:
           $ref: "#/components/schemas/BosonReference"
+    HashResponse:
+      type: object
+      properties:
+        hash:
+          type: string
+          example: "36b7efd913ca4cf880b8eeac5093fa27b0825906c600685b6abdd6566e6cfe8f"
 
     ManifestViewResponse:
       type: object
@@ -329,6 +335,7 @@ components:
         - $ref: "#/components/schemas/BosonAddress"
         - $ref: "#/components/schemas/BosonEncryptedReference"
         - $ref: "#/components/schemas/DomainName"
+
 
     ChunkSourceReference:
       type: object
