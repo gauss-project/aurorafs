@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/ethereum/go-ethereum/common"
 	"io"
 	"io/ioutil"
 	"math"
@@ -105,8 +106,11 @@ type server struct {
 	http.Handler
 	metrics metrics
 
-	wsWg sync.WaitGroup // wait for all websockets to close on exit
-	quit chan struct{}
+	wsWg            sync.WaitGroup // wait for all websockets to close on exit
+	quit            chan struct{}
+	auroraChainSate sync.Map
+	tranProcess     sync.Map
+	transactionChan chan TransactionResponse
 }
 
 type Options struct {
@@ -115,6 +119,11 @@ type Options struct {
 	WsPingPeriod       time.Duration
 	BufferSizeMul      int
 	Restricted         bool
+}
+type TransactionResponse struct {
+	Hash     common.Hash
+	Address  boson.Address
+	Register bool
 }
 
 const (
@@ -127,25 +136,27 @@ func New(storer storage.Storer, resolver resolver.Interface, addr boson.Address,
 	traversalService traversal.Traverser, pinning pinning.Interface, auth authenticator, logger logging.Logger,
 	tracer *tracing.Tracer, traffic traffic.ApiInterface, commonChain chain.Common, oracleChain chain.Resolver, o Options) Service {
 	s := &server{
-		auth:        auth,
-		storer:      storer,
-		resolver:    resolver,
-		overlay:     addr,
-		chunkInfo:   chunkInfo,
-		traversal:   traversalService,
-		pinning:     pinning,
-		Options:     o,
-		logger:      logger,
-		tracer:      tracer,
-		commonChain: commonChain,
-		oracleChain: oracleChain,
-		metrics:     newMetrics(),
-		quit:        make(chan struct{}),
-		traffic:     traffic,
+		auth:            auth,
+		storer:          storer,
+		resolver:        resolver,
+		overlay:         addr,
+		chunkInfo:       chunkInfo,
+		traversal:       traversalService,
+		pinning:         pinning,
+		Options:         o,
+		logger:          logger,
+		tracer:          tracer,
+		commonChain:     commonChain,
+		oracleChain:     oracleChain,
+		metrics:         newMetrics(),
+		quit:            make(chan struct{}),
+		traffic:         traffic,
+		transactionChan: make(chan TransactionResponse, 10),
 	}
 
 	BufferSizeMul = o.BufferSizeMul
 	s.setupRouting()
+	s.transactionReceiptUpdate()
 
 	return s
 }
@@ -343,6 +354,44 @@ func (s *server) newTracingHandler(spanName string) func(h http.Handler) http.Ha
 			h.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}
+}
+
+func (s *server) transactionReceiptUpdate() {
+
+	go func() {
+		tranReceipt := func(txHash common.Hash) (uint64, error) {
+			receipt, err := s.oracleChain.WaitForReceipt(context.Background(), txHash)
+			if err != nil {
+				return 0, err
+			}
+			if receipt.Status == 0 {
+				s.logger.Errorf("api:tranReceipt - %s Exchange failed ", txHash.String())
+			}
+			return receipt.Status, nil
+		}
+
+		tranUpdate := func(trans TransactionResponse) error {
+			s.auroraChainSate.Store(trans.Address.String(), trans.Register)
+			return nil
+		}
+
+		for {
+			select {
+			case trans := <-s.transactionChan:
+				status, err := tranReceipt(trans.Hash)
+				if err != nil {
+					continue
+				}
+				if status == 1 {
+					err := tranUpdate(trans)
+					if err != nil {
+						s.logger.Errorf("api:tranUpdate - %v ", err.Error())
+						continue
+					}
+				}
+			}
+		}
+	}()
 }
 
 func lookaheadBufferSize(size int64) int {
