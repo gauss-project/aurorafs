@@ -50,6 +50,7 @@ type Resolver interface {
 	RegisterCidAndNode(ctx context.Context, rootCid boson.Address, address boson.Address) (common.Hash, error)
 	RemoveCidAndNode(ctx context.Context, rootCid boson.Address, address boson.Address) (common.Hash, error)
 	GetRegisterState(ctx context.Context, rootCid boson.Address, address boson.Address) (bool, error)
+	WaitForReceipt(ctx context.Context, txHash common.Hash) (receipt *types.Receipt, err error)
 }
 
 type Traffic interface {

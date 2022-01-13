@@ -450,15 +450,25 @@ func (s *server) auroraListHandler(w http.ResponseWriter, r *http.Request) {
 	ch := make(chan ordHash, 30)
 	getChainState := func(ctx context.Context, i int, rootCid boson.Address) {
 		defer wg.Done()
+		if v, ok := s.auroraChainSate.Load(rootCid.String()); ok {
+			l.Lock()
+			responseList[i].Register = v.(bool)
+			l.Unlock()
+			return
+		}
+
 		b, err := s.oracleChain.GetRegisterState(r.Context(), rootCid, s.overlay)
 		if err != nil {
 			s.logger.Errorf("aurora list: GetRegisterState failed %v", err.Error())
 		}
 
 		if err == nil && b {
+			s.auroraChainSate.Store(rootCid.String(), true)
 			l.Lock()
 			responseList[i].Register = true
 			l.Unlock()
+		} else {
+			s.auroraChainSate.Store(rootCid.String(), false)
 		}
 	}
 
@@ -470,15 +480,17 @@ func (s *server) auroraListHandler(w http.ResponseWriter, r *http.Request) {
 
 	for i, v := range responseList {
 		response := v
-		hashChain := ordHash{ord: i, hash: v.FileHash}
-		ch <- hashChain
-
 		maniFest, err := s.manifestView(r.Context(), v.FileHash.String(), pathVar, depth)
 		if err == nil {
 			response.Manifest = *maniFest
 		}
 		responseList[i] = response
 	}
+	for i, v := range responseList {
+		hashChain := ordHash{ord: i, hash: v.FileHash}
+		ch <- hashChain
+	}
+
 	close(ch)
 	wg.Wait()
 	jsonhttp.OK(w, responseList)
@@ -688,15 +700,24 @@ func (s *server) manifestViewHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *server) fileRegister(w http.ResponseWriter, r *http.Request) {
+	apiName := "fileRegister"
 	logger := tracing.NewLoggerWithTraceID(r.Context(), s.logger)
 	nameOrHex := mux.Vars(r)["address"]
 	address, err := s.resolveNameOrAddress(nameOrHex)
+	defer s.tranProcess.Delete(apiName + address.String())
+
 	if err != nil {
 		logger.Debugf("aurora fileRegister: parse address %s: %v", nameOrHex, err)
 		logger.Error("aurora fileRegister: parse address")
 		jsonhttp.NotFound(w, nil)
 		return
 	}
+	if _, ok := s.tranProcess.Load(apiName + address.String()); ok {
+		logger.Error("parse address %s under processing", nameOrHex)
+		jsonhttp.InternalServerError(w, fmt.Sprintf("parse address %s under processing", nameOrHex))
+		return
+	}
+	s.tranProcess.Store(apiName+address.String(), "-")
 	overlays := s.oracleChain.GetNodesFromCid(address.Bytes())
 	for _, v := range overlays {
 		if s.overlay.Equal(v) {
@@ -712,6 +733,13 @@ func (s *server) fileRegister(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	trans := TransactionResponse{
+		Hash:     hash,
+		Address:  address,
+		Register: true,
+	}
+	s.transactionChan <- trans
+
 	jsonhttp.OK(w,
 		auroraRegisterResponse{
 			Hash: hash,
@@ -719,6 +747,7 @@ func (s *server) fileRegister(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *server) fileRegisterRemove(w http.ResponseWriter, r *http.Request) {
+	apiName := "fileRegisterRemove"
 	logger := tracing.NewLoggerWithTraceID(r.Context(), s.logger)
 	nameOrHex := mux.Vars(r)["address"]
 	address, err := s.resolveNameOrAddress(nameOrHex)
@@ -727,6 +756,14 @@ func (s *server) fileRegisterRemove(w http.ResponseWriter, r *http.Request) {
 		jsonhttp.NotFound(w, nil)
 		return
 	}
+	defer s.tranProcess.Delete(apiName + address.String())
+	if _, ok := s.tranProcess.Load(apiName + address.String()); ok {
+		logger.Error("parse address %s under processing", nameOrHex)
+		jsonhttp.InternalServerError(w, fmt.Sprintf("parse address %s under processing", nameOrHex))
+		return
+	}
+	s.tranProcess.Store(apiName+address.String(), "-")
+
 	overlays := s.oracleChain.GetNodesFromCid(address.Bytes())
 	isDel := false
 	for _, v := range overlays {
@@ -745,6 +782,14 @@ func (s *server) fileRegisterRemove(w http.ResponseWriter, r *http.Request) {
 		jsonhttp.InternalServerError(w, fmt.Sprintf("aurora fileRegisterRemove failed: %v ", err))
 		return
 	}
+
+	trans := TransactionResponse{
+		Hash:     hash,
+		Address:  address,
+		Register: false,
+	}
+	s.transactionChan <- trans
+
 	jsonhttp.OK(w,
 		auroraRegisterResponse{
 			Hash: hash,

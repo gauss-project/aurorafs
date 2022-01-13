@@ -11,6 +11,7 @@ import (
 	"github.com/gauss-project/aurorafs/pkg/logging"
 	"github.com/gauss-project/aurorafs/pkg/settlement/chain"
 	"math/big"
+	"time"
 )
 
 type ChainOracle struct {
@@ -32,6 +33,7 @@ func NewServer(logger logging.Logger, backend *ethclient.Client, address string,
 		logger.Infof("could not connect to backend  In a swap-enabled network a working blockchain node (for goerli network in production) is required. Check your node or specify another node using --traffic-endpoint.")
 		return nil, err
 	}
+
 	oracle, err := NewOracle(common.HexToAddress(address), backend)
 	if err != nil {
 		logger.Errorf("Failed to connect to the Ethereum client: %v", err)
@@ -87,7 +89,6 @@ func (ora *ChainOracle) RegisterCidAndNode(ctx context.Context, rootCid boson.Ad
 	if err != nil {
 		return common.Hash{}, err
 	}
-
 	return tract.Hash(), nil
 }
 func (ora *ChainOracle) RemoveCidAndNode(ctx context.Context, rootCid boson.Address, address boson.Address) (common.Hash, error) {
@@ -101,6 +102,27 @@ func (ora *ChainOracle) RemoveCidAndNode(ctx context.Context, rootCid boson.Addr
 		return common.Hash{}, err
 	}
 	return tract.Hash(), nil
+}
+
+func (ora *ChainOracle) WaitForReceipt(ctx context.Context, txHash common.Hash) (receipt *types.Receipt, err error) {
+	for {
+		receipt, err := ora.chain.TransactionReceipt(ctx, txHash)
+		if receipt != nil {
+			return receipt, nil
+		}
+		if err != nil {
+			// some node implementations return an error if the transaction is not yet mined
+			ora.logger.Tracef("waiting for transaction %x to be mined: %v", txHash, err)
+		} else {
+			ora.logger.Tracef("waiting for transaction %x to be mined", txHash)
+		}
+
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case <-time.After(1 * time.Second):
+		}
+	}
 }
 
 func (ora *ChainOracle) GetRegisterState(ctx context.Context, rootCid boson.Address, address boson.Address) (bool, error) {

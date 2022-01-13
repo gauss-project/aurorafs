@@ -3,6 +3,7 @@ package mock
 import (
 	"context"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/settlement/chain"
 )
@@ -47,4 +48,8 @@ func (ora *ChainOracle) RemoveCidAndNode(ctx context.Context, rootCid boson.Addr
 
 func (ora *ChainOracle) GetRegisterState(ctx context.Context, rootCid boson.Address, address boson.Address) (bool, error) {
 	return false, nil
+}
+
+func (ora *ChainOracle) WaitForReceipt(ctx context.Context, txHash common.Hash) (receipt *types.Receipt, err error) {
+	return nil, nil
 }
