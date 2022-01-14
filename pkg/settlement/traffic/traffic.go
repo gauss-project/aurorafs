@@ -761,7 +761,6 @@ func (s *Service) ReceiveCheque(ctx context.Context, peer boson.Address, cheque 
 	if ok {
 		localTraffic := traffic
 		localTraffic.transferChequeTraffic = cheque.CumulativePayout
-		localTraffic.transferTraffic = s.maxBigint(localTraffic.transferTraffic, localTraffic.transferChequeTraffic)
 		s.trafficPeers.trafficPeers[cheque.Beneficiary.String()] = localTraffic
 	} else {
 		traffic := newTraffic()

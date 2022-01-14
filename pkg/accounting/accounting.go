@@ -99,8 +99,8 @@ func (a *Accounting) Reserve(peer boson.Address, traffic uint64) (err error) {
 			return err
 		}
 	}
+	ret := big.NewInt(0).Add(retrieve, new(big.Int).SetUint64(traffic))
 	for {
-		ret := big.NewInt(0).Add(retrieve, new(big.Int).SetUint64(traffic))
 		available, err := a.settlement.AvailableBalance()
 		if err != nil {
 			return err
