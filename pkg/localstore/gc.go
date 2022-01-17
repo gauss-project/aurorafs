@@ -181,7 +181,7 @@ func (db *DB) collectGarbage() (collectedCount uint64, done bool, err error) {
 
 		gcCount := uint64(0)
 
-		del := db.discover.DelFile(boson.NewAddress(item.Address))
+		del := db.discover.DelFile(boson.NewAddress(item.Address), func() {})
 		if !del {
 			return 0, false, fmt.Errorf("chunkinfo report delete %s failed", addr)
 		}
