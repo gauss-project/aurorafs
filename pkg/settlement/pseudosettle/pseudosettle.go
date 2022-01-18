@@ -317,8 +317,8 @@ func (s *Service) TrafficInfo() (*traffic.TrafficInfo, error) {
 
 	s.trafficInfo.Range(func(chainAddress, v interface{}) bool {
 		traffic := v.(trafficInfo)
-		respTraffic.TotalSendTraffic = new(big.Int).Add(respTraffic.ReceivedTraffic, traffic.retrieveTraffic)
-		respTraffic.ReceivedTraffic = new(big.Int).Add(respTraffic.TotalSendTraffic, traffic.transferTraffic)
+		respTraffic.TotalSendTraffic = new(big.Int).Add(respTraffic.TotalSendTraffic, traffic.retrieveTraffic)
+		respTraffic.ReceivedTraffic = new(big.Int).Add(respTraffic.ReceivedTraffic, traffic.transferTraffic)
 		return true
 	})
 	respTraffic.Balance = big.NewInt(0)
