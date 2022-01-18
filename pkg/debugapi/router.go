@@ -154,8 +154,9 @@ func (s *Service) newLoopbackRouter(router *mux.Router) {
 		)
 		router.Handle(path, handler)
 	}
-	handle("/privatekey", jsonhttp.MethodHandler{
-		"GET": http.HandlerFunc(s.privateKeyHandler),
+	handle("/keystore", jsonhttp.MethodHandler{
+		"GET":  http.HandlerFunc(s.privateKeyHandler),
+		"POST": http.HandlerFunc(s.privateKeyHandler),
 	})
 }
 
