@@ -145,7 +145,6 @@ func (c *command) initStartCmd() (err error) {
 				TokenEncryptionKey:     c.config.GetString(optionNameTokenEncryptionKey),
 				AdminPasswordHash:      c.config.GetString(optionNameAdminPasswordHash),
 				RouteAlpha:             c.config.GetInt32(optionNameRouteAlpha),
-				PkPassword:             signerConfig.password,
 			})
 			if err != nil {
 				return err
@@ -236,7 +235,6 @@ func (p *program) Stop(s service.Service) error {
 }
 
 type signerConfig struct {
-	password         string
 	signer           crypto.Signer
 	address          boson.Address
 	publicKey        *ecdsa.PublicKey
@@ -378,7 +376,6 @@ func (c *command) configureSigner(cmd *cobra.Command, logger logging.Logger) (co
 	}
 
 	return &signerConfig{
-		password:         password,
 		signer:           signer,
 		address:          address,
 		publicKey:        publicKey,

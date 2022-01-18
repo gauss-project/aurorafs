@@ -59,19 +59,12 @@ func (s *Service) Key(name, password string) (pk *ecdsa.PrivateKey, created bool
 	return k.pk, created, nil
 }
 
-func (s *Service) BackKey(name string) error {
-	return nil
+func (s *Service) ExportKey(name string) ([]byte, error) {
+	panic("implement me")
 }
 
-func (s *Service) ImportKey(name, password string, pk *ecdsa.PrivateKey) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	s.m[name] = key{
-		pk:       pk,
-		password: password,
-	}
-	return nil
+func (s *Service) ImportKey(name, password string, keyJson []byte) error {
+	panic("implement me")
 }
 
 type key struct {
