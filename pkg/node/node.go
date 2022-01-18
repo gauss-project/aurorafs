@@ -146,8 +146,6 @@ func NewAurora(nodeMode aurora.Model, addr string, bosonAddress boson.Address, p
 	if o.DebugAPIAddr != "" {
 		// set up basic debug api endpoints for debugging and /health endpoint
 		debugAPIService = debugapi.New(bosonAddress, publicKey, logger, tracer, o.CORSAllowedOrigins, o.Restricted, authenticator, debugapi.Options{
-			Signer:         signer,
-			Password:       o.PkPassword,
 			DataDir:        o.DataDir,
 			NATAddr:        o.NATAddr,
 			NetworkID:      networkID,

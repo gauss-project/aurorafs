@@ -9,6 +9,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"github.com/google/uuid"
 	"io"
 
 	"github.com/gauss-project/aurorafs/pkg/crypto"
@@ -34,6 +35,7 @@ type encryptedKey struct {
 	Address string    `json:"address"`
 	Crypto  keyCripto `json:"crypto"`
 	Version int       `json:"version"`
+	Id      string    `json:"id"`
 }
 
 type keyCripto struct {
@@ -71,6 +73,7 @@ func encryptKey(k *ecdsa.PrivateKey, password string) ([]byte, error) {
 		Address: hex.EncodeToString(addr),
 		Crypto:  *kc,
 		Version: keyVersion,
+		Id:      uuid.NewString(),
 	})
 }
 
@@ -108,7 +111,10 @@ func encryptData(data, password []byte) (*keyCripto, error) {
 	if err != nil {
 		return nil, err
 	}
-	mac := sha3.Sum256(append(derivedKey[16:32], cipherText...))
+	mac, err := crypto.LegacyKeccak256(append(derivedKey[16:32], cipherText...))
+	if err != nil {
+		return nil, err
+	}
 
 	return &keyCripto{
 		Cipher:     "aes-128-ctr",
@@ -147,7 +153,14 @@ func decryptData(v keyCripto, password string) ([]byte, error) {
 	}
 	calculatedMAC := sha3.Sum256(append(derivedKey[16:32], cipherText...))
 	if !bytes.Equal(calculatedMAC[:], mac) {
-		return nil, keystore.ErrInvalidPassword
+		// if this fails we might be trying to load an ethereum V3 keyfile
+		calculatedMACEth, err := crypto.LegacyKeccak256(append(derivedKey[16:32], cipherText...))
+		if err != nil {
+			return nil, err
+		}
+		if !bytes.Equal(calculatedMACEth[:], mac) {
+			return nil, keystore.ErrInvalidPassword
+		}
 	}
 
 	iv, err := hex.DecodeString(v.CipherParams.IV)
