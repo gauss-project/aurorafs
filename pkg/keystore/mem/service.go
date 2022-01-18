@@ -3,10 +3,9 @@ package mem
 import (
 	"crypto/ecdsa"
 	"fmt"
-	"sync"
-
 	"github.com/gauss-project/aurorafs/pkg/crypto"
 	"github.com/gauss-project/aurorafs/pkg/keystore"
+	"sync"
 )
 
 var _ keystore.Service = (*Service)(nil)
@@ -58,6 +57,21 @@ func (s *Service) Key(name, password string) (pk *ecdsa.PrivateKey, created bool
 	}
 
 	return k.pk, created, nil
+}
+
+func (s *Service) BackKey(name string) error {
+	return nil
+}
+
+func (s *Service) ImportKey(name, password string, pk *ecdsa.PrivateKey) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	s.m[name] = key{
+		pk:       pk,
+		password: password,
+	}
+	return nil
 }
 
 type key struct {

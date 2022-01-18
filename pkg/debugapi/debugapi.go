@@ -5,6 +5,7 @@ package debugapi
 
 import (
 	"crypto/ecdsa"
+	"github.com/gauss-project/aurorafs/pkg/crypto"
 	"github.com/gauss-project/aurorafs/pkg/settlement/traffic"
 	"net/http"
 	"sync"
@@ -63,7 +64,9 @@ type Service struct {
 }
 
 type Options struct {
-	PrivateKey     *ecdsa.PrivateKey
+	Signer         crypto.Signer
+	Password       string
+	DataDir        string
 	NetworkID      uint64
 	NATAddr        string
 	EnableWS       bool

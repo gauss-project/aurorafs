@@ -103,6 +103,7 @@ type Options struct {
 	TokenEncryptionKey     string
 	AdminPasswordHash      string
 	RouteAlpha             int32
+	PkPassword             string
 }
 
 func NewAurora(nodeMode aurora.Model, addr string, bosonAddress boson.Address, publicKey ecdsa.PublicKey, signer crypto.Signer, networkID uint64, logger logging.Logger, libp2pPrivateKey *ecdsa.PrivateKey, o Options) (b *Aurora, err error) {
@@ -145,7 +146,9 @@ func NewAurora(nodeMode aurora.Model, addr string, bosonAddress boson.Address, p
 	if o.DebugAPIAddr != "" {
 		// set up basic debug api endpoints for debugging and /health endpoint
 		debugAPIService = debugapi.New(bosonAddress, publicKey, logger, tracer, o.CORSAllowedOrigins, o.Restricted, authenticator, debugapi.Options{
-			PrivateKey:     signer.PrivateKey(),
+			Signer:         signer,
+			Password:       o.PkPassword,
+			DataDir:        o.DataDir,
 			NATAddr:        o.NATAddr,
 			NetworkID:      networkID,
 			EnableWS:       o.EnableWS,
