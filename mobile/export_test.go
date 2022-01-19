@@ -29,7 +29,7 @@ func ExportDefaultConfig() (o *Options, err error) {
 	o.KeysPath = o.DataPath
 
 	// dev chain
-	o.ContractAddress = "0x7F578e5ade91A30aC8ABf120d102E282821bd142"
+	o.OracleContract = "0x7F578e5ade91A30aC8ABf120d102E282821bd142"
 	o.ChainEndpoint = "https://data-seed-prebsc-1-s1.binance.org:8545"
 
 	return
