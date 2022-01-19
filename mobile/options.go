@@ -1,11 +1,12 @@
 package mobile
 
 import (
-	"bytes"
 	"fmt"
 	"reflect"
+	"strings"
 
 	"github.com/gauss-project/aurorafs/pkg/node"
+	"github.com/gauss-project/aurorafs/pkg/resolver/multiresolver"
 )
 
 // Options represents the collection of configuration values to fine tune the aurora
@@ -31,13 +32,20 @@ type Options struct {
 	CacheCapacity int64 // default type uint64
 
 	// node bootstrap
-	BootNodes      []byte // default type []string
+	BootNodes      string // default type []string
 	EnableDevNode  bool
 	EnableFullNode bool
 
-	// oracle setting
-	ContractAddress string
-	ChainEndpoint   string
+	// chain setting
+	ChainEndpoint  string
+	OracleContract string
+
+	// traffic stat
+	EnableFlowStat bool
+	FlowContract   string
+
+	// domain resolver
+	ResolverOptions string // default type []string
 
 	// security
 	Password string
@@ -87,9 +95,17 @@ func (o Options) DebugAPIAddr(c *node.Options) {
 }
 
 func (o Options) Bootnodes(c *node.Options) {
-	bootNodes := bytes.Split(o.BootNodes, []byte{','})
+	bootNodes := strings.Split(o.BootNodes, ",")
 	for _, bootNode := range bootNodes {
 		c.Bootnodes = append(c.Bootnodes, string(bootNode))
+	}
+}
+
+func (o Options) ResolverConnectionCfgs(c *node.Options) {
+	resolverOptions := strings.Split(o.ResolverOptions, ",")
+	resolverCfgs, err := multiresolver.ParseConnectionStrings(resolverOptions)
+	if err == nil {
+		c.ResolverConnectionCfgs = resolverCfgs
 	}
 }
 
@@ -106,11 +122,19 @@ func (o Options) LightNodeMaxPeers(c *node.Options) {
 }
 
 func (o Options) OracleContractAddress(c *node.Options) {
-	c.OracleContractAddress = o.ContractAddress
+	c.OracleContractAddress = o.OracleContract
 }
 
 func (o Options) OracleEndpoint(c *node.Options) {
 	c.OracleEndpoint = o.ChainEndpoint
+}
+
+func (o Options) TrafficEnable(c *node.Options) {
+	c.TrafficEnable = o.EnableFlowStat
+}
+
+func (o Options) TrafficContractAddr(c *node.Options) {
+	c.TrafficContractAddr = o.FlowContract
 }
 
 func (o Options) DBBlockCacheCapacity(c *node.Options) {
