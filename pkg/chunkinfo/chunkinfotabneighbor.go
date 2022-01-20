@@ -19,11 +19,13 @@ type chunkInfoTabNeighbor struct {
 	// rootCid:node:bitvector
 	presence map[string]map[string]*bitvector.BitVector
 	// rootCid:node
-	overlays map[string][]boson.Address
+	overlays      map[string][]boson.Address
+	serverPutChan chan chunkPut
 }
 
 func newChunkInfoTabNeighbor() *chunkInfoTabNeighbor {
-	return &chunkInfoTabNeighbor{overlays: make(map[string][]boson.Address), presence: make(map[string]map[string]*bitvector.BitVector)}
+	return &chunkInfoTabNeighbor{overlays: make(map[string][]boson.Address), presence: make(map[string]map[string]*bitvector.BitVector),
+		serverPutChan: make(chan chunkPut, 200)}
 }
 
 func (ci *ChunkInfo) initChunkInfoTabNeighbor() error {
@@ -53,8 +55,7 @@ func (ci *ChunkInfo) initChunkInfoTabNeighbor() error {
 }
 
 func (cn *chunkInfoTabNeighbor) putChunkInfoTabNeighbor(rootCid, overlay boson.Address, vector bitvector.BitVector) {
-	cn.Lock()
-	defer cn.Unlock()
+
 	rc := rootCid.String()
 	cn.overlays[rc] = append(cn.overlays[rc], overlay)
 	if _, ok := cn.presence[rc]; !ok {
@@ -68,34 +69,18 @@ func (ci *ChunkInfo) updateNeighborChunkInfo(rootCid, cid boson.Address, overlay
 
 	rc := rootCid.String()
 	over := overlay.String()
-	if !ci.cp.isExists(rootCid) {
-		if !target.IsZero() && !target.Equal(ci.addr) {
-			if err := ci.doFindChunkPyramid(context.Background(), nil, rootCid, target); err != nil {
-				return err
-			}
-		}
-		if err := ci.putChunkInfoNeighbor(rootCid, overlay); err != nil {
-			return err
-		}
-	}
-
-	ci.ct.Lock()
 	_, ok := ci.ct.presence[rc]
-	ci.ct.Unlock()
 	if !ok {
 		return fmt.Errorf("rootCid is not exists")
 	}
-
 	if err := ci.putChunkInfoNeighbor(rootCid, overlay); err != nil {
 		return err
 	}
-	ci.ct.Lock()
 	bv, ok := ci.ct.presence[rc][over]
-	ci.ct.Unlock()
 
 	v := ci.cp.getCidStore(rootCid, cid)
 	if v < 0 {
-		ci.cp.updateCidSort(rootCid, cid, 0)
+		ci.chunkPutChanUpdate(context.Background(), ci.cp, ci.cp.updateCidSort, rootCid, cid, 0)
 		v = 0
 	}
 	bv.Set(v)
@@ -109,9 +94,9 @@ func (ci *ChunkInfo) putChunkInfoNeighbor(rootCid, overlay boson.Address) error 
 	if v == 0 {
 		return fmt.Errorf("pyramid is not exists")
 	}
-	ci.ct.Lock()
+
 	_, ok := ci.ct.presence[rootCid.String()][overlay.String()]
-	ci.ct.Unlock()
+
 	if !ok {
 		b, _ := bitvector.New(v)
 		ci.ct.putChunkInfoTabNeighbor(rootCid, overlay, *b)
@@ -121,10 +106,10 @@ func (ci *ChunkInfo) putChunkInfoNeighbor(rootCid, overlay boson.Address) error 
 }
 
 func (ci *ChunkInfo) initNeighborChunkInfo(rootCid, peer boson.Address, cids [][]byte) {
-	ci.ct.Lock()
+
 	rc := rootCid.String()
 	_, ok := ci.ct.presence[rc]
-	ci.ct.Unlock()
+
 	if !ok {
 		err := ci.putChunkInfoNeighbor(rootCid, ci.addr)
 		if err != nil {
@@ -198,8 +183,7 @@ func (cn *chunkInfoTabNeighbor) createChunkInfoResp(rootCid boson.Address, ctn m
 }
 
 func (ci *ChunkInfo) delPresence(rootCid boson.Address) bool {
-	ci.ct.Lock()
-	defer ci.ct.Unlock()
+
 	delKey := fmt.Sprintf("%s%s", keyPrefix, rootCid.String())
 	if err := ci.storer.Iterate(delKey, func(k, v []byte) (bool, error) {
 		if !strings.HasPrefix(string(k), delKey) {
@@ -220,4 +204,14 @@ func (ci *ChunkInfo) delPresence(rootCid boson.Address) bool {
 	delete(ci.ct.overlays, rootCid.String())
 
 	return true
+}
+
+func (cn *chunkInfoTabNeighbor) setLock() {
+	cn.Lock()
+}
+func (cn *chunkInfoTabNeighbor) setUnLock() {
+	cn.Unlock()
+}
+func (cn *chunkInfoTabNeighbor) getChan() chan chunkPut {
+	return cn.serverPutChan
 }
