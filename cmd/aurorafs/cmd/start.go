@@ -144,7 +144,7 @@ func (c *command) initStartCmd() (err error) {
 				Restricted:             c.config.GetBool(optionNameRestrictedAPI),
 				TokenEncryptionKey:     c.config.GetString(optionNameTokenEncryptionKey),
 				AdminPasswordHash:      c.config.GetString(optionNameAdminPasswordHash),
-				RouteAlpha:         c.config.GetInt32(optionNameRouteAlpha),
+				RouteAlpha:             c.config.GetInt32(optionNameRouteAlpha),
 			})
 			if err != nil {
 				return err
@@ -258,12 +258,12 @@ type signerConfig struct {
 //}
 
 func (c *command) configureSigner(cmd *cobra.Command, logger logging.Logger) (config *signerConfig, err error) {
-	var keystore keystore.Service
+	var kt keystore.Service
 	if c.config.GetString(optionNameDataDir) == "" {
-		keystore = memkeystore.New()
+		kt = memkeystore.New()
 		logger.Warning("data directory not provided, keys are not persisted")
 	} else {
-		keystore = filekeystore.New(filepath.Join(c.config.GetString(optionNameDataDir), "keys"))
+		kt = filekeystore.New(filepath.Join(c.config.GetString(optionNameDataDir), "keys"))
 	}
 
 	var signer crypto.Signer
@@ -282,7 +282,7 @@ func (c *command) configureSigner(cmd *cobra.Command, logger logging.Logger) (co
 		// if libp2p key exists we can assume all required keys exist
 		// so prompt for a password to unlock them
 		// otherwise prompt for new password with confirmation to create them
-		exists, err := keystore.Exists("libp2p")
+		exists, err := kt.Exists("libp2p")
 		if err != nil {
 			return nil, err
 		}
@@ -344,7 +344,7 @@ func (c *command) configureSigner(cmd *cobra.Command, logger logging.Logger) (co
 	//	logger.Infof("using boson network address through clef: %s", address)
 	//} else {
 	//	logger.Warning("clef is not enabled; portability and security of your keys is sub optimal")
-	PrivateKey, created, err := keystore.Key("boson", password)
+	PrivateKey, created, err := kt.Key("boson", password)
 	if err != nil {
 		return nil, fmt.Errorf("boson key: %w", err)
 	}
@@ -365,7 +365,7 @@ func (c *command) configureSigner(cmd *cobra.Command, logger logging.Logger) (co
 
 	logger.Infof("boson public key %x", crypto.EncodeSecp256k1PublicKey(publicKey))
 
-	libp2pPrivateKey, created, err := keystore.Key("libp2p", password)
+	libp2pPrivateKey, created, err := kt.Key("libp2p", password)
 	if err != nil {
 		return nil, fmt.Errorf("libp2p key: %w", err)
 	}

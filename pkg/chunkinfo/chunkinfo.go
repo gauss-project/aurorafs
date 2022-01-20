@@ -301,13 +301,13 @@ func (ci *ChunkInfo) GetFileList(overlay boson.Address) (fileListInfo map[string
 	return
 }
 
-func (ci *ChunkInfo) DelFile(rootCid boson.Address) bool {
+func (ci *ChunkInfo) DelFile(rootCid boson.Address, del func()) bool {
 	ctx := context.Background()
 	ci.syncLk.Lock()
 	defer ci.syncLk.Unlock()
 	ci.CancelFindChunkInfo(rootCid)
 	ci.queues.Delete(rootCid.String())
-
+	del()
 	if res := ci.chunkPutChanUpdate(ctx, ci.cd, ci.delDiscoverPresence, rootCid).state; !res {
 		return false
 	}

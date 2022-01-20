@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/gauss-project/aurorafs/pkg/crypto"
 )
@@ -73,4 +74,47 @@ func (s *Service) Key(name, password string) (pk *ecdsa.PrivateKey, created bool
 
 func (s *Service) keyFilename(name string) string {
 	return filepath.Join(s.dir, fmt.Sprintf("%s.key", name))
+}
+
+func (s *Service) ExportKey(name string) ([]byte, error) {
+	filename := s.keyFilename(name)
+	return os.ReadFile(filename)
+}
+
+func (s *Service) ImportKey(name, password string, keyJson []byte) (err error) {
+	filename := s.keyFilename(name)
+
+	has, err := s.Exists(name)
+	if err != nil {
+		return err
+	}
+	if has {
+		bakFile := filename + fmt.Sprintf(".bak.%d", time.Now().Unix())
+		err = os.Rename(filename, bakFile)
+		if err != nil {
+			return err
+		}
+		defer func() {
+			if err != nil {
+				_ = os.Rename(bakFile, filename)
+			}
+		}()
+	}
+
+	pk, err := decryptKey(keyJson, password)
+	if err != nil {
+		return err
+	}
+	d, err := encryptKey(pk, password)
+	if err != nil {
+		return err
+	}
+
+	if err = os.MkdirAll(filepath.Dir(filename), 0700); err != nil {
+		return err
+	}
+	if err = os.WriteFile(filename, d, 0600); err != nil {
+		return err
+	}
+	return nil
 }

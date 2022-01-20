@@ -18,4 +18,6 @@ type Service interface {
 	Key(name, password string) (k *ecdsa.PrivateKey, created bool, err error)
 	// Exists returns true if the key with specified name exists.
 	Exists(name string) (bool, error)
+	ExportKey(name string) ([]byte, error)
+	ImportKey(name, password string, keyJson []byte) error
 }

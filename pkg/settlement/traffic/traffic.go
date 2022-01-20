@@ -382,8 +382,8 @@ func (s *Service) TrafficInfo() (*TrafficInfo, error) {
 		traffic := v
 		cashed = new(big.Int).Add(cashed, traffic.retrieveChainTraffic)
 		transfer = new(big.Int).Add(transfer, traffic.retrieveChequeTraffic)
-		respTraffic.TotalSendTraffic = new(big.Int).Add(respTraffic.TotalSendTraffic, traffic.transferChequeTraffic)
-		respTraffic.ReceivedTraffic = new(big.Int).Add(respTraffic.ReceivedTraffic, traffic.retrieveChequeTraffic)
+		respTraffic.TotalSendTraffic = new(big.Int).Add(respTraffic.TotalSendTraffic, traffic.retrieveChequeTraffic)
+		respTraffic.ReceivedTraffic = new(big.Int).Add(respTraffic.ReceivedTraffic, traffic.transferChequeTraffic)
 	}
 
 	respTraffic.Balance = s.trafficPeers.balance

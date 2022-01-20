@@ -63,7 +63,7 @@ type Service struct {
 }
 
 type Options struct {
-	PrivateKey     *ecdsa.PrivateKey
+	DataDir        string
 	NetworkID      uint64
 	NATAddr        string
 	EnableWS       bool

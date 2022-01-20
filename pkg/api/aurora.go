@@ -401,7 +401,7 @@ type auroraListResponse struct {
 	PinState  bool                `json:"pinState"`
 	BitVector aurora.BitVectorApi `json:"bitVector"`
 	Register  bool                `json:"register"`
-	Manifest  ManifestNode        `json:"manifest"`
+	Manifest  *ManifestNode       `json:"manifest"`
 }
 
 // auroraListHandler
@@ -431,6 +431,7 @@ func (s *server) auroraListHandler(w http.ResponseWriter, r *http.Request) {
 				PinState:  pinned,
 				BitVector: info.Bitvector,
 				Register:  false,
+				Manifest:  nil,
 			})
 		}
 	}
@@ -481,8 +482,8 @@ func (s *server) auroraListHandler(w http.ResponseWriter, r *http.Request) {
 	for i, v := range responseList {
 		response := v
 		maniFest, err := s.manifestView(r.Context(), v.FileHash.String(), pathVar, depth)
-		if err == nil {
-			response.Manifest = *maniFest
+		if err == nil && maniFest != nil {
+			response.Manifest = maniFest
 		}
 		responseList[i] = response
 	}

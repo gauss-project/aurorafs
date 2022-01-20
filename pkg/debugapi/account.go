@@ -1,18 +1,39 @@
 package debugapi
 
 import (
-	"fmt"
+	"bytes"
+	"github.com/gauss-project/aurorafs/pkg/keystore/file"
+	"io"
 	"net/http"
+	"path/filepath"
 
-	"github.com/gauss-project/aurorafs/pkg/crypto"
 	"github.com/gauss-project/aurorafs/pkg/jsonhttp"
 )
 
 func (s *Service) privateKeyHandler(w http.ResponseWriter, r *http.Request) {
-	pk := crypto.EncodeSecp256k1PrivateKey(s.nodeOptions.PrivateKey)
+	path := filepath.Join(s.nodeOptions.DataDir, "keys")
+	f := file.New(path)
 
-	type out struct {
-		PrivateKey string `json:"private_key"`
+	if r.Method == "POST" {
+		// import
+		keyJson := r.FormValue("key")
+		password := r.FormValue("pwd")
+
+		err := f.ImportKey("boson", password, []byte(keyJson))
+		if err != nil {
+			jsonhttp.InternalServerError(w, err)
+			return
+		}
+		jsonhttp.OK(w, nil)
+	} else {
+		// export get
+		b, err := f.ExportKey("boson")
+		if err != nil {
+			jsonhttp.InternalServerError(w, err)
+			return
+		}
+
+		w.Header().Set("Content-Type", jsonhttp.DefaultContentTypeHeader)
+		_, _ = io.Copy(w, bytes.NewBuffer(b))
 	}
-	jsonhttp.OK(w, out{PrivateKey: fmt.Sprintf("%x", pk)})
 }
