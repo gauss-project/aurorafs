@@ -844,10 +844,22 @@ func (s *Service) BlocklistedPeers() ([]p2p.Peer, error) {
 }
 
 func (s *Service) CallHandler(ctx context.Context, last p2p.Peer, stream p2p.Stream) (relayData *pb.RouteRelayReq, w p2p.WriterChan, r p2p.ReaderChan, forward bool, err error) {
+	defer func() {
+		if bytes.Equal(relayData.Dest, s.self.Bytes()) {
+			forward = false
+		} else {
+			if err != nil {
+				forward = true
+			}
+		}
+	}()
 	reqCh := make(chan *pb.RouteRelayReq, 1)
 	w, r, done := s.route.PackRelayResp(ctx, stream, reqCh)
 	relayData = <-reqCh
-
+	if !relayData.MidCall && !bytes.Equal(relayData.Dest, s.self.Bytes()) {
+		forward = true
+		return
+	}
 	name := string(relayData.ProtocolName)
 	version := string(relayData.ProtocolVersion)
 	streamName := string(relayData.StreamName)
@@ -863,9 +875,6 @@ func (s *Service) CallHandler(ctx context.Context, last p2p.Peer, stream p2p.Str
 	matcher, err := s.protocolSemverMatcher(id)
 	if err != nil {
 		err = fmt.Errorf("protocol version match %s: %w", id, err)
-		if !relayData.MidCall {
-			forward = true
-		}
 		return
 	}
 	var spec p2p.StreamSpec
@@ -880,8 +889,8 @@ func (s *Service) CallHandler(ctx context.Context, last p2p.Peer, stream p2p.Str
 			break
 		}
 	}
-	if spec.Handler == nil && !relayData.MidCall {
-		forward = true
+	if spec.Handler == nil {
+		err = fmt.Errorf("no handler match %s", id)
 		return
 	}
 
@@ -909,9 +918,6 @@ func (s *Service) CallHandler(ctx context.Context, last p2p.Peer, stream p2p.Str
 		// count unexpected requests
 		if errors.Is(err, p2p.ErrUnexpected) {
 			s.metrics.UnexpectedProtocolReqCount.Inc()
-		}
-		if !bytes.Equal(relayData.Dest, s.self.Bytes()) {
-			forward = true
 		}
 		logger.Debugf("could not call handle protocol %s/%s: realy stream %s: peer %s: error: %v, forward=%v", name, version, streamName, src.Address, err, forward)
 	}
