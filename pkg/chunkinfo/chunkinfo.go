@@ -42,7 +42,7 @@ type Interface interface {
 
 	GetFileList(overlay boson.Address) (fileListInfo map[string]*aurora.FileInfo, rootList []boson.Address)
 
-	DelFile(rootCid boson.Address) bool
+	DelFile(rootCid boson.Address, del func()) bool
 
 	DelDiscover(rootCid boson.Address)
 
@@ -302,9 +302,9 @@ func (ci *ChunkInfo) GetFileList(overlay boson.Address) (fileListInfo map[string
 }
 
 func (ci *ChunkInfo) DelFile(rootCid boson.Address, del func()) bool {
-	ctx := context.Background()
 	ci.syncLk.Lock()
 	defer ci.syncLk.Unlock()
+	ctx := context.Background()
 	ci.CancelFindChunkInfo(rootCid)
 	ci.queues.Delete(rootCid.String())
 	del()
