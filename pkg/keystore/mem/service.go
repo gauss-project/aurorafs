@@ -59,11 +59,16 @@ func (s *Service) Key(name, password string) (pk *ecdsa.PrivateKey, created bool
 	return k.pk, created, nil
 }
 
-func (s *Service) ExportKey(name string) ([]byte, error) {
+func (s *Service) ExportKey(name, password string) ([]byte, error) {
 	panic("implement me")
 }
 
 func (s *Service) ImportKey(name, password string, keyJson []byte) error {
+	panic("implement me")
+}
+
+func (s *Service) ImportPrivateKey(name, password string, pk *ecdsa.PrivateKey) (err error) {
+	//TODO implement me
 	panic("implement me")
 }
 
