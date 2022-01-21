@@ -6,7 +6,9 @@ import (
 	"github.com/gauss-project/aurorafs/pkg/crypto"
 	"github.com/gauss-project/aurorafs/pkg/jsonhttp"
 	"github.com/gauss-project/aurorafs/pkg/keystore/file"
+	"github.com/gogf/gf/encoding/gjson"
 	"io"
+	"io/ioutil"
 	"net/http"
 	"path/filepath"
 )
@@ -14,9 +16,19 @@ import (
 func (s *Service) importKeyHandler(w http.ResponseWriter, r *http.Request) {
 	path := filepath.Join(s.nodeOptions.DataDir, "keys")
 	f := file.New(path)
-	password := r.FormValue("password")
-	keyJson := r.FormValue("keystore")
-	pkData := r.FormValue("private_key")
+	req, err := ioutil.ReadAll(r.Body)
+	if err != nil {
+		jsonhttp.InternalServerError(w, err)
+		return
+	}
+	j, err := gjson.DecodeToJson(req)
+	if err != nil {
+		jsonhttp.InternalServerError(w, err)
+		return
+	}
+	password := j.GetString("password")
+	keyJson := j.GetString("keystore")
+	pkData := j.GetString("private_key")
 	if pkData == "" && keyJson == "" {
 		jsonhttp.InternalServerError(w, "Please enter the private_key or keystore")
 		return
@@ -51,8 +63,18 @@ func (s *Service) importKeyHandler(w http.ResponseWriter, r *http.Request) {
 func (s *Service) exportKeyHandler(w http.ResponseWriter, r *http.Request) {
 	path := filepath.Join(s.nodeOptions.DataDir, "keys")
 	f := file.New(path)
-	password := r.FormValue("password")
-	tp := r.FormValue("type")
+	req, err := ioutil.ReadAll(r.Body)
+	if err != nil {
+		jsonhttp.InternalServerError(w, err)
+		return
+	}
+	j, err := gjson.DecodeToJson(req)
+	if err != nil {
+		jsonhttp.InternalServerError(w, err)
+		return
+	}
+	password := j.GetString("password")
+	tp := j.GetString("type")
 	if tp == "private" {
 		privateKey, _, err := f.Key("boson", password)
 		if err != nil {
