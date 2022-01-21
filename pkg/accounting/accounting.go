@@ -48,7 +48,6 @@ type Accounting struct {
 }
 
 type payChan struct {
-	ctx              context.Context
 	peer             boson.Address
 	paymentThreshold *big.Int
 }
@@ -83,11 +82,11 @@ func NewAccounting(
 
 // Reserve reserves a portion of the balance for peer and attempts settlements if necessary.
 func (a *Accounting) Reserve(peer boson.Address, traffic uint64) (err error) {
-
 	accountingPeer, err := a.getAccountingPeer(peer)
 	if err != nil {
 		return err
 	}
+
 	accountingPeer.lock.Lock()
 	defer accountingPeer.lock.Unlock()
 	retrieve := accountingPeer.unPaidTraffic
@@ -100,22 +99,17 @@ func (a *Accounting) Reserve(peer boson.Address, traffic uint64) (err error) {
 		}
 	}
 	ret := big.NewInt(0).Add(retrieve, new(big.Int).SetUint64(traffic))
-	for {
-		available, err := a.settlement.AvailableBalance()
-		if err != nil {
-			return err
-		}
-
-		if available.Cmp(ret) < 0 {
-			return ErrLowAvailableExceeded
-		}
-		if retrieve.Cmp(a.paymentTolerance) < 0 {
-			// todo prevent frequent loop logic
-			accountingPeer.unPaidTraffic = ret
-			break
-		}
-
+	available, err := a.settlement.AvailableBalance()
+	if err != nil {
+		return err
 	}
+
+	if available.Cmp(ret) < 0 {
+		return ErrLowAvailableExceeded
+	}
+	a.accountingPeersMu.Lock()
+	accountingPeer.unPaidTraffic = big.NewInt(0).Add(retrieve, new(big.Int).SetUint64(traffic))
+	a.accountingPeersMu.Unlock()
 
 	return nil
 }
@@ -127,8 +121,8 @@ func (a *Accounting) Credit(ctx context.Context, peer boson.Address, traffic uin
 	if err != nil {
 		return err
 	}
-	a.accountingPeersMu.Lock()
-	defer a.accountingPeersMu.Unlock()
+	accountingPeer.lock.Lock()
+	defer accountingPeer.lock.Unlock()
 	if err := a.settlement.PutRetrieveTraffic(peer, new(big.Int).SetUint64(traffic)); err != nil {
 		a.logger.Errorf("failed to modify retrieve traffic")
 		return err
@@ -136,7 +130,6 @@ func (a *Accounting) Credit(ctx context.Context, peer boson.Address, traffic uin
 	unPaid := accountingPeer.unPaidTraffic
 	if unPaid.Cmp(accountingPeer.paymentThreshold) >= 0 {
 		a.payChan <- payChan{
-			ctx:              ctx,
 			peer:             peer,
 			paymentThreshold: accountingPeer.paymentThreshold,
 		}
@@ -150,9 +143,11 @@ func (a *Accounting) Credit(ctx context.Context, peer boson.Address, traffic uin
 func (a *Accounting) settle() {
 
 	for {
-		pay := <-a.payChan
-		if err := a.settlement.Pay(pay.ctx, pay.peer, pay.paymentThreshold); err != nil {
-			a.logger.Errorf("generating check errors %v", err)
+		select {
+		case pay := <-a.payChan:
+			if err := a.settlement.Pay(context.Background(), pay.peer, pay.paymentThreshold); err != nil {
+				a.logger.Errorf("generating check errors %v", err)
+			}
 		}
 	}
 }
@@ -160,9 +155,13 @@ func (a *Accounting) settle() {
 // Debit increases the amount of debt we have with the given peer (and decreases
 // existing credit).
 func (a *Accounting) Debit(peer boson.Address, traffic uint64) error {
+	accountingPeer, err := a.getAccountingPeer(peer)
+	if err != nil {
+		return err
+	}
 
-	a.accountingPeersMu.Lock()
-	defer a.accountingPeersMu.Unlock()
+	accountingPeer.lock.Lock()
+	defer accountingPeer.lock.Unlock()
 	tolerance := a.paymentTolerance
 	traff, err := a.settlement.TransferTraffic(peer)
 	if err != nil {
@@ -214,8 +213,8 @@ func (a *Accounting) NotifyPayment(peer boson.Address, traffic *big.Int) error {
 		return err
 	}
 
-	accountingPeer.lock.Lock()
-	defer accountingPeer.lock.Unlock()
+	a.accountingPeersMu.Lock()
+	defer a.accountingPeersMu.Unlock()
 	unPay := accountingPeer.unPaidTraffic
 	if unPay.Cmp(big.NewInt(0)) <= 0 {
 		return nil
