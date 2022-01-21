@@ -613,16 +613,14 @@ func (s *Service) PutTransferTraffic(peer boson.Address, traffic *big.Int) error
 	s.trafficPeers.trafficMu.Lock()
 	defer s.trafficPeers.trafficMu.Unlock()
 
-	var localTraffic Traffic
 	chainAddress, known := s.addressBook.Beneficiary(peer)
 
 	if !known {
 		return chequePkg.ErrNoCheque
 	}
 
-	chainTraffic, ok := s.trafficPeers.trafficPeers[chainAddress.String()]
+	localTraffic, ok := s.trafficPeers.trafficPeers[chainAddress.String()]
 	if ok {
-		localTraffic = chainTraffic
 		localTraffic.transferTraffic = new(big.Int).Add(localTraffic.transferTraffic, traffic)
 	} else {
 		localTraffic = *newTraffic()
