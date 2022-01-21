@@ -263,7 +263,7 @@ func NewAurora(nodeMode aurora.Model, addr string, bosonAddress boson.Address, p
 		}
 	}
 
-	paymentThreshold := new(big.Int).SetUint64(256 * 4)
+	paymentThreshold := new(big.Int).SetUint64(256 * 16)
 	paymentTolerance := new(big.Int).Mul(paymentThreshold, new(big.Int).SetUint64(32))
 
 	acc := accounting.NewAccounting(
