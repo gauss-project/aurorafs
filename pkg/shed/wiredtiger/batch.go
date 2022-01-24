@@ -55,9 +55,9 @@ func (b *batch) Delete(key driver.Key) (err error) {
 }
 
 func (b *batch) Commit() (err error) {
-	if err = b.s.checkpoint(); err != nil {
-		return err
-	}
+	// if err = b.s.checkpoint(); err != nil {
+	// 	return err
+	// }
 	b.db.pool.Put(b.s)
 	return nil
 }

@@ -63,6 +63,7 @@ func (d Driver) Init() driver.Configure {
 		c.SetCreate(defaultCreate),
 		c.SetCacheSize(defaultCacheSize),
 		c.SetCacheOverhead(defaultCacheOverhead),
+		c.SetCheckpoint(defaultCheckpoint),
 		c.SetConfigBase(defaultConfigBase),
 		c.SetDebugMode(defaultDebugMode),
 		c.SetEviction(defaultEviction),

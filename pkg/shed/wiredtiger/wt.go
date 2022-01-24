@@ -41,7 +41,15 @@ func (db *DB) Close() error {
 	quit := make(chan struct{})
 
 	go func() {
-		err := db.pool.Close()
+		s := db.pool.Get()
+		err := s.checkpoint()
+		if err != nil {
+			logger.Errorf("wiredtiger: create checkpoint: %v", err)
+		}
+
+		db.pool.Put(s)
+
+		err = db.pool.Close()
 		if err != nil {
 			logger.Errorf("wiredtiger: close session pool: %v", err)
 		}

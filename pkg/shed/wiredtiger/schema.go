@@ -108,7 +108,7 @@ func (db *DB) CreateIndex(spec driver.IndexSpec) ([]byte, error) {
 			Checksum:          "on",
 			PrefixCompression: true,
 			BlockCompressor:   SnappyCompressor,
-			AccessPatternHint: "none",
+			AccessPatternHint: "random",
 			AllocationSize:    4 * 1024,
 			KeyFormat:         "u",
 			ValueFormat:       "u",
