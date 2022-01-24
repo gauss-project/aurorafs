@@ -21,6 +21,10 @@ int wiredtiger_session_drop(WT_SESSION *session, const char *name, const char *c
 	return session->drop(session, name, config);
 }
 
+int wiredtiger_session_checkpoint(WT_SESSION *session, const char *config) {
+	return session->checkpoint(session, config);
+}
+
 const char *wiredtiger_session_strerror(WT_SESSION *session, int error) {
 	return session->strerror(session, error);
 }
@@ -275,6 +279,12 @@ func (p *sessionPool) get(locked uint64) *session {
 func (p *sessionPool) Get() *session {
 	// return p.get(0)
 	s, _ := newSession(p.conn, p.getSessionID(), 0, false)
+
+	err := setTimestamp(p.conn, fmt.Sprintf("%d", time.Now().UnixMilli()), true)
+	if err != nil {
+		logger.Warnf("cannot set stable timestamp: %v", err)
+	}
+
 	return s
 }
 
@@ -537,9 +547,6 @@ type createOption struct {
 	PrefixCompression bool
 	SplitPct          int
 	Checksum          string
-	Log               struct {
-		Enabled bool
-	}
 }
 
 func (s *session) create(obj dataSource, opt *createOption) error {
@@ -581,6 +588,17 @@ func (s *session) compact(obj dataSource) error {
 	return nil
 }
 
+func (s *session) checkpoint() error {
+	var configStr *C.char = nil
+
+	result := int(C.wiredtiger_session_checkpoint(s.impl, configStr))
+	if checkError(result) {
+		return NewError(result)
+	}
+
+	return nil
+}
+
 func (s *session) openCursor(obj dataSource, opt *cursorOption) (*cursor, error) {
 	if atomic.LoadInt32(&s.closing) == 1 {
 		return nil, ErrSessionClosed
@@ -589,6 +607,11 @@ func (s *session) openCursor(obj dataSource, opt *cursorOption) (*cursor, error)
 		opt = &cursorOption{Raw: true}
 	}
 	return s.cursors.newCursor(s, obj.String(), opt)
+}
+
+func (s *session) closeCursor(c *cursor) error {
+	s.cursors.releaseCursor(c)
+	return nil
 }
 
 func (s *session) refresh() {

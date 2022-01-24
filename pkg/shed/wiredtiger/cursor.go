@@ -125,6 +125,7 @@ func newCursorCache(size uint64) *cursorCache {
 }
 
 type cursorOption struct {
+	Bulk      bool `key:"-"`
 	Raw       bool
 	ReadOnce  bool
 	Overwrite bool

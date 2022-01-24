@@ -5,40 +5,73 @@ import (
 )
 
 type batch struct {
-	*transaction
+	s  *session
+	db *DB
 }
 
 func (b *batch) Put(key driver.Key, value driver.Value) (err error) {
-	defer func() {
-		if err != nil {
-			b.transaction.err = err
-			_ = b.Rollback()
-		}
-	}()
-	return b.transaction.Put(key, value)
+	var obj dataSource
+
+	// parse source
+	obj, k := parseKey(key)
+	if obj.dataType == "" {
+		logger.Warnf("wiredtiger: parse unknown key type: %s", k)
+		return ErrInvalidArgument
+	}
+
+	c, err := b.s.openCursor(obj, nil)
+	if err != nil {
+		return err
+	}
+
+	defer b.s.closeCursor(c)
+
+	return c.insert(k, value.Data)
 }
 
 func (b *batch) Delete(key driver.Key) (err error) {
-	defer func() {
-		if err != nil {
-			b.transaction.err = err
-			_ = b.Rollback()
-		}
-	}()
-	return b.transaction.Delete(key)
-}
+	var obj dataSource
 
-func (b *batch) Commit() (err error) {
-	err = b.transaction.Commit()
-	if err != nil {
-		_ = b.transaction.Rollback()
+	// parse source
+	obj, k := parseKey(key)
+	if obj.dataType == "" {
+		logger.Warnf("wiredtiger: parse unknown key type: %s", k)
+		return ErrInvalidArgument
 	}
+
+	c, err := b.s.openCursor(obj, nil)
+	if err != nil {
+		return err
+	}
+
+	defer b.s.closeCursor(c)
+
+	err = c.remove(k)
+	if err != nil && IsNotFound(err) {
+		return driver.ErrNotFound
+	}
+
 	return
 }
 
+func (b *batch) Commit() (err error) {
+	if err = b.s.checkpoint(); err != nil {
+		return err
+	}
+	b.db.pool.Put(b.s)
+	return nil
+}
+
 func (db *DB) NewBatch() driver.Batching {
-	// disable sync
+	s := db.pool.Get()
+
+	// err := s.checkpoint()
+	// if err != nil {
+	// 	logger.Warnf("cannot create checkpoint: %v", err)
+	// }
+
 	return &batch{
-		transaction: db.newTxn(false),
+		db: db,
+		s:  s,
 	}
 }

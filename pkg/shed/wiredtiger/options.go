@@ -13,6 +13,7 @@ import (
 const (
 	optionCacheSize     = "cache_size"
 	optionCacheOverhead = "cache_overhead"
+	optionCheckpoint    = "checkpoint"
 	optionConfigBase    = "config_base"
 	optionCreate        = "create"
 	optionDebugMode     = "debug_mode"
@@ -22,6 +23,7 @@ const (
 	optionSessionMax    = "session_max"
 	optionStatistics    = "statistics"
 	optionStatisticsLog = "statistics_log"
+	optionExtensions    = "extensions"
 	optionVerbose       = "verbose"
 )
 
@@ -95,6 +97,12 @@ func structToList(v interface{}, embed bool) string {
 		if key == "" {
 			key = camelToSnake(f.Name)
 		}
+		if key == "-" {
+			if !ft.IsZero() {
+				res = append(res, camelToSnake(f.Name))
+			}
+			continue
+		}
 		var value string
 		switch ft.Kind() {
 		case reflect.Bool:
@@ -141,6 +149,8 @@ func (c *Configuration) Options(opts ...driver.Option) {
 			list[i] += strconv.Itoa(opt.Value().(int))
 		case optionConfigBase:
 			list[i] += strconv.FormatBool(opt.Value().(bool))
+		case optionCheckpoint:
+			list[i] += structToList(opt.Value().(Checkpoint), true)
 		case optionCreate:
 			list[i] += strconv.FormatBool(opt.Value().(bool))
 		case optionDebugMode:
@@ -161,6 +171,8 @@ func (c *Configuration) Options(opts ...driver.Option) {
 			list[i] += "(" + strings.TrimRight(r, ",") + ")"
 		case optionStatisticsLog:
 			list[i] += structToList(opt.Value().(StatisticsLog), true)
+		case optionExtensions:
+			list[i] += opt.Value().(string)
 		case optionVerbose:
 			list[i] += opt.Value().(string)
 		default:
@@ -197,6 +209,20 @@ func (c *Configuration) SetCreate(b bool) driver.Option {
 	return o
 }
 
+type Checkpoint struct {
+	LogSize int
+	Wait    int
+}
+
+func (c *Configuration) SetCheckpoint(cp Checkpoint) driver.Option {
+	o := driver.NewOption(optionCheckpoint, Checkpoint{})
+	if cp.LogSize < 0 || cp.LogSize > 2*1024*1024*1024 {
+		cp.LogSize = 0
+	}
+	o.Set(cp)
+	return o
+}
+
 func (c *Configuration) SetConfigBase(b bool) driver.Option {
 	o := driver.NewOption(optionConfigBase, false)
 	o.Set(b)
@@ -204,7 +230,7 @@ func (c *Configuration) SetConfigBase(b bool) driver.Option {
 }
 
 type DebugMode struct {
-	CheckPointRetention int `key:"checkpoint_retention"`
+	CheckpointRetention int
 	CursorCopy          bool
 	Eviction            bool
 	TableLogging        bool
@@ -212,8 +238,8 @@ type DebugMode struct {
 
 func (c *Configuration) SetDebugMode(m DebugMode) driver.Option {
 	o := driver.NewOption(optionDebugMode, DebugMode{})
-	if m.CheckPointRetention < 0 || m.CheckPointRetention > 1024 {
-		m.CheckPointRetention = 0
+	if m.CheckpointRetention < 0 || m.CheckpointRetention > 1024 {
+		m.CheckpointRetention = 0
 	}
 	o.Set(m)
 	return o
@@ -319,6 +345,14 @@ func (c *Configuration) SetStatisticsLog(l StatisticsLog) driver.Option {
 		l.Wait = 0
 	}
 	o.Set(l)
+	return o
+}
+
+func (c *Configuration) SetExtensions(s string) driver.Option {
+	o := driver.NewOption(optionExtensions, "")
+	if len(s) != 0 {
+		o.Set(s)
+	}
 	return o
 }
 

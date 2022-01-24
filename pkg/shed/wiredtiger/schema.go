@@ -107,7 +107,7 @@ func (db *DB) CreateIndex(spec driver.IndexSpec) ([]byte, error) {
 			LeafValueMax:      67108864, // 64MB
 			Checksum:          "on",
 			PrefixCompression: true,
-			BlockCompressor:   NoneCompressor,
+			BlockCompressor:   SnappyCompressor,
 			AccessPatternHint: "none",
 			AllocationSize:    4 * 1024,
 			KeyFormat:         "u",
@@ -116,9 +116,9 @@ func (db *DB) CreateIndex(spec driver.IndexSpec) ([]byte, error) {
 		if err != nil {
 			return nil, err
 		}
-		indexKeyPrefix++
 		fallthrough
 	case IsDuplicateKey(err):
+		indexKeyPrefix++
 		return []byte{prefix}, nil
 	}
 	return nil, err
