@@ -27,7 +27,7 @@ all: build lint vet test-race binary
 binary: dist FORCE
 	$(GO) version
 ifeq ($(GOOS), "windows")
-	set CGO_ENABLED=0
+	export CGO_ENABLED=0 || set CGO_ENABLED=0
 	$(GO) build -trimpath -ldflags "$(LDFLAGS)" -o dist/aurora.exe ./cmd/aurorafs
 else
 	export CGO_ENABLED=0

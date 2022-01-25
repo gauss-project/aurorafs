@@ -398,10 +398,6 @@ func (s *Service) getNeighbor(target boson.Address, alpha int32, skip ...boson.A
 			return false, false, nil
 		})
 	}
-	if len(now) == 0 {
-		list := s.kad.ConnectedPeers().BinPeers(depth - 1)
-		now = skipPeers(list, skip)
-	}
 	forward, _ = s.kad.RandomSubset(now, int(alpha))
 	return
 }
@@ -724,7 +720,7 @@ func (s *Service) onRelay(ctx context.Context, p p2p.Peer, stream p2p.Stream) (e
 		}
 	}()
 
-	req, w, _, forwardNext, err := s.p2ps.CallHandler(ctx, p, stream)
+	req, w, r, forwardNext, err := s.p2ps.CallHandler(ctx, p, stream)
 
 	if forwardNext {
 		forwardChan <- req
@@ -755,6 +751,11 @@ func (s *Service) onRelay(ctx context.Context, p p2p.Peer, stream p2p.Stream) (e
 
 	for {
 		select {
+		case err = <-r.Err:
+			if errors.Is(err, io.EOF) {
+				return nil
+			}
+			return err
 		case req := <-forwardChan:
 			req.Paths = append(req.Paths, s.self.Bytes())
 			target = boson.NewAddress(req.Dest)

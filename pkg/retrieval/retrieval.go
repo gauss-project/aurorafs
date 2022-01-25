@@ -322,7 +322,9 @@ func (s *Service) retrieveChunk(ctx context.Context, route aco.Route, rootAddr, 
 	if err != nil {
 		return nil, fmt.Errorf("retrieval: report chunk source: %v", err)
 	}
+	start := time.Now().Unix()
 	exists, err := s.storer.Put(sctx.SetRootCID(ctx, rootAddr), storage.ModePutRequest, chunk)
+	s.logger.Infof("storage time required : %d.", time.Now().Unix()-start)
 	if err != nil {
 		return nil, fmt.Errorf("retrieval: storage put cache:%v", err)
 	}

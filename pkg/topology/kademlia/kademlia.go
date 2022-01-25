@@ -218,40 +218,24 @@ func (k *Kad) connectBalanced(wg *sync.WaitGroup, peerConnChan chan<- *peerConnI
 		}
 
 		binPeers := k.knownPeers.BinPeers(uint8(i))
+		binConnectedPeers := k.connectedPeers.BinPeers(uint8(i))
 
 		for j := range k.commonBinPrefixes[i] {
 			pseudoAddr := k.commonBinPrefixes[i][j]
 
-			closestConnectedPeer, err := closestPeer(k.connectedPeers, pseudoAddr, noopSanctionedPeerFn)
-			if err != nil {
-				if errors.Is(err, topology.ErrNotFound) {
-					break
-				}
-				k.logger.Errorf("closest connected peer: %v", err)
-				continue
-			}
-
-			closestConnectedPO := boson.ExtendedProximity(closestConnectedPeer.Bytes(), pseudoAddr.Bytes())
-			if int(closestConnectedPO) >= i+k.bitSuffixLength+1 {
-				continue
-			}
-
 			// Connect to closest known peer which we haven't tried connecting to recently.
-			closestKnownPeer, err := closestPeerInSlice(binPeers, pseudoAddr, skipPeers)
-			if err != nil {
-				if errors.Is(err, topology.ErrNotFound) {
-					break
-				}
-				k.logger.Errorf("closest known peer: %v", err)
+
+			_, exists := nClosePeerInSlice(binConnectedPeers, pseudoAddr, noopSanctionedPeerFn, uint8(i+k.bitSuffixLength+1))
+			if exists {
+				continue
+			}
+
+			closestKnownPeer, exists := nClosePeerInSlice(binPeers, pseudoAddr, skipPeers, uint8(i+k.bitSuffixLength+1))
+			if !exists {
 				continue
 			}
 
 			if k.connectedPeers.Exists(closestKnownPeer) {
-				continue
-			}
-
-			closestKnownPeerPO := boson.ExtendedProximity(closestKnownPeer.Bytes(), pseudoAddr.Bytes())
-			if int(closestKnownPeerPO) < i+k.bitSuffixLength+1 {
 				continue
 			}
 
@@ -1118,23 +1102,18 @@ func closestPeer(peers *pslice.PSlice, addr boson.Address, spf sanctionedPeerFun
 	return closest, nil
 }
 
-func closestPeerInSlice(peers []boson.Address, addr boson.Address, spf sanctionedPeerFunc) (boson.Address, error) {
-	closest := boson.ZeroAddress
-	closestFunc := closestPeerFunc(&closest, addr, spf)
-
+func nClosePeerInSlice(peers []boson.Address, addr boson.Address, spf sanctionedPeerFunc, minPO uint8) (boson.Address, bool) {
 	for _, peer := range peers {
-		_, _, err := closestFunc(peer, 0)
-		if err != nil {
-			return closest, err
+		if spf(peer) {
+			continue
+		}
+
+		if boson.ExtendedProximity(peer.Bytes(), addr.Bytes()) >= minPO {
+			return peer, true
 		}
 	}
 
-	// check if found
-	if closest.IsZero() {
-		return closest, topology.ErrNotFound
-	}
-
-	return closest, nil
+	return boson.ZeroAddress, false
 }
 
 func closestPeerFunc(closest *boson.Address, addr boson.Address, spf sanctionedPeerFunc) func(peer boson.Address, po uint8) (bool, bool, error) {
