@@ -358,7 +358,7 @@ func (ci *ChunkInfo) DelChunkInfoSource(rootCid boson.Address) bool {
 
 func (ci *ChunkInfo) chunkPutChanUpdate(ctx context.Context, chunkObj chunkPutEntry, method interface{}, params ...interface{}) (res chunkPutRes) {
 	if method == nil {
-		res.err = fmt.Errorf("chunkinfo - chunkPutChanUpdate method is nil ")
+		res.err = fmt.Errorf("chunkinfo - chunkPutChanUpdate method is  nil ")
 		res.state = false
 		return
 	}
