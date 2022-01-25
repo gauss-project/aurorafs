@@ -142,12 +142,9 @@ func (a *Accounting) Credit(ctx context.Context, peer boson.Address, traffic uin
 // called.
 func (a *Accounting) settle() {
 
-	for {
-		select {
-		case pay := <-a.payChan:
-			if err := a.settlement.Pay(context.Background(), pay.peer, pay.paymentThreshold); err != nil {
-				a.logger.Errorf("generating check errors %v", err)
-			}
+	for pay := range a.payChan {
+		if err := a.settlement.Pay(context.Background(), pay.peer, pay.paymentThreshold); err != nil {
+			a.logger.Errorf("generating check errors %v", err)
 		}
 	}
 }

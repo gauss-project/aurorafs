@@ -576,10 +576,7 @@ func (s *Service) retrieveTraffic(peer common.Address) *big.Int {
 	traffic := s.getTraffic(peer)
 	traffic.Lock()
 	defer traffic.Unlock()
-	if traffic != nil {
-		return new(big.Int).Sub(traffic.retrieveTraffic, traffic.retrieveChequeTraffic)
-	}
-	return big.NewInt(0)
+	return new(big.Int).Sub(traffic.retrieveTraffic, traffic.retrieveChequeTraffic)
 }
 
 func (s *Service) PutRetrieveTraffic(peer boson.Address, traffic *big.Int) error {
@@ -787,19 +784,16 @@ func (s *Service) cashChequeReceiptUpdate() {
 			return s.UpdatePeerBalance(peer)
 		}
 
-		for {
-			select {
-			case cashInfo := <-s.cashChequeChan:
-				status, err := tranReceipt(cashInfo.txHash)
+		for cashInfo := range s.cashChequeChan {
+			status, err := tranReceipt(cashInfo.txHash)
+			if err != nil {
+				continue
+			}
+			if status == 1 {
+				err := cashUpdate(cashInfo.chainAddress, cashInfo.peer)
 				if err != nil {
+					s.logger.Errorf("traffic:cashChequeReceiptUpdate - %v ", err.Error())
 					continue
-				}
-				if status == 1 {
-					err := cashUpdate(cashInfo.chainAddress, cashInfo.peer)
-					if err != nil {
-						s.logger.Errorf("traffic:cashChequeReceiptUpdate - %v ", err.Error())
-						continue
-					}
 				}
 			}
 		}

@@ -90,7 +90,7 @@ func (ci *ChunkInfo) updateNeighborChunkInfo(rootCid, cid boson.Address, overlay
 		return err
 	}
 	ci.ct.Lock()
-	bv, ok := ci.ct.presence[rc][over]
+	bv := ci.ct.presence[rc][over]
 	ci.ct.Unlock()
 
 	v := ci.cp.getCidStore(rootCid, cid)

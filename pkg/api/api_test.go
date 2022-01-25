@@ -53,7 +53,7 @@ func newTestServer(t *testing.T, o testServerOptions) (*http.Client, *websocket.
 	}
 	serverAddress := boson.MustParseHexAddress("01")
 
-	s := api.New(o.Storer, o.Resolver, serverAddress, o.ChunkInfo, o.Traversal, o.Pinning, o.Authenticator, o.Logger, nil, nil, nil,
+	s := api.New(o.Storer, o.Resolver, serverAddress, o.ChunkInfo, o.Traversal, o.Pinning, o.Authenticator, o.Logger, nil, nil, nil, nil,
 		api.Options{
 			CORSAllowedOrigins: o.CORSAllowedOrigins,
 			GatewayMode:        o.GatewayMode,
