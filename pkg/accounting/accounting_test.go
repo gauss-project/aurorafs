@@ -16,7 +16,6 @@ import (
 
 var (
 	testPaymentTolerance = big.NewInt(1000)
-	testPaymentEarly     = big.NewInt(1000)
 	testPaymentThreshold = big.NewInt(10000)
 )
 
@@ -97,8 +96,14 @@ func TestAccountingCredit(t *testing.T) {
 	}
 
 	_ = acc.Credit(context.Background(), peer1Addr, testPaymentThreshold.Uint64())
-	acc.Reserve(peer1Addr, new(big.Int).Add(testPaymentThreshold, big.NewInt(1)).Uint64())
+	err = acc.Reserve(peer1Addr, new(big.Int).Add(testPaymentThreshold, big.NewInt(1)).Uint64())
+	if err != nil {
+		t.Fatal(err)
+	}
 	err = acc.Credit(context.Background(), peer1Addr, testPaymentThreshold.Uint64())
+	if err != nil {
+		t.Fatal(err)
+	}
 	time.Sleep(3 * time.Second)
 	if !chequeSend {
 		t.Fatal("Sending check failed.")
