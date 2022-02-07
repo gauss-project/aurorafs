@@ -23,7 +23,8 @@ const (
 type chunkInfoDiscover struct {
 	sync.RWMutex
 	// rootcid:overlays:bitvector
-	presence map[string]map[string]*discoverBitVector
+	presence        map[string]map[string]*discoverBitVector
+	discoverPutChan chan chunkPut
 }
 
 type discoverBitVector struct {
@@ -47,7 +48,7 @@ func (ci *ChunkInfo) initChunkInfoDiscover() error {
 		}
 		bit, _ := bitvector.NewFromBytes(vb.B, vb.Len)
 		ci.cd.putChunkInfoDiscover(rootCid, overlay, *bit)
-		if err := ci.initChunkPyramid(context.Background(), rootCid); err != nil {
+		if err := ci.chunkPutChanUpdate(context.Background(), ci.cp, ci.initChunkPyramid, context.Background(), rootCid).err; err != nil {
 			return true, err
 		}
 		return false, nil
@@ -58,7 +59,11 @@ func (ci *ChunkInfo) initChunkInfoDiscover() error {
 }
 
 func newChunkInfoDiscover() *chunkInfoDiscover {
-	return &chunkInfoDiscover{presence: make(map[string]map[string]*discoverBitVector)}
+	discover := &chunkInfoDiscover{presence: make(map[string]map[string]*discoverBitVector),
+		discoverPutChan: make(chan chunkPut, 200),
+	}
+
+	return discover
 }
 
 // isExists
@@ -134,8 +139,6 @@ func (ci *ChunkInfo) getChunkInfoOverlays(rootCid boson.Address) []aurora.ChunkI
 }
 
 func (cd *chunkInfoDiscover) putChunkInfoDiscover(rootCid, overlay boson.Address, vector bitvector.BitVector) {
-	cd.Lock()
-	defer cd.Unlock()
 	rc := rootCid.String()
 	if _, ok := cd.presence[rc]; !ok {
 		cd.presence[rc] = make(map[string]*discoverBitVector)
@@ -148,9 +151,6 @@ func (cd *chunkInfoDiscover) putChunkInfoDiscover(rootCid, overlay boson.Address
 }
 
 func (ci *ChunkInfo) delDiscoverPresence(rootCid boson.Address) bool {
-	ci.cd.Lock()
-	defer ci.cd.Unlock()
-
 	if v, ok := ci.cd.presence[rootCid.String()]; ok {
 		for k := range v {
 			err := ci.storer.Delete(generateKey(discoverKeyPrefix, rootCid, boson.MustParseHexAddress(k)))
@@ -166,9 +166,6 @@ func (ci *ChunkInfo) delDiscoverPresence(rootCid boson.Address) bool {
 
 // updateChunkInfo
 func (ci *ChunkInfo) updateChunkInfo(rootCid, overlay boson.Address, bv []byte) {
-	ci.cd.Lock()
-	defer ci.cd.Unlock()
-
 	rc := rootCid.String()
 	if _, ok := ci.cd.presence[rc]; !ok {
 		ci.cd.presence[rc] = make(map[string]*discoverBitVector)
@@ -224,14 +221,22 @@ func (ci *ChunkInfo) cleanDiscoverTrigger() {
 						if err := ci.storer.Delete(generateKey(discoverKeyPrefix, rc, boson.MustParseHexAddress(overlay))); err != nil {
 							continue
 						}
-						ci.queuesLk.Lock()
-						if q, ok := ci.queues[rootCid]; ok {
-							q.popNode(Pulled, boson.MustParseHexAddress(overlay).Bytes())
+						if q, ok := ci.queues.Load(rootCid); ok {
+							q.(*queue).popNode(Pulled, boson.MustParseHexAddress(overlay).Bytes())
 						}
-						ci.queuesLk.Unlock()
 					}
 				}
 			}
 		}
 	}()
+}
+
+func (cd *chunkInfoDiscover) setLock() {
+	cd.Lock()
+}
+func (cd *chunkInfoDiscover) setUnLock() {
+	cd.Unlock()
+}
+func (cd *chunkInfoDiscover) getChan() chan chunkPut {
+	return cd.discoverPutChan
 }

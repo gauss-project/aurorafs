@@ -31,14 +31,12 @@ type queue struct {
 
 // newQueue
 func (ci *ChunkInfo) newQueue(rootCid string) {
-	ci.queuesLk.Lock()
-	defer ci.queuesLk.Unlock()
 	q := &queue{
 		UnPull:  make([]*[]byte, 0, PullerMax),
 		Pulling: make([]*[]byte, 0, PullingMax),
 		Pulled:  make([]*[]byte, 0, PullMax),
 	}
-	ci.queues[rootCid] = q
+	ci.queues.Store(rootCid, q)
 }
 
 // len
@@ -118,7 +116,11 @@ func (q *queue) updatePull(pull Pull, queue []*[]byte) {
 
 // getQueue
 func (ci *ChunkInfo) getQueue(rootCid string) *queue {
-	return ci.queues[rootCid]
+	var que *queue
+	if q, ok := ci.queues.Load(rootCid); ok {
+		que = q.(*queue)
+	}
+	return que
 }
 
 // isExists
@@ -172,14 +174,12 @@ func (ci *ChunkInfo) queueProcess(ctx context.Context, rootCid boson.Address) {
 
 // updateQueue
 func (ci *ChunkInfo) updateQueue(ctx context.Context, authInfo []byte, rootCid, overlay boson.Address, chunkInfo map[string][]byte) {
-	ci.queuesLk.Lock()
 	q := ci.getQueue(rootCid.String())
 	if chunkInfo[overlay.String()] != nil {
-		ci.updateChunkInfo(rootCid, overlay, chunkInfo[overlay.String()])
+		ci.chunkPutChanUpdate(ctx, ci.cd, ci.updateChunkInfo, rootCid, overlay, chunkInfo[overlay.String()])
 	}
 
 	if q == nil {
-		ci.queuesLk.Unlock()
 		return
 	}
 	for over := range chunkInfo {
@@ -198,6 +198,5 @@ func (ci *ChunkInfo) updateQueue(ctx context.Context, authInfo []byte, rootCid, 
 	}
 	q.popNode(Pulling, overlay.Bytes())
 	q.push(Pulled, overlay.Bytes())
-	ci.queuesLk.Unlock()
 	ci.doFindChunkInfo(ctx, authInfo, rootCid)
 }

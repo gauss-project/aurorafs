@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"github.com/gauss-project/aurorafs/pkg/retrieval/aco"
 	"github.com/gauss-project/aurorafs/pkg/settlement/chain"
+	"reflect"
 	"resenje.org/singleflight"
+	"runtime"
 	"strings"
 	"sync"
 	"time"
@@ -49,6 +51,23 @@ type Interface interface {
 	GetChunkInfoSource(rootCid boson.Address) aurora.ChunkInfoSourceApi
 }
 
+type chunkPutEntry interface {
+	setLock()
+	setUnLock()
+	getChan() chan chunkPut
+}
+type chunkPut struct {
+	method  interface{}
+	params  []reflect.Value
+	msgChan chan chunkPutRes
+}
+type chunkPutRes struct {
+	err   error
+	state bool
+
+	data interface{}
+}
+
 // ChunkInfo
 type ChunkInfo struct {
 	addr         boson.Address
@@ -60,9 +79,9 @@ type ChunkInfo struct {
 	metrics      metrics
 	tt           *timeoutTrigger
 	queuesLk     sync.RWMutex
-	queues       map[string]*queue
+	queues       sync.Map //map[string]*queue
 	syncLk       sync.RWMutex
-	syncMsg      map[string]chan bool
+	syncMsg      sync.Map //map[string]chan bool
 	ct           *chunkInfoTabNeighbor
 	cd           *chunkInfoDiscover
 	cp           *chunkPyramid
@@ -74,9 +93,6 @@ type ChunkInfo struct {
 
 // New
 func New(addr boson.Address, streamer p2p.Streamer, logger logging.Logger, traversal traversal.Traverser, storer storage.StateStorer, route routetab.RouteTab, oracleChain chain.Resolver) *ChunkInfo {
-	queues := make(map[string]*queue)
-	syncMsg := make(map[string]chan bool)
-
 	chunkinfo := &ChunkInfo{
 		addr:        addr,
 		storer:      storer,
@@ -86,8 +102,6 @@ func New(addr boson.Address, streamer p2p.Streamer, logger logging.Logger, trave
 		cd:          newChunkInfoDiscover(),
 		cp:          newChunkPyramid(),
 		cpd:         newPendingFinderInfo(),
-		queues:      queues,
-		syncMsg:     syncMsg,
 		tt:          newTimeoutTrigger(),
 		streamer:    streamer,
 		logger:      logger,
@@ -97,6 +111,10 @@ func New(addr boson.Address, streamer p2p.Streamer, logger logging.Logger, trave
 	}
 	chunkinfo.triggerTimeOut()
 	chunkinfo.cleanDiscoverTrigger()
+	chunkinfo.chunkPutChanUpdateListen(chunkinfo.cp)
+	chunkinfo.chunkPutChanUpdateListen(chunkinfo.cd)
+	chunkinfo.chunkPutChanUpdateListen(chunkinfo.ct)
+	chunkinfo.chunkPutChanUpdateListen(chunkinfo.cs)
 	return chunkinfo
 }
 
@@ -119,13 +137,16 @@ type bitVector struct {
 }
 
 func (ci *ChunkInfo) InitChunkInfo() error {
-	if err := ci.initChunkInfoTabNeighbor(); err != nil {
+	ctx := context.Background()
+
+	if err := ci.chunkPutChanUpdate(ctx, ci.ct, ci.initChunkInfoTabNeighbor).err; err != nil {
 		return err
 	}
-	if err := ci.initChunkInfoDiscover(); err != nil {
+	if err := ci.chunkPutChanUpdate(ctx, ci.cd, ci.initChunkInfoDiscover).err; err != nil {
 		return err
 	}
-	if err := ci.cs.initChunkInfoSource(); err != nil {
+
+	if err := ci.chunkPutChanUpdate(ctx, ci.cs, ci.cs.initChunkInfoSource).err; err != nil {
 		return err
 	}
 	return nil
@@ -168,9 +189,7 @@ func (ci *ChunkInfo) FindChunkInfo(ctx context.Context, authInfo []byte, rootCid
 	for {
 		if ci.ct.isExists(rootCid) {
 			ticker.Stop()
-			ci.syncLk.Lock()
-			ci.syncMsg[rootCid.String()] = msgChan
-			ci.syncLk.Unlock()
+			ci.syncMsg.Store(rootCid.String(), msgChan)
 			ci.findChunkInfo(ctx, authInfo, rootCid, overlays)
 		} else if peerAttempt < count {
 			if err := ci.doFindChunkPyramid(ctx, nil, rootCid, overlays[peerAttempt]); err != nil {
@@ -186,9 +205,7 @@ func (ci *ChunkInfo) FindChunkInfo(ctx context.Context, authInfo []byte, rootCid
 		case <-ctx.Done():
 			return false
 		case msg := <-msgChan:
-			ci.syncLk.Lock()
-			delete(ci.syncMsg, rootCid.String())
-			ci.syncLk.Unlock()
+			ci.syncMsg.Delete(rootCid.String())
 			return msg
 		}
 
@@ -236,7 +253,10 @@ func (ci *ChunkInfo) CancelFindChunkInfo(rootCid boson.Address) {
 func (ci *ChunkInfo) OnChunkTransferred(cid, rootCid boson.Address, overlay, target boson.Address) error {
 	ci.syncLk.Lock()
 	defer ci.syncLk.Unlock()
-	return ci.updateNeighborChunkInfo(rootCid, cid, overlay, target)
+	if err := ci.pyramidCheck(rootCid, overlay, target); err != nil {
+		return err
+	}
+	return ci.chunkPutChanUpdate(context.Background(), ci.ct, ci.updateNeighborChunkInfo, rootCid, cid, overlay, target).err
 }
 
 func (ci *ChunkInfo) GetChunkPyramid(rootCid boson.Address) []*PyramidCidNum {
@@ -284,48 +304,48 @@ func (ci *ChunkInfo) GetFileList(overlay boson.Address) (fileListInfo map[string
 func (ci *ChunkInfo) DelFile(rootCid boson.Address, del func()) bool {
 	ci.syncLk.Lock()
 	defer ci.syncLk.Unlock()
-
-	del()
-
-	ci.queuesLk.Lock()
+	ctx := context.Background()
 	ci.CancelFindChunkInfo(rootCid)
-	delete(ci.queues, rootCid.String())
-	ci.queuesLk.Unlock()
-
-	if !ci.delDiscoverPresence(rootCid) {
+	ci.queues.Delete(rootCid.String())
+	del()
+	if res := ci.chunkPutChanUpdate(ctx, ci.cd, ci.delDiscoverPresence, rootCid).state; !res {
 		return false
 	}
+
 	if !ci.DelChunkInfoSource(rootCid) {
 		return false
 	}
-	if !ci.cp.delRootCid(rootCid) {
+
+	if !ci.chunkPutChanUpdate(ctx, ci.cp, ci.cp.delRootCid, rootCid).state {
 		return false
 	}
-	return ci.delPresence(rootCid)
+
+	return ci.chunkPutChanUpdate(ctx, ci.ct, ci.delPresence, rootCid).state
 }
 
 func (ci *ChunkInfo) DelDiscover(rootCid boson.Address) {
 	ci.syncLk.Lock()
 	defer ci.syncLk.Unlock()
-	ci.queuesLk.Lock()
 	ci.CancelFindChunkInfo(rootCid)
-	delete(ci.queues, rootCid.String())
-	ci.queuesLk.Unlock()
-	ci.delDiscoverPresence(rootCid)
+	ci.queues.Delete(rootCid.String())
+	ci.chunkPutChanUpdate(context.Background(), ci.cd, ci.delDiscoverPresence, rootCid)
 }
 
 //Record every chunk source.
 func (ci *ChunkInfo) OnChunkRetrieved(cid, rootCid, sourceOverlay boson.Address) error {
 	ci.syncLk.Lock()
 	defer ci.syncLk.Unlock()
-	if err := ci.updateNeighborChunkInfo(rootCid, cid, ci.addr, sourceOverlay); err != nil {
+	if err := ci.pyramidCheck(rootCid, ci.addr, sourceOverlay); err != nil {
 		return err
 	}
-	err := ci.cs.updatePyramidSource(rootCid, sourceOverlay)
-	if err != nil {
+	if err := ci.chunkPutChanUpdate(context.Background(), ci.ct, ci.updateNeighborChunkInfo, rootCid, cid, ci.addr, sourceOverlay).err; err != nil {
 		return err
 	}
-	return ci.UpdateChunkInfoSource(rootCid, sourceOverlay, cid)
+	if err := ci.chunkPutChanUpdate(context.Background(), ci.cs, ci.cs.updatePyramidSource, rootCid, sourceOverlay).err; err != nil {
+		return err
+	}
+	err := ci.chunkPutChanUpdate(context.Background(), ci.cs, ci.UpdateChunkInfoSource, rootCid, sourceOverlay, cid).err
+	return err
 }
 
 func (ci *ChunkInfo) GetChunkInfoSource(rootCid boson.Address) aurora.ChunkInfoSourceApi {
@@ -333,7 +353,92 @@ func (ci *ChunkInfo) GetChunkInfoSource(rootCid boson.Address) aurora.ChunkInfoS
 }
 
 func (ci *ChunkInfo) DelChunkInfoSource(rootCid boson.Address) bool {
-	return ci.cs.DelChunkInfoSource(rootCid)
+	return ci.chunkPutChanUpdate(context.Background(), ci.cs, ci.cs.DelChunkInfoSource, rootCid).state
+}
+
+func (ci *ChunkInfo) chunkPutChanUpdate(ctx context.Context, chunkObj chunkPutEntry, method interface{}, params ...interface{}) (res chunkPutRes) {
+	if method == nil {
+		res.err = fmt.Errorf("chunkinfo - chunkPutChanUpdate method is  nil ")
+		res.state = false
+		return
+	}
+	msgCh := make(chan chunkPutRes, 1)
+
+	var pram []reflect.Value
+	for _, v := range params {
+		pram = append(pram, reflect.ValueOf(v))
+	}
+
+	msg := chunkPut{
+		method:  method,
+		params:  pram,
+		msgChan: msgCh,
+	}
+
+	chunkObj.getChan() <- msg
+	select {
+	case res = <-msgCh:
+		close(msgCh)
+	case <-ctx.Done():
+		res.err = fmt.Errorf("chunkinfo chunkPutChanUpdate timeout method = %v", runtime.FuncForPC(reflect.ValueOf(method).Pointer()).Name())
+	}
+
+	return res
+}
+
+func (ci *ChunkInfo) chunkPutChanUpdateListen(chunkObj chunkPutEntry) {
+	update := func(msg chunkPut) {
+		chunkObj.setLock()
+		defer chunkObj.setUnLock()
+		var res chunkPutRes
+		var values []reflect.Value
+		fn := reflect.ValueOf(msg.method)
+		values = fn.Call(msg.params)
+
+		res.err = nil
+		res.state = true
+
+		if len(values) > 0 {
+			value := values[0]
+			switch value.Kind() {
+			case reflect.Interface:
+				switch value.Interface().(type) {
+				case error:
+					res.err = value.Interface().(error)
+					res.state = false
+				default:
+					res.data = value.Interface()
+				}
+			case reflect.Bool:
+				res.state = value.Bool()
+				if !res.state {
+					res.err = fmt.Errorf("chunkinfo - chunkPutChanUpdateListen error,method = %v", runtime.FuncForPC(reflect.ValueOf(msg.method).Pointer()).Name())
+				}
+			default:
+				res.data = value.Interface()
+			}
+		}
+		msg.msgChan <- res
+	}
+	go func() {
+		for msg := range chunkObj.getChan() {
+			update(msg)
+		}
+	}()
+}
+
+func (ci *ChunkInfo) pyramidCheck(rootCid, overlay, target boson.Address) error {
+	if !ci.cp.isExists(rootCid) {
+		if !target.IsZero() && !target.Equal(ci.addr) {
+			if err := ci.doFindChunkPyramid(context.Background(), nil, rootCid, target); err != nil {
+				return err
+			}
+		}
+		if err := ci.putChunkInfoNeighbor(rootCid, overlay); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func generateKey(keyPrefix string, rootCid, overlay boson.Address) string {
