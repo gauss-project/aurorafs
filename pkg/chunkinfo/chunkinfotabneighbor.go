@@ -66,7 +66,6 @@ func (cn *chunkInfoTabNeighbor) putChunkInfoTabNeighbor(rootCid, overlay boson.A
 
 // updateNeighborChunkInfo
 func (ci *ChunkInfo) updateNeighborChunkInfo(rootCid, cid boson.Address, overlay, target boson.Address) error {
-
 	rc := rootCid.String()
 	over := overlay.String()
 	_, ok := ci.ct.presence[rc]
