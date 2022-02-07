@@ -96,9 +96,7 @@ func (o Options) DebugAPIAddr(c *node.Options) {
 
 func (o Options) Bootnodes(c *node.Options) {
 	bootNodes := strings.Split(o.BootNodes, ",")
-	for _, bootNode := range bootNodes {
-		c.Bootnodes = append(c.Bootnodes, bootNode)
-	}
+	c.Bootnodes = append(c.Bootnodes, bootNodes...)
 }
 
 func (o Options) ResolverConnectionCfgs(c *node.Options) {
