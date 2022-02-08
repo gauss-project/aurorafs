@@ -110,7 +110,11 @@ func structToList(v interface{}, embed bool) string {
 		case reflect.String:
 			value = ft.String()
 		case reflect.Struct:
-			value = structToList(ft.Interface(), true)
+			if ft.CanInterface() {
+				value = ft.Interface().(fmt.Stringer).String()
+			} else {
+				value = structToList(ft.Interface(), true)
+			}
 		case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
 			value = strconv.FormatInt(ft.Int(), 10)
 		case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
@@ -144,7 +148,7 @@ func (c *Configuration) Options(opts ...driver.Option) {
 
 		switch opt.Identity() {
 		case optionCacheSize:
-			list[i] += strconv.FormatUint(opt.Value().(uint64), 10)
+			list[i] += opt.Value().(DiskSize).String()
 		case optionCacheOverhead:
 			list[i] += strconv.Itoa(opt.Value().(int))
 		case optionConfigBase:
@@ -185,10 +189,40 @@ func (c *Configuration) Options(opts ...driver.Option) {
 	*c = Configuration(strings.Join(list, string(optionSeparator)))
 }
 
-func (c *Configuration) SetCacheSize(n uint64) driver.Option {
-	o := driver.NewOption(optionCacheSize, uint64(0))
-	if n < 1 || n > 87960930222080 {
-		n = 838860800
+type ByteType int
+
+const (
+	MB ByteType = iota
+	GB
+	TB
+)
+
+type DiskSize struct {
+	Size int
+	Type ByteType
+}
+
+func (ds DiskSize) String() string {
+	var s string
+
+	switch ds.Type {
+	case MB:
+		s = fmt.Sprintf("%dMB", ds.Size)
+	case GB:
+		s = fmt.Sprintf("%dGB", ds.Size)
+	case TB:
+		s = fmt.Sprintf("%dTB", ds.Size)
+	default:
+		s = "0"
+	}
+
+	return s
+}
+
+func (c *Configuration) SetCacheSize(n DiskSize) driver.Option {
+	o := driver.NewOption(optionCacheSize, DiskSize{})
+	if (n.Type == MB && n.Size < 1) || (n.Type == TB && n.Size > 10) {
+		n = DiskSize{Size: 100, Type: MB}
 	}
 	o.Set(n)
 	return o
@@ -210,14 +244,14 @@ func (c *Configuration) SetCreate(b bool) driver.Option {
 }
 
 type Checkpoint struct {
-	LogSize int
+	LogSize DiskSize
 	Wait    int
 }
 
 func (c *Configuration) SetCheckpoint(cp Checkpoint) driver.Option {
 	o := driver.NewOption(optionCheckpoint, Checkpoint{})
-	if cp.LogSize < 0 || cp.LogSize > 2*1024*1024*1024 {
-		cp.LogSize = 0
+	if cp.LogSize.Size < 0 || (cp.LogSize.Type == GB && cp.LogSize.Size > 2) || cp.LogSize.Type == TB {
+		cp.LogSize = DiskSize{Size: 0}
 	}
 	o.Set(cp)
 	return o

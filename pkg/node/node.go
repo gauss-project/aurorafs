@@ -7,7 +7,6 @@ import (
 	"context"
 	"crypto/ecdsa"
 	"fmt"
-	"github.com/gauss-project/aurorafs/pkg/auth"
 	"io"
 	"log"
 	"net"
@@ -18,6 +17,7 @@ import (
 	"github.com/gauss-project/aurorafs/pkg/addressbook"
 	"github.com/gauss-project/aurorafs/pkg/api"
 	"github.com/gauss-project/aurorafs/pkg/aurora"
+	"github.com/gauss-project/aurorafs/pkg/auth"
 	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/chunkinfo"
 	"github.com/gauss-project/aurorafs/pkg/crypto"
@@ -60,7 +60,7 @@ type Aurora struct {
 	topologyCloser   io.Closer
 
 	ethClientCloser func()
-	//recoveryHandleCleanup func()
+	// recoveryHandleCleanup func()
 }
 
 type Options struct {
@@ -84,16 +84,16 @@ type Options struct {
 	TracingEnabled        bool
 	TracingEndpoint       string
 	TracingServiceName    string
-	//GlobalPinningEnabled     bool
-	//PaymentThreshold         string
-	//PaymentTolerance         string
-	//PaymentEarly             string
+	// GlobalPinningEnabled     bool
+	// PaymentThreshold         string
+	// PaymentTolerance         string
+	// PaymentEarly             string
 	ResolverConnectionCfgs []multiresolver.ConnectionConfig
 	GatewayMode            bool
-	//SwapEndpoint             string
-	//SwapFactoryAddress       string
-	//SwapInitialDeposit       string
-	//SwapEnable               bool
+	// SwapEndpoint             string
+	// SwapFactoryAddress       string
+	// SwapInitialDeposit       string
+	// SwapEnable               bool
 	KadBinMaxPeers     int
 	LightNodeMaxPeers  int
 	AllowPrivateCIDRs  bool
@@ -197,15 +197,15 @@ func NewAurora(nodeMode aurora.Model, addr string, bosonAddress boson.Address, p
 	if err != nil {
 		return nil, err
 	}
-	//var overlayEthAddress common.Address
-	//var chainID int64
-	//var transactionService transaction.Service
-	//var chequebookFactory chequebook.Factory
-	//var chequebookService chequebook.Service
-	//var chequeStore chequebook.ChequeStore
-	//var cashoutService chequebook.CashoutService
+	// var overlayEthAddress common.Address
+	// var chainID int64
+	// var transactionService transaction.Service
+	// var chequebookFactory chequebook.Factory
+	// var chequebookService chequebook.Service
+	// var chequeStore chequebook.ChequeStore
+	// var cashoutService chequebook.CashoutService
 
-	//if o.SwapEnable {
+	// if o.SwapEnable {
 
 	//	b.ethClientCloser = swapBackend.Close
 	//
@@ -248,7 +248,7 @@ func NewAurora(nodeMode aurora.Model, addr string, bosonAddress boson.Address, p
 	//		overlayEthAddress,
 	//		transactionService,
 	//	)
-	//}
+	// }
 
 	addressBook := addressbook.New(stateStore)
 	lightNodes := lightnode.NewContainer(bosonAddress)
@@ -307,10 +307,10 @@ func NewAurora(nodeMode aurora.Model, addr string, bosonAddress boson.Address, p
 		}
 	}
 
-	//var settlement settlement.Interface
-	//var swapService *swap.Service
+	// var settlement settlement.Interface
+	// var swapService *swap.Service
 
-	//if o.SwapEnable {
+	// if o.SwapEnable {
 	//	swapService, err = InitSwap(
 	//		p2ps,
 	//		logger,
@@ -325,32 +325,32 @@ func NewAurora(nodeMode aurora.Model, addr string, bosonAddress boson.Address, p
 	//		return nil, err
 	//	}
 	//	settlement = swapService
-	//} else {
+	// } else {
 	//	pseudosettleService := pseudosettle.New(p2ps, logger, stateStore)
 	//	if err = p2ps.AddProtocol(pseudosettleService.Protocol()); err != nil {
 	//		return nil, fmt.Errorf("pseudosettle service: %w", err)
 	//	}
 	//	settlement = pseudosettleService
-	//}
+	// }
 
-	//paymentThreshold, ok := new(big.Int).SetString(o.PaymentThreshold, 10)
-	//if !ok {
+	// paymentThreshold, ok := new(big.Int).SetString(o.PaymentThreshold, 10)
+	// if !ok {
 	//	return nil, fmt.Errorf("invalid payment threshold: %s", paymentThreshold)
-	//}
-	//pricing := pricing.New(p2ps, logger, paymentThreshold)
-	//if err = p2ps.AddProtocol(pricing.Protocol()); err != nil {
+	// }
+	// pricing := pricing.New(p2ps, logger, paymentThreshold)
+	// if err = p2ps.AddProtocol(pricing.Protocol()); err != nil {
 	//	return nil, fmt.Errorf("pricing service: %w", err)
-	//}
+	// }
 
-	//paymentTolerance, ok := new(big.Int).SetString(o.PaymentTolerance, 10)
-	//if !ok {
+	// paymentTolerance, ok := new(big.Int).SetString(o.PaymentTolerance, 10)
+	// if !ok {
 	//	return nil, fmt.Errorf("invalid payment tolerance: %s", paymentTolerance)
-	//}
-	//paymentEarly, ok := new(big.Int).SetString(o.PaymentEarly, 10)
-	//if !ok {
+	// }
+	// paymentEarly, ok := new(big.Int).SetString(o.PaymentEarly, 10)
+	// if !ok {
 	//	return nil, fmt.Errorf("invalid payment early: %s", paymentEarly)
-	//}
-	//acc, err := accounting.NewAccounting(
+	// }
+	// acc, err := accounting.NewAccounting(
 	//	paymentThreshold,
 	//	paymentTolerance,
 	//	paymentEarly,
@@ -358,13 +358,13 @@ func NewAurora(nodeMode aurora.Model, addr string, bosonAddress boson.Address, p
 	//	stateStore,
 	//	settlement,
 	//	pricing,
-	//)
-	//if err != nil {
+	// )
+	// if err != nil {
 	//	return nil, fmt.Errorf("accounting: %w", err)
-	//}
+	// }
 
-	//settlement.SetNotifyPaymentFunc(acc.AsyncNotifyPayment)
-	//pricing.SetPaymentThresholdObserver(acc)
+	// settlement.SetNotifyPaymentFunc(acc.AsyncNotifyPayment)
+	// pricing.SetPaymentThresholdObserver(acc)
 
 	metricsDB, err := shed.NewDBWrap(stateStore.DB())
 	if err != nil {
@@ -426,6 +426,8 @@ func NewAurora(nodeMode aurora.Model, addr string, bosonAddress boson.Address, p
 	}
 	b.localstoreCloser = storer
 
+	logger.Info("localstore init")
+
 	retrieve := retrieval.New(bosonAddress, p2ps, route, storer, nodeMode.IsFull(), logger, tracer)
 	if err = p2ps.AddProtocol(retrieve.Protocol()); err != nil {
 		return nil, fmt.Errorf("retrieval service: %w", err)
@@ -447,11 +449,11 @@ func NewAurora(nodeMode aurora.Model, addr string, bosonAddress boson.Address, p
 	storer.WithChunkInfo(chunkInfo)
 	retrieve.Config(chunkInfo)
 
-	//multiResolver := multiresolver.NewMultiResolver(
+	// multiResolver := multiresolver.NewMultiResolver(
 	//	multiresolver.WithConnectionConfigs(o.ResolverConnectionCfgs),
 	//	multiresolver.WithLogger(o.Logger),
-	//)
-	//b.resolverCloser = multiResolver
+	// )
+	// b.resolverCloser = multiResolver
 
 	var apiService api.Service
 	if o.APIAddr != "" {
@@ -492,7 +494,7 @@ func NewAurora(nodeMode aurora.Model, addr string, bosonAddress boson.Address, p
 		// register metrics from components
 		debugAPIService.MustRegisterMetrics(p2ps.Metrics()...)
 		debugAPIService.MustRegisterMetrics(pingPong.Metrics()...)
-		//debugAPIService.MustRegisterMetrics(acc.Metrics()...)
+		// debugAPIService.MustRegisterMetrics(acc.Metrics()...)
 		debugAPIService.MustRegisterMetrics(storer.Metrics()...)
 		debugAPIService.MustRegisterMetrics(kad.Metrics()...)
 		debugAPIService.MustRegisterMetrics(lightNodes.Metrics()...)
@@ -509,9 +511,9 @@ func NewAurora(nodeMode aurora.Model, addr string, bosonAddress boson.Address, p
 			debugAPIService.MustRegisterMetrics(l.Metrics()...)
 		}
 
-		//if l, ok := settlement.(metrics.Collector); ok {
+		// if l, ok := settlement.(metrics.Collector); ok {
 		//	debugAPIService.MustRegisterMetrics(l.Metrics()...)
-		//}
+		// }
 
 		// inject dependencies and configure full debug api http path routes
 		debugAPIService.Configure(p2ps, pingPong, kad, lightNodes, bootNodes, storer, route, chunkInfo, retrieve)

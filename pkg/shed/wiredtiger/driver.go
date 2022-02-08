@@ -41,9 +41,9 @@ type Driver struct{}
 
 var (
 	defaultCreate        = true
-	defaultCacheSize     = uint64(2 * 1024 * 1024 * 1024)
+	defaultCacheSize     = DiskSize{Size: 2, Type: GB}
 	defaultCacheOverhead = 8
-	defaultCheckpoint    = Checkpoint{LogSize: 2 * 1024 * 1024 * 1024, Wait: 60}
+	defaultCheckpoint    = Checkpoint{LogSize: DiskSize{Size: 2, Type: GB}, Wait: 60}
 	defaultConfigBase    = false
 	defaultDebugMode     = DebugMode{CheckpointRetention: 0, CursorCopy: false, Eviction: false, TableLogging: false}
 	defaultEviction      = Eviction{ThreadsMin: 4, ThreadsMax: 4}
