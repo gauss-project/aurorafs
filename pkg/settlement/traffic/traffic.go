@@ -189,12 +189,6 @@ func (s *Service) getTraffic(peer common.Address) (traffic *Traffic) {
 	return
 }
 
-func (s *Service) trafficList() map[string]*Traffic {
-	s.trafficPeers.trafficLock.Lock()
-	defer s.trafficPeers.trafficLock.Unlock()
-	return s.trafficPeers.trafficPeers
-}
-
 func (s *Service) putTraffic(peer common.Address, traffic *Traffic) {
 	s.trafficPeers.trafficLock.Lock()
 	defer s.trafficPeers.trafficLock.Unlock()
@@ -406,7 +400,9 @@ func (s *Service) TrafficInfo() (*TrafficInfo, error) {
 	defer s.peersLock.Unlock()
 	cashed := big.NewInt(0)
 	transfer := big.NewInt(0)
-	for _, traffic := range s.trafficList() {
+	s.trafficPeers.trafficLock.Lock()
+	defer s.trafficPeers.trafficLock.Unlock()
+	for _, traffic := range s.trafficPeers.trafficPeers {
 		cashed = new(big.Int).Add(cashed, traffic.retrieveChainTraffic)
 		transfer = new(big.Int).Add(transfer, traffic.retrieveChequeTraffic)
 		respTraffic.TotalSendTraffic = new(big.Int).Add(respTraffic.TotalSendTraffic, traffic.retrieveChequeTraffic)
@@ -423,7 +419,9 @@ func (s *Service) TrafficCheques() ([]*TrafficCheque, error) {
 	s.peersLock.Lock()
 	defer s.peersLock.Unlock()
 	var trafficCheques []*TrafficCheque
-	for chainAddress, traffic := range s.trafficList() {
+	s.trafficPeers.trafficLock.Lock()
+	defer s.trafficPeers.trafficLock.Unlock()
+	for chainAddress, traffic := range s.trafficPeers.trafficPeers {
 		peer, known := s.addressBook.BeneficiaryPeer(common.HexToAddress(chainAddress))
 		if known {
 			trans := new(big.Int).Sub(traffic.transferTraffic, traffic.transferChequeTraffic)
@@ -615,7 +613,9 @@ func (s *Service) AvailableBalance() (*big.Int, error) {
 	defer s.peersLock.Unlock()
 	cashed := big.NewInt(0)
 	transfer := big.NewInt(0)
-	for _, traffic := range s.trafficList() {
+	s.trafficPeers.trafficLock.Lock()
+	defer s.trafficPeers.trafficLock.Unlock()
+	for _, traffic := range s.trafficPeers.trafficPeers {
 		cashed = new(big.Int).Add(cashed, traffic.retrieveChainTraffic)
 		transfer = new(big.Int).Add(transfer, traffic.retrieveTraffic)
 	}
