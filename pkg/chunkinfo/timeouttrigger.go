@@ -61,15 +61,11 @@ func (ci *ChunkInfo) triggerTimeOut() {
 			<-t.C
 			rootCid, overlay := ci.tt.getTimeOutRootCidAndNode()
 			if !rootCid.Equal(boson.ZeroAddress) {
-				ci.queuesLk.Lock()
 				q := ci.getQueue(rootCid.String())
-				ci.queuesLk.Unlock()
 				if q != nil {
-					ci.syncLk.RLock()
-					msgChan, ok := ci.syncMsg[rootCid.String()]
-					ci.syncLk.RUnlock()
+					msgChan, ok := ci.syncMsg.Load(rootCid.String())
 					if ok {
-						msgChan <- false
+						msgChan.(chan bool) <- false
 					}
 					q.popNode(Pulling, overlay.Bytes())
 					q.push(UnPull, overlay.Bytes())

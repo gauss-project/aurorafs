@@ -36,7 +36,7 @@ binary-wt: binary
 binary: dist FORCE
 	$(GO) version
 ifeq ("$(GOOS)", "windows")
-	set CGO_ENABLED=0
+	export CGO_ENABLED=0 || set CGO_ENABLED=0
 	$(GO) build -tags leveldb -trimpath -ldflags "$(LDFLAGS)" -o dist/aurora.exe ./cmd/aurorafs
 else
 	./install-deps.sh

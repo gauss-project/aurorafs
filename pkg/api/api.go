@@ -375,19 +375,16 @@ func (s *server) transactionReceiptUpdate() {
 			return nil
 		}
 
-		for {
-			select {
-			case trans := <-s.transactionChan:
-				status, err := tranReceipt(trans.Hash)
+		for trans := range s.transactionChan {
+			status, err := tranReceipt(trans.Hash)
+			if err != nil {
+				continue
+			}
+			if status == 1 {
+				err := tranUpdate(trans)
 				if err != nil {
+					s.logger.Errorf("api:tranUpdate - %v ", err.Error())
 					continue
-				}
-				if status == 1 {
-					err := tranUpdate(trans)
-					if err != nil {
-						s.logger.Errorf("api:tranUpdate - %v ", err.Error())
-						continue
-					}
 				}
 			}
 		}

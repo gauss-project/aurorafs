@@ -22,9 +22,10 @@ type sourceInfo struct {
 type chunkInfoSource struct {
 	sync.RWMutex
 	// rootCid:overlays:bitvector
-	storer   storage.StateStorer
-	logger   logging.Logger
-	presence map[string]*sourceInfo
+	storer        storage.StateStorer
+	logger        logging.Logger
+	presence      map[string]*sourceInfo
+	sourcePutChan chan chunkPut
 }
 
 var chunkSourceKeyPrefix = "sourceChunk-"
@@ -32,9 +33,10 @@ var pyramidKeyPrefix = "sourcePyramid-"
 
 func newChunkSource(store storage.StateStorer, logger logging.Logger) *chunkInfoSource {
 	return &chunkInfoSource{
-		storer:   store,
-		logger:   logger,
-		presence: make(map[string]*sourceInfo)}
+		storer:        store,
+		logger:        logger,
+		presence:      make(map[string]*sourceInfo),
+		sourcePutChan: make(chan chunkPut, 200)}
 }
 
 func (cs *chunkInfoSource) initChunkInfoSource() error {
@@ -90,16 +92,14 @@ func (cs *chunkInfoSource) initChunkInfoSource() error {
 }
 
 func (cs *chunkInfoSource) putChunkInfoChunkInfoSource(rootCid, sourceOverlay boson.Address, vector bitvector.BitVector) {
-	cs.Lock()
-	defer cs.Unlock()
+
 	rc := rootCid.String()
 	over := sourceOverlay.String()
 	cs.presence[rc].ChunkSource[over] = &vector
 }
 
 func (cs *chunkInfoSource) putPyramidSource(rootCid boson.Address, sourceOverlay string) {
-	cs.Lock()
-	defer cs.Unlock()
+
 	rc := rootCid.String()
 	if _, ok := cs.presence[rc]; !ok {
 		cs.presence[rc] = &sourceInfo{
@@ -110,8 +110,7 @@ func (cs *chunkInfoSource) putPyramidSource(rootCid boson.Address, sourceOverlay
 }
 
 func (ci *ChunkInfo) UpdateChunkInfoSource(rootCid, sourceOverlay boson.Address, cid boson.Address) error {
-	ci.cs.Lock()
-	defer ci.cs.Unlock()
+
 	rc := rootCid.String()
 	over := sourceOverlay.String()
 	if _, ok := ci.cs.presence[rc]; !ok {
@@ -143,8 +142,7 @@ func (ci *ChunkInfo) UpdatePyramidSource(rootCid, sourceOverlay boson.Address) e
 }
 
 func (cs *chunkInfoSource) updatePyramidSource(rootCid, sourceOverlay boson.Address) error {
-	cs.Lock()
-	defer cs.Unlock()
+
 	rc := rootCid.String()
 	overlay := sourceOverlay.String()
 	if _, ok := cs.presence[rc]; !ok {
@@ -186,8 +184,7 @@ func (cs *chunkInfoSource) GetChunkInfoSource(rootCid boson.Address) (sourceResp
 }
 
 func (cs *chunkInfoSource) DelChunkInfoSource(rootCid boson.Address) bool {
-	cs.Lock()
-	defer cs.Unlock()
+
 	delKey := fmt.Sprintf("%s%s", chunkSourceKeyPrefix, rootCid.String())
 	if err := cs.storer.Iterate(delKey, func(k, value []byte) (stop bool, err error) {
 		key := string(k)
@@ -222,4 +219,14 @@ func (cs *chunkInfoSource) DelChunkInfoSource(rootCid boson.Address) bool {
 	delete(cs.presence, rootCid.String())
 
 	return true
+}
+
+func (cs *chunkInfoSource) setLock() {
+	cs.Lock()
+}
+func (cs *chunkInfoSource) setUnLock() {
+	cs.Unlock()
+}
+func (cs *chunkInfoSource) getChan() chan chunkPut {
+	return cs.sourcePutChan
 }

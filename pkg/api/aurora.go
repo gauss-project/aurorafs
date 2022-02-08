@@ -709,12 +709,12 @@ func (s *server) fileRegister(w http.ResponseWriter, r *http.Request) {
 
 	if err != nil {
 		logger.Debugf("aurora fileRegister: parse address %s: %v", nameOrHex, err)
-		logger.Error("aurora fileRegister: parse address")
+		logger.Errorf("aurora fileRegister: parse address")
 		jsonhttp.NotFound(w, nil)
 		return
 	}
 	if _, ok := s.tranProcess.Load(apiName + address.String()); ok {
-		logger.Error("parse address %s under processing", nameOrHex)
+		logger.Errorf("parse address %s under processing", nameOrHex)
 		jsonhttp.InternalServerError(w, fmt.Sprintf("parse address %s under processing", nameOrHex))
 		return
 	}
@@ -729,7 +729,7 @@ func (s *server) fileRegister(w http.ResponseWriter, r *http.Request) {
 
 	hash, err := s.oracleChain.RegisterCidAndNode(r.Context(), address, s.overlay)
 	if err != nil {
-		logger.Error("aurora fileRegister failed: %v ", err)
+		logger.Errorf("aurora fileRegister failed: %v ", err)
 		jsonhttp.InternalServerError(w, fmt.Sprintf("aurora fileRegister failed: %v ", err))
 		return
 	}
@@ -753,13 +753,13 @@ func (s *server) fileRegisterRemove(w http.ResponseWriter, r *http.Request) {
 	nameOrHex := mux.Vars(r)["address"]
 	address, err := s.resolveNameOrAddress(nameOrHex)
 	if err != nil {
-		logger.Error("aurora fileRegisterRemove: parse address")
+		logger.Errorf("aurora fileRegisterRemove: parse address")
 		jsonhttp.NotFound(w, nil)
 		return
 	}
 	defer s.tranProcess.Delete(apiName + address.String())
 	if _, ok := s.tranProcess.Load(apiName + address.String()); ok {
-		logger.Error("parse address %s under processing", nameOrHex)
+		logger.Errorf("parse address %s under processing", nameOrHex)
 		jsonhttp.InternalServerError(w, fmt.Sprintf("parse address %s under processing", nameOrHex))
 		return
 	}
@@ -779,7 +779,7 @@ func (s *server) fileRegisterRemove(w http.ResponseWriter, r *http.Request) {
 
 	hash, err := s.oracleChain.RemoveCidAndNode(r.Context(), address, s.overlay)
 	if err != nil {
-		logger.Error("aurora fileRegisterRemove failed: %v ", err)
+		s.logger.Error("aurora fileRegisterRemove failed: %v ", err)
 		jsonhttp.InternalServerError(w, fmt.Sprintf("aurora fileRegisterRemove failed: %v ", err))
 		return
 	}

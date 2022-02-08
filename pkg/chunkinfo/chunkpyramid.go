@@ -17,7 +17,8 @@ type chunkPyramid struct {
 	// rootCid: count
 	hashData map[string][]string
 
-	chunk map[string]uint
+	chunk          map[string]uint
+	pyramidPutChan chan chunkPut
 }
 
 type pyramidCidCount struct {
@@ -32,7 +33,12 @@ type PyramidCidNum struct {
 }
 
 func newChunkPyramid() *chunkPyramid {
-	return &chunkPyramid{pyramid: make(map[string]map[string]pyramidCidCount), mateData: make(map[string]map[string][]byte), hashData: make(map[string][]string), chunk: make(map[string]uint)}
+	chunkPayramid := &chunkPyramid{pyramid: make(map[string]map[string]pyramidCidCount),
+		mateData:       make(map[string]map[string][]byte),
+		hashData:       make(map[string][]string),
+		chunk:          make(map[string]uint),
+		pyramidPutChan: make(chan chunkPut, 200)}
+	return chunkPayramid
 }
 
 func (ci *ChunkInfo) initChunkPyramid(ctx context.Context, rootCid boson.Address) error {
@@ -63,8 +69,6 @@ func (ci *ChunkInfo) initChunkPyramid(ctx context.Context, rootCid boson.Address
 
 // updateChunkPyramid
 func (ci *ChunkInfo) updateChunkPyramid(rootCid boson.Address, pyramids [][][]byte, trie map[string][]byte) [][]byte {
-	ci.cp.Lock()
-	defer ci.cp.Unlock()
 	py := make(map[string]pyramidCidCount)
 	cids := make([][]byte, 0)
 	var i, max int
@@ -218,8 +222,7 @@ func (cp *chunkPyramid) getCidStore(rootCid, cid boson.Address) int {
 }
 
 func (cp *chunkPyramid) updateCidSort(rootCid, cid boson.Address, sort int) {
-	cp.Lock()
-	defer cp.Unlock()
+
 	v, ok := cp.pyramid[rootCid.String()][cid.String()]
 	if !ok {
 		return
@@ -256,8 +259,7 @@ func (cp *chunkPyramid) delChunk(cid boson.Address) {
 }
 
 func (cp *chunkPyramid) delRootCid(rootCID boson.Address) bool {
-	cp.Lock()
-	defer cp.Unlock()
+
 	if cids, ok := cp.pyramid[rootCID.String()]; ok {
 		hashs := cp.hashData[rootCID.String()]
 		for _, cid := range hashs {
@@ -271,4 +273,14 @@ func (cp *chunkPyramid) delRootCid(rootCID boson.Address) bool {
 	delete(cp.mateData, rootCID.String())
 	delete(cp.hashData, rootCID.String())
 	return true
+}
+
+func (cp *chunkPyramid) setLock() {
+	cp.Lock()
+}
+func (cp *chunkPyramid) setUnLock() {
+	cp.Unlock()
+}
+func (cp *chunkPyramid) getChan() chan chunkPut {
+	return cp.pyramidPutChan
 }
