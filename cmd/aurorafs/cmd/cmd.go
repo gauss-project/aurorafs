@@ -42,20 +42,20 @@ const (
 	optionNameVerbosity             = "verbosity"
 	optionNameGlobalPinningEnabled  = "global-pinning-enable"
 	optionNameApiFileBufferMultiple = "api-file-buffer-multiple"
-	//optionNamePaymentThreshold          = "payment-threshold"
-	//optionNamePaymentTolerance          = "payment-tolerance"
-	//optionNamePaymentEarly              = "payment-early"
-	//optionNameResolverEndpoints = "resolver-options"
+	// optionNamePaymentThreshold          = "payment-threshold"
+	// optionNamePaymentTolerance          = "payment-tolerance"
+	// optionNamePaymentEarly              = "payment-early"
+	// optionNameResolverEndpoints = "resolver-options"
 	optionNameBootnodeMode = "bootnode-mode"
 	optionNameFullNode     = "full-node"
 	optionNameGatewayMode  = "gateway-mode"
-	//optionNameClefSignerEnable          = "clef-signer-enable"
-	//optionNameClefSignerEndpoint        = "clef-signer-endpoint"
-	//optionNameClefSignerEthereumAddress = "clef-signer-ethereum-address"
-	//optionNameSwapEndpoint              = "swap-endpoint"
-	//optionNameSwapFactoryAddress        = "swap-factory-address"
-	//optionNameSwapInitialDeposit        = "swap-initial-deposit"
-	//optionNameSwapEnable                = "swap-enable"
+	// optionNameClefSignerEnable          = "clef-signer-enable"
+	// optionNameClefSignerEndpoint        = "clef-signer-endpoint"
+	// optionNameClefSignerEthereumAddress = "clef-signer-ethereum-address"
+	// optionNameSwapEndpoint              = "swap-endpoint"
+	// optionNameSwapFactoryAddress        = "swap-factory-address"
+	// optionNameSwapInitialDeposit        = "swap-initial-deposit"
+	// optionNameSwapEnable                = "swap-enable"
 	optionNameBinMaxPeers        = "bin-max-peers"
 	optionNameLightMaxPeers      = "light-max-peers"
 	optionNameAllowPrivateCIDRs  = "allow-private-cidrs"
@@ -113,9 +113,9 @@ func newCommand(opts ...option) (c *command, err error) {
 		return nil, err
 	}
 
-	//if err := c.initDeployCmd(); err != nil {
+	// if err := c.initDeployCmd(); err != nil {
 	//	return nil, err
-	//}
+	// }
 
 	c.initVersionCmd()
 	c.initDBCmd()
@@ -192,7 +192,7 @@ func (c *command) setHomeDir() (err error) {
 func (c *command) setAllFlags(cmd *cobra.Command) {
 	cmd.Flags().String(optionNameDataDir, filepath.Join(c.homeDir, ".aurorafs"), "data directory")
 	cmd.Flags().Uint64(optionNameCacheCapacity, 80000, fmt.Sprintf("cache capacity in chunks, multiply by %d to get approximate capacity in bytes", boson.ChunkSize))
-	cmd.Flags().String(optionDatabaseDriver, "leveldb", fmt.Sprintf("database storage driver, support leveldb or wiredtiger"))
+	cmd.Flags().String(optionDatabaseDriver, driver, fmt.Sprintf("database storage driver, only support leveldb/wiredtiger"))
 	cmd.Flags().String(optionNamePassword, "", "password for decrypting keys")
 	cmd.Flags().String(optionNamePasswordFile, "", "path to a file that contains password for decrypting keys")
 	cmd.Flags().String(optionNameAPIAddr, ":1633", "HTTP API listen address")
@@ -216,19 +216,19 @@ func (c *command) setAllFlags(cmd *cobra.Command) {
 	cmd.Flags().String(optionWelcomeMessage, "", "send a welcome message string during handshakes")
 	cmd.Flags().Bool(optionNameGlobalPinningEnabled, false, "enable global pinning")
 	cmd.Flags().Int(optionNameApiFileBufferMultiple, 8, "When the API downloads files, the multiple of the buffer (256kb for files less than 10mb and 512kb for others), the default multiple is 8")
-	//cmd.Flags().String(optionNamePaymentThreshold, "10000000000000", "threshold in BZZ where you expect to get paid from your peers")
-	//cmd.Flags().String(optionNamePaymentTolerance, "50000000000000", "excess debt above payment threshold in BZZ where you disconnect from your peer")
-	//cmd.Flags().String(optionNamePaymentEarly, "1000000000000", "amount in BZZ below the peers payment threshold when we initiate settlement")
-	//cmd.Flags().StringSlice(optionNameResolverEndpoints, []string{}, "ENS compatible API endpoint for a TLD and with contract address, can be repeated, format [tld:][contract-addr@]url")
+	// cmd.Flags().String(optionNamePaymentThreshold, "10000000000000", "threshold in BZZ where you expect to get paid from your peers")
+	// cmd.Flags().String(optionNamePaymentTolerance, "50000000000000", "excess debt above payment threshold in BZZ where you disconnect from your peer")
+	// cmd.Flags().String(optionNamePaymentEarly, "1000000000000", "amount in BZZ below the peers payment threshold when we initiate settlement")
+	// cmd.Flags().StringSlice(optionNameResolverEndpoints, []string{}, "ENS compatible API endpoint for a TLD and with contract address, can be repeated, format [tld:][contract-addr@]url")
 	cmd.Flags().Bool(optionNameGatewayMode, false, "disable a set of sensitive features in the api")
 	cmd.Flags().Bool(optionNameBootnodeMode, false, "cause the node to always accept incoming connections")
-	//cmd.Flags().Bool(optionNameClefSignerEnable, false, "enable clef signer")
-	//cmd.Flags().String(optionNameClefSignerEndpoint, "", "clef signer endpoint")
-	//cmd.Flags().String(optionNameClefSignerEthereumAddress, "", "ethereum address to use from clef signer")
-	//cmd.Flags().String(optionNameSwapEndpoint, "http://localhost:8545", "swap ethereum blockchain endpoint")
-	//cmd.Flags().String(optionNameSwapFactoryAddress, "", "swap factory address")
-	//cmd.Flags().String(optionNameSwapInitialDeposit, "100000000000000000", "initial deposit if deploying a new chequebook")
-	//cmd.Flags().Bool(optionNameSwapEnable, true, "enable swap")
+	// cmd.Flags().Bool(optionNameClefSignerEnable, false, "enable clef signer")
+	// cmd.Flags().String(optionNameClefSignerEndpoint, "", "clef signer endpoint")
+	// cmd.Flags().String(optionNameClefSignerEthereumAddress, "", "ethereum address to use from clef signer")
+	// cmd.Flags().String(optionNameSwapEndpoint, "http://localhost:8545", "swap ethereum blockchain endpoint")
+	// cmd.Flags().String(optionNameSwapFactoryAddress, "", "swap factory address")
+	// cmd.Flags().String(optionNameSwapInitialDeposit, "100000000000000000", "initial deposit if deploying a new chequebook")
+	// cmd.Flags().Bool(optionNameSwapEnable, true, "enable swap")
 	cmd.Flags().Bool(optionNameFullNode, true, "full node")
 	cmd.Flags().Int(optionNameLightMaxPeers, 100, "connected light node max limit")
 	cmd.Flags().Int(optionNameBinMaxPeers, 20, "kademlia every k bucket connected peers max limit")

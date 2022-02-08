@@ -426,8 +426,6 @@ func NewAurora(nodeMode aurora.Model, addr string, bosonAddress boson.Address, p
 	}
 	b.localstoreCloser = storer
 
-	logger.Info("localstore init")
-
 	retrieve := retrieval.New(bosonAddress, p2ps, route, storer, nodeMode.IsFull(), logger, tracer)
 	if err = p2ps.AddProtocol(retrieve.Protocol()); err != nil {
 		return nil, fmt.Errorf("retrieval service: %w", err)
