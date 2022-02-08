@@ -6,7 +6,7 @@ mkdir -p "$SHELL_FOLDER"/lib
 
 cd "$SHELL_FOLDER"/lib
 
-if compgen -G /usr/local/lib/libsnappy.* > /dev/null; then
+if bash -c "compgen -G /usr/local/lib/libsnappy.* > /dev/null"; then
   echo "snappy installed"
 else
   if [ ! -d "$SHELL_FOLDER"/lib/snappy ]; then
@@ -24,7 +24,7 @@ else
     cd "$SHELL_FOLDER"/lib
 fi
 
-if compgen -G /usr/local/lib/libwiredtiger.* > /dev/null; then
+if bash -c "compgen -G /usr/local/lib/libwiredtiger.* > /dev/null"; then
   echo "wiredtiger installed"
 else
   if [ ! -d "$SHELL_FOLDER"/lib/wiredtiger ]; then
