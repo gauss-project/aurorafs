@@ -6,7 +6,7 @@ mkdir -p "$SHELL_FOLDER"/lib
 
 cd "$SHELL_FOLDER"/lib
 
-if compgen -G "$SHELL_FOLDER"/lib/lib/libsnappy.* > /dev/null; then
+if compgen -G /usr/local/lib/libsnappy.* > /dev/null; then
   echo "snappy installed"
 else
   if [ ! -d "$SHELL_FOLDER"/lib/snappy ]; then
@@ -18,13 +18,13 @@ else
     cd "$SHELL_FOLDER"/lib/snappy
     [ ! -d build ] && mkdir build
     cd build
-    cmake -DCMAKE_INSTALL_PREFIX="$SHELL_FOLDER"/lib ../ || exit
+    cmake ../ || exit
     make || exit
     make install || exit
     cd "$SHELL_FOLDER"/lib
 fi
 
-if compgen -G "$SHELL_FOLDER"/lib/lib/libwiredtiger.* > /dev/null; then
+if compgen -G /usr/local/lib/libwiredtiger.* > /dev/null; then
   echo "wiredtiger installed"
 else
   if [ ! -d "$SHELL_FOLDER"/lib/wiredtiger ]; then
@@ -38,6 +38,6 @@ else
 
   cd "$SHELL_FOLDER"/lib/wiredtiger
   sh autogen.sh
-  ./configure --enable-snappy --prefix="$SHELL_FOLDER"/lib CPPFLAGS="-I$SHELL_FOLDER/lib/include" LDFLAGS="-L$SHELL_FOLDER/lib/include"
+  ./configure --enable-snappy CPPFLAGS="-I/usr/local/include" LDFLAGS="-L/usr/local/include"
   make && make install
 fi
