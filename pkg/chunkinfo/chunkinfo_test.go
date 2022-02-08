@@ -18,7 +18,7 @@ import (
 	"github.com/gauss-project/aurorafs/pkg/p2p/protobuf"
 	"github.com/gauss-project/aurorafs/pkg/p2p/streamtest"
 	rmock "github.com/gauss-project/aurorafs/pkg/routetab/mock"
-	omock "github.com/gauss-project/aurorafs/pkg/settlement/swap/oracle/mock"
+	omock "github.com/gauss-project/aurorafs/pkg/settlement/chain/oracle/mock"
 	smock "github.com/gauss-project/aurorafs/pkg/statestore/mock"
 	"github.com/gauss-project/aurorafs/pkg/storage"
 	"github.com/gauss-project/aurorafs/pkg/storage/mock"

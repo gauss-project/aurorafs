@@ -22,5 +22,5 @@ func (t *Table) TableClean() {
 }
 
 func (s *Service) SetStreamer(recorder *streamtest.Recorder) {
-	s.config.Stream = recorder
+	s.stream = recorder
 }

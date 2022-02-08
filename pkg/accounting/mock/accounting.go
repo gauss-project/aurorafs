@@ -13,81 +13,11 @@ import (
 
 // Service is the mock Accounting service.
 type Service struct {
-	lock                    sync.Mutex
-	balances                map[string]*big.Int
-	reserveFunc             func(ctx context.Context, peer boson.Address, price uint64) error
-	releaseFunc             func(peer boson.Address, price uint64)
-	creditFunc              func(peer boson.Address, price uint64) error
-	debitFunc               func(peer boson.Address, price uint64) error
-	balanceFunc             func(boson.Address) (*big.Int, error)
-	balancesFunc            func() (map[string]*big.Int, error)
-	compensatedBalanceFunc  func(boson.Address) (*big.Int, error)
-	compensatedBalancesFunc func() (map[string]*big.Int, error)
-
-	balanceSurplusFunc func(boson.Address) (*big.Int, error)
-}
-
-// WithReserveFunc sets the mock Reserve function
-func WithReserveFunc(f func(ctx context.Context, peer boson.Address, price uint64) error) Option {
-	return optionFunc(func(s *Service) {
-		s.reserveFunc = f
-	})
-}
-
-// WithReleaseFunc sets the mock Release function
-func WithReleaseFunc(f func(peer boson.Address, price uint64)) Option {
-	return optionFunc(func(s *Service) {
-		s.releaseFunc = f
-	})
-}
-
-// WithCreditFunc sets the mock Credit function
-func WithCreditFunc(f func(peer boson.Address, price uint64) error) Option {
-	return optionFunc(func(s *Service) {
-		s.creditFunc = f
-	})
-}
-
-// WithDebitFunc sets the mock Debit function
-func WithDebitFunc(f func(peer boson.Address, price uint64) error) Option {
-	return optionFunc(func(s *Service) {
-		s.debitFunc = f
-	})
-}
-
-// WithBalanceFunc sets the mock Balance function
-func WithBalanceFunc(f func(boson.Address) (*big.Int, error)) Option {
-	return optionFunc(func(s *Service) {
-		s.balanceFunc = f
-	})
-}
-
-// WithBalancesFunc sets the mock Balances function
-func WithBalancesFunc(f func() (map[string]*big.Int, error)) Option {
-	return optionFunc(func(s *Service) {
-		s.balancesFunc = f
-	})
-}
-
-// WithCompensatedBalanceFunc sets the mock Balance function
-func WithCompensatedBalanceFunc(f func(boson.Address) (*big.Int, error)) Option {
-	return optionFunc(func(s *Service) {
-		s.compensatedBalanceFunc = f
-	})
-}
-
-// WithCompensatedBalancesFunc sets the mock Balances function
-func WithCompensatedBalancesFunc(f func() (map[string]*big.Int, error)) Option {
-	return optionFunc(func(s *Service) {
-		s.compensatedBalancesFunc = f
-	})
-}
-
-// WithBalanceSurplusFunc sets the mock SurplusBalance function
-func WithBalanceSurplusFunc(f func(boson.Address) (*big.Int, error)) Option {
-	return optionFunc(func(s *Service) {
-		s.balanceSurplusFunc = f
-	})
+	lock        sync.Mutex
+	balances    map[string]*big.Int
+	reserveFunc func(peer boson.Address, price uint64) error
+	creditFunc  func(ctx context.Context, peer boson.Address, price uint64) error
+	debitFunc   func(peer boson.Address, price uint64) error
 }
 
 // NewAccounting creates the mock accounting implementation
@@ -100,101 +30,65 @@ func NewAccounting(opts ...Option) accounting.Interface {
 	return mock
 }
 
+// WithReserveFunc sets the mock Reserve function
+func WithReserveFunc(f func(peer boson.Address, traffic uint64) error) Option {
+	return optionFunc(func(s *Service) {
+		s.reserveFunc = f
+	})
+}
+
+// WithCreditFunc sets the mock Credit function
+func WithCreditFunc(f func(ctx context.Context, peer boson.Address, traffic uint64) error) Option {
+	return optionFunc(func(s *Service) {
+		s.creditFunc = f
+	})
+}
+
+// WithDebitFunc sets the mock Debit function
+func WithDebitFunc(f func(peer boson.Address, traffic uint64) error) Option {
+	return optionFunc(func(s *Service) {
+		s.debitFunc = f
+	})
+}
+
 // Reserve is the mock function wrapper that calls the set implementation
-func (s *Service) Reserve(ctx context.Context, peer boson.Address, price uint64) error {
+func (s *Service) Reserve(peer boson.Address, traffic uint64) error {
 	if s.reserveFunc != nil {
-		return s.reserveFunc(ctx, peer, price)
+		return s.reserveFunc(peer, traffic)
 	}
 	return nil
 }
 
-// Release is the mock function wrapper that calls the set implementation
-func (s *Service) Release(peer boson.Address, price uint64) {
-	if s.releaseFunc != nil {
-		s.releaseFunc(peer, price)
-	}
-}
-
 // Credit is the mock function wrapper that calls the set implementation
-func (s *Service) Credit(peer boson.Address, price uint64) error {
+func (s *Service) Credit(ctx context.Context, peer boson.Address, traffic uint64) error {
 	if s.creditFunc != nil {
-		return s.creditFunc(peer, price)
+		return s.creditFunc(ctx, peer, traffic)
 	}
 	s.lock.Lock()
 	defer s.lock.Unlock()
 
 	if bal, ok := s.balances[peer.String()]; ok {
-		s.balances[peer.String()] = new(big.Int).Sub(bal, new(big.Int).SetUint64(price))
+		s.balances[peer.String()] = new(big.Int).Sub(bal, new(big.Int).SetUint64(traffic))
 	} else {
-		s.balances[peer.String()] = big.NewInt(-int64(price))
+		s.balances[peer.String()] = big.NewInt(-int64(traffic))
 	}
 	return nil
 }
 
 // Debit is the mock function wrapper that calls the set implementation
-func (s *Service) Debit(peer boson.Address, price uint64) error {
+func (s *Service) Debit(peer boson.Address, traffic uint64) error {
 	if s.debitFunc != nil {
-		return s.debitFunc(peer, price)
+		return s.debitFunc(peer, traffic)
 	}
 	s.lock.Lock()
 	defer s.lock.Unlock()
 
 	if bal, ok := s.balances[peer.String()]; ok {
-		s.balances[peer.String()] = new(big.Int).Add(bal, new(big.Int).SetUint64(price))
+		s.balances[peer.String()] = new(big.Int).Add(bal, new(big.Int).SetUint64(traffic))
 	} else {
-		s.balances[peer.String()] = new(big.Int).SetUint64(price)
+		s.balances[peer.String()] = new(big.Int).SetUint64(traffic)
 	}
 	return nil
-}
-
-// Balance is the mock function wrapper that calls the set implementation
-func (s *Service) Balance(peer boson.Address) (*big.Int, error) {
-	if s.balanceFunc != nil {
-		return s.balanceFunc(peer)
-	}
-	s.lock.Lock()
-	defer s.lock.Unlock()
-	if bal, ok := s.balances[peer.String()]; ok {
-		return bal, nil
-	} else {
-		return big.NewInt(0), nil
-	}
-}
-
-// Balances is the mock function wrapper that calls the set implementation
-func (s *Service) Balances() (map[string]*big.Int, error) {
-	if s.balancesFunc != nil {
-		return s.balancesFunc()
-	}
-	return s.balances, nil
-}
-
-// CompensatedBalance is the mock function wrapper that calls the set implementation
-func (s *Service) CompensatedBalance(peer boson.Address) (*big.Int, error) {
-	if s.compensatedBalanceFunc != nil {
-		return s.compensatedBalanceFunc(peer)
-	}
-	s.lock.Lock()
-	defer s.lock.Unlock()
-	return s.balances[peer.String()], nil
-}
-
-// CompensatedBalances is the mock function wrapper that calls the set implementation
-func (s *Service) CompensatedBalances() (map[string]*big.Int, error) {
-	if s.compensatedBalancesFunc != nil {
-		return s.compensatedBalancesFunc()
-	}
-	return s.balances, nil
-}
-
-//
-func (s *Service) SurplusBalance(peer boson.Address) (*big.Int, error) {
-	if s.balanceFunc != nil {
-		return s.balanceSurplusFunc(peer)
-	}
-	s.lock.Lock()
-	defer s.lock.Unlock()
-	return big.NewInt(0), nil
 }
 
 // Option is the option passed to the mock accounting service

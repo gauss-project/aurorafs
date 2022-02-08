@@ -151,6 +151,47 @@ func (s *server) setupRouting() {
 		})),
 	)
 
+	handle("/traffic/info", web.ChainHandlers(
+		s.gatewayModeForbidEndpointHandler,
+		web.FinalHandler(jsonhttp.MethodHandler{
+			"GET": http.HandlerFunc(s.trafficInfo),
+		})),
+	)
+
+	handle("/traffic/address", web.ChainHandlers(
+		s.gatewayModeForbidEndpointHandler,
+		web.FinalHandler(jsonhttp.MethodHandler{
+			"GET": http.HandlerFunc(s.address),
+		})),
+	)
+
+	handle("/traffic/cheques", web.ChainHandlers(
+		s.gatewayModeForbidEndpointHandler,
+		web.FinalHandler(jsonhttp.MethodHandler{
+			"GET": http.HandlerFunc(s.trafficCheques),
+		})),
+	)
+
+	handle("/traffic/cash/{address}", web.ChainHandlers(
+		s.gatewayModeForbidEndpointHandler,
+		web.FinalHandler(jsonhttp.MethodHandler{
+			"POST": http.HandlerFunc(s.cashCheque),
+		})),
+	)
+
+	handle("/fileRegister/{address}", jsonhttp.MethodHandler{
+		"POST": web.ChainHandlers(
+			s.newTracingHandler("aurora-Register"),
+			web.FinalHandlerFunc(s.fileRegister),
+		),
+		"DELETE": web.ChainHandlers(
+			s.newTracingHandler("aurora-RegisterRemove"),
+			web.FinalHandlerFunc(s.fileRegisterRemove),
+		),
+	})
+
+	s.newLoopbackRouter(router)
+
 	s.Handler = web.ChainHandlers(
 		httpaccess.NewHTTPAccessLogHandler(s.logger, logrus.InfoLevel, s.tracer, "api access"),
 		handlers.CompressHandler,
@@ -173,7 +214,22 @@ func (s *server) setupRouting() {
 		web.FinalHandler(router),
 	)
 }
+func (s *server) newLoopbackRouter(router *mux.Router) {
+	var handle = func(path string, handler http.Handler) {
+		handler = web.ChainHandlers(
+			//auth.AllowLoopbackIP(),
+			web.FinalHandler(handler),
+		)
+		router.Handle(path, handler)
+	}
 
+	handle("/chain", web.ChainHandlers(
+		web.FinalHandler(jsonhttp.MethodHandler{
+			"POST": http.HandlerFunc(s.chainHandler),
+		})),
+	)
+
+}
 func (s *server) gatewayModeForbidEndpointHandler(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if s.GatewayMode {

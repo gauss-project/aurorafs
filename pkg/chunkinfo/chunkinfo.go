@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/gauss-project/aurorafs/pkg/retrieval/aco"
-	"github.com/gauss-project/aurorafs/pkg/settlement/swap/oracle"
+	"github.com/gauss-project/aurorafs/pkg/settlement/chain"
 	"resenje.org/singleflight"
 	"strings"
 	"sync"
@@ -40,7 +40,7 @@ type Interface interface {
 
 	GetFileList(overlay boson.Address) (fileListInfo map[string]*aurora.FileInfo, rootList []boson.Address)
 
-	DelFile(rootCid boson.Address) bool
+	DelFile(rootCid boson.Address, del func()) bool
 
 	DelDiscover(rootCid boson.Address)
 
@@ -68,12 +68,12 @@ type ChunkInfo struct {
 	cp           *chunkPyramid
 	cpd          *pendingFinderInfo
 	singleflight singleflight.Group
-	oracleChain  oracle.Resolver
+	oracleChain  chain.Resolver
 	cs           *chunkInfoSource
 }
 
 // New
-func New(addr boson.Address, streamer p2p.Streamer, logger logging.Logger, traversal traversal.Traverser, storer storage.StateStorer, route routetab.RouteTab, oracleChain oracle.Resolver) *ChunkInfo {
+func New(addr boson.Address, streamer p2p.Streamer, logger logging.Logger, traversal traversal.Traverser, storer storage.StateStorer, route routetab.RouteTab, oracleChain chain.Resolver) *ChunkInfo {
 	queues := make(map[string]*queue)
 	syncMsg := make(map[string]chan bool)
 
@@ -147,6 +147,9 @@ func (ci *ChunkInfo) Init(ctx context.Context, authInfo []byte, rootCid boson.Ad
 		}
 		return ci.FindChunkInfo(context.Background(), authInfo, rootCid, overlays), nil
 	})
+	if v == nil {
+		return false
+	}
 	return v.(bool)
 }
 
@@ -278,9 +281,12 @@ func (ci *ChunkInfo) GetFileList(overlay boson.Address) (fileListInfo map[string
 	return
 }
 
-func (ci *ChunkInfo) DelFile(rootCid boson.Address) bool {
+func (ci *ChunkInfo) DelFile(rootCid boson.Address, del func()) bool {
 	ci.syncLk.Lock()
 	defer ci.syncLk.Unlock()
+
+	del()
+
 	ci.queuesLk.Lock()
 	ci.CancelFindChunkInfo(rootCid)
 	delete(ci.queues, rootCid.String())

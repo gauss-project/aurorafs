@@ -9,11 +9,13 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"math/big"
 	"net"
 	"net/http"
 	"path/filepath"
 	"time"
 
+	"github.com/gauss-project/aurorafs/pkg/accounting"
 	"github.com/gauss-project/aurorafs/pkg/addressbook"
 	"github.com/gauss-project/aurorafs/pkg/api"
 	"github.com/gauss-project/aurorafs/pkg/aurora"
@@ -33,7 +35,6 @@ import (
 	"github.com/gauss-project/aurorafs/pkg/resolver/multiresolver"
 	"github.com/gauss-project/aurorafs/pkg/retrieval"
 	"github.com/gauss-project/aurorafs/pkg/routetab"
-	"github.com/gauss-project/aurorafs/pkg/settlement/swap/oracle"
 	"github.com/gauss-project/aurorafs/pkg/shed"
 	"github.com/gauss-project/aurorafs/pkg/topology/bootnode"
 	"github.com/gauss-project/aurorafs/pkg/topology/kademlia"
@@ -90,16 +91,16 @@ type Options struct {
 	// PaymentEarly             string
 	ResolverConnectionCfgs []multiresolver.ConnectionConfig
 	GatewayMode            bool
-	// SwapEndpoint             string
-	// SwapFactoryAddress       string
-	// SwapInitialDeposit       string
-	// SwapEnable               bool
-	KadBinMaxPeers     int
-	LightNodeMaxPeers  int
-	AllowPrivateCIDRs  bool
-	Restricted         bool
-	TokenEncryptionKey string
-	AdminPasswordHash  string
+	TrafficEnable          bool
+	TrafficContractAddr    string
+	KadBinMaxPeers         int
+	LightNodeMaxPeers      int
+	AllowPrivateCIDRs      bool
+	Restricted             bool
+	TokenEncryptionKey     string
+	AdminPasswordHash      string
+	RouteAlpha             int32
+	PkPassword             string
 }
 
 func NewAurora(nodeMode aurora.Model, addr string, bosonAddress boson.Address, publicKey ecdsa.PublicKey, signer crypto.Signer, networkID uint64, logger logging.Logger, libp2pPrivateKey *ecdsa.PrivateKey, o Options) (b *Aurora, err error) {
@@ -142,7 +143,7 @@ func NewAurora(nodeMode aurora.Model, addr string, bosonAddress boson.Address, p
 	if o.DebugAPIAddr != "" {
 		// set up basic debug api endpoints for debugging and /health endpoint
 		debugAPIService = debugapi.New(bosonAddress, publicKey, logger, tracer, o.CORSAllowedOrigins, o.Restricted, authenticator, debugapi.Options{
-			PrivateKey:     libp2pPrivateKey,
+			DataDir:        o.DataDir,
 			NATAddr:        o.NATAddr,
 			NetworkID:      networkID,
 			EnableWS:       o.EnableWS,
@@ -187,69 +188,6 @@ func NewAurora(nodeMode aurora.Model, addr string, bosonAddress boson.Address, p
 		return nil, err
 	}
 
-	var oracleChain *oracle.ChainOracle
-	_, oracleChain, err = InitChain(
-		p2pCtx,
-		logger,
-		o.OracleEndpoint,
-		o.OracleContractAddress,
-	)
-	if err != nil {
-		return nil, err
-	}
-	// var overlayEthAddress common.Address
-	// var chainID int64
-	// var transactionService transaction.Service
-	// var chequebookFactory chequebook.Factory
-	// var chequebookService chequebook.Service
-	// var chequeStore chequebook.ChequeStore
-	// var cashoutService chequebook.CashoutService
-
-	// if o.SwapEnable {
-
-	//	b.ethClientCloser = swapBackend.Close
-	//
-	//	chequebookFactory, err = InitChequebookFactory(
-	//		logger,
-	//		swapBackend,
-	//		chainID,
-	//		transactionService,
-	//		o.SwapFactoryAddress,
-	//	)
-	//	if err != nil {
-	//		return nil, err
-	//	}
-	//
-	//	if err = chequebookFactory.VerifyBytecode(p2pCtx); err != nil {
-	//		return nil, fmt.Errorf("factory fail: %w", err)
-	//	}
-	//
-	//	chequebookService, err = InitChequebookService(
-	//		p2pCtx,
-	//		logger,
-	//		stateStore,
-	//		signer,
-	//		chainID,
-	//		swapBackend,
-	//		overlayEthAddress,
-	//		transactionService,
-	//		chequebookFactory,
-	//		o.SwapInitialDeposit,
-	//	)
-	//	if err != nil {
-	//		return nil, err
-	//	}
-	//
-	//	chequeStore, cashoutService = initChequeStoreCashout(
-	//		stateStore,
-	//		swapBackend,
-	//		chequebookFactory,
-	//		chainID,
-	//		overlayEthAddress,
-	//		transactionService,
-	//	)
-	// }
-
 	addressBook := addressbook.New(stateStore)
 	lightNodes := lightnode.NewContainer(bosonAddress)
 	bootNodes := bootnode.NewContainer(bosonAddress)
@@ -263,8 +201,23 @@ func NewAurora(nodeMode aurora.Model, addr string, bosonAddress boson.Address, p
 		NodeMode:       nodeMode,
 		LightNodeLimit: o.LightNodeMaxPeers,
 	})
+
 	if err != nil {
 		return nil, fmt.Errorf("p2p service: %w", err)
+	}
+
+	oracleChain, settlement, apiInterface, commonChain, err := InitChain(
+		p2pCtx,
+		logger,
+		o.OracleEndpoint,
+		o.OracleContractAddress,
+		stateStore,
+		signer,
+		o.TrafficEnable,
+		o.TrafficContractAddr,
+		p2ps)
+	if err != nil {
+		return nil, err
 	}
 	b.p2pService = p2ps
 
@@ -307,64 +260,17 @@ func NewAurora(nodeMode aurora.Model, addr string, bosonAddress boson.Address, p
 		}
 	}
 
-	// var settlement settlement.Interface
-	// var swapService *swap.Service
+	paymentThreshold := new(big.Int).SetUint64(256 * 4)
+	paymentTolerance := new(big.Int).Mul(paymentThreshold, new(big.Int).SetUint64(32))
 
-	// if o.SwapEnable {
-	//	swapService, err = InitSwap(
-	//		p2ps,
-	//		logger,
-	//		stateStore,
-	//		networkID,
-	//		overlayEthAddress,
-	//		chequebookService,
-	//		chequeStore,
-	//		cashoutService,
-	//	)
-	//	if err != nil {
-	//		return nil, err
-	//	}
-	//	settlement = swapService
-	// } else {
-	//	pseudosettleService := pseudosettle.New(p2ps, logger, stateStore)
-	//	if err = p2ps.AddProtocol(pseudosettleService.Protocol()); err != nil {
-	//		return nil, fmt.Errorf("pseudosettle service: %w", err)
-	//	}
-	//	settlement = pseudosettleService
-	// }
-
-	// paymentThreshold, ok := new(big.Int).SetString(o.PaymentThreshold, 10)
-	// if !ok {
-	//	return nil, fmt.Errorf("invalid payment threshold: %s", paymentThreshold)
-	// }
-	// pricing := pricing.New(p2ps, logger, paymentThreshold)
-	// if err = p2ps.AddProtocol(pricing.Protocol()); err != nil {
-	//	return nil, fmt.Errorf("pricing service: %w", err)
-	// }
-
-	// paymentTolerance, ok := new(big.Int).SetString(o.PaymentTolerance, 10)
-	// if !ok {
-	//	return nil, fmt.Errorf("invalid payment tolerance: %s", paymentTolerance)
-	// }
-	// paymentEarly, ok := new(big.Int).SetString(o.PaymentEarly, 10)
-	// if !ok {
-	//	return nil, fmt.Errorf("invalid payment early: %s", paymentEarly)
-	// }
-	// acc, err := accounting.NewAccounting(
-	//	paymentThreshold,
-	//	paymentTolerance,
-	//	paymentEarly,
-	//	logger,
-	//	stateStore,
-	//	settlement,
-	//	pricing,
-	// )
-	// if err != nil {
-	//	return nil, fmt.Errorf("accounting: %w", err)
-	// }
-
-	// settlement.SetNotifyPaymentFunc(acc.AsyncNotifyPayment)
-	// pricing.SetPaymentThresholdObserver(acc)
+	acc := accounting.NewAccounting(
+		paymentTolerance,
+		paymentThreshold,
+		logger,
+		stateStore,
+		settlement,
+	)
+	settlement.SetNotifyPaymentFunc(acc.NotifyPayment)
 
 	metricsDB, err := shed.NewDBWrap(stateStore.DB())
 	if err != nil {
@@ -398,16 +304,10 @@ func NewAurora(nodeMode aurora.Model, addr string, bosonAddress boson.Address, p
 		logger.Debugf("p2p address: %s", addr)
 	}
 
-	route := routetab.New(bosonAddress, p2pCtx, p2ps, kad, stateStore, logger)
+	route := routetab.New(bosonAddress, p2pCtx, p2ps, p2ps, addressBook, networkID, lightNodes, kad, stateStore, logger, routetab.Options{Alpha: o.RouteAlpha})
 	if err = p2ps.AddProtocol(route.Protocol()); err != nil {
 		return nil, fmt.Errorf("routetab service: %w", err)
 	}
-	route.SetConfig(routetab.Config{
-		AddressBook: addressBook,
-		NetworkID:   networkID,
-		LightNodes:  lightNodes,
-		Stream:      p2ps,
-	})
 
 	p2ps.ApplyRoute(bosonAddress, route, nodeMode)
 
@@ -426,7 +326,7 @@ func NewAurora(nodeMode aurora.Model, addr string, bosonAddress boson.Address, p
 	}
 	b.localstoreCloser = storer
 
-	retrieve := retrieval.New(bosonAddress, p2ps, route, storer, nodeMode.IsFull(), logger, tracer)
+	retrieve := retrieval.New(bosonAddress, p2ps, route, storer, nodeMode.IsFull(), logger, tracer, acc)
 	if err = p2ps.AddProtocol(retrieve.Protocol()); err != nil {
 		return nil, fmt.Errorf("retrieval service: %w", err)
 	}
@@ -447,22 +347,24 @@ func NewAurora(nodeMode aurora.Model, addr string, bosonAddress boson.Address, p
 	storer.WithChunkInfo(chunkInfo)
 	retrieve.Config(chunkInfo)
 
-	// multiResolver := multiresolver.NewMultiResolver(
-	//	multiresolver.WithConnectionConfigs(o.ResolverConnectionCfgs),
-	//	multiresolver.WithLogger(o.Logger),
-	// )
-	// b.resolverCloser = multiResolver
+	multiResolver := multiresolver.NewMultiResolver(
+		multiresolver.WithConnectionConfigs(o.ResolverConnectionCfgs),
+		multiresolver.WithLogger(o.Logger),
+	)
+	b.resolverCloser = multiResolver
 
 	var apiService api.Service
 	if o.APIAddr != "" {
 		// API server
-		apiService = api.New(ns, nil, bosonAddress, chunkInfo, traversalService, pinningService, authenticator, logger, tracer, api.Options{
-			CORSAllowedOrigins: o.CORSAllowedOrigins,
-			GatewayMode:        o.GatewayMode,
-			WsPingPeriod:       60 * time.Second,
-			BufferSizeMul:      o.ApiBufferSizeMul,
-			Restricted:         o.Restricted,
-		})
+		apiService = api.New(ns, multiResolver, bosonAddress, chunkInfo, traversalService, pinningService,
+			authenticator, logger, tracer, apiInterface, commonChain, oracleChain,
+			api.Options{
+				CORSAllowedOrigins: o.CORSAllowedOrigins,
+				GatewayMode:        o.GatewayMode,
+				WsPingPeriod:       60 * time.Second,
+				BufferSizeMul:      o.ApiBufferSizeMul,
+				Restricted:         o.Restricted,
+			})
 		apiListener, err := net.Listen("tcp", o.APIAddr)
 		if err != nil {
 			return nil, fmt.Errorf("api listener: %w", err)
@@ -515,6 +417,9 @@ func NewAurora(nodeMode aurora.Model, addr string, bosonAddress boson.Address, p
 
 		// inject dependencies and configure full debug api http path routes
 		debugAPIService.Configure(p2ps, pingPong, kad, lightNodes, bootNodes, storer, route, chunkInfo, retrieve)
+		if apiInterface != nil {
+			debugAPIService.MustRegisterTraffic(apiInterface)
+		}
 	}
 
 	if err := kad.Start(p2pCtx); err != nil {

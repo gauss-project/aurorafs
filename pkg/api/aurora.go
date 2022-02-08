@@ -6,6 +6,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"github.com/ethereum/go-ethereum/common"
 	"io"
 	"mime"
 	"net/http"
@@ -13,6 +14,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/ethersphere/langos"
@@ -26,6 +28,11 @@ import (
 	"github.com/gauss-project/aurorafs/pkg/storage"
 	"github.com/gauss-project/aurorafs/pkg/tracing"
 	"github.com/gorilla/mux"
+)
+
+var (
+	ErrNotFound    = errors.New("manifest: not found")
+	ErrServerError = errors.New("manifest: ServerError")
 )
 
 func (s *server) auroraUploadHandler(w http.ResponseWriter, r *http.Request) {
@@ -50,6 +57,10 @@ func (s *server) auroraUploadHandler(w http.ResponseWriter, r *http.Request) {
 // auroraUploadResponse is returned when an HTTP request to upload a file or collection is successful
 type auroraUploadResponse struct {
 	Reference boson.Address `json:"reference"`
+}
+
+type auroraRegisterResponse struct {
+	Hash common.Hash `json:"hash"`
 }
 
 // fileUploadHandler uploads the file and its metadata supplied in the file body and
@@ -351,7 +362,6 @@ func (s *server) downloadHandler(w http.ResponseWriter, r *http.Request, referen
 	reader, l, err := joiner.New(r.Context(), s.storer, reference)
 	if err != nil {
 		if errors.Is(err, storage.ErrNotFound) {
-			s.chunkInfo.Init(r.Context(), nil, sctx.GetRootCID(r.Context()))
 			logger.Debugf("api download: not found %s: %v", reference, err)
 			logger.Error("api download: not found")
 			jsonhttp.NotFound(w, nil)
@@ -390,10 +400,18 @@ type auroraListResponse struct {
 	FileSize  int                 `json:"fileSize"`
 	PinState  bool                `json:"pinState"`
 	BitVector aurora.BitVectorApi `json:"bitVector"`
+	Register  bool                `json:"register"`
+	Manifest  *ManifestNode       `json:"manifest"`
 }
 
 // auroraListHandler
-func (s *server) auroraListHandler(w http.ResponseWriter, _ *http.Request) {
+func (s *server) auroraListHandler(w http.ResponseWriter, r *http.Request) {
+	var wg sync.WaitGroup
+	pathVar := ""
+	depth := 1
+	if r.URL.Query().Get("recursive") != "" {
+		depth = -1
+	}
 	responseList := make([]auroraListResponse, 0)
 	fileListInfo, addressList := s.chunkInfo.GetFileList(s.overlay)
 
@@ -402,7 +420,6 @@ func (s *server) auroraListHandler(w http.ResponseWriter, _ *http.Request) {
 		if ok {
 			pinned, err := s.pinning.HasPin(v)
 			if err != nil {
-				s.logger.Debugf("aurora list: check hash %s pinning err: %v", v, err)
 				s.logger.Errorf("aurora list: check hash %s pinning err", v)
 				continue
 			}
@@ -413,6 +430,8 @@ func (s *server) auroraListHandler(w http.ResponseWriter, _ *http.Request) {
 				FileSize:  info.FileSize,
 				PinState:  pinned,
 				BitVector: info.Bitvector,
+				Register:  false,
+				Manifest:  nil,
 			})
 		}
 	}
@@ -422,7 +441,59 @@ func (s *server) auroraListHandler(w http.ResponseWriter, _ *http.Request) {
 		closer, _ := responseList[i].FileHash.Closer(zeroAddress, responseList[j].FileHash)
 		return closer
 	})
+	wg.Add(len(responseList))
 
+	type ordHash struct {
+		ord  int
+		hash boson.Address
+	}
+	var l sync.Mutex
+	ch := make(chan ordHash, 30)
+	getChainState := func(ctx context.Context, i int, rootCid boson.Address) {
+		defer wg.Done()
+		if v, ok := s.auroraChainSate.Load(rootCid.String()); ok {
+			l.Lock()
+			responseList[i].Register = v.(bool)
+			l.Unlock()
+			return
+		}
+
+		b, err := s.oracleChain.GetRegisterState(r.Context(), rootCid, s.overlay)
+		if err != nil {
+			s.logger.Errorf("aurora list: GetRegisterState failed %v", err.Error())
+		}
+
+		if err == nil && b {
+			s.auroraChainSate.Store(rootCid.String(), true)
+			l.Lock()
+			responseList[i].Register = true
+			l.Unlock()
+		} else {
+			s.auroraChainSate.Store(rootCid.String(), false)
+		}
+	}
+
+	go func() {
+		for v := range ch {
+			go getChainState(r.Context(), v.ord, v.hash)
+		}
+	}()
+
+	for i, v := range responseList {
+		response := v
+		maniFest, err := s.manifestView(r.Context(), v.FileHash.String(), pathVar, depth)
+		if err == nil && maniFest != nil {
+			response.Manifest = maniFest
+		}
+		responseList[i] = response
+	}
+	for i, v := range responseList {
+		hashChain := ordHash{ord: i, hash: v.FileHash}
+		ch <- hashChain
+	}
+
+	close(ch)
+	wg.Wait()
 	jsonhttp.OK(w, responseList)
 }
 
@@ -457,25 +528,15 @@ type ManifestNode struct {
 	Nodes     map[string]*ManifestNode `json:"sub,omitempty"`
 }
 
-// manifestViewHandler
-func (s *server) manifestViewHandler(w http.ResponseWriter, r *http.Request) {
-	logger := tracing.NewLoggerWithTraceID(r.Context(), s.logger)
+func (s *server) manifestView(ctx context.Context, nameOrHex, pathVar string, depth int) (*ManifestNode, error) {
+	logger := tracing.NewLoggerWithTraceID(ctx, s.logger)
 	ls := loadsave.NewReadonly(s.storer)
-
-	nameOrHex := mux.Vars(r)["address"]
-	pathVar := mux.Vars(r)["path"]
-
-	depth := 1
-	if r.URL.Query().Get("recursive") != "" {
-		depth = -1
-	}
 
 	address, err := s.resolveNameOrAddress(nameOrHex)
 	if err != nil {
 		logger.Debugf("manifest view: parse address %s: %v", nameOrHex, err)
 		logger.Error("manifest view: parse address")
-		jsonhttp.NotFound(w, nil)
-		return
+		return nil, ErrNotFound
 	}
 
 	// read manifest entry
@@ -486,11 +547,9 @@ func (s *server) manifestViewHandler(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		logger.Debugf("aurora download: not manifest %s: %v", address, err)
 		logger.Errorf("aurora download: not manifest %s", address)
-		jsonhttp.NotFound(w, nil)
-		return
+		return nil, ErrNotFound
 	}
 
-	ctx := r.Context()
 	rootNode := &ManifestNode{
 		Type:  manifest.Directory.String(),
 		Nodes: make(map[string]*ManifestNode),
@@ -566,16 +625,14 @@ func (s *server) manifestViewHandler(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if err := m.IterateDirectories(ctx, []byte(pathVar), depth, fn); err != nil {
-			jsonhttp.InternalServerError(w, err)
-			return
+			return nil, ErrServerError
 		}
 	} else {
 		e, err := m.Lookup(ctx, pathVar)
 		if err != nil {
 			logger.Debugf("manifest view: invalid filename: %v", err)
 			logger.Error("manifest view: invalid filename")
-			jsonhttp.NotFound(w, nil)
-			return
+			return nil, ErrNotFound
 		}
 
 		filename := e.Metadata()[manifest.EntryMetadataFilenameKey]
@@ -590,8 +647,7 @@ func (s *server) manifestViewHandler(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			logger.Debugf("manifest view: file not found: %v", err)
 			logger.Error("manifest view: file not found")
-			jsonhttp.NotFound(w, nil)
-			return
+			return nil, ErrNotFound
 		}
 
 		rootNode.Name = e.Metadata()[manifest.EntryMetadataDirnameKey]
@@ -607,7 +663,7 @@ func (s *server) manifestViewHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if indexDocumentSuffixKey, ok := manifestMetadataLoad(ctx, m, manifest.RootPath, manifest.WebsiteIndexDocumentSuffixKey); ok {
-		_, err := m.Lookup(r.Context(), indexDocumentSuffixKey)
+		_, err := m.Lookup(ctx, indexDocumentSuffixKey)
 		if err != nil {
 			logger.Debugf("manifest view: invalid index %s/%s: %v", address, indexDocumentSuffixKey, err)
 			logger.Error("manifest view: invalid index")
@@ -619,5 +675,124 @@ func (s *server) manifestViewHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	return rootNode, nil
+}
+
+// manifestViewHandler
+func (s *server) manifestViewHandler(w http.ResponseWriter, r *http.Request) {
+
+	nameOrHex := mux.Vars(r)["address"]
+	pathVar := mux.Vars(r)["path"]
+
+	depth := 1
+	if r.URL.Query().Get("recursive") != "" {
+		depth = -1
+	}
+
+	rootNode, err := s.manifestView(r.Context(), nameOrHex, pathVar, depth)
+	if errors.Is(err, ErrNotFound) {
+		jsonhttp.NotFound(w, nil)
+	}
+	if errors.Is(err, ErrServerError) {
+		jsonhttp.InternalServerError(w, nil)
+	}
+
 	jsonhttp.OK(w, rootNode)
+}
+
+func (s *server) fileRegister(w http.ResponseWriter, r *http.Request) {
+	apiName := "fileRegister"
+	logger := tracing.NewLoggerWithTraceID(r.Context(), s.logger)
+	nameOrHex := mux.Vars(r)["address"]
+	address, err := s.resolveNameOrAddress(nameOrHex)
+	defer s.tranProcess.Delete(apiName + address.String())
+
+	if err != nil {
+		logger.Debugf("aurora fileRegister: parse address %s: %v", nameOrHex, err)
+		logger.Error("aurora fileRegister: parse address")
+		jsonhttp.NotFound(w, nil)
+		return
+	}
+	if _, ok := s.tranProcess.Load(apiName + address.String()); ok {
+		logger.Error("parse address %s under processing", nameOrHex)
+		jsonhttp.InternalServerError(w, fmt.Sprintf("parse address %s under processing", nameOrHex))
+		return
+	}
+	s.tranProcess.Store(apiName+address.String(), "-")
+	overlays := s.oracleChain.GetNodesFromCid(address.Bytes())
+	for _, v := range overlays {
+		if s.overlay.Equal(v) {
+			jsonhttp.Forbidden(w, fmt.Sprintf("address:%v Already Register", address.String()))
+			return
+		}
+	}
+
+	hash, err := s.oracleChain.RegisterCidAndNode(r.Context(), address, s.overlay)
+	if err != nil {
+		logger.Error("aurora fileRegister failed: %v ", err)
+		jsonhttp.InternalServerError(w, fmt.Sprintf("aurora fileRegister failed: %v ", err))
+		return
+	}
+
+	trans := TransactionResponse{
+		Hash:     hash,
+		Address:  address,
+		Register: true,
+	}
+	s.transactionChan <- trans
+
+	jsonhttp.OK(w,
+		auroraRegisterResponse{
+			Hash: hash,
+		})
+}
+
+func (s *server) fileRegisterRemove(w http.ResponseWriter, r *http.Request) {
+	apiName := "fileRegisterRemove"
+	logger := tracing.NewLoggerWithTraceID(r.Context(), s.logger)
+	nameOrHex := mux.Vars(r)["address"]
+	address, err := s.resolveNameOrAddress(nameOrHex)
+	if err != nil {
+		logger.Error("aurora fileRegisterRemove: parse address")
+		jsonhttp.NotFound(w, nil)
+		return
+	}
+	defer s.tranProcess.Delete(apiName + address.String())
+	if _, ok := s.tranProcess.Load(apiName + address.String()); ok {
+		logger.Error("parse address %s under processing", nameOrHex)
+		jsonhttp.InternalServerError(w, fmt.Sprintf("parse address %s under processing", nameOrHex))
+		return
+	}
+	s.tranProcess.Store(apiName+address.String(), "-")
+
+	overlays := s.oracleChain.GetNodesFromCid(address.Bytes())
+	isDel := false
+	for _, v := range overlays {
+		if s.overlay.Equal(v) {
+			isDel = true
+			break
+		}
+	}
+	if !isDel {
+		jsonhttp.Forbidden(w, fmt.Sprintf("address:%v Already Remove", address.String()))
+	}
+
+	hash, err := s.oracleChain.RemoveCidAndNode(r.Context(), address, s.overlay)
+	if err != nil {
+		logger.Error("aurora fileRegisterRemove failed: %v ", err)
+		jsonhttp.InternalServerError(w, fmt.Sprintf("aurora fileRegisterRemove failed: %v ", err))
+		return
+	}
+
+	trans := TransactionResponse{
+		Hash:     hash,
+		Address:  address,
+		Register: false,
+	}
+	s.transactionChan <- trans
+
+	jsonhttp.OK(w,
+		auroraRegisterResponse{
+			Hash: hash,
+		})
 }

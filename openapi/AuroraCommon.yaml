@@ -1,6 +1,6 @@
 openapi: 3.0.3
 info:
-  version: 1.2.0
+  version: 1.2.2
   title: Common Data Types
   description: |
 
@@ -181,6 +181,12 @@ components:
       properties:
         reference:
           $ref: "#/components/schemas/BosonReference"
+    HashResponse:
+      type: object
+      properties:
+        hash:
+          type: string
+          example: "36b7efd913ca4cf880b8eeac5093fa27b0825906c600685b6abdd6566e6cfe8f"
 
     ManifestViewResponse:
       type: object
@@ -287,6 +293,8 @@ components:
           type: boolean
         bootNodeMode:
           type: boolean
+        auth:
+          type: boolean
 
     BosonAddress:
       type: string
@@ -328,6 +336,7 @@ components:
         - $ref: "#/components/schemas/BosonEncryptedReference"
         - $ref: "#/components/schemas/DomainName"
 
+
     ChunkSourceReference:
       type: object
       properties:
@@ -335,6 +344,40 @@ components:
           $ref: "#/components/schemas/BosonAddress"
         chunkCount:
           $ref: "#/components/schemas/DataCount"
+
+    ChequeTrafficInfo:
+      type: object
+      properties:
+        balance:
+          type: integer
+        availableBalance:
+          type: integer
+        totalSendTraffic:
+          type: integer
+        receivedTraffic:
+          type: integer
+
+    ChequeTrafficCheque:
+      type: object
+      properties:
+        peer:
+          $ref: "#/components/schemas/BosonAddress"
+        outstandingTraffic:
+          type: integer
+        sendTraffic:
+          type: integer
+        receivedTraffic:
+          type: integer
+        total:
+          type: integer
+        unCashed:
+          type: integer
+
+    ChequeTrafficHash:
+        type: object
+        properties:
+          hash:
+            $ref: "#/components/schemas/BosonAddress"
 
     Uid:
       type: integer

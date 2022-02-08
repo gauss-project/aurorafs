@@ -83,6 +83,10 @@ func TestTable_Gc(t *testing.T) {
 	if len(list) != 1 || !list[0].Equal(p2) {
 		t.Fatalf("expect length=1 and  p0 next equal p2")
 	}
+	list = table.GetNextHop(p0, p2)
+	if len(list) != 0 {
+		t.Fatalf("expect length=0")
+	}
 	list = table.GetNextHop(p1)
 	if len(list) != 1 || !list[0].Equal(p2) {
 		t.Fatalf("expect length=1 and  p1 next equal p2")

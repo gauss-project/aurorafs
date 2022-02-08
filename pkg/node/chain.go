@@ -5,15 +5,21 @@ import (
 	"fmt"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethclient"
+	"github.com/gauss-project/aurorafs/pkg/crypto"
 	"github.com/gauss-project/aurorafs/pkg/logging"
 	"github.com/gauss-project/aurorafs/pkg/p2p/libp2p"
-	"github.com/gauss-project/aurorafs/pkg/settlement/swap"
-	"github.com/gauss-project/aurorafs/pkg/settlement/swap/chequebook"
-	"github.com/gauss-project/aurorafs/pkg/settlement/swap/oracle"
-	"github.com/gauss-project/aurorafs/pkg/settlement/swap/swapprotocol"
+	"github.com/gauss-project/aurorafs/pkg/settlement"
+	"github.com/gauss-project/aurorafs/pkg/settlement/chain"
+	chainCommon "github.com/gauss-project/aurorafs/pkg/settlement/chain/common"
+	"github.com/gauss-project/aurorafs/pkg/settlement/chain/oracle"
+	chainTraffic "github.com/gauss-project/aurorafs/pkg/settlement/chain/traffic"
+	"github.com/gauss-project/aurorafs/pkg/settlement/chain/transaction"
+	"github.com/gauss-project/aurorafs/pkg/settlement/pseudosettle"
+	"github.com/gauss-project/aurorafs/pkg/settlement/traffic"
+	chequePkg "github.com/gauss-project/aurorafs/pkg/settlement/traffic/cheque"
+	"github.com/gauss-project/aurorafs/pkg/settlement/traffic/trafficprotocol"
 	"github.com/gauss-project/aurorafs/pkg/storage"
 )
-
 
 // InitChain will initialize the Ethereum backend at the given endpoint and
 // set up the Transacton Service to interact with it using the provided signer.
@@ -21,62 +27,79 @@ func InitChain(
 	ctx context.Context,
 	logger logging.Logger,
 	endpoint string,
-	contractAddress string,
-) (*ethclient.Client, *oracle.ChainOracle, error) {
-
+	oracleContractAddress string,
+	stateStore storage.StateStorer,
+	signer crypto.Signer,
+	trafficEnable bool,
+	trafficContractAddr string,
+	p2pService *libp2p.Service) (chain.Resolver, settlement.Interface, traffic.ApiInterface, chain.Common, error) {
 	backend, err := ethclient.Dial(endpoint)
 	if err != nil {
-		return nil, nil, fmt.Errorf("dial eth client: %w", err)
+		return nil, nil, nil, nil, fmt.Errorf("dial eth client: %w", err)
 	}
 
-	_, err = backend.ChainID(ctx)
+	chainID, err := backend.ChainID(ctx)
 	if err != nil {
-		logger.Infof("could not connect to backend at %v. In a swap-enabled network a working blockchain node (for goerli network in production) is required. Check your node or specify another node using --swap-endpoint.", endpoint)
-		return nil, nil, fmt.Errorf("get chain id: %w", err)
+		logger.Infof("could not connect to backend at %v. In a swap-enabled network a working blockchain node (for goerli network in production) is required. Check your node or specify another node using --traffic-endpoint.", endpoint)
+		return nil, nil, nil, nil, fmt.Errorf("get chain id: %w", err)
 	}
-	if contractAddress == "" {
-		return nil, nil, fmt.Errorf("oracle contract address is empty")
+	if oracleContractAddress == "" {
+		return nil, nil, nil, nil, fmt.Errorf("oracle contract address is empty")
 	}
-	oracleServer, err := oracle.NewServer(logger, backend, contractAddress)
+	oracleServer, err := oracle.NewServer(logger, backend, oracleContractAddress, signer)
 	if err != nil {
-		return nil, nil, fmt.Errorf("new oracle service: %w", err)
+		return nil, nil, nil, nil, fmt.Errorf("new oracle service: %w", err)
 	}
-	return backend, oracleServer, nil
+
+	address, err := signer.EthereumAddress()
+	logger.Infof("address  %s", address.String())
+	if err != nil {
+		return nil, nil, nil, nil, fmt.Errorf("chain address: %w", err)
+	}
+	transactionService, err := transaction.NewService(logger, backend, signer, stateStore, chainID)
+	if err != nil {
+		return nil, nil, nil, nil, fmt.Errorf("new transaction service: %w", err)
+	}
+	cc, err := chainCommon.New(logger, signer, chainID, endpoint)
+	if err != nil {
+		return nil, nil, nil, nil, fmt.Errorf("new common serveice: %v", err)
+	}
+	if !trafficEnable {
+		service := pseudosettle.New(p2pService, logger, stateStore, address)
+		if err = service.Init(); err != nil {
+			return nil, nil, nil, nil, fmt.Errorf("InitTraffic:: %w", err)
+		}
+
+		return oracleServer, service, service, cc, nil
+	}
+	trafficChainService, err := chainTraffic.NewServer(logger, chainID, backend, signer, transactionService, trafficContractAddr)
+	if err != nil {
+		return nil, nil, nil, nil, fmt.Errorf("new traffic service: %w", err)
+	}
+
+	trafficService, err := InitTraffic(stateStore, address, trafficChainService, transactionService, logger, p2pService, signer, chainID.Int64(), trafficContractAddr)
+	if err != nil {
+		return nil, nil, nil, nil, err
+	}
+	err = trafficService.Init()
+	if err != nil {
+		return nil, nil, nil, nil, fmt.Errorf("InitChain: %w", err)
+	}
+
+	return oracleServer, trafficService, trafficService, cc, nil
 }
 
-
-// InitSwap will initialize and register the swap service.
-func InitSwap(
-	p2ps *libp2p.Service,
-	logger logging.Logger,
-	stateStore storage.StateStorer,
-	networkID uint64,
-	overlayEthAddress common.Address,
-	chequebookService chequebook.Service,
-	chequeStore chequebook.ChequeStore,
-	cashoutService chequebook.CashoutService,
-) (*swap.Service, error) {
-	swapProtocol := swapprotocol.New(p2ps, logger, overlayEthAddress)
-	swapAddressBook := swap.NewAddressbook(stateStore)
-
-	swapService := swap.New(
-		swapProtocol,
-		logger,
-		stateStore,
-		chequebookService,
-		chequeStore,
-		swapAddressBook,
-		networkID,
-		cashoutService,
-		p2ps,
-	)
-
-	swapProtocol.SetSwap(swapService)
-
-	err := p2ps.AddProtocol(swapProtocol.Protocol())
-	if err != nil {
-		return nil, err
+func InitTraffic(store storage.StateStorer, address common.Address, trafficChainService chain.Traffic,
+	transactionService chain.Transaction, logger logging.Logger, p2pService *libp2p.Service, signer crypto.Signer, chainID int64, trafficContractAddr string) (*traffic.Service, error) {
+	chequeStore := chequePkg.NewChequeStore(store, address, chequePkg.RecoverCheque, chainID)
+	cashOut := chequePkg.NewCashoutService(store, transactionService, trafficChainService, chequeStore, common.HexToAddress(trafficContractAddr))
+	addressBook := traffic.NewAddressBook(store)
+	protocol := trafficprotocol.New(p2pService, logger, address)
+	if err := p2pService.AddProtocol(protocol.Protocol()); err != nil {
+		return nil, fmt.Errorf("traffic server :%v", err)
 	}
-
-	return swapService, nil
+	chequeSigner := chequePkg.NewChequeSigner(signer, chainID)
+	trafficService := traffic.New(logger, address, store, trafficChainService, chequeStore, cashOut, p2pService, addressBook, chequeSigner, protocol, chainID)
+	protocol.SetTraffic(trafficService)
+	return trafficService, nil
 }

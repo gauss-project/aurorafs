@@ -18,15 +18,8 @@ COMMIT_TIME ?= "$(shell git show -s --format=%ct $(CLEAN_COMMIT) || true)"
 LDFLAGS ?= -s -w -X github.com/gauss-project/aurorafs.commitHash="$(COMMIT_HASH)" -X github.com/gauss-project/aurorafs.commitTime="$(COMMIT_TIME)"
 
 GOOS ?= "$(shell go env GOOS)"
-ifeq ($(GOOS),"windows")
-DATABASE ?= leveldb
-BINARY_NAME ?= aurora.exe
-else
-DATABASE ?= wiredtiger
-BINARY_NAME ?= aurora
-endif
-
 SHELL ?= bash
+DATABASE ?= wiredtiger
 
 .PHONY: all
 all: build lint vet test-race binary
@@ -35,11 +28,21 @@ all: build lint vet test-race binary
 binary-wt: DATABASE=wiredtiger
 binary-wt: binary
 
+.PHONY: binary-ldb
+binary-wt: DATABASE=leveldb
+binary-wt: binary
+
 .PHONY: binary
 binary: ./install-deps.sh
 binary: dist FORCE
 	$(GO) version
-	$(GO) build -tags $(DATABASE) -trimpath -ldflags "$(LDFLAGS)" -o dist/$(BINARY_NAME) ./cmd/aurorafs
+ifeq ("$(GOOS)", "windows")
+	set CGO_ENABLED=0
+	$(GO) build -tags leveldb -trimpath -ldflags "$(LDFLAGS)" -o dist/aurora.exe ./cmd/aurorafs
+else
+	export CGO_ENABLED=0
+	$(GO) build -tags $(DATABASE) -trimpath -ldflags "$(LDFLAGS)" -o dist/aurora ./cmd/aurorafs
+endif
 
 dist:
 	mkdir $@

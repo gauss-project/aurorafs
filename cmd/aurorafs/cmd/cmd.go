@@ -45,23 +45,19 @@ const (
 	// optionNamePaymentThreshold          = "payment-threshold"
 	// optionNamePaymentTolerance          = "payment-tolerance"
 	// optionNamePaymentEarly              = "payment-early"
-	// optionNameResolverEndpoints = "resolver-options"
+	optionNameResolverEndpoints = "resolver-options"
 	optionNameBootnodeMode = "bootnode-mode"
 	optionNameFullNode     = "full-node"
 	optionNameGatewayMode  = "gateway-mode"
-	// optionNameClefSignerEnable          = "clef-signer-enable"
-	// optionNameClefSignerEndpoint        = "clef-signer-endpoint"
-	// optionNameClefSignerEthereumAddress = "clef-signer-ethereum-address"
-	// optionNameSwapEndpoint              = "swap-endpoint"
-	// optionNameSwapFactoryAddress        = "swap-factory-address"
-	// optionNameSwapInitialDeposit        = "swap-initial-deposit"
-	// optionNameSwapEnable                = "swap-enable"
+	optionNameTrafficContractAddr = "traffic-contract-addr"
+	optionNameTrafficEnable       = "traffic-enable"
 	optionNameBinMaxPeers        = "bin-max-peers"
 	optionNameLightMaxPeers      = "light-max-peers"
 	optionNameAllowPrivateCIDRs  = "allow-private-cidrs"
 	optionNameRestrictedAPI      = "restricted"
 	optionNameTokenEncryptionKey = "token-encryption-key"
 	optionNameAdminPasswordHash  = "admin-password"
+	optionNameRouteAlpha         = "route-alpha"
 )
 
 func init() {
@@ -216,19 +212,14 @@ func (c *command) setAllFlags(cmd *cobra.Command) {
 	cmd.Flags().String(optionWelcomeMessage, "", "send a welcome message string during handshakes")
 	cmd.Flags().Bool(optionNameGlobalPinningEnabled, false, "enable global pinning")
 	cmd.Flags().Int(optionNameApiFileBufferMultiple, 8, "When the API downloads files, the multiple of the buffer (256kb for files less than 10mb and 512kb for others), the default multiple is 8")
-	// cmd.Flags().String(optionNamePaymentThreshold, "10000000000000", "threshold in BZZ where you expect to get paid from your peers")
-	// cmd.Flags().String(optionNamePaymentTolerance, "50000000000000", "excess debt above payment threshold in BZZ where you disconnect from your peer")
-	// cmd.Flags().String(optionNamePaymentEarly, "1000000000000", "amount in BZZ below the peers payment threshold when we initiate settlement")
-	// cmd.Flags().StringSlice(optionNameResolverEndpoints, []string{}, "ENS compatible API endpoint for a TLD and with contract address, can be repeated, format [tld:][contract-addr@]url")
+	//cmd.Flags().String(optionNamePaymentThreshold, "10000000000000", "threshold in BZZ where you expect to get paid from your peers")
+	//cmd.Flags().String(optionNamePaymentTolerance, "50000000000000", "excess debt above payment threshold in BZZ where you disconnect from your peer")
+	//cmd.Flags().String(optionNamePaymentEarly, "1000000000000", "amount in BZZ below the peers payment threshold when we initiate settlement")
+	cmd.Flags().StringSlice(optionNameResolverEndpoints, []string{}, "ENS compatible API endpoint for a TLD and with contract address, can be repeated, format [tld:][contract-addr@]url")
 	cmd.Flags().Bool(optionNameGatewayMode, false, "disable a set of sensitive features in the api")
 	cmd.Flags().Bool(optionNameBootnodeMode, false, "cause the node to always accept incoming connections")
-	// cmd.Flags().Bool(optionNameClefSignerEnable, false, "enable clef signer")
-	// cmd.Flags().String(optionNameClefSignerEndpoint, "", "clef signer endpoint")
-	// cmd.Flags().String(optionNameClefSignerEthereumAddress, "", "ethereum address to use from clef signer")
-	// cmd.Flags().String(optionNameSwapEndpoint, "http://localhost:8545", "swap ethereum blockchain endpoint")
-	// cmd.Flags().String(optionNameSwapFactoryAddress, "", "swap factory address")
-	// cmd.Flags().String(optionNameSwapInitialDeposit, "100000000000000000", "initial deposit if deploying a new chequebook")
-	// cmd.Flags().Bool(optionNameSwapEnable, true, "enable swap")
+	cmd.Flags().String(optionNameTrafficContractAddr, "", "link to traffic contract")
+	cmd.Flags().Bool(optionNameTrafficEnable, false, "enable traffic")
 	cmd.Flags().Bool(optionNameFullNode, true, "full node")
 	cmd.Flags().Int(optionNameLightMaxPeers, 100, "connected light node max limit")
 	cmd.Flags().Int(optionNameBinMaxPeers, 20, "kademlia every k bucket connected peers max limit")
@@ -236,6 +227,7 @@ func (c *command) setAllFlags(cmd *cobra.Command) {
 	cmd.Flags().Bool(optionNameRestrictedAPI, false, "enable permission check on the http APIs")
 	cmd.Flags().String(optionNameTokenEncryptionKey, "", "admin username to get the security token")
 	cmd.Flags().String(optionNameAdminPasswordHash, "", "bcrypt hash of the admin password to get the security token")
+	cmd.Flags().Int32(optionNameRouteAlpha, 2, "each find route will return alpha routes")
 }
 
 func newLogger(cmd *cobra.Command, verbosity string) (logging.Logger, error) {

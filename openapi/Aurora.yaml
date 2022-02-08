@@ -1,7 +1,7 @@
 openapi: 3.0.3
 
 info:
-  version: 1.2.0
+  version: 1.2.2
   title: Aurora API
   description: "A list of the currently provided Interfaces to interact with the boson, implementing file operations and sending messages"
 
@@ -385,6 +385,51 @@ paths:
         default:
           description: Default response
 
+  "/fileRegister/{reference}":
+    parameters:
+      - in: path
+        name: reference
+        schema:
+          $ref: "AuroraCommon.yaml#/components/schemas/BosonReference"
+        required: true
+        description: Boson address of content
+    post:
+      summary: "FileRegister registers the information to the chain after the file upload is successful."
+      tags:
+        - File
+        - Collection
+      responses:
+        "200":
+          description: Ok
+          content:
+            application/json:
+              schema:
+                $ref: "AuroraCommon.yaml#/components/schemas/HashResponse"
+        "404":
+          $ref: "AuroraCommon.yaml#/components/responses/404"
+        "500":
+          $ref: "AuroraCommon.yaml#/components/responses/500"
+        default:
+          description: Default response
+    delete:
+      summary: "Remove registration information from the chain."
+      tags:
+        - File
+        - Collection
+      responses:
+        "200":
+          description: Ok
+          content:
+            application/json:
+              schema:
+                $ref: "AuroraCommon.yaml#/components/schemas/HashResponse"
+        "404":
+          $ref: "AuroraCommon.yaml#/components/responses/404"
+        "500":
+          $ref: "AuroraCommon.yaml#/components/responses/500"
+        default:
+          description: Default response
+
   "/pins/{reference}":
     parameters:
       - in: path
@@ -480,6 +525,89 @@ paths:
             application/json:
               schema:
                 $ref: "AuroraCommon.yaml#/components/schemas/BosonOnlyReferencesList"
+        "403":
+          $ref: "AuroraCommon.yaml#/components/responses/GatewayForbidden"
+        "500":
+          $ref: "AuroraCommon.yaml#/components/responses/500"
+        default:
+          description: Default response
+
+  "/traffic/info":
+    get:
+      summary: Get the remaining flow and the total flow usage
+      tags:
+        - Traffic
+      responses:
+        "200":
+          description: Flow situation
+          content:
+            application/json:
+              schema:
+                $ref: "AuroraCommon.yaml#/components/schemas/ChequeTrafficInfo"
+        "403":
+          $ref: "AuroraCommon.yaml#/components/responses/GatewayForbidden"
+        "500":
+          $ref: "AuroraCommon.yaml#/components/responses/500"
+        default:
+          description: Default response
+
+  "/traffic/address":
+    get:
+      summary: Get the chain account address
+      tags:
+        - Traffic
+      responses:
+        "200":
+          description: address messages
+          content:
+            application/json:
+              schema:
+                $ref: "AuroraCommon.yaml#/components/schemas/ReferenceResponse"
+        "403":
+          $ref: "AuroraCommon.yaml#/components/responses/GatewayForbidden"
+        "500":
+          $ref: "AuroraCommon.yaml#/components/responses/500"
+        default:
+          description: Default response
+
+  "/traffic/cheques":
+    get:
+      summary: Acquire traffic interaction information of each node
+      tags:
+        - Traffic
+      responses:
+        "200":
+          description: traffic information
+          content:
+            application/json:
+              schema:
+                $ref: "AuroraCommon.yaml#/components/schemas/ChequeTrafficCheque"
+        "403":
+          $ref: "AuroraCommon.yaml#/components/responses/GatewayForbidden"
+        "500":
+          $ref: "AuroraCommon.yaml#/components/responses/500"
+        default:
+          description: Default response
+
+  "/traffic/cash/{address}":
+    get:
+      summary: cheque exchange
+      tags:
+        - Traffic
+      parameters:
+        - in: path
+          name: address
+          schema:
+            $ref: "AuroraCommon.yaml#/components/schemas/BosonReference"
+          required: true
+          description: Boson address of content
+      responses:
+        "200":
+          description: Exchange code
+          content:
+            application/json:
+              schema:
+                $ref: "AuroraCommon.yaml#/components/schemas/ChequeTrafficHash"
         "403":
           $ref: "AuroraCommon.yaml#/components/responses/GatewayForbidden"
         "500":

@@ -328,46 +328,56 @@ func (k *Kad) connectNeighbours(wg *sync.WaitGroup, peerConnChan chan<- *peerCon
 	})
 }
 
+func (k *Kad) GetAuroraAddress(overlay boson.Address) (addr *aurora.Address, err error) {
+	addr, err = k.addressBook.Get(overlay)
+	switch {
+	case errors.Is(err, addressbook.ErrNotFound):
+		k.logger.Debugf("kademlia: empty address book entry for peer %q", overlay)
+		k.knownPeers.Remove(overlay)
+		return
+	case err != nil:
+		k.logger.Debugf("kademlia: failed to get address book entry for peer %q: %v", overlay, err)
+		return
+	}
+	return
+}
+
+func (k *Kad) Connection(ctx context.Context, addr *aurora.Address) error {
+	remove := func(peer boson.Address) {
+		k.waitNext.Remove(peer)
+		k.knownPeers.Remove(peer)
+		if err := k.addressBook.Remove(peer); err != nil {
+			k.logger.Debugf("kademlia: could not remove peer %q from addressbook", peer)
+		}
+	}
+	i, err := k.connect(ctx, addr.Overlay, addr.Underlay)
+	switch {
+	case errors.Is(err, errPruneEntry):
+		k.logger.Debugf("kademlia: dial to light node with overlay %q and underlay %q", addr.Overlay, addr.Underlay)
+		remove(addr.Overlay)
+		return err
+	case errors.Is(err, errOverlayMismatch):
+		k.logger.Debugf("kademlia: overlay mismatch has occurred to an overlay %q with underlay %q", addr.Overlay, addr.Underlay)
+		remove(addr.Overlay)
+		return err
+	case err != nil:
+		k.logger.Debugf("kademlia: peer not reachable from kademlia %q: %v", addr, err)
+		k.logger.Warningf("peer not reachable when attempting to connect")
+		return err
+	}
+	k.Outbound(*i)
+	return nil
+}
+
 // connectionAttemptsHandler handles the connection attempts
 // to peers sent by the producers to the peerConnChan.
 func (k *Kad) connectionAttemptsHandler(ctx context.Context, wg *sync.WaitGroup, neighbourhoodChan, balanceChan <-chan *peerConnInfo) {
 	connect := func(peer *peerConnInfo) {
-		bzzAddr, err := k.addressBook.Get(peer.addr)
-		switch {
-		case errors.Is(err, addressbook.ErrNotFound):
-			k.logger.Debugf("kademlia: empty address book entry for peer %q", peer.addr)
-			k.knownPeers.Remove(peer.addr)
-			return
-		case err != nil:
-			k.logger.Debugf("kademlia: failed to get address book entry for peer %q: %v", peer.addr, err)
+		addr, err := k.GetAuroraAddress(peer.addr)
+		if err != nil {
 			return
 		}
-
-		remove := func(peer *peerConnInfo) {
-			k.waitNext.Remove(peer.addr)
-			k.knownPeers.Remove(peer.addr)
-			if err := k.addressBook.Remove(peer.addr); err != nil {
-				k.logger.Debugf("kademlia: could not remove peer %q from addressbook", peer.addr)
-			}
-		}
-
-		i, err := k.connect(ctx, peer.addr, bzzAddr.Underlay)
-		switch {
-		case errors.Is(err, errPruneEntry):
-			k.logger.Debugf("kademlia: dial to light node with overlay %q and underlay %q", peer.addr, bzzAddr.Underlay)
-			remove(peer)
-			return
-		case errors.Is(err, errOverlayMismatch):
-			k.logger.Debugf("kademlia: overlay mismatch has occurred to an overlay %q with underlay %q", peer.addr, bzzAddr.Underlay)
-			remove(peer)
-			return
-		case err != nil:
-			k.logger.Debugf("kademlia: peer not reachable from kademlia %q: %v", bzzAddr, err)
-			k.logger.Warningf("peer not reachable when attempting to connect")
-			return
-		}
-
-		k.Outbound(*i)
+		_ = k.Connection(ctx, addr)
 	}
 
 	var (

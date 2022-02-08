@@ -356,48 +356,49 @@ func (s *server) auroraDeleteHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	pyramid := s.chunkInfo.GetChunkPyramid(hash)
-	chunkHashes := make([]chunkinfo.PyramidCidNum, len(pyramid))
+	del := func() {
+		pyramid := s.chunkInfo.GetChunkPyramid(hash)
+		chunkHashes := make([]chunkinfo.PyramidCidNum, len(pyramid))
 
-	for i, chunk := range pyramid {
-		chunkHashes[i] = *chunk
-	}
-
-	ok := s.chunkInfo.DelFile(hash)
-	if !ok {
-		s.logger.Errorf("aurora delete: chunk info report remove %s failed", hash)
-		jsonhttp.InternalServerError(w, "aurora deleting occur error")
-		return
-	}
-
-	for _, chunk := range chunkHashes {
-		if chunk.Cid.Equal(hash) {
-			continue
+		for i, chunk := range pyramid {
+			chunkHashes[i] = *chunk
 		}
 
-		for i := 0; i < chunk.Number; i++ {
-			err = s.storer.Set(r.Context(), storage.ModeSetRemove, chunk.Cid)
-			if err != nil {
-				if errors.Is(err, driver.ErrNotFound) {
-					continue
-				}
+		for _, chunk := range chunkHashes {
+			if chunk.Cid.Equal(hash) {
+				continue
+			}
 
+			for i := 0; i < chunk.Number; i++ {
+				err = s.storer.Set(r.Context(), storage.ModeSetRemove, chunk.Cid)
+				if err != nil {
+					if errors.Is(err, driver.ErrNotFound) {
+						continue
+					}
+
+					s.logger.Debugf("aurora delete: remove chunk: %w", err)
+					s.logger.Errorf("aurora delete: remove chunk %s", chunk.Cid)
+					jsonhttp.InternalServerError(w, "aurora deleting occur error")
+					return
+				}
+			}
+		}
+
+		err = s.storer.Set(r.Context(), storage.ModeSetRemove, hash)
+		if err != nil {
+			if !errors.Is(err, driver.ErrNotFound) {
 				s.logger.Debugf("aurora delete: remove chunk: %w", err)
-				s.logger.Errorf("aurora delete: remove chunk %s", chunk.Cid)
+				s.logger.Errorf("aurora delete: remove chunk %s", hash)
 				jsonhttp.InternalServerError(w, "aurora deleting occur error")
 				return
 			}
 		}
 	}
-
-	err = s.storer.Set(r.Context(), storage.ModeSetRemove, hash)
-	if err != nil {
-		if !errors.Is(err, driver.ErrNotFound) {
-			s.logger.Debugf("aurora delete: remove chunk: %w", err)
-			s.logger.Errorf("aurora delete: remove chunk %s", hash)
-			jsonhttp.InternalServerError(w, "aurora deleting occur error")
-			return
-		}
+	ok := s.chunkInfo.DelFile(hash, del)
+	if !ok {
+		s.logger.Errorf("aurora delete: chunk info report remove %s failed", hash)
+		jsonhttp.InternalServerError(w, "aurora deleting occur error")
+		return
 	}
 
 	jsonhttp.OK(w, nil)

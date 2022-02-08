@@ -6,26 +6,29 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"github.com/gauss-project/aurorafs/pkg/auth"
-	"github.com/gauss-project/aurorafs/pkg/jsonhttp"
+	"fmt"
+	"github.com/ethereum/go-ethereum/common"
 	"io"
 	"io/ioutil"
 	"math"
 	"net/http"
-
 	"strings"
 	"sync"
 	"time"
 	"unicode/utf8"
 
+	"github.com/gauss-project/aurorafs/pkg/auth"
 	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/chunkinfo"
 	"github.com/gauss-project/aurorafs/pkg/file/pipeline"
 	"github.com/gauss-project/aurorafs/pkg/file/pipeline/builder"
+	"github.com/gauss-project/aurorafs/pkg/jsonhttp"
 	"github.com/gauss-project/aurorafs/pkg/logging"
 	m "github.com/gauss-project/aurorafs/pkg/metrics"
 	"github.com/gauss-project/aurorafs/pkg/pinning"
 	"github.com/gauss-project/aurorafs/pkg/resolver"
+	"github.com/gauss-project/aurorafs/pkg/settlement/chain"
+	"github.com/gauss-project/aurorafs/pkg/settlement/traffic"
 	"github.com/gauss-project/aurorafs/pkg/storage"
 	"github.com/gauss-project/aurorafs/pkg/tracing"
 	"github.com/gauss-project/aurorafs/pkg/traversal"
@@ -87,21 +90,27 @@ type authenticator interface {
 }
 
 type server struct {
-	auth      authenticator
-	storer    storage.Storer
-	resolver  resolver.Interface
-	overlay   boson.Address
-	chunkInfo chunkinfo.Interface
-	traversal traversal.Traverser
-	pinning   pinning.Interface
-	logger    logging.Logger
-	tracer    *tracing.Tracer
+	auth        authenticator
+	storer      storage.Storer
+	resolver    resolver.Interface
+	overlay     boson.Address
+	chunkInfo   chunkinfo.Interface
+	traversal   traversal.Traverser
+	pinning     pinning.Interface
+	logger      logging.Logger
+	tracer      *tracing.Tracer
+	traffic     traffic.ApiInterface
+	commonChain chain.Common
+	oracleChain chain.Resolver
 	Options
 	http.Handler
 	metrics metrics
 
-	wsWg sync.WaitGroup // wait for all websockets to close on exit
-	quit chan struct{}
+	wsWg            sync.WaitGroup // wait for all websockets to close on exit
+	quit            chan struct{}
+	auroraChainSate sync.Map
+	tranProcess     sync.Map
+	transactionChan chan TransactionResponse
 }
 
 type Options struct {
@@ -111,6 +120,11 @@ type Options struct {
 	BufferSizeMul      int
 	Restricted         bool
 }
+type TransactionResponse struct {
+	Hash     common.Hash
+	Address  boson.Address
+	Register bool
+}
 
 const (
 	// TargetsRecoveryHeader defines the Header for Recovery targets in Global Pinning
@@ -118,24 +132,31 @@ const (
 )
 
 // New will create a and initialize a new API service.
-func New(storer storage.Storer, resolver resolver.Interface, addr boson.Address, chunkInfo chunkinfo.Interface, traversalService traversal.Traverser, pinning pinning.Interface, auth authenticator, logger logging.Logger, tracer *tracing.Tracer, o Options) Service {
+func New(storer storage.Storer, resolver resolver.Interface, addr boson.Address, chunkInfo chunkinfo.Interface,
+	traversalService traversal.Traverser, pinning pinning.Interface, auth authenticator, logger logging.Logger,
+	tracer *tracing.Tracer, traffic traffic.ApiInterface, commonChain chain.Common, oracleChain chain.Resolver, o Options) Service {
 	s := &server{
-		auth:      auth,
-		storer:    storer,
-		resolver:  resolver,
-		overlay:   addr,
-		chunkInfo: chunkInfo,
-		traversal: traversalService,
-		pinning:   pinning,
-		Options:   o,
-		logger:    logger,
-		tracer:    tracer,
-		metrics:   newMetrics(),
-		quit:      make(chan struct{}),
+		auth:            auth,
+		storer:          storer,
+		resolver:        resolver,
+		overlay:         addr,
+		chunkInfo:       chunkInfo,
+		traversal:       traversalService,
+		pinning:         pinning,
+		Options:         o,
+		logger:          logger,
+		tracer:          tracer,
+		commonChain:     commonChain,
+		oracleChain:     oracleChain,
+		metrics:         newMetrics(),
+		quit:            make(chan struct{}),
+		traffic:         traffic,
+		transactionChan: make(chan TransactionResponse, 10),
 	}
 
 	BufferSizeMul = o.BufferSizeMul
 	s.setupRouting()
+	s.transactionReceiptUpdate()
 
 	return s
 }
@@ -169,22 +190,21 @@ func (s *server) resolveNameOrAddress(str string) (boson.Address, error) {
 		log.Tracef("name resolve: valid aurora address %q", str)
 		return addr, nil
 	}
-	return boson.ZeroAddress, err
 
-	//// If no resolver is not available, return an error.
-	//if s.resolver == nil {
-	//	return boson.ZeroAddress, errNoResolver
-	//}
-	//
-	//// Try and resolve the name using the provided resolver.
-	//log.Debugf("name resolve: attempting to resolve %s to aurora address", str)
-	//addr, err = s.resolver.Resolve(str)
-	//if err == nil {
-	//	log.Tracef("name resolve: resolved name %s to %s", str, addr)
-	//	return addr, nil
-	//}
-	//
-	//return boson.ZeroAddress, fmt.Errorf("%w: %v", errInvalidNameOrAddress, err)
+	// If no resolver is not available, return an error.
+	if s.resolver == nil {
+		return boson.ZeroAddress, errNoResolver
+	}
+
+	// Try and resolve the name using the provided resolver.
+	log.Debugf("name resolve: attempting to resolve %s to aurora address", str)
+	addr, err = s.resolver.Resolve(str)
+	if err == nil {
+		log.Tracef("name resolve: resolved name %s to %s", str, addr)
+		return addr, nil
+	}
+
+	return boson.ZeroAddress, fmt.Errorf("%w: %v", errInvalidNameOrAddress, err)
 }
 
 // requestModePut returns the desired storage.ModePut for this request based on the request headers.
@@ -334,6 +354,44 @@ func (s *server) newTracingHandler(spanName string) func(h http.Handler) http.Ha
 			h.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}
+}
+
+func (s *server) transactionReceiptUpdate() {
+
+	go func() {
+		tranReceipt := func(txHash common.Hash) (uint64, error) {
+			receipt, err := s.oracleChain.WaitForReceipt(context.Background(), txHash)
+			if err != nil {
+				return 0, err
+			}
+			if receipt.Status == 0 {
+				s.logger.Errorf("api:tranReceipt - %s Exchange failed ", txHash.String())
+			}
+			return receipt.Status, nil
+		}
+
+		tranUpdate := func(trans TransactionResponse) error {
+			s.auroraChainSate.Store(trans.Address.String(), trans.Register)
+			return nil
+		}
+
+		for {
+			select {
+			case trans := <-s.transactionChan:
+				status, err := tranReceipt(trans.Hash)
+				if err != nil {
+					continue
+				}
+				if status == 1 {
+					err := tranUpdate(trans)
+					if err != nil {
+						s.logger.Errorf("api:tranUpdate - %v ", err.Error())
+						continue
+					}
+				}
+			}
+		}
+	}()
 }
 
 func lookaheadBufferSize(size int64) int {

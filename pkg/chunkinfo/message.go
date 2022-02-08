@@ -166,9 +166,6 @@ func (ci *ChunkInfo) sendPyramid(ctx context.Context, address boson.Address, str
 			if err = ci.onChunkPyramidResp(ctx, nil, boson.NewAddress(req.RootCid), address, chunkResps); err != nil {
 				return nil, err
 			}
-			if err = ci.UpdatePyramidSource(ctx, boson.NewAddress(req.RootCid), address); err != nil {
-				return nil, err
-			}
 			return chunkResps, nil
 		}
 		chunkResps = append(chunkResps, resp)
@@ -310,8 +307,12 @@ func (ci *ChunkInfo) onChunkPyramidResp(ctx context.Context, authInfo []byte, ro
 		ci.logger.Errorf("chunk pyramid: check pyramid error")
 		return err
 	}
-	ci.updateChunkPyramid(rootCid, v, pyramid)
+	if err = ci.UpdatePyramidSource(rootCid, peer); err != nil {
+		return err
+	}
+	localCid := ci.updateChunkPyramid(rootCid, v, pyramid)
 	ci.initNeighborChunkInfo(rootCid, peer, cids)
+	ci.initNeighborChunkInfo(rootCid, ci.addr, localCid)
 	return nil
 }
 

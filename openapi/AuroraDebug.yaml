@@ -1,6 +1,6 @@
 openapi: 3.0.3
 info:
-  version: 1.2.0
+  version: 1.2.2
   title: Aurora Debug API
   description: "A list of the currently provided debug interfaces to interact with the aurorafs node"
 
@@ -574,5 +574,38 @@ paths:
           $ref: "AuroraCommon.yaml#/components/responses/400"
         "404":
           $ref: "AuroraCommon.yaml#/components/responses/404"
+        default:
+          description: Default response
+
+  "/traffic/init":
+    post:
+      summary: Initialize traffic information
+      tags:
+        - Traffic
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "AuroraCommon.yaml#/components/schemas/Response"
+        "400":
+          $ref: "AuroraCommon.yaml#/components/responses/400"
+        "404":
+          $ref: "AuroraCommon.yaml#/components/responses/404"
+        default:
+          description: Default response
+
+  "/keystore":
+    get:
+      summary: Get address keystore json
+      tags:
+        - Account
+      responses:
+        "200":
+          description: address keystore json
+          content:
+            application/json:
+              example: '{"address":"2f8b6f42b70a1ed0bf4f9100f88b8e9e3aecfafd","crypto":{"cipher":"aes-128-ctr","ciphertext":"38dca54facaa0153dd74b28379de278b5065107b650fd25702e41b7da6c1486d","cipherparams":{"iv":"a80c4d741ae7d558deeab6aebdd7862b"},"kdf":"scrypt","kdfparams":{"dklen":32,"n":4096,"p":6,"r":8,"salt":"9fa03653fe70ff1a5d3529fbfe158952deedc9e052622eefebf039beeaaacc66"},"mac":"89f4a1265bc5c3452a26685155a3d56162dfee5a5d430d0bbf9c7b67221b85a6"},"id":"4480f8d3-80ec-4dff-bbff-0390e1fbd83c","version":3}'
         default:
           description: Default response
