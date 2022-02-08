@@ -33,14 +33,14 @@ binary-wt: DATABASE=leveldb
 binary-wt: binary
 
 .PHONY: binary
-binary: ./install-deps.sh
 binary: dist FORCE
 	$(GO) version
 ifeq ("$(GOOS)", "windows")
 	set CGO_ENABLED=0
 	$(GO) build -tags leveldb -trimpath -ldflags "$(LDFLAGS)" -o dist/aurora.exe ./cmd/aurorafs
 else
-	export CGO_ENABLED=0
+	./install-deps.sh
+	export CGO_ENABLED=1
 	$(GO) build -tags $(DATABASE) -trimpath -ldflags "$(LDFLAGS)" -o dist/aurora ./cmd/aurorafs
 endif
 
