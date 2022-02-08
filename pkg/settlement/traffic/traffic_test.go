@@ -32,13 +32,6 @@ import (
 	"testing"
 )
 
-const (
-	protocolName    = "pseudosettle"
-	protocolVersion = "1.0.0"
-	streamName      = "traffic" // stream for cheques
-	initStreamName  = "init"    // stream for handshake
-)
-
 type libp2pServiceOpts struct {
 	Logger      logging.Logger
 	Addressbook addressbook.Interface
@@ -61,11 +54,16 @@ func (m *trafficProtocolMock) EmitCheque(ctx context.Context, peer boson.Address
 }
 
 type cashOutMock struct {
-	cashCheque func(ctx context.Context, chequebook common.Address, recipient common.Address) (common.Hash, error)
+	cashCheque     func(ctx context.Context, chequebook common.Address, recipient common.Address) (common.Hash, error)
+	waitForReceipt func(ctx context.Context, ctxHash common.Hash) (uint64, error)
 }
 
 func (m *cashOutMock) CashCheque(ctx context.Context, chequebook common.Address, recipient common.Address) (common.Hash, error) {
 	return m.cashCheque(ctx, chequebook, recipient)
+}
+
+func (m *cashOutMock) WaitForReceipt(ctx context.Context, ctxHash common.Hash) (uint64, error) {
+	return m.waitForReceipt(ctx, ctxHash)
 }
 
 type chequeSignerMock struct {
@@ -80,7 +78,6 @@ type addressBookMock struct {
 	beneficiary     func(peer boson.Address) (beneficiary common.Address, known bool)
 	beneficiaryPeer func(beneficiary common.Address) (peer boson.Address, known bool)
 	putBeneficiary  func(peer boson.Address, beneficiary common.Address) error
-	initAddressBook func() error
 }
 
 func (m *addressBookMock) Beneficiary(peer boson.Address) (beneficiary common.Address, known bool) {
@@ -295,7 +292,7 @@ func TestPay(t *testing.T) {
 		chainID,
 	)
 	tra.trafficPeers.balance = new(big.Int).SetInt64(120)
-	tra.trafficPeers.trafficPeers[beneficiary.String()] = Traffic{
+	tra.trafficPeers.trafficPeers[beneficiary.String()] = &Traffic{
 		trafficPeerBalance:    big.NewInt(0),
 		retrieveChainTraffic:  big.NewInt(0),
 		transferChainTraffic:  big.NewInt(0),
@@ -356,7 +353,7 @@ func TestPayIssueError(t *testing.T) {
 	trafficService.SetNotifyPaymentFunc(func(peer boson.Address, amount *big.Int) error {
 		return nil
 	})
-	trafficService.trafficPeers.trafficPeers[beneficiarys.String()] = Traffic{
+	trafficService.trafficPeers.trafficPeers[beneficiarys.String()] = &Traffic{
 		trafficPeerBalance:    big.NewInt(0),
 		retrieveChainTraffic:  big.NewInt(0),
 		transferChainTraffic:  big.NewInt(0),

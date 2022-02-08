@@ -259,6 +259,7 @@ func applyPolicies(e *casbin.Enforcer) error {
 		{"maintainer", "/chunk/source/*", "GET"},
 		{"maintainer", "/aco/*", "GET"},
 		{"maintainer", "/keystore", "(GET)|(POST)"},
+		{"maintainer", "/privatekey", "GET"},
 		{"maintainer", "/transaction", "POST"},
 	})
 

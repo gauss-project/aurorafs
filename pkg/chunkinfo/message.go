@@ -307,12 +307,13 @@ func (ci *ChunkInfo) onChunkPyramidResp(ctx context.Context, authInfo []byte, ro
 		ci.logger.Errorf("chunk pyramid: check pyramid error")
 		return err
 	}
-	if err = ci.UpdatePyramidSource(rootCid, peer); err != nil {
+
+	if err = ci.chunkPutChanUpdate(ctx, ci.cs, ci.UpdatePyramidSource, rootCid, peer).err; err != nil {
 		return err
 	}
-	localCid := ci.updateChunkPyramid(rootCid, v, pyramid)
-	ci.initNeighborChunkInfo(rootCid, peer, cids)
-	ci.initNeighborChunkInfo(rootCid, ci.addr, localCid)
+	localCid := ci.chunkPutChanUpdate(ctx, ci.cp, ci.updateChunkPyramid, rootCid, v, pyramid).data.([][]byte)
+	ci.chunkPutChanUpdate(ctx, ci.ct, ci.initNeighborChunkInfo, rootCid, peer, cids)
+	ci.chunkPutChanUpdate(ctx, ci.ct, ci.initNeighborChunkInfo, rootCid, ci.addr, localCid)
 	return nil
 }
 
@@ -322,11 +323,9 @@ func (ci *ChunkInfo) onFindChunkInfo(ctx context.Context, authInfo []byte, rootC
 	if chunkInfo == nil {
 		chunkInfo = make(map[string][]byte, 1)
 	}
-	ci.syncLk.RLock()
-	msgChan, ok := ci.syncMsg[rootCid.String()]
-	ci.syncLk.RUnlock()
+	msgChan, ok := ci.syncMsg.Load(rootCid.String())
 	if ok {
-		msgChan <- true
+		msgChan.(chan bool) <- true
 	}
 	ci.updateQueue(ctx, authInfo, rootCid, overlay, chunkInfo)
 }

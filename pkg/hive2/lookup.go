@@ -16,7 +16,6 @@ const (
 
 // discover is a forever loop that manages the find to new peers
 func (s *Service) discover() {
-	defer s.wg.Done()
 	defer s.logger.Debugf("hive2: discover loop exited")
 
 	tick := time.NewTicker(findWorkInterval)

@@ -51,7 +51,7 @@ func TestChunkInfoSource(t *testing.T) {
 		t.Fatal("ChunkInfo Init Failed:", err.Error())
 	}
 
-	delfile := a.DelFile(rootCid)
+	delfile := a.DelFile(rootCid, func() {})
 	if !delfile {
 		t.Fatal("delete file error")
 	}
@@ -70,7 +70,7 @@ func TestChunkInfoSource(t *testing.T) {
 		t.Fatal("Pyramid values are unequal.")
 	}
 
-	delfile = a.DelFile(rootCid)
+	delfile = a.DelFile(rootCid, func() {})
 	if !delfile {
 		t.Fatal("delete file error")
 	}
