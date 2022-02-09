@@ -88,3 +88,7 @@ else
   make && make install
   make clean
 fi
+
+if command -v ldconfig > /dev/null; then
+  ldconfig
+fi
