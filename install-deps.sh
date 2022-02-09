@@ -13,6 +13,47 @@ else
       git clone https://github.com/google/snappy.git -b 1.1.9
       cd snappy
       git submodule update --init
+      cat <<"EOF" > snappy.pc.in
+      prefix=@CMAKE_INSTALL_PREFIX@
+      exec_prefix=${prefix}
+      libdir=${prefix}/lib
+      includedir=${prefix}/include
+
+      Name: snappy
+      Description: Fast compressor/decompressor library.
+      Version: @PROJECT_VERSION@
+      Libs: -L${libdir} -lsnappy
+      Cflags: -I${includedir}
+EOF
+      cat <<"EOF" > cmake_add_pkgconfig.patch
+      --- a/CMakeLists.txt
+      +++ b/CMakeLists.txt
+      @@ -187,6 +187,12 @@
+         "${PROJECT_BINARY_DIR}/config.h"
+       )
+
+      +configure_file(
+      +  "${CMAKE_CURRENT_SOURCE_DIR}/snappy.pc.in"
+      +  "${CMAKE_CURRENT_BINARY_DIR}/snappy.pc"
+      +  @ONLY
+      +)
+      +
+       # We don't want to define HAVE_ macros in public headers. Instead, we use
+       # CMake's variable substitution with 0/1 variables, which will be seen by the
+       # preprocessor as constants.
+      @@ -395,4 +401,8 @@
+             "${PROJECT_BINARY_DIR}/cmake/${PROJECT_NAME}ConfigVersion.cmake"
+           DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/${PROJECT_NAME}"
+         )
+      +  install(
+      +    FILES "${PROJECT_BINARY_DIR}/snappy.pc"
+      +    DESTINATION "${CMAKE_INSTALL_LIBDIR}/pkgconfig"
+      +  )
+       endif(SNAPPY_INSTALL)
+EOF
+      patch -p1 < cmake_add_pkgconfig.patch
+      wget -O system_gtest.patch https://github.com/google/snappy/commit/114df35e84ad95b6d5afbcf69aa85a14ff029000.patch || exit
+      patch -p1 < system_gtest.patch
       wget -O reenable_rtti.patch https://github.com/google/snappy/commit/516fdcca6606502e2d562d20c01b225c8d066739.patch || exit
       patch -p1 < reenable_rtti.patch
       wget -O fix_inline.patch https://github.com/google/snappy/pull/128/commits/0c716d435abe65250100c2caea0e5126ac4e14bd.patch || exit
@@ -22,9 +63,10 @@ else
     cd "$SHELL_FOLDER"/lib/snappy
     [ ! -d build ] && mkdir build
     cd build
-    cmake -DBUILD_SHARED_LIBS=yes ../ || exit
+    cmake -DBUILD_SHARED_LIBS=yes -DSNAPPY_USE_BUNDLED_GTEST=OFF -DSNAPPY_USE_BUNDLED_BENCHMARK_LIB=OFF ../ || exit
     make || exit
     make install || exit
+    make clean || exit
     cd "$SHELL_FOLDER"/lib
 fi
 
@@ -44,4 +86,5 @@ else
   sh autogen.sh
   ./configure --enable-snappy CPPFLAGS="-I/usr/local/include" LDFLAGS="-L/usr/local/include"
   make && make install
+  make clean
 fi

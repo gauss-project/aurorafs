@@ -1,7 +1,8 @@
 package wiredtiger
 
 /*
-#cgo LDFLAGS: -lwiredtiger
+#cgo CFLAGS: -I/usr/local/include
+#cgo LDFLAGS: -L/usr/local/lib -lwiredtiger
 #include <stdlib.h>
 #include <wiredtiger.h>
 
