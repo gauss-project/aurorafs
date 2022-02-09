@@ -110,6 +110,7 @@ func (c *command) initStartCmd() (err error) {
 				DataDir:               c.config.GetString(optionNameDataDir),
 				CacheCapacity:         c.config.GetUint64(optionNameCacheCapacity),
 				DBDriver:              c.config.GetString(optionDatabaseDriver),
+				DBPath:                c.config.GetString(optionDatabasePath),
 				APIAddr:               c.config.GetString(optionNameAPIAddr),
 				DebugAPIAddr:          debugAPIAddr,
 				ApiBufferSizeMul:      c.config.GetInt(optionNameApiFileBufferMultiple),
@@ -127,10 +128,10 @@ func (c *command) initStartCmd() (err error) {
 				TracingEndpoint:       c.config.GetString(optionNameTracingEndpoint),
 				TracingServiceName:    c.config.GetString(optionNameTracingServiceName),
 				Logger:                logger,
-				//GlobalPinningEnabled:     c.config.GetBool(optionNameGlobalPinningEnabled),
-				//PaymentThreshold:         c.config.GetString(optionNamePaymentThreshold),
-				//PaymentTolerance:         c.config.GetString(optionNamePaymentTolerance),
-				//PaymentEarly:             c.config.GetString(optionNamePaymentEarly),
+				// GlobalPinningEnabled:     c.config.GetBool(optionNameGlobalPinningEnabled),
+				// PaymentThreshold:         c.config.GetString(optionNamePaymentThreshold),
+				// PaymentTolerance:         c.config.GetString(optionNamePaymentTolerance),
+				// PaymentEarly:             c.config.GetString(optionNamePaymentEarly),
 				ResolverConnectionCfgs: resolverCfgs,
 				GatewayMode:            c.config.GetBool(optionNameGatewayMode),
 				TrafficEnable:          c.config.GetBool(optionNameTrafficEnable),
@@ -238,7 +239,7 @@ type signerConfig struct {
 	libp2pPrivateKey *ecdsa.PrivateKey
 }
 
-//func waitForClef(logger logging.Logger, maxRetries uint64, endpoint string) (externalSigner *external.ExternalSigner, err error) {
+// func waitForClef(logger logging.Logger, maxRetries uint64, endpoint string) (externalSigner *external.ExternalSigner, err error) {
 //	for {
 //		externalSigner, err = external.NewExternalSigner(endpoint)
 //		if err == nil {
@@ -252,7 +253,7 @@ type signerConfig struct {
 //
 //		time.Sleep(5 * time.Second)
 //	}
-//}
+// }
 
 func (c *command) configureSigner(cmd *cobra.Command, logger logging.Logger) (config *signerConfig, err error) {
 	var kt keystore.Service
@@ -296,7 +297,7 @@ func (c *command) configureSigner(cmd *cobra.Command, logger logging.Logger) (co
 		}
 	}
 
-	//if c.config.GetBool(optionNameClefSignerEnable) {
+	// if c.config.GetBool(optionNameClefSignerEnable) {
 	//	endpoint := c.config.GetString(optionNameClefSignerEndpoint)
 	//	if endpoint == "" {
 	//		endpoint, err = clef.DefaultIpcPath()
@@ -339,7 +340,7 @@ func (c *command) configureSigner(cmd *cobra.Command, logger logging.Logger) (co
 	//	}
 	//
 	//	logger.Infof("using boson network address through clef: %s", address)
-	//} else {
+	// } else {
 	//	logger.Warning("clef is not enabled; portability and security of your keys is sub optimal")
 	PrivateKey, created, err := kt.Key("boson", password)
 	if err != nil {
@@ -358,7 +359,7 @@ func (c *command) configureSigner(cmd *cobra.Command, logger logging.Logger) (co
 	} else {
 		logger.Infof("using existing boson network address: %s", address)
 	}
-	//}
+	// }
 
 	logger.Infof("boson public key %x", crypto.EncodeSecp256k1PublicKey(publicKey))
 

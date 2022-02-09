@@ -68,6 +68,7 @@ type Options struct {
 	DataDir               string
 	CacheCapacity         uint64
 	DBDriver              string
+	DBPath                string
 	APIAddr               string
 	DebugAPIAddr          string
 	ApiBufferSizeMul      int
@@ -313,7 +314,9 @@ func NewAurora(nodeMode aurora.Model, addr string, bosonAddress boson.Address, p
 
 	var path string
 
-	if o.DataDir != "" {
+	if o.DBPath != "" {
+		path = o.DBPath
+	} else if o.DataDir != "" {
 		path = filepath.Join(o.DataDir, "localstore")
 	}
 	lo := &localstore.Options{

@@ -19,6 +19,7 @@ const (
 	optionNameDataDir               = "data-dir"
 	optionNameCacheCapacity         = "cache-capacity"
 	optionDatabaseDriver            = "db-driver"
+	optionDatabasePath              = "db-path"
 	optionNamePassword              = "password"
 	optionNamePasswordFile          = "password-file"
 	optionNameAPIAddr               = "api-addr"
@@ -45,19 +46,19 @@ const (
 	// optionNamePaymentThreshold          = "payment-threshold"
 	// optionNamePaymentTolerance          = "payment-tolerance"
 	// optionNamePaymentEarly              = "payment-early"
-	optionNameResolverEndpoints = "resolver-options"
-	optionNameBootnodeMode = "bootnode-mode"
-	optionNameFullNode     = "full-node"
-	optionNameGatewayMode  = "gateway-mode"
+	optionNameResolverEndpoints   = "resolver-options"
+	optionNameBootnodeMode        = "bootnode-mode"
+	optionNameFullNode            = "full-node"
+	optionNameGatewayMode         = "gateway-mode"
 	optionNameTrafficContractAddr = "traffic-contract-addr"
 	optionNameTrafficEnable       = "traffic-enable"
-	optionNameBinMaxPeers        = "bin-max-peers"
-	optionNameLightMaxPeers      = "light-max-peers"
-	optionNameAllowPrivateCIDRs  = "allow-private-cidrs"
-	optionNameRestrictedAPI      = "restricted"
-	optionNameTokenEncryptionKey = "token-encryption-key"
-	optionNameAdminPasswordHash  = "admin-password"
-	optionNameRouteAlpha         = "route-alpha"
+	optionNameBinMaxPeers         = "bin-max-peers"
+	optionNameLightMaxPeers       = "light-max-peers"
+	optionNameAllowPrivateCIDRs   = "allow-private-cidrs"
+	optionNameRestrictedAPI       = "restricted"
+	optionNameTokenEncryptionKey  = "token-encryption-key"
+	optionNameAdminPasswordHash   = "admin-password"
+	optionNameRouteAlpha          = "route-alpha"
 )
 
 func init() {
@@ -189,6 +190,7 @@ func (c *command) setAllFlags(cmd *cobra.Command) {
 	cmd.Flags().String(optionNameDataDir, filepath.Join(c.homeDir, ".aurorafs"), "data directory")
 	cmd.Flags().Uint64(optionNameCacheCapacity, 80000, fmt.Sprintf("cache capacity in chunks, multiply by %d to get approximate capacity in bytes", boson.ChunkSize))
 	cmd.Flags().String(optionDatabaseDriver, driver, fmt.Sprintf("database storage driver, only support leveldb/wiredtiger"))
+	cmd.Flags().String(optionDatabasePath, "", fmt.Sprintf("if the path not empty, all chunks will be stored at this directory"))
 	cmd.Flags().String(optionNamePassword, "", "password for decrypting keys")
 	cmd.Flags().String(optionNamePasswordFile, "", "path to a file that contains password for decrypting keys")
 	cmd.Flags().String(optionNameAPIAddr, ":1633", "HTTP API listen address")
@@ -212,9 +214,9 @@ func (c *command) setAllFlags(cmd *cobra.Command) {
 	cmd.Flags().String(optionWelcomeMessage, "", "send a welcome message string during handshakes")
 	cmd.Flags().Bool(optionNameGlobalPinningEnabled, false, "enable global pinning")
 	cmd.Flags().Int(optionNameApiFileBufferMultiple, 8, "When the API downloads files, the multiple of the buffer (256kb for files less than 10mb and 512kb for others), the default multiple is 8")
-	//cmd.Flags().String(optionNamePaymentThreshold, "10000000000000", "threshold in BZZ where you expect to get paid from your peers")
-	//cmd.Flags().String(optionNamePaymentTolerance, "50000000000000", "excess debt above payment threshold in BZZ where you disconnect from your peer")
-	//cmd.Flags().String(optionNamePaymentEarly, "1000000000000", "amount in BZZ below the peers payment threshold when we initiate settlement")
+	// cmd.Flags().String(optionNamePaymentThreshold, "10000000000000", "threshold in BZZ where you expect to get paid from your peers")
+	// cmd.Flags().String(optionNamePaymentTolerance, "50000000000000", "excess debt above payment threshold in BZZ where you disconnect from your peer")
+	// cmd.Flags().String(optionNamePaymentEarly, "1000000000000", "amount in BZZ below the peers payment threshold when we initiate settlement")
 	cmd.Flags().StringSlice(optionNameResolverEndpoints, []string{}, "ENS compatible API endpoint for a TLD and with contract address, can be repeated, format [tld:][contract-addr@]url")
 	cmd.Flags().Bool(optionNameGatewayMode, false, "disable a set of sensitive features in the api")
 	cmd.Flags().Bool(optionNameBootnodeMode, false, "cause the node to always accept incoming connections")
