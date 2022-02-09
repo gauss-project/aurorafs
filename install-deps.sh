@@ -13,12 +13,16 @@ else
       git clone https://github.com/google/snappy.git -b 1.1.9
       cd snappy
       git submodule update --init
+      wget -O reenable_rtti.patch https://github.com/google/snappy/commit/516fdcca6606502e2d562d20c01b225c8d066739.patch || exit
+      patch -p1 < reenable_rtti.patch
+      wget -O fix_inline.patch https://github.com/google/snappy/pull/128/commits/0c716d435abe65250100c2caea0e5126ac4e14bd.patch || exit
+      patch -p1 < fix_inline.patch
     fi
 
     cd "$SHELL_FOLDER"/lib/snappy
     [ ! -d build ] && mkdir build
     cd build
-    cmake ../ || exit
+    cmake -DBUILD_SHARED_LIBS=yes ../ || exit
     make || exit
     make install || exit
     cd "$SHELL_FOLDER"/lib
