@@ -110,8 +110,8 @@ func structToList(v interface{}, embed bool) string {
 		case reflect.String:
 			value = ft.String()
 		case reflect.Struct:
-			if ft.CanInterface() {
-				value = ft.Interface().(fmt.Stringer).String()
+			if stringer, ok := ft.Interface().(fmt.Stringer); ok {
+				value = stringer.String()
 			} else {
 				value = structToList(ft.Interface(), true)
 			}
@@ -124,10 +124,18 @@ func structToList(v interface{}, embed bool) string {
 		case reflect.Float64:
 			value = strconv.FormatFloat(ft.Float(), 'E', -1, 64)
 		default:
-			if !ft.CanConvert(rs) {
-				panic(fmt.Errorf("field %s not convert to string, is %s", f.Name, f.Type))
+			if ft.CanInterface() {
+				if stringer, ok := ft.Interface().(fmt.Stringer); ok {
+					value = stringer.String()
+				} else {
+					panic(fmt.Errorf("field %s not implement fmt.Stringer", f.Name))
+				}
+			} else {
+				if !ft.CanConvert(rs) {
+					panic(fmt.Errorf("field %s not convert to string, is %s", f.Name, f.Type))
+				}
+				value = ft.Convert(rs).String()
 			}
-			value = ft.Convert(rs).String()
 		}
 		res = append(res, key+string(optionJoiner)+value)
 	}
