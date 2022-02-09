@@ -35,7 +35,7 @@ binary-wt: binary
 .PHONY: binary
 binary: dist FORCE
 	$(GO) version
-ifeq ("$(GOOS)", "windows")
+ifeq ($(GOOS), "windows")
 	export CGO_ENABLED=0 || set CGO_ENABLED=0
 	$(GO) build -tags leveldb -trimpath -ldflags "$(LDFLAGS)" -o dist/aurora.exe ./cmd/aurorafs
 else
@@ -76,10 +76,10 @@ test:
 	$(GO) test -v -failfast ./...
 
 .PHONY: build
-build: export CGO_ENABLED=0
+build: export CGO_ENABLED=0 || set CGO_ENABLED=0
 build: check-version
 build:
-	$(GO) build -trimpath -ldflags "$(LDFLAGS)" ./...
+	$(GO) build -tags leveldb -trimpath -ldflags "$(LDFLAGS)" ./...
 
 .PHONY: android
 android: check-java
