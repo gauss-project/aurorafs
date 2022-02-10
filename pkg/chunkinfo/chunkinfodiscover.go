@@ -81,7 +81,7 @@ func (ci *ChunkInfo) getChunkInfo(rootCid, cid boson.Address) []aco.Route {
 	res := make([]aco.Route, 0)
 	for overlay, bv := range ci.cd.presence[rootCid.String()] {
 		over := boson.MustParseHexAddress(overlay)
-		s := ci.cp.getCidStore(rootCid, cid)
+		s := ci.getCidSort(rootCid, cid)
 		if bv.bit.Get(s) {
 			route := aco.NewRoute(over, over)
 			res = append(res, route)

@@ -260,7 +260,7 @@ func (ci *ChunkInfo) OnChunkTransferred(cid, rootCid boson.Address, overlay, tar
 }
 
 func (ci *ChunkInfo) GetChunkPyramid(rootCid boson.Address) []*PyramidCidNum {
-	return ci.cp.getUnRepeatChunk(rootCid)
+	return ci.getUnRepeatChunk(rootCid)
 }
 
 func (ci *ChunkInfo) IsDiscover(rootCid boson.Address) bool {
@@ -291,7 +291,7 @@ func (ci *ChunkInfo) GetFileList(overlay boson.Address) (fileListInfo map[string
 			file := &aurora.FileInfo{}
 			file.PinState = false
 			file.TreeSize = ci.cp.getRootHash(root)
-			file.FileSize = ci.cp.getRootChunk(root)
+			file.FileSize = ci.getRootChunk(root)
 			file.Bitvector.B = v.Bytes()
 			file.Bitvector.Len = v.Len()
 			fileListInfo[root] = file
@@ -307,16 +307,16 @@ func (ci *ChunkInfo) DelFile(rootCid boson.Address, del func()) bool {
 	ctx := context.Background()
 	ci.CancelFindChunkInfo(rootCid)
 	ci.queues.Delete(rootCid.String())
+
+	if !ci.chunkPutChanUpdate(ctx, ci.cp, ci.delRootCid, rootCid).state {
+		return false
+	}
 	del()
 	if res := ci.chunkPutChanUpdate(ctx, ci.cd, ci.delDiscoverPresence, rootCid).state; !res {
 		return false
 	}
 
 	if !ci.DelChunkInfoSource(rootCid) {
-		return false
-	}
-
-	if !ci.chunkPutChanUpdate(ctx, ci.cp, ci.cp.delRootCid, rootCid).state {
 		return false
 	}
 
@@ -428,12 +428,14 @@ func (ci *ChunkInfo) chunkPutChanUpdateListen(chunkObj chunkPutEntry) {
 }
 
 func (ci *ChunkInfo) pyramidCheck(rootCid, overlay, target boson.Address) error {
-	if !ci.cp.isExists(rootCid) {
+	if !ci.isExists(rootCid) {
 		if !target.IsZero() && !target.Equal(ci.addr) {
 			if err := ci.doFindChunkPyramid(context.Background(), nil, rootCid, target); err != nil {
 				return err
 			}
 		}
+	}
+	if !ci.ct.isExists(rootCid) {
 		if err := ci.putChunkInfoNeighbor(rootCid, overlay); err != nil {
 			return err
 		}

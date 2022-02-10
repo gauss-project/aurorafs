@@ -242,7 +242,7 @@ func (ci *ChunkInfo) handlerPyramid(ctx context.Context, p p2p.Peer, stream p2p.
 	target := boson.NewAddress(req.GetTarget())
 
 	resps := make([]pb.ChunkPyramidResp, 0)
-	if target.Equal(ci.addr) || ci.cp.isExists(boson.NewAddress(req.GetRootCid())) {
+	if target.Equal(ci.addr) || ci.isExists(boson.NewAddress(req.GetRootCid())) {
 		v, err := ci.onChunkPyramidHashReq(ctx, nil, req)
 		if err != nil {
 			return err
@@ -292,7 +292,7 @@ func (ci *ChunkInfo) onChunkPyramidHashReq(ctx context.Context, authInfo []byte,
 
 // onChunkPyramidResp
 func (ci *ChunkInfo) onChunkPyramidResp(ctx context.Context, authInfo []byte, rootCid, peer boson.Address, resps []pb.ChunkPyramidResp) error {
-	_, ok := ci.cp.pyramid[rootCid.String()]
+	_, ok := ci.cp.hashData[rootCid.String()]
 	if ok {
 		return nil
 	}
