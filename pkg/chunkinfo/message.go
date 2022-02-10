@@ -292,8 +292,7 @@ func (ci *ChunkInfo) onChunkPyramidHashReq(ctx context.Context, authInfo []byte,
 
 // onChunkPyramidResp
 func (ci *ChunkInfo) onChunkPyramidResp(ctx context.Context, authInfo []byte, rootCid, peer boson.Address, resps []pb.ChunkPyramidResp) error {
-	_, ok := ci.cp.hashData[rootCid.String()]
-	if ok {
+	if ci.isExists(rootCid) {
 		return nil
 	}
 

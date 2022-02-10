@@ -11,14 +11,18 @@ import (
 // chunkPyramid Pyramid
 type chunkPyramid struct {
 	sync.RWMutex
-	hashData       map[string]uint
+	hashData       map[string]chunkInfo
 	chunk          map[string]uint
 	pyramidPutChan chan chunkPut
 }
 
+type chunkInfo struct {
+	hashMax  uint
+	chunkMax uint
+}
+
 type pyramid struct {
-	cids  map[string]pyramidCid
-	count int
+	cids map[string]pyramidCid
 }
 
 type pyramidCid struct {
@@ -33,7 +37,7 @@ type PyramidCidNum struct {
 
 func newChunkPyramid() *chunkPyramid {
 	chunkPayramid := &chunkPyramid{
-		hashData:       make(map[string]uint),
+		hashData:       make(map[string]chunkInfo),
 		chunk:          make(map[string]uint),
 		pyramidPutChan: make(chan chunkPut, 200)}
 	return chunkPayramid
@@ -63,6 +67,7 @@ func (ci *ChunkInfo) updateChunkPyramid(rootCid boson.Address, pyramids [][][]by
 		return nil
 	}
 	py := pyramid.cids
+	var hashMax, chunkMax uint
 	for _, p := range pyramids {
 		for _, x := range p {
 			if _, ok := py[boson.NewAddress(x).String()]; !ok {
@@ -70,16 +75,19 @@ func (ci *ChunkInfo) updateChunkPyramid(rootCid boson.Address, pyramids [][][]by
 					cids = append(cids, x)
 				}
 			}
+			chunkMax++
 		}
 	}
-	var hashMax uint
 	for k := range trie {
 		if _, ok := py[k]; !ok {
 			hashMax++
 			ci.cp.putChunk(boson.MustParseHexAddress(k))
 		}
 	}
-	ci.cp.hashData[rootCid.String()] = hashMax
+	ci.cp.hashData[rootCid.String()] = chunkInfo{
+		chunkMax: chunkMax,
+		hashMax:  hashMax,
+	}
 	return cids
 }
 
@@ -91,25 +99,23 @@ func (ci *ChunkInfo) getPyramid(rootCid boson.Address) (*pyramid, error) {
 		if err != nil {
 			return nil, err
 		}
-		var i, max int
+		var sort int
 		for _, p := range pyramids {
 			for _, x := range p {
 				if v, ok := py[boson.NewAddress(x).String()]; !ok {
 					py[boson.NewAddress(x).String()] = pyramidCid{
-						sort:   i,
+						sort:   sort,
 						number: 1,
 					}
-					i++
+					sort++
 				} else {
 					v.number = v.number + 1
 					py[boson.NewAddress(x).String()] = v
 				}
-				max++
 			}
 		}
 		return &pyramid{
-			cids:  py,
-			count: max,
+			cids: py,
 		}, nil
 	})
 	if err != nil {
@@ -170,11 +176,8 @@ func (ci *ChunkInfo) isExists(rootCid boson.Address) bool {
 }
 
 func (ci *ChunkInfo) getChunkSize(cxt context.Context, rootCid boson.Address) (int, error) {
-	pyramid, err := ci.getPyramid(rootCid)
-	if err != nil {
-		return 0, err
-	}
-	if _, ok := ci.cp.hashData[rootCid.String()]; !ok {
+	info, ok := ci.cp.hashData[rootCid.String()]
+	if !ok {
 		v, err := ci.getChunkPyramid(context.Background(), rootCid)
 		if err != nil {
 			return 0, nil
@@ -184,8 +187,9 @@ func (ci *ChunkInfo) getChunkSize(cxt context.Context, rootCid boson.Address) (i
 			return 0, err
 		}
 		ci.updateChunkPyramid(rootCid, trie, v)
+		return ci.getChunkSize(cxt, rootCid)
 	}
-	return pyramid.count, nil
+	return int(info.chunkMax), nil
 }
 
 // doFindChunkPyramid
@@ -211,7 +215,7 @@ func (ci *ChunkInfo) getUnRepeatChunk(rootCid boson.Address) []*PyramidCidNum {
 	if err != nil {
 		return nil
 	}
-	cids := make([]*PyramidCidNum, 0, v.count+len(mate))
+	cids := make([]*PyramidCidNum, 0, len(v.cids)+len(mate))
 	for overlay, c := range v.cids {
 		v := ci.cp.chunk[overlay]
 		if v > 1 {
@@ -243,7 +247,7 @@ func (ci *ChunkInfo) getChunkCid(rootCid boson.Address) []*PyramidCidNum {
 	if err != nil {
 		return nil
 	}
-	cids := make([]*PyramidCidNum, 0, v.count)
+	cids := make([]*PyramidCidNum, 0, len(v.cids))
 	for overlay, c := range v.cids {
 		over := boson.MustParseHexAddress(overlay)
 		pcn := PyramidCidNum{Cid: over, Number: c.number}
@@ -275,17 +279,21 @@ func (ci *ChunkInfo) getCidSort(rootCid, cid boson.Address) int {
 func (ci *ChunkInfo) getRootChunk(rootCid string) int {
 	ci.cp.RLock()
 	defer ci.cp.RUnlock()
-	pyramid, err := ci.getPyramid(boson.MustParseHexAddress(rootCid))
-	if err != nil {
+	info, ok := ci.cp.hashData[rootCid]
+	if !ok {
 		return 0
 	}
-	return pyramid.count
+	return int(info.chunkMax)
 }
 
 func (cp *chunkPyramid) getRootHash(rootCID string) int {
 	cp.RLock()
 	defer cp.RUnlock()
-	return int(cp.hashData[rootCID])
+	info, ok := cp.hashData[rootCID]
+	if !ok {
+		return 0
+	}
+	return int(info.hashMax)
 }
 
 func (cp *chunkPyramid) delChunk(cid boson.Address) {
