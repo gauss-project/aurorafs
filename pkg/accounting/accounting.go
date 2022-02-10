@@ -168,7 +168,7 @@ func (a *Accounting) Debit(peer boson.Address, traffic uint64) error {
 		a.metrics.AccountingDisconnectsCount.Inc()
 		a.logger.Errorf("block list %s", peer.String())
 		//return ErrDisconnectThresholdExceeded
-		return p2p.NewBlockPeerError(10000*time.Hour, ErrDisconnectThresholdExceeded)
+		return p2p.NewBlockPeerError(24*time.Hour, ErrDisconnectThresholdExceeded)
 	}
 
 	balance, err := a.settlement.GetPeerBalance(peer)
