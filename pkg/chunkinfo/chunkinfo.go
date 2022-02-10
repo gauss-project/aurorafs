@@ -312,8 +312,14 @@ func (ci *ChunkInfo) DelFile(rootCid boson.Address, del func()) bool {
 		return false
 	}
 	pyr := *pyramid
+
+	hashs, err := ci.getPyramidHash(rootCid)
+	if err != nil {
+		return false
+	}
+	h := *hashs
 	del()
-	if !ci.chunkPutChanUpdate(ctx, ci.cp, ci.delRootCid, rootCid, pyr).state {
+	if !ci.chunkPutChanUpdate(ctx, ci.cp, ci.delRootCid, rootCid, pyr, h).state {
 		return false
 	}
 
