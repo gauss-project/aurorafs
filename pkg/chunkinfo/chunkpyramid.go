@@ -132,21 +132,25 @@ func (cp *chunkPyramid) putChunk(cid boson.Address) bool {
 func (ci *ChunkInfo) getChunkPyramid(cxt context.Context, rootCid boson.Address) (map[string][]byte, error) {
 	ci.cp.RLock()
 	defer ci.cp.RUnlock()
-	v, err := ci.traversal.GetPyramid(cxt, rootCid)
+	key := fmt.Sprintf("mate-%s", rootCid.String())
+	mate, _, err := ci.singleflight.Do(cxt, key, func(ctx context.Context) (interface{}, error) {
+		v, err := ci.traversal.GetPyramid(cxt, rootCid)
+		if err != nil {
+			return nil, err
+		}
+		return v, nil
+	})
 	if err != nil {
 		return nil, err
 	}
-	return v, nil
+	return mate.(map[string][]byte), nil
 }
 
 func (ci *ChunkInfo) isExists(rootCid boson.Address) bool {
 	ci.cp.RLock()
 	defer ci.cp.RUnlock()
-	_, err := ci.getPyramid(rootCid)
-	if err != nil {
-		return false
-	}
-	return true
+	_, ok := ci.cp.hashData[rootCid.String()]
+	return ok
 }
 
 func (ci *ChunkInfo) getChunkSize(cxt context.Context, rootCid boson.Address) (int, error) {
@@ -154,15 +158,18 @@ func (ci *ChunkInfo) getChunkSize(cxt context.Context, rootCid boson.Address) (i
 	if err != nil {
 		return 0, err
 	}
-	return pyramid.count, nil
-}
-
-func (ci *ChunkInfo) getChunkPyramidHash(cxt context.Context, rootCid boson.Address) (map[string][]byte, error) {
-	v, err := ci.getChunkPyramid(cxt, rootCid)
-	if err != nil {
-		return nil, err
+	if ci.cp.hashData[rootCid.String()] == nil {
+		v, err := ci.getChunkPyramid(context.Background(), rootCid)
+		if err != nil {
+			return 0, nil
+		}
+		trie, _, err := ci.traversal.GetChunkHashes(cxt, rootCid, nil)
+		if err != nil {
+			return 0, err
+		}
+		ci.updateChunkPyramid(rootCid, trie, v)
 	}
-	return v, nil
+	return pyramid.count, nil
 }
 
 // doFindChunkPyramid
@@ -274,17 +281,13 @@ func (cp *chunkPyramid) delChunk(cid boson.Address) {
 	}
 }
 
-func (ci *ChunkInfo) delRootCid(rootCID boson.Address) bool {
-	pyramid, err := ci.getPyramid(rootCID)
-	if err != nil {
-		return false
-	}
+func (ci *ChunkInfo) delRootCid(rootCID boson.Address, pyr pyramid) bool {
 
 	hashs := ci.cp.hashData[rootCID.String()]
 	for _, cid := range hashs {
 		ci.cp.delChunk(boson.MustParseHexAddress(cid))
 	}
-	for cid := range pyramid.cids {
+	for cid := range pyr.cids {
 		ci.cp.delChunk(boson.MustParseHexAddress(cid))
 	}
 	delete(ci.cp.hashData, rootCID.String())

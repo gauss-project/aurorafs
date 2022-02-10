@@ -287,7 +287,7 @@ func (ci *ChunkInfo) onChunkInfoResp(ctx context.Context, authInfo []byte, overl
 
 func (ci *ChunkInfo) onChunkPyramidHashReq(ctx context.Context, authInfo []byte, req pb.ChunkPyramidReq) (map[string][]byte, error) {
 	rootCid := boson.NewAddress(req.RootCid)
-	return ci.getChunkPyramidHash(ctx, rootCid)
+	return ci.getChunkPyramid(ctx, rootCid)
 }
 
 // onChunkPyramidResp

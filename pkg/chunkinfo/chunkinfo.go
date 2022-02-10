@@ -307,11 +307,16 @@ func (ci *ChunkInfo) DelFile(rootCid boson.Address, del func()) bool {
 	ctx := context.Background()
 	ci.CancelFindChunkInfo(rootCid)
 	ci.queues.Delete(rootCid.String())
-
-	if !ci.chunkPutChanUpdate(ctx, ci.cp, ci.delRootCid, rootCid).state {
+	pyramid, err := ci.getPyramid(rootCid)
+	if err != nil {
 		return false
 	}
+	pyr := *pyramid
 	del()
+	if !ci.chunkPutChanUpdate(ctx, ci.cp, ci.delRootCid, rootCid, pyr).state {
+		return false
+	}
+
 	if res := ci.chunkPutChanUpdate(ctx, ci.cd, ci.delDiscoverPresence, rootCid).state; !res {
 		return false
 	}
@@ -434,8 +439,6 @@ func (ci *ChunkInfo) pyramidCheck(rootCid, overlay, target boson.Address) error 
 				return err
 			}
 		}
-	}
-	if !ci.ct.isExists(rootCid) {
 		if err := ci.putChunkInfoNeighbor(rootCid, overlay); err != nil {
 			return err
 		}
