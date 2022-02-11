@@ -2,9 +2,10 @@ package api
 
 import (
 	"fmt"
-	"github.com/gauss-project/aurorafs/pkg/auth"
 	"net/http"
 	"strings"
+
+	"github.com/gauss-project/aurorafs/pkg/auth"
 
 	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/jsonhttp"
@@ -217,7 +218,7 @@ func (s *server) setupRouting() {
 func (s *server) newLoopbackRouter(router *mux.Router) {
 	var handle = func(path string, handler http.Handler) {
 		handler = web.ChainHandlers(
-			//auth.AllowLoopbackIP(),
+			// auth.AllowLoopbackIP(),
 			web.FinalHandler(handler),
 		)
 		router.Handle(path, handler)

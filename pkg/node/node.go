@@ -28,6 +28,7 @@ import (
 	"github.com/gauss-project/aurorafs/pkg/localstore"
 	"github.com/gauss-project/aurorafs/pkg/logging"
 	"github.com/gauss-project/aurorafs/pkg/metrics"
+	"github.com/gauss-project/aurorafs/pkg/multicast"
 	"github.com/gauss-project/aurorafs/pkg/netstore"
 	"github.com/gauss-project/aurorafs/pkg/p2p/libp2p"
 	"github.com/gauss-project/aurorafs/pkg/pingpong"
@@ -35,6 +36,7 @@ import (
 	"github.com/gauss-project/aurorafs/pkg/resolver/multiresolver"
 	"github.com/gauss-project/aurorafs/pkg/retrieval"
 	"github.com/gauss-project/aurorafs/pkg/routetab"
+	"github.com/gauss-project/aurorafs/pkg/rpc"
 	"github.com/gauss-project/aurorafs/pkg/shed"
 	"github.com/gauss-project/aurorafs/pkg/topology/bootnode"
 	"github.com/gauss-project/aurorafs/pkg/topology/kademlia"
@@ -47,20 +49,19 @@ import (
 )
 
 type Aurora struct {
-	p2pService     io.Closer
-	p2pCancel      context.CancelFunc
-	apiCloser      io.Closer
-	apiServer      *http.Server
-	debugAPIServer *http.Server
-	resolverCloser io.Closer
-	errorLogWriter *io.PipeWriter
-	tracerCloser   io.Closer
-
+	p2pService       io.Closer
+	p2pCancel        context.CancelFunc
+	apiCloser        io.Closer
+	apiServer        *http.Server
+	debugAPIServer   *http.Server
+	resolverCloser   io.Closer
+	errorLogWriter   *io.PipeWriter
+	tracerCloser     io.Closer
+	groupCloser      io.Closer
 	stateStoreCloser io.Closer
 	localstoreCloser io.Closer
 	topologyCloser   io.Closer
-
-	ethClientCloser func()
+	ethClientCloser  func()
 	// recoveryHandleCleanup func()
 }
 
@@ -105,7 +106,6 @@ type Options struct {
 	TokenEncryptionKey     string
 	AdminPasswordHash      string
 	RouteAlpha             int32
-	PkPassword             string
 }
 
 func NewAurora(nodeMode aurora.Model, addr string, bosonAddress boson.Address, publicKey ecdsa.PublicKey, signer crypto.Signer, networkID uint64, logger logging.Logger, libp2pPrivateKey *ecdsa.PrivateKey, o Options) (b *Aurora, err error) {
@@ -361,6 +361,15 @@ func NewAurora(nodeMode aurora.Model, addr string, bosonAddress boson.Address, p
 	)
 	b.resolverCloser = multiResolver
 
+	group := multicast.NewService(bosonAddress, p2ps, p2ps, kad, route, logger, multicast.Option{Dev: o.IsDev})
+	group.Start()
+	b.groupCloser = group
+
+	err = p2ps.AddProtocol(group.Protocol())
+	if err != nil {
+		return nil, err
+	}
+
 	var apiService api.Service
 	if o.APIAddr != "" {
 		// API server
@@ -424,7 +433,7 @@ func NewAurora(nodeMode aurora.Model, addr string, bosonAddress boson.Address, p
 		// }
 
 		// inject dependencies and configure full debug api http path routes
-		debugAPIService.Configure(p2ps, pingPong, kad, lightNodes, bootNodes, storer, route, chunkInfo, retrieve)
+		debugAPIService.Configure(p2ps, pingPong, group, kad, lightNodes, bootNodes, storer, route, chunkInfo, retrieve)
 		if apiInterface != nil {
 			debugAPIService.MustRegisterTraffic(apiInterface)
 		}
@@ -452,6 +461,9 @@ func NewAurora(nodeMode aurora.Model, addr string, bosonAddress boson.Address, p
 	if err != nil {
 		return nil, err
 	}
+	stack.RegisterAPIs([]rpc.API{
+		group.API(),
+	})
 	err = stack.Start()
 	if err != nil {
 		return nil, err
@@ -512,6 +524,12 @@ func (b *Aurora) Shutdown(ctx context.Context) error {
 
 	if err := b.localstoreCloser.Close(); err != nil {
 		errs.add(fmt.Errorf("localstore: %w", err))
+	}
+
+	if b.groupCloser != nil {
+		if err := b.groupCloser.Close(); err != nil {
+			errs.add(fmt.Errorf("multicast: %w", err))
+		}
 	}
 
 	if err := b.topologyCloser.Close(); err != nil {
