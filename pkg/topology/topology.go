@@ -24,11 +24,13 @@ type Driver interface {
 	EachNeighbor
 	NeighborhoodDepther
 	SubscribePeersChange() (c <-chan struct{}, unsubscribe func())
+	SubscribePeerState(state p2p.PeerState) (c <-chan p2p.Peer, unsubscribe func())
 	io.Closer
 	Halter
 	Snapshot() *model.KadParams
 	DisconnectForce(addr boson.Address, reason string) error
 	Outbound(peer p2p.Peer)
+	SnapshotConnected() (connected int, peers map[string]*model.PeerInfo)
 	EachKnownPeerer
 }
 

@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/ethereum/go-ethereum/common"
 	"io"
 	"io/ioutil"
 	"math"
@@ -16,6 +15,8 @@ import (
 	"sync"
 	"time"
 	"unicode/utf8"
+
+	"github.com/ethereum/go-ethereum/common"
 
 	"github.com/gauss-project/aurorafs/pkg/auth"
 	"github.com/gauss-project/aurorafs/pkg/boson"
@@ -485,9 +486,9 @@ func calculateNumberOfChunks(contentLength int64, isEncrypted bool) int64 {
 	return int64(totalChunks) + 1
 }
 
-//func requestCalculateNumberOfChunks(r *http.Request) int64 {
+// func requestCalculateNumberOfChunks(r *http.Request) int64 {
 //	if !strings.Contains(r.Header.Get(contentTypeHeader), "multipart") && r.ContentLength > 0 {
 //		return calculateNumberOfChunks(r.ContentLength, requestEncrypt(r))
 //	}
 //	return 0
-//}
+// }

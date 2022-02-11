@@ -1,0 +1,33 @@
+syntax = "proto3";
+
+package multicast;
+
+option go_package = "pb";
+
+message GIDs {
+  repeated bytes gid = 1;
+}
+
+message FindGroupReq {
+  bytes gid = 1;
+  int32 limit = 2;
+  int32 ttl = 3;
+  repeated bytes paths = 4;
+}
+
+message FindGroupResp {
+  repeated bytes addresses = 1;
+}
+
+message MulticastMsg {
+  uint64 id = 1;
+  int64 createTime = 2;
+  bytes origin = 3;
+  bytes gid = 4;
+  bytes data = 5;
+}
+
+message Notify {
+  int32 status = 1; // 1 join group ,2 leave group
+  repeated bytes gids = 2;
+}
