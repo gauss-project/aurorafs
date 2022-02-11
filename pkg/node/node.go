@@ -61,7 +61,7 @@ type Aurora struct {
 	topologyCloser   io.Closer
 
 	ethClientCloser func()
-	//recoveryHandleCleanup func()
+	// recoveryHandleCleanup func()
 }
 
 type Options struct {
@@ -71,6 +71,8 @@ type Options struct {
 	DBWriteBufferSize        uint64
 	DBBlockCacheCapacity     uint64
 	DBDisableSeeksCompaction bool
+	HTTPAddr                 string
+	WSAddr                   string
 	APIAddr                  string
 	DebugAPIAddr             string
 	ApiBufferSizeMul         int
@@ -88,10 +90,10 @@ type Options struct {
 	TracingEnabled           bool
 	TracingEndpoint          string
 	TracingServiceName       string
-	//GlobalPinningEnabled     bool
-	//PaymentThreshold         string
-	//PaymentTolerance         string
-	//PaymentEarly             string
+	// GlobalPinningEnabled     bool
+	// PaymentThreshold         string
+	// PaymentTolerance         string
+	// PaymentEarly             string
 	ResolverConnectionCfgs []multiresolver.ConnectionConfig
 	GatewayMode            bool
 	TrafficEnable          bool
@@ -400,7 +402,7 @@ func NewAurora(nodeMode aurora.Model, addr string, bosonAddress boson.Address, p
 		// register metrics from components
 		debugAPIService.MustRegisterMetrics(p2ps.Metrics()...)
 		debugAPIService.MustRegisterMetrics(pingPong.Metrics()...)
-		//debugAPIService.MustRegisterMetrics(acc.Metrics()...)
+		// debugAPIService.MustRegisterMetrics(acc.Metrics()...)
 		debugAPIService.MustRegisterMetrics(storer.Metrics()...)
 		debugAPIService.MustRegisterMetrics(kad.Metrics()...)
 		debugAPIService.MustRegisterMetrics(lightNodes.Metrics()...)
@@ -417,9 +419,9 @@ func NewAurora(nodeMode aurora.Model, addr string, bosonAddress boson.Address, p
 			debugAPIService.MustRegisterMetrics(l.Metrics()...)
 		}
 
-		//if l, ok := settlement.(metrics.Collector); ok {
+		// if l, ok := settlement.(metrics.Collector); ok {
 		//	debugAPIService.MustRegisterMetrics(l.Metrics()...)
-		//}
+		// }
 
 		// inject dependencies and configure full debug api http path routes
 		debugAPIService.Configure(p2ps, pingPong, kad, lightNodes, bootNodes, storer, route, chunkInfo, retrieve)
@@ -433,6 +435,26 @@ func NewAurora(nodeMode aurora.Model, addr string, bosonAddress boson.Address, p
 	}
 	if !o.IsDev {
 		hiveObj.Start()
+	}
+
+	stack, err := NewRPC(logger, Config{
+		DebugAPIAddr: o.DebugAPIAddr,
+		APIAddr:      o.APIAddr,
+		//
+		DataDir: o.DataDir,
+		// HTTPAddr:    o.HTTPAddr,
+		// HTTPCors:    o.CORSAllowedOrigins,
+		// HTTPModules: []string{"debug", "api"},
+		WSAddr:    o.WSAddr,
+		WSOrigins: o.CORSAllowedOrigins,
+		WSModules: []string{},
+	})
+	if err != nil {
+		return nil, err
+	}
+	err = stack.Start()
+	if err != nil {
+		return nil, err
 	}
 
 	p2ps.Ready()

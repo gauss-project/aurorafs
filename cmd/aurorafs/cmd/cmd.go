@@ -24,6 +24,8 @@ const (
 	optionNameDBDisableSeeksCompaction = "db-disable-seeks-compaction"
 	optionNamePassword                 = "password"
 	optionNamePasswordFile             = "password-file"
+	optionNameHTTPAddr                 = "http-addr"
+	optionNameWebsocketAddr            = "ws-addr"
 	optionNameAPIAddr                  = "api-addr"
 	optionNameP2PAddr                  = "p2p-addr"
 	optionNameNATAddr                  = "nat-addr"
@@ -45,9 +47,9 @@ const (
 	optionNameVerbosity                = "verbosity"
 	optionNameGlobalPinningEnabled     = "global-pinning-enable"
 	optionNameApiFileBufferMultiple    = "api-file-buffer-multiple"
-	//optionNamePaymentThreshold          = "payment-threshold"
-	//optionNamePaymentTolerance          = "payment-tolerance"
-	//optionNamePaymentEarly              = "payment-early"
+	// optionNamePaymentThreshold          = "payment-threshold"
+	// optionNamePaymentTolerance          = "payment-tolerance"
+	// optionNamePaymentEarly              = "payment-early"
 	optionNameResolverEndpoints   = "resolver-options"
 	optionNameBootnodeMode        = "bootnode-mode"
 	optionNameFullNode            = "full-node"
@@ -57,10 +59,10 @@ const (
 	optionNameBinMaxPeers         = "bin-max-peers"
 	optionNameLightMaxPeers       = "light-max-peers"
 	optionNameAllowPrivateCIDRs   = "allow-private-cidrs"
-	optionNameRestrictedAPI      = "restricted"
-	optionNameTokenEncryptionKey = "token-encryption-key"
-	optionNameAdminPasswordHash  = "admin-password"
-	optionNameRouteAlpha         = "route-alpha"
+	optionNameRestrictedAPI       = "restricted"
+	optionNameTokenEncryptionKey  = "token-encryption-key"
+	optionNameAdminPasswordHash   = "admin-password"
+	optionNameRouteAlpha          = "route-alpha"
 )
 
 func init() {
@@ -112,9 +114,9 @@ func newCommand(opts ...option) (c *command, err error) {
 		return nil, err
 	}
 
-	//if err := c.initDeployCmd(); err != nil {
+	// if err := c.initDeployCmd(); err != nil {
 	//	return nil, err
-	//}
+	// }
 
 	c.initVersionCmd()
 	c.initDBCmd()
@@ -197,6 +199,8 @@ func (c *command) setAllFlags(cmd *cobra.Command) {
 	cmd.Flags().Bool(optionNameDBDisableSeeksCompaction, false, "disables db compactions triggered by seeks")
 	cmd.Flags().String(optionNamePassword, "", "password for decrypting keys")
 	cmd.Flags().String(optionNamePasswordFile, "", "path to a file that contains password for decrypting keys")
+	cmd.Flags().String(optionNameHTTPAddr, ":1636", "HTTP json-rpc listen address")
+	cmd.Flags().String(optionNameWebsocketAddr, ":1637", "Websocket json-rpc listen address")
 	cmd.Flags().String(optionNameAPIAddr, ":1633", "HTTP API listen address")
 	cmd.Flags().String(optionNameP2PAddr, ":1634", "P2P listen address")
 	cmd.Flags().String(optionNameNATAddr, "", "NAT exposed address")
@@ -218,9 +222,9 @@ func (c *command) setAllFlags(cmd *cobra.Command) {
 	cmd.Flags().String(optionWelcomeMessage, "", "send a welcome message string during handshakes")
 	cmd.Flags().Bool(optionNameGlobalPinningEnabled, false, "enable global pinning")
 	cmd.Flags().Int(optionNameApiFileBufferMultiple, 8, "When the API downloads files, the multiple of the buffer (256kb for files less than 10mb and 512kb for others), the default multiple is 8")
-	//cmd.Flags().String(optionNamePaymentThreshold, "10000000000000", "threshold in BZZ where you expect to get paid from your peers")
-	//cmd.Flags().String(optionNamePaymentTolerance, "50000000000000", "excess debt above payment threshold in BZZ where you disconnect from your peer")
-	//cmd.Flags().String(optionNamePaymentEarly, "1000000000000", "amount in BZZ below the peers payment threshold when we initiate settlement")
+	// cmd.Flags().String(optionNamePaymentThreshold, "10000000000000", "threshold in BZZ where you expect to get paid from your peers")
+	// cmd.Flags().String(optionNamePaymentTolerance, "50000000000000", "excess debt above payment threshold in BZZ where you disconnect from your peer")
+	// cmd.Flags().String(optionNamePaymentEarly, "1000000000000", "amount in BZZ below the peers payment threshold when we initiate settlement")
 	cmd.Flags().StringSlice(optionNameResolverEndpoints, []string{}, "ENS compatible API endpoint for a TLD and with contract address, can be repeated, format [tld:][contract-addr@]url")
 	cmd.Flags().Bool(optionNameGatewayMode, false, "disable a set of sensitive features in the api")
 	cmd.Flags().Bool(optionNameBootnodeMode, false, "cause the node to always accept incoming connections")
