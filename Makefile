@@ -30,8 +30,7 @@ ifeq ($(GOOS), "windows")
 	export CGO_ENABLED=0 || set CGO_ENABLED=0
 	$(GO) build -trimpath -ldflags "$(LDFLAGS)" -o dist/aurora.exe ./cmd/aurorafs
 else
-	export CGO_ENABLED=0
-	$(GO) build -trimpath -ldflags "$(LDFLAGS)" -o dist/aurora ./cmd/aurorafs
+	CGO_ENABLED=0 $(GO) build -trimpath -ldflags "$(LDFLAGS)" -o dist/aurora ./cmd/aurorafs
 endif
 
 dist:
