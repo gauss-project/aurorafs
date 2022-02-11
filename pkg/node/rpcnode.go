@@ -150,6 +150,13 @@ func (n *Node) openEndpoints() error {
 	return err
 }
 
+func (n *Node) wsServerForAddr(endpoint string) *httpServer {
+	if n.config.HTTPAddr == "" || n.http.endpoint == endpoint {
+		return n.http
+	}
+	return n.ws
+}
+
 // configureRPC is a helper method to configure all the various RPC endpoints during node
 // startup. It's not meant to be called at any time afterwards as it makes certain
 // assumptions about the state of the node.
@@ -183,15 +190,16 @@ func (n *Node) startRPC() error {
 
 	// Configure WebSocket.
 	if n.config.WSAddr != "" {
+		server := n.wsServerForAddr(n.config.WSAddr)
 		config := wsConfig{
 			Modules: n.config.WSModules,
 			Origins: n.config.WSOrigins,
 			prefix:  n.config.WSPathPrefix,
 		}
-		if err := n.ws.setListenAddr(n.config.WSAddr); err != nil {
+		if err := server.setListenAddr(n.config.WSAddr); err != nil {
 			return err
 		}
-		if err := n.ws.enableWS(n.rpcAPIs, config); err != nil {
+		if err := server.enableWS(n.rpcAPIs, config); err != nil {
 			return err
 		}
 	}
