@@ -77,11 +77,12 @@ func (ci *ChunkInfo) updateNeighborChunkInfo(rootCid, cid boson.Address, overlay
 	}
 	bv, ok := ci.ct.presence[rc][over]
 
-	v := ci.cp.getCidStore(rootCid, cid)
-	if v < 0 {
-		ci.chunkPutChanUpdate(context.Background(), ci.cp, ci.cp.updateCidSort, rootCid, cid, 0)
-		v = 0
-	}
+	v := ci.getCidSort(rootCid, cid)
+	//if v < 0 {
+	// todo
+	//ci.chunkPutChanUpdate(context.Background(), ci.cp, ci.cp.updateCidSort, rootCid, cid, 0)
+	//v = 0
+	//}
 	bv.Set(v)
 	// db
 	return ci.storer.Put(generateKey(keyPrefix, rootCid, overlay), &bitVector{B: bv.Bytes(), Len: bv.Len()})

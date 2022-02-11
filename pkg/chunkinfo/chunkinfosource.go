@@ -125,7 +125,7 @@ func (ci *ChunkInfo) UpdateChunkInfoSource(rootCid, sourceOverlay boson.Address,
 		vb, _ = bitvector.New(v)
 		ci.cs.presence[rc].ChunkSource[over] = vb
 	}
-	v := ci.cp.getCidStore(rootCid, cid)
+	v := ci.getCidSort(rootCid, cid)
 	vb.Set(v)
 	// db
 	return ci.cs.storer.Put(generateKey(chunkSourceKeyPrefix, rootCid, sourceOverlay), &bitVector{B: vb.Bytes(), Len: vb.Len()})
