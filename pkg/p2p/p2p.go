@@ -4,10 +4,11 @@ package p2p
 
 import (
 	"context"
-	"github.com/gauss-project/aurorafs/pkg/routetab/pb"
 	"io"
 	"net"
 	"time"
+
+	"github.com/gauss-project/aurorafs/pkg/routetab/pb"
 
 	"github.com/gauss-project/aurorafs/pkg/aurora"
 	"github.com/gauss-project/aurorafs/pkg/boson"
@@ -159,3 +160,11 @@ const (
 func NewAuroraStreamName(protocol, version, stream string) string {
 	return "/boson/" + protocol + "/" + version + "/" + stream
 }
+
+type PeerState int
+
+const (
+	PeerStateConnectIn PeerState = iota + 1
+	PeerStateConnectOut
+	PeerStateDisconnect
+)

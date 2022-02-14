@@ -261,6 +261,12 @@ func applyPolicies(e *casbin.Enforcer) error {
 		{"maintainer", "/keystore", "(GET)|(POST)"},
 		{"maintainer", "/privatekey", "GET"},
 		{"maintainer", "/transaction", "POST"},
+
+		// multicast
+		{"maintainer", "/multicast/*", "POST"},
+		{"maintainer", "/topology/group", "GET"},
+		{"maintainer", "/group/*", "(DELETE)|(POST)"},
+		{"maintainer", "/group/observe/*", "(DELETE)|(POST)"},
 	})
 
 	return err

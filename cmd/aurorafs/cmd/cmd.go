@@ -22,6 +22,8 @@ const (
 	optionDatabasePath              = "db-path"
 	optionNamePassword              = "password"
 	optionNamePasswordFile          = "password-file"
+	optionNameHTTPAddr              = "http-addr"
+	optionNameWebsocketAddr         = "ws-addr"
 	optionNameAPIAddr               = "api-addr"
 	optionNameP2PAddr               = "p2p-addr"
 	optionNameNATAddr               = "nat-addr"
@@ -193,6 +195,8 @@ func (c *command) setAllFlags(cmd *cobra.Command) {
 	cmd.Flags().String(optionDatabasePath, "", fmt.Sprintf("if the path not empty, all chunks will be stored at this directory"))
 	cmd.Flags().String(optionNamePassword, "", "password for decrypting keys")
 	cmd.Flags().String(optionNamePasswordFile, "", "path to a file that contains password for decrypting keys")
+	cmd.Flags().String(optionNameHTTPAddr, ":1636", "HTTP json-rpc listen address")
+	cmd.Flags().String(optionNameWebsocketAddr, ":1637", "Websocket json-rpc listen address")
 	cmd.Flags().String(optionNameAPIAddr, ":1633", "HTTP API listen address")
 	cmd.Flags().String(optionNameP2PAddr, ":1634", "P2P listen address")
 	cmd.Flags().String(optionNameNATAddr, "", "NAT exposed address")

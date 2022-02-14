@@ -85,10 +85,10 @@ test:
 	$(GO) test -v -failfast ./...
 
 .PHONY: build
-build: export CGO_ENABLED=0 || set CGO_ENABLED=0
+build: export CGO_ENABLED=0
 build: check-version
 build:
-	$(GO) build -tags leveldb -trimpath -ldflags "$(LDFLAGS)" ./...
+	$(GO) build -trimpath -ldflags "$(LDFLAGS)" ./...
 
 .PHONY: android
 android: check-java

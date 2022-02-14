@@ -2,6 +2,9 @@ package debugapi
 
 import (
 	"expvar"
+	"net/http"
+	"net/http/pprof"
+
 	"github.com/gauss-project/aurorafs/pkg/auth"
 	"github.com/gauss-project/aurorafs/pkg/jsonhttp"
 	"github.com/gauss-project/aurorafs/pkg/logging/httpaccess"
@@ -9,8 +12,6 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/sirupsen/logrus"
-	"net/http"
-	"net/http/pprof"
 	"resenje.org/web"
 )
 
@@ -107,6 +108,22 @@ func (s *Service) newRouter() *mux.Router {
 	handle("/topology", jsonhttp.MethodHandler{
 		"GET": http.HandlerFunc(s.topologyHandler),
 	})
+	if s.group != nil {
+		handle("/topology/group", jsonhttp.MethodHandler{
+			"GET": http.HandlerFunc(s.groupsTopologyHandler),
+		})
+		handle("/group/{gid}", jsonhttp.MethodHandler{
+			"POST":   http.HandlerFunc(s.groupJoinHandler),
+			"DELETE": http.HandlerFunc(s.groupLeaveHandler),
+		})
+		handle("/group/observe/{gid}", jsonhttp.MethodHandler{
+			"POST":   http.HandlerFunc(s.groupObserveHandler),
+			"DELETE": http.HandlerFunc(s.groupObserveCancelHandler),
+		})
+		handle("/multicast/{gid}", jsonhttp.MethodHandler{
+			"POST": http.HandlerFunc(s.multicastMsg),
+		})
+	}
 	handle("/route/{peer-id}", jsonhttp.MethodHandler{
 		"GET":    http.HandlerFunc(s.getRouteHandel),
 		"POST":   http.HandlerFunc(s.findRouteHandel),
@@ -149,7 +166,7 @@ func (s *Service) newRouter() *mux.Router {
 func (s *Service) newLoopbackRouter(router *mux.Router) {
 	var handle = func(path string, handler http.Handler) {
 		handler = web.ChainHandlers(
-			//auth.AllowLoopbackIP(),
+			// auth.AllowLoopbackIP(),
 			web.FinalHandler(handler),
 		)
 		router.Handle(path, handler)

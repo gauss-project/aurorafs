@@ -2,6 +2,7 @@ package mock
 
 import (
 	"context"
+	"github.com/gauss-project/aurorafs/pkg/aurora"
 	"github.com/gauss-project/aurorafs/pkg/topology/model"
 	"sync"
 
@@ -75,6 +76,34 @@ func (m *Mock) EachNeighbor(model.EachPeerFunc) error {
 
 func (m *Mock) EachNeighborRev(model.EachPeerFunc) error {
 	panic("not implemented") // TODO: Implement
+}
+
+func (m *Mock) ClosestPeers(addr boson.Address, limit int, skipPeers ...boson.Address) ([]boson.Address, error) {
+	panic("implement me")
+}
+
+func (m *Mock) DisconnectForce(addr boson.Address, reason string) error {
+	m.Disconnected(p2p.Peer{
+		Address: addr,
+		Mode:    aurora.NewModel(),
+	})
+	return nil
+}
+
+func (m *Mock) Outbound(peer p2p.Peer) {
+
+}
+
+func (m *Mock) EachKnownPeer(peerFunc model.EachPeerFunc) error {
+	panic("implement me")
+}
+
+func (m *Mock) EachKnownPeerRev(peerFunc model.EachPeerFunc) error {
+	panic("implement me")
+}
+
+func (m *Mock) SnapshotConnected() (connected int, peers map[string]*model.PeerInfo) {
+	return
 }
 
 // EachPeer iterates from closest bin to farthest
@@ -175,6 +204,10 @@ func (m *Mock) SubscribePeersChange() (c <-chan struct{}, unsubscribe func()) {
 	}
 
 	return channel, unsubscribe
+}
+
+func (m *Mock) SubscribePeerState(state p2p.PeerState) (c <-chan p2p.Peer, unsubscribe func()) {
+	panic("implement me")
 }
 
 func (m *Mock) Trigger() {

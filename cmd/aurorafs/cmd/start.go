@@ -111,6 +111,8 @@ func (c *command) initStartCmd() (err error) {
 				CacheCapacity:         c.config.GetUint64(optionNameCacheCapacity),
 				DBDriver:              c.config.GetString(optionDatabaseDriver),
 				DBPath:                c.config.GetString(optionDatabasePath),
+				HTTPAddr:              c.config.GetString(optionNameHTTPAddr),
+				WSAddr:                c.config.GetString(optionNameWebsocketAddr),
 				APIAddr:               c.config.GetString(optionNameAPIAddr),
 				DebugAPIAddr:          debugAPIAddr,
 				ApiBufferSizeMul:      c.config.GetInt(optionNameApiFileBufferMultiple),

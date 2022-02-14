@@ -5,15 +5,16 @@ import (
 	random "crypto/rand"
 	"encoding/json"
 	"errors"
-	"github.com/gauss-project/aurorafs/pkg/aurora"
-	"github.com/gauss-project/aurorafs/pkg/topology/bootnode"
-	"github.com/gauss-project/aurorafs/pkg/topology/model"
-	"golang.org/x/sync/errgroup"
 	"math/big"
 	"net"
 	"sync"
 	"syscall"
 	"time"
+
+	"github.com/gauss-project/aurorafs/pkg/aurora"
+	"github.com/gauss-project/aurorafs/pkg/topology/bootnode"
+	"github.com/gauss-project/aurorafs/pkg/topology/model"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/gauss-project/aurorafs/pkg/addressbook"
 	"github.com/gauss-project/aurorafs/pkg/boson"
@@ -94,6 +95,8 @@ type Kad struct {
 	manageC           chan struct{} // trigger the manage forever loop to connect to new peers
 	peerSig           []chan struct{}
 	peerSigMtx        sync.Mutex
+	peerStateSig      map[p2p.PeerState][]chan p2p.Peer
+	peerStateSigMtx   sync.RWMutex
 	logger            logging.Logger // logger
 	nodeMode          aurora.Model   // indicates whether the node working mode
 	collector         *im.Collector
@@ -113,7 +116,7 @@ func New(
 	base boson.Address,
 	addressbook addressbook.Interface,
 	discovery discovery.Driver,
-	p2p p2p.Service,
+	p2ps p2p.Service,
 	bootNodes *bootnode.Container,
 	metricsDB *shed.DB,
 	logger logging.Logger,
@@ -154,7 +157,7 @@ func New(
 		base:              base,
 		discovery:         discovery,
 		addressBook:       addressbook,
-		p2p:               p2p,
+		p2p:               p2ps,
 		saturationFunc:    o.SaturationFunc,
 		bitSuffixLength:   o.BitSuffixLength,
 		commonBinPrefixes: make([][]boson.Address, int(boson.MaxBins)),
@@ -163,6 +166,7 @@ func New(
 		bootnodes:         o.Bootnodes,
 		bootNodes:         bootNodes,
 		manageC:           make(chan struct{}, 1),
+		peerStateSig:      make(map[p2p.PeerState][]chan p2p.Peer),
 		waitNext:          waitnext.New(),
 		logger:            logger,
 		nodeMode:          o.NodeMode,
@@ -962,6 +966,7 @@ func (k *Kad) Outbound(peer p2p.Peer) {
 
 	k.notifyManageLoop()
 	k.notifyPeerSig()
+	k.notifyPeerState(p2p.PeerStateConnectOut, peer)
 }
 
 func (k *Kad) Pick(peer p2p.Peer) bool {
@@ -994,17 +999,18 @@ func (k *Kad) Connected(ctx context.Context, peer p2p.Peer, forceConnection bool
 				return err
 			}
 			_ = k.p2p.Disconnect(randPeer, "kicking out random peer to accommodate node")
-			return k.onConnected(ctx, address)
+			return k.onConnected(ctx, peer)
 		}
 		if !forceConnection {
 			return topology.ErrOversaturated
 		}
 	}
 
-	return k.onConnected(ctx, address)
+	return k.onConnected(ctx, peer)
 }
 
-func (k *Kad) onConnected(ctx context.Context, addr boson.Address) error {
+func (k *Kad) onConnected(ctx context.Context, peer p2p.Peer) error {
+	addr := peer.Address
 	if err := k.Announce(ctx, addr, true); err != nil {
 		return err
 	}
@@ -1026,6 +1032,7 @@ func (k *Kad) onConnected(ctx context.Context, addr boson.Address) error {
 
 	k.notifyManageLoop()
 	k.notifyPeerSig()
+	k.notifyPeerState(p2p.PeerStateConnectIn, peer)
 	return nil
 }
 
@@ -1046,6 +1053,7 @@ func (k *Kad) Disconnected(peer p2p.Peer) {
 
 	k.notifyManageLoop()
 	k.notifyPeerSig()
+	k.notifyPeerState(p2p.PeerStateDisconnect, peer)
 }
 
 // DisconnectForce only debug calls
@@ -1289,6 +1297,50 @@ func (k *Kad) SubscribePeersChange() (c <-chan struct{}, unsubscribe func()) {
 	return channel, unsubscribe
 }
 
+func (k *Kad) SubscribePeerState(state p2p.PeerState) (c <-chan p2p.Peer, unsubscribe func()) {
+	channel := make(chan p2p.Peer, 1)
+	var closeOnce sync.Once
+
+	k.peerStateSigMtx.Lock()
+	defer k.peerStateSigMtx.Unlock()
+
+	m, ok := k.peerStateSig[state]
+	if !ok {
+		m = make([]chan p2p.Peer, 0)
+	}
+	m = append(m, channel)
+	k.peerStateSig[state] = m
+
+	unsubscribe = func() {
+		k.peerStateSigMtx.Lock()
+		defer k.peerStateSigMtx.Unlock()
+		mp, has := k.peerStateSig[state]
+		if has {
+			for i, c := range mp {
+				if c == channel {
+					mp = append(mp[:i], mp[i+1:]...)
+					break
+				}
+			}
+			k.peerStateSig[state] = mp
+		}
+		closeOnce.Do(func() { close(channel) })
+	}
+
+	return channel, unsubscribe
+}
+
+func (k *Kad) notifyPeerState(state p2p.PeerState, peer p2p.Peer) {
+	k.peerStateSigMtx.RLock()
+	mp, ok := k.peerStateSig[state]
+	k.peerStateSigMtx.RUnlock()
+	if ok {
+		for _, ch := range mp {
+			ch <- peer
+		}
+	}
+}
+
 // NeighborhoodDepth returns the current Kademlia depth.
 func (k *Kad) NeighborhoodDepth() uint8 {
 	k.depthMu.RLock()
@@ -1424,6 +1476,19 @@ func (k *Kad) Snapshot() *model.KadParams {
 			Bin31: infos[31],
 		},
 	}
+}
+
+func (k *Kad) SnapshotConnected() (connected int, peers map[string]*model.PeerInfo) {
+	peers = make(map[string]*model.PeerInfo)
+	ss := k.collector.Snapshot(time.Now())
+	_ = k.connectedPeers.EachBin(func(addr boson.Address, po uint8) (bool, bool, error) {
+		peers[addr.String()] = &model.PeerInfo{
+			Address: addr,
+			Metrics: createMetricsSnapshotView(ss[addr.ByteString()]),
+		}
+		return false, false, nil
+	})
+	return k.connectedPeers.Length(), peers
 }
 
 // String returns a string represenstation of Kademlia.

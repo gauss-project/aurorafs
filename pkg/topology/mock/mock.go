@@ -190,19 +190,23 @@ func (d *mock) SubscribePeersChange() (c <-chan struct{}, unsubscribe func()) {
 	return c, unsubscribe
 }
 
-func (m *mock) NeighborhoodDepth() uint8 {
-	return m.depth
+func (d *mock) SubscribePeerState(state p2p.PeerState) (c <-chan p2p.Peer, unsubscribe func()) {
+	return c, unsubscribe
 }
 
-func (m *mock) IsWithinDepth(addr boson.Address) bool {
-	if m.isWithinFunc != nil {
-		return m.isWithinFunc(addr)
+func (d *mock) NeighborhoodDepth() uint8 {
+	return d.depth
+}
+
+func (d *mock) IsWithinDepth(addr boson.Address) bool {
+	if d.isWithinFunc != nil {
+		return d.isWithinFunc(addr)
 	}
 	return false
 }
 
-func (m *mock) EachNeighbor(f model.EachPeerFunc) error {
-	return m.EachPeer(f)
+func (d *mock) EachNeighbor(f model.EachPeerFunc) error {
+	return d.EachPeer(f)
 }
 
 func (*mock) EachNeighborRev(model.EachPeerFunc) error {
@@ -245,6 +249,10 @@ func (d *mock) EachPeerRev(f model.EachPeerFunc) (err error) {
 
 func (d *mock) Snapshot() *model.KadParams {
 	return new(model.KadParams)
+}
+
+func (d *mock) SnapshotConnected() (connected int, peers map[string]*model.PeerInfo) {
+	return
 }
 
 func (d *mock) Halt()        {}

@@ -3,12 +3,13 @@ package debugapi_test
 import (
 	"crypto/ecdsa"
 	"encoding/hex"
-	"github.com/gauss-project/aurorafs/pkg/aurora"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"testing"
+
+	"github.com/gauss-project/aurorafs/pkg/aurora"
 
 	"github.com/gauss-project/aurorafs"
 	accountingmock "github.com/gauss-project/aurorafs/pkg/accounting/mock"
@@ -50,14 +51,14 @@ var logger = logging.New(io.Discard, 0)
 
 func newTestServer(t *testing.T, o testServerOptions) *testServer {
 	topologyDriver := topologymock.NewTopologyDriver(o.TopologyOpts...)
-	//acc := accountingmock.NewAccounting(o.AccountingOpts...)
-	//settlement := swapmock.New(o.SettlementOpts...)
-	//chequebook := chequebookmock.NewChequebook(o.ChequebookOpts...)
-	//swapserv := swapmock.NewApiInterface(o.SwapOpts...)
+	// acc := accountingmock.NewAccounting(o.AccountingOpts...)
+	// settlement := swapmock.New(o.SettlementOpts...)
+	// chequebook := chequebookmock.NewChequebook(o.ChequebookOpts...)
+	// swapserv := swapmock.NewApiInterface(o.SwapOpts...)
 	ln := lightnode.NewContainer(o.Overlay)
 	bn := bootnode.NewContainer(o.Overlay)
 	s := debugapi.New(o.Overlay, o.PublicKey, logging.New(io.Discard, 0), nil, o.CORSAllowedOrigins, false, nil, debugapi.Options{NodeMode: aurora.NewModel()})
-	s.Configure(o.P2P, o.Pingpong, topologyDriver, ln, bn, o.Storer, nil, nil, nil)
+	s.Configure(o.P2P, o.Pingpong, nil, topologyDriver, ln, bn, o.Storer, nil, nil, nil)
 	ts := httptest.NewServer(s)
 	t.Cleanup(ts.Close)
 
@@ -111,10 +112,10 @@ func TestServer_Configure(t *testing.T) {
 		})),
 	}
 	topologyDriver := topologymock.NewTopologyDriver(o.TopologyOpts...)
-	//acc := accountingmock.NewAccounting(o.AccountingOpts...)
-	//settlement := swapmock.New(o.SettlementOpts...)
-	//chequebook := chequebookmock.NewChequebook(o.ChequebookOpts...)
-	//swapserv := swapmock.NewApiInterface(o.SwapOpts...)
+	// acc := accountingmock.NewAccounting(o.AccountingOpts...)
+	// settlement := swapmock.New(o.SettlementOpts...)
+	// chequebook := chequebookmock.NewChequebook(o.ChequebookOpts...)
+	// swapserv := swapmock.NewApiInterface(o.SwapOpts...)
 	ln := lightnode.NewContainer(o.Overlay)
 	bn := bootnode.NewContainer(o.Overlay)
 	s := debugapi.New(o.Overlay, o.PublicKey, logger, nil, nil, false, nil, debugapi.Options{
@@ -147,7 +148,7 @@ func TestServer_Configure(t *testing.T) {
 		}),
 	)
 
-	s.Configure(o.P2P, o.Pingpong, topologyDriver, ln, bn, o.Storer, nil, nil, nil)
+	s.Configure(o.P2P, o.Pingpong, nil, topologyDriver, ln, bn, o.Storer, nil, nil, nil)
 
 	testBasicRouter(t, client)
 	jsonhttptest.Request(t, client, http.MethodGet, "/readiness", http.StatusOK,

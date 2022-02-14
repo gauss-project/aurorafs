@@ -5,9 +5,11 @@ package debugapi
 
 import (
 	"crypto/ecdsa"
-	"github.com/gauss-project/aurorafs/pkg/settlement/traffic"
 	"net/http"
 	"sync"
+
+	"github.com/gauss-project/aurorafs/pkg/multicast"
+	"github.com/gauss-project/aurorafs/pkg/settlement/traffic"
 
 	"github.com/gauss-project/aurorafs/pkg/aurora"
 	"github.com/gauss-project/aurorafs/pkg/boson"
@@ -40,6 +42,7 @@ type Service struct {
 	p2p            p2p.DebugService
 	pingpong       pingpong.Interface
 	topologyDriver topology.Driver
+	group          *multicast.Service
 	storer         storage.Storer
 	logger         logging.Logger
 	tracer         *tracing.Tracer
@@ -49,11 +52,11 @@ type Service struct {
 	chunkInfo      chunkinfo.Interface
 	retrieval      retrieval.Interface
 	traffic        traffic.ApiInterface
-	//accounting         accounting.Interface
-	//settlement         settlement.Interface
-	//chequebookEnabled  bool
-	//chequebook         chequebook.Service
-	//swap               swap.ApiInterface
+	// accounting         accounting.Interface
+	// settlement         settlement.Interface
+	// chequebookEnabled  bool
+	// chequebook         chequebook.Service
+	// swap               swap.ApiInterface
 	corsAllowedOrigins []string
 	metricsRegistry    *prometheus.Registry
 	// handler is changed in the Configure method
@@ -97,21 +100,22 @@ func New(overlay boson.Address, publicKey ecdsa.PublicKey, logger logging.Logger
 // Configure injects required dependencies and configuration parameters and
 // constructs HTTP routes that depend on them. It is intended and safe to call
 // this method only once.
-func (s *Service) Configure(p2p p2p.DebugService, pingpong pingpong.Interface, topologyDriver topology.Driver, lightNodes *lightnode.Container, bootNodes *bootnode.Container, storer storage.Storer, route routetab.RouteTab, chunkinfo chunkinfo.Interface, retrieval retrieval.Interface) {
+func (s *Service) Configure(p2p p2p.DebugService, pingpong pingpong.Interface, group *multicast.Service, topologyDriver topology.Driver, lightNodes *lightnode.Container, bootNodes *bootnode.Container, storer storage.Storer, route routetab.RouteTab, chunkinfo chunkinfo.Interface, retrieval retrieval.Interface) {
 	s.p2p = p2p
 	s.pingpong = pingpong
 	s.topologyDriver = topologyDriver
+	s.group = group
 	s.storer = storer
 	s.lightNodes = lightNodes
 	s.bootNodes = bootNodes
 	s.routetab = route
 	s.chunkInfo = chunkinfo
 	s.retrieval = retrieval
-	//s.accounting = accounting
-	//s.settlement = settlement
-	//s.chequebookEnabled = chequebookEnabled
-	//s.chequebook = chequebook
-	//s.swap = swap
+	// s.accounting = accounting
+	// s.settlement = settlement
+	// s.chequebookEnabled = chequebookEnabled
+	// s.chequebook = chequebook
+	// s.swap = swap
 
 	s.setRouter(s.newRouter())
 }
