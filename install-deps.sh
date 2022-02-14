@@ -1,18 +1,19 @@
 #!/bin/sh
 
-SHELL_FOLDER=$(pwd)
-echo "$SHELL_FOLDER"
-mkdir -p "$SHELL_FOLDER"/lib
+SHELL_FOLDER="$(pwd)"
+INSTALL_DIR="${1:-$SHELL_FOLDER/lib}"
+IS_DOCKER="${2:-false}"
 
+mkdir -p "$SHELL_FOLDER"/lib
 cd "$SHELL_FOLDER"/lib
 
-if bash -c "compgen -G /usr/local/lib/libsnappy.* > /dev/null"; then
+if bash -c "compgen -G "$INSTALL_DIR"/lib/libsnappy.* > /dev/null"; then
   echo "snappy installed"
 else
   if [ ! -d "$SHELL_FOLDER"/lib/snappy ]; then
       git clone https://github.com/google/snappy.git -b 1.1.9
       cd snappy
-      git submodule update --init
+      git submodule update --init --recursive
       cat <<"EOF" > snappy.pc.in
       prefix=@CMAKE_INSTALL_PREFIX@
       exec_prefix=${prefix}
@@ -52,8 +53,6 @@ EOF
        endif(SNAPPY_INSTALL)
 EOF
       patch -p1 < cmake_add_pkgconfig.patch
-      wget -O system_gtest.patch https://github.com/google/snappy/commit/114df35e84ad95b6d5afbcf69aa85a14ff029000.patch || exit
-      patch -p1 < system_gtest.patch
       wget -O reenable_rtti.patch https://github.com/google/snappy/commit/516fdcca6606502e2d562d20c01b225c8d066739.patch || exit
       patch -p1 < reenable_rtti.patch
       wget -O fix_inline.patch https://github.com/google/snappy/pull/128/commits/0c716d435abe65250100c2caea0e5126ac4e14bd.patch || exit
@@ -63,14 +62,19 @@ EOF
     cd "$SHELL_FOLDER"/lib/snappy
     [ ! -d build ] && mkdir build
     cd build
-    cmake -DBUILD_SHARED_LIBS=yes -DSNAPPY_USE_BUNDLED_GTEST=OFF -DSNAPPY_USE_BUNDLED_BENCHMARK_LIB=OFF ../ || exit
+    cmake -DCMAKE_INSTALL_PREFIX="$INSTALL_DIR" -DCMAKE_INSTALL_LIBDIR="$INSTALL_DIR"/lib -DBUILD_SHARED_LIBS=yes -DSNAPPY_BUILD_TESTS=OFF -DSNAPPY_BUILD_BENCHMARKS=OFF ../ || exit
     make || exit
     make install || exit
-    make clean || exit
+    make clean
     cd "$SHELL_FOLDER"/lib
 fi
 
-if bash -c "compgen -G /usr/local/lib/libwiredtiger.* > /dev/null"; then
+if $IS_DOCKER; then
+  cp -r "$INSTALL_DIR"/lib/* /usr/local/lib
+  ldconfig
+fi
+
+if bash -c "compgen -G "$INSTALL_DIR"/lib/libwiredtiger.* > /dev/null"; then
   echo "wiredtiger installed"
 else
   if [ ! -d "$SHELL_FOLDER"/lib/wiredtiger ]; then
@@ -84,11 +88,17 @@ else
 
   cd "$SHELL_FOLDER"/lib/wiredtiger
   sh autogen.sh
-  ./configure --enable-snappy CPPFLAGS="-I/usr/local/include" LDFLAGS="-L/usr/local/include"
-  make && make install
+  ./configure --enable-snappy --prefix="$INSTALL_DIR" CPPFLAGS="-I$INSTALL_DIR/include" LDFLAGS="-L$INSTALL_DIR/include" || exit
+  make || exit
+  make install || exit
   make clean
 fi
 
+if $IS_DOCKER; then
+  cp -r "$INSTALL_DIR"/lib/* /usr/local/lib
+  cp -r "$INSTALL_DIR"/include/* /usr/local/include
+fi
+
 if command -v ldconfig > /dev/null; then
-  ldconfig
+  ldconfig "$INSTALL_DIR"/lib
 fi

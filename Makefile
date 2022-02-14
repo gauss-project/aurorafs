@@ -19,7 +19,11 @@ LDFLAGS ?= -s -w -X github.com/gauss-project/aurorafs.commitHash="$(COMMIT_HASH)
 
 GOOS ?= "$(shell go env GOOS)"
 SHELL ?= bash
+IS_DOCKER ?= false
 DATABASE ?= wiredtiger
+LIB_INSTALL_DIR ?= /usr/local
+
+CGO_ENABLED ?= "$(shell go env CGO_ENABLED)"
 
 .PHONY: all
 all: build lint vet test-race binary
@@ -29,20 +33,25 @@ binary-wt: DATABASE=wiredtiger
 binary-wt: binary
 
 .PHONY: binary-ldb
-binary-wt: DATABASE=leveldb
-binary-wt: binary
+binary-ldb: DATABASE=leveldb
+binary-ldb: binary
 
 .PHONY: binary
 binary: dist FORCE
 	$(GO) version
-ifeq ($(GOOS), "windows")
-	export CGO_ENABLED=0 || set CGO_ENABLED=0
+ifeq ("$(GOOS)", "windows")
+	$(GO) env -w CGO_ENABLED=0
 	$(GO) build -tags leveldb -trimpath -ldflags "$(LDFLAGS)" -o dist/aurora.exe ./cmd/aurorafs
 else
-	./install-deps.sh
-	export CGO_ENABLED=1
+ifeq ("$(DATABASE)", "wiredtiger")
+	sh -c "./install-deps.sh $(LIB_INSTALL_DIR) $(IS_DOCKER)"
+	$(GO) env -w CGO_ENABLED=1
+else
+	$(GO) env -w CGO_ENABLED=0
+endif
 	$(GO) build -tags $(DATABASE) -trimpath -ldflags "$(LDFLAGS)" -o dist/aurora ./cmd/aurorafs
 endif
+	$(GO) env -w CGO_ENABLED=$(CGO_ENABLED)
 
 dist:
 	mkdir $@
