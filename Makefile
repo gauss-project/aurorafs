@@ -6,24 +6,24 @@ GOLANGCI_LINT_VERSION ?= v1.42.1
 GOGOPROTOBUF ?= protoc-gen-gogofaster
 GOGOPROTOBUF_VERSION ?= v1.3.2
 
-GO_MIN_VERSION ?= "1.17"
-GO_BUILD_VERSION ?= "1.17.2"
-GO_MOD_ENABLED_VERSION ?= "1.12"
-GO_MOD_VERSION ?= "$(shell go mod edit -print | awk '/^go[ \t]+[0-9]+\.[0-9]+(\.[0-9]+)?[ \t]*$$/{print $$2}')"
-GO_SYSTEM_VERSION ?= "$(shell go version | awk '{ gsub(/go/, "", $$3); print $$3 }')"
+GO_MIN_VERSION ?= 1.17
+GO_BUILD_VERSION ?= 1.17.2
+GO_MOD_ENABLED_VERSION ?= 1.12
+GO_MOD_VERSION ?= $(shell go mod edit -print | awk '/^go[ \t]+[0-9]+\.[0-9]+(\.[0-9]+)?[ \t]*$$/{print $$2}')
+GO_SYSTEM_VERSION ?= $(shell go version | awk '{ gsub(/go/, "", $$3); print $$3 }')
 
-COMMIT_HASH ?= "$(shell git describe --long --dirty --always --match "" || true)"
-CLEAN_COMMIT ?= "$(shell git describe --long --always --match "" || true)"
-COMMIT_TIME ?= "$(shell git show -s --format=%ct $(CLEAN_COMMIT) || true)"
+COMMIT_HASH ?= $(shell git describe --long --dirty --always --match "" || true)
+CLEAN_COMMIT ?= $(shell git describe --long --always --match "" || true)
+COMMIT_TIME ?= $(shell git show -s --format=%ct $(CLEAN_COMMIT) || true)
 LDFLAGS ?= -s -w -X github.com/gauss-project/aurorafs.commitHash="$(COMMIT_HASH)" -X github.com/gauss-project/aurorafs.commitTime="$(COMMIT_TIME)"
 
-GOOS ?= "$(shell go env GOOS)"
+GOOS ?= $(shell go env GOOS)
 SHELL ?= bash
 IS_DOCKER ?= false
 DATABASE ?= wiredtiger
 LIB_INSTALL_DIR ?= /usr/local
 
-CGO_ENABLED ?= "$(shell go env CGO_ENABLED)"
+CGO_ENABLED ?= $(shell go env CGO_ENABLED)
 
 .PHONY: all
 all: build lint vet test-race binary
@@ -39,11 +39,11 @@ binary-ldb: binary
 .PHONY: binary
 binary: dist FORCE
 	$(GO) version
-ifeq ("$(GOOS)", "windows")
+ifeq ($(GOOS), windows)
 	$(GO) env -w CGO_ENABLED=0
 	$(GO) build -tags leveldb -trimpath -ldflags "$(LDFLAGS)" -o dist/aurora.exe ./cmd/aurorafs
 else
-ifeq ("$(DATABASE)", "wiredtiger")
+ifeq ($(DATABASE), wiredtiger)
 	sh -c "./install-deps.sh $(LIB_INSTALL_DIR) $(IS_DOCKER)"
 	$(GO) env -w CGO_ENABLED=1
 else
