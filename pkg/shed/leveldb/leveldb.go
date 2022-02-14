@@ -8,7 +8,6 @@ import (
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/iterator"
 	"github.com/syndtr/goleveldb/leveldb/opt"
-	"github.com/syndtr/goleveldb/leveldb/util"
 )
 
 type LevelDB struct {
@@ -65,16 +64,14 @@ func (l *LevelDB) Delete(key driver.Key) error {
 }
 
 func (l *LevelDB) Search(query driver.Query) driver.Cursor {
-	var rng *util.Range
+	i := l.db.NewIterator(nil, nil)
 
-	if query.Prefix.Data != nil {
-		rng = util.BytesPrefix(query.Prefix.Data)
-	}
+	i.Seek(query.Prefix.Data)
 
 	return &Iterator{
 		q: query,
 		m: l.m,
-		i: l.db.NewIterator(rng, nil),
+		i: i,
 	}
 }
 

@@ -22,6 +22,7 @@ import (
 	"errors"
 	"io"
 	"math/rand"
+	"os"
 	"runtime"
 	"sync"
 	"testing"
@@ -32,14 +33,17 @@ import (
 	"github.com/gauss-project/aurorafs/pkg/logging"
 	routetab "github.com/gauss-project/aurorafs/pkg/routetab/mock"
 	"github.com/gauss-project/aurorafs/pkg/shed"
+	"github.com/gauss-project/aurorafs/pkg/shed/driver"
 	"github.com/gauss-project/aurorafs/pkg/storage"
 	chunktesting "github.com/gauss-project/aurorafs/pkg/storage/testing"
-	"github.com/syndtr/goleveldb/leveldb"
 )
 
 var (
 	// chunkinfo service inject
 	ci = chunkinfo.New(routetab.NewMockRouteTable())
+
+	// default db driver
+	dbTest = "wiredtiger"
 )
 
 func init() {
@@ -162,7 +166,17 @@ func newTestDB(t testing.TB, o *Options) *DB {
 		t.Fatal(err)
 	}
 	logger := logging.New(io.Discard, 0)
-	db, err := New("", baseKey, o, logger)
+	var path string
+	switch dbTest {
+	case "leveldb":
+	case "wiredtiger":
+		dir, err := os.MkdirTemp("", "shed-test")
+		if err != nil {
+			t.Fatal(err)
+		}
+		path = dir
+	}
+	db, err := New(path, baseKey, o, logger)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -172,6 +186,7 @@ func newTestDB(t testing.TB, o *Options) *DB {
 		if err != nil {
 			t.Error(err)
 		}
+		_ = os.RemoveAll(path)
 	})
 	return db
 }
@@ -260,7 +275,7 @@ func newRetrieveIndexesTest(db *DB, chunk boson.Chunk, storeTimestamp, accessTim
 		validateItem(t, item, chunk.Address().Bytes(), chunk.Data(), storeTimestamp, 0)
 
 		// access index should not be set
-		wantErr := leveldb.ErrNotFound
+		wantErr := driver.ErrNotFound
 		_, err = db.retrievalAccessIndex.Get(addressToItem(chunk.Address()))
 		if !errors.Is(err, wantErr) {
 			t.Errorf("got error %v, want %v", err, wantErr)

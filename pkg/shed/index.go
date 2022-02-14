@@ -171,7 +171,7 @@ func (f Index) Fill(items []Item) (err error) {
 		return fmt.Errorf("get snapshot: %w", err)
 	}
 	defer func() {
-		err = snapshot.Close()
+		_ = snapshot.Close()
 	}()
 
 	for i, item := range items {
@@ -272,6 +272,11 @@ func (f Index) Delete(keyFields Item) (err error) {
 	if err != nil {
 		return fmt.Errorf("encode key: %w", err)
 	}
+	defer func() {
+		if errors.Is(err, driver.ErrNotFound) {
+			err = nil
+		}
+	}()
 	return f.db.Delete(indexKeyPrefixLength, key)
 }
 
@@ -282,6 +287,11 @@ func (f Index) DeleteInBatch(batch driver.Batching, keyFields Item) (err error) 
 	if err != nil {
 		return fmt.Errorf("encode key: %w", err)
 	}
+	defer func() {
+		if errors.Is(err, driver.ErrNotFound) {
+			err = nil
+		}
+	}()
 	return batch.Delete(driver.Key{
 		Prefix: indexKeyPrefixLength,
 		Data:   key,
@@ -336,20 +346,11 @@ func (f Index) Iterate(fn IndexIterFunc, options *IterateOptions) (err error) {
 		err = it.Close()
 	}()
 
-	var ok bool
+	ok := it.Valid()
 
-	if !options.Reverse {
-		if !ok {
-			// stop iterator if seek has failed
-			return it.Error()
-		}
-	} else {
+	if options.Reverse {
 		// reverse seeker
-		if options.StartFrom != nil {
-			if !ok {
-				return it.Error()
-			}
-		} else {
+		if options.StartFrom == nil {
 			// find last key for this index (and prefix)
 			// move cursor to last key
 			ok = it.Last()
@@ -439,7 +440,7 @@ func (f Index) First(prefix []byte) (i Item, err error) {
 		Data:   append(f.prefix, prefix...),
 	}})
 	defer func() {
-		err = it.Close()
+		_ = it.Close()
 	}()
 
 	totalPrefix := append(f.prefix, prefix...)
@@ -478,7 +479,7 @@ func (f Index) Last(prefix []byte) (i Item, err error) {
 		Data:   f.prefix,
 	}})
 	defer func() {
-		err = it.Close()
+		_ = it.Close()
 	}()
 
 	// get the next prefix in line
@@ -530,10 +531,10 @@ func (f Index) Count() (count int, err error) {
 		Data:   f.prefix,
 	}})
 	defer func() {
-		err = it.Close()
+		_ = it.Close()
 	}()
 
-	for it.Next() {
+	for ok := it.Valid(); ok; ok = it.Next() {
 		key := it.Key()
 		if key[0] != f.prefix[0] {
 			break
@@ -555,10 +556,10 @@ func (f Index) CountFrom(start Item) (count int, err error) {
 		Data:   startKey,
 	}})
 	defer func() {
-		err = it.Close()
+		_ = it.Close()
 	}()
 
-	for it.Next() {
+	for ok := it.Valid(); ok; ok = it.Next() {
 		key := it.Key()
 		if key[0] != f.prefix[0] {
 			break

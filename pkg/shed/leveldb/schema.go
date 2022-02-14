@@ -19,17 +19,11 @@ var (
 	keyPrefixIndexStart byte = 2 // Q: or maybe a higher number like 7, to have more space for potential specific perfixes
 )
 
-// schema is used to serialize known database structure information.
-type schema struct {
-	Fields  map[string]driver.FieldSpec `json:"fields"`  // keys are field names
-	Indexes map[byte]driver.IndexSpec   `json:"indexes"` // keys are index prefix bytes
-}
-
-func (l *LevelDB) GetFieldKey() []byte {
+func (l *LevelDB) DefaultFieldKey() []byte {
 	return []byte{keyPrefixFields}
 }
 
-func (l *LevelDB) GetIndexKey() []byte {
+func (l *LevelDB) DefaultIndexKey() []byte {
 	return []byte{keyPrefixIndexStart}
 }
 
@@ -45,8 +39,8 @@ func (l *LevelDB) CreateField(spec driver.FieldSpec) ([]byte, error) {
 		return nil, fmt.Errorf("get schema: %w", err)
 	}
 	var found bool
-	for n, f := range s.Fields {
-		if n == spec.Name {
+	for _, f := range s.Fields {
+		if f.Name == spec.Name {
 			if f.Type != spec.Type {
 				return nil, fmt.Errorf("field %q of type %q stored as %q in db", spec.Name, spec.Type, f.Type)
 			}
@@ -54,9 +48,7 @@ func (l *LevelDB) CreateField(spec driver.FieldSpec) ([]byte, error) {
 		}
 	}
 	if !found {
-		s.Fields[spec.Name] = driver.FieldSpec{
-			Type: spec.Type,
-		}
+		s.Fields = append(s.Fields, spec)
 		err := l.putSchema(s)
 		if err != nil {
 			return nil, fmt.Errorf("put schema: %w", err)
@@ -71,17 +63,18 @@ func (l *LevelDB) CreateIndex(spec driver.IndexSpec) ([]byte, error) {
 		return nil, fmt.Errorf("get schema: %w", err)
 	}
 	nextID := keyPrefixIndexStart
-	for i, f := range s.Indexes {
-		if i >= nextID {
-			nextID = i + 1
+	for _, f := range s.Indexes {
+		if f.Prefix[0] >= nextID {
+			nextID = f.Prefix[0] + 1
 		}
 		if f.Name == spec.Name {
-			return []byte{i}, nil
+			return f.Prefix, nil
 		}
 	}
 	id := nextID
-	s.Indexes[id] = spec
-	return []byte{id}, l.putSchema(s)
+	spec.Prefix = []byte{id}
+	s.Indexes = append(s.Indexes, spec)
+	return spec.Prefix, l.putSchema(s)
 }
 
 func (l *LevelDB) RenameIndex(oldName, newName string) (bool, error) {
@@ -100,9 +93,7 @@ func (l *LevelDB) RenameIndex(oldName, newName string) (bool, error) {
 	}
 	for i, f := range s.Indexes {
 		if f.Name == oldName {
-			s.Indexes[i] = driver.IndexSpec{
-				Name: newName,
-			}
+			s.Indexes[i].Name = newName
 			return true, l.putSchema(s)
 		}
 		if f.Name == newName {
@@ -112,9 +103,13 @@ func (l *LevelDB) RenameIndex(oldName, newName string) (bool, error) {
 	return false, nil
 }
 
+func (l *LevelDB) GetSchemaSpec() (driver.SchemaSpec, error) {
+	return l.getSchema()
+}
+
 // getSchema retrieves the complete schema from
 // the database.
-func (l *LevelDB) getSchema() (s schema, err error) {
+func (l *LevelDB) getSchema() (s driver.SchemaSpec, err error) {
 	b, err := l.Get(driver.Key{Data: keySchema})
 	if err != nil {
 		return s, err
@@ -125,7 +120,7 @@ func (l *LevelDB) getSchema() (s schema, err error) {
 
 // putSchema stores the complete schema to
 // the database.
-func (l *LevelDB) putSchema(s schema) (err error) {
+func (l *LevelDB) putSchema(s driver.SchemaSpec) (err error) {
 	b, err := json.Marshal(s)
 	if err != nil {
 		return err

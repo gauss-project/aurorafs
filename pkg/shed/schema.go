@@ -28,8 +28,8 @@ var (
 )
 
 func (db *DB) initSchema() {
-	fieldKeyPrefixLength = len(db.backend.GetFieldKey())
-	indexKeyPrefixLength = len(db.backend.GetIndexKey())
+	fieldKeyPrefixLength = len(db.backend.DefaultFieldKey())
+	indexKeyPrefixLength = len(db.backend.DefaultIndexKey())
 }
 
 // schemaFieldKey retrieves the complete LevelDB key for
@@ -73,4 +73,10 @@ func (db *DB) schemaIndexPrefix(name string) (id []byte, err error) {
 	return db.backend.CreateIndex(driver.IndexSpec{
 		Name: name,
 	})
+}
+
+// getSchema retrieves the complete schema from
+// the database.
+func (db *DB) getSchema() (s driver.SchemaSpec, err error) {
+	return db.backend.GetSchemaSpec()
 }

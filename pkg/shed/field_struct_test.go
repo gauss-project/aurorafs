@@ -19,7 +19,7 @@ package shed
 import (
 	"testing"
 
-	"github.com/syndtr/goleveldb/leveldb"
+	"github.com/gauss-project/aurorafs/pkg/shed/driver"
 )
 
 // TestStructField validates put and get operations
@@ -39,8 +39,8 @@ func TestStructField(t *testing.T) {
 	t.Run("get empty", func(t *testing.T) {
 		var s complexStructure
 		err := complexField.Get(&s)
-		if err != leveldb.ErrNotFound {
-			t.Fatalf("got error %v, want %v", err, leveldb.ErrNotFound)
+		if err != driver.ErrNotFound {
+			t.Fatalf("got error %v, want %v", err, driver.ErrNotFound)
 		}
 		want := ""
 		if s.A != want {
@@ -85,7 +85,7 @@ func TestStructField(t *testing.T) {
 	})
 
 	t.Run("put in batch", func(t *testing.T) {
-		batch := new(leveldb.Batch)
+		batch := db.NewBatch()
 		want := complexStructure{
 			A: "simple string batch value",
 		}
@@ -93,7 +93,7 @@ func TestStructField(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		err = db.WriteBatch(batch)
+		err = batch.Commit()
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -107,7 +107,7 @@ func TestStructField(t *testing.T) {
 		}
 
 		t.Run("overwrite", func(t *testing.T) {
-			batch := new(leveldb.Batch)
+			batch := db.NewBatch()
 			want := complexStructure{
 				A: "overwritten string batch value",
 			}
@@ -115,7 +115,7 @@ func TestStructField(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			err = db.WriteBatch(batch)
+			err = batch.Commit()
 			if err != nil {
 				t.Fatal(err)
 			}

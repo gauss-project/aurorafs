@@ -203,14 +203,15 @@ func (cc *cursorCache) closeAll(uri string) error {
 }
 
 type cursor struct {
-	s    *session
-	impl *C.WT_CURSOR
-	typ  dataType
-	gen  uint64
-	uri  string
-	kf   string // key format
-	vf   string // value format
-	exit bool
+	s     *session
+	impl  *C.WT_CURSOR
+	typ   dataType
+	gen   uint64
+	uri   string
+	kf    string // key format
+	vf    string // value format
+	exit  bool
+	delay bool
 }
 
 func openCursor(s *session, uri, config string) (*cursor, error) {
@@ -295,7 +296,7 @@ func (c *cursor) update(key, value []byte) error {
 
 func (c *cursor) find(key []byte) (*resultCursor, error) {
 	if len(key) == 0 {
-		return nil, ErrInvalidArgument
+		return nil, ErrNotFound
 	}
 
 	data := C.CBytes(key) // unsafe.Pointer
@@ -312,25 +313,36 @@ func (c *cursor) find(key []byte) (*resultCursor, error) {
 	return &resultCursor{cursor: c, k: key}, nil
 }
 
-func (c *cursor) search(key []byte) (*searchCursor, error) {
+func (c *cursor) search(key []byte) (s *searchCursor, err error) {
 	var compare C.int
 	var data unsafe.Pointer
 	var size C.size_t = 0
 
-	if len(key) != 0 {
-		data = C.CBytes(key)
-		size = C.size_t(len(key))
-
-		// TODO why free will be stuck?
-		defer C.free(data)
-
-		result := int(C.wiredtiger_cursor_search_near(c.impl, data, size, &compare))
-		if checkError(result) {
-			return nil, NewError(result, c.s)
-		}
+	if len(key) == 0 {
+		key = []byte{0}
 	}
 
-	return &searchCursor{cursor: c, k: key, direct: int(compare)}, nil
+	data = C.CBytes(key)
+	size = C.size_t(len(key))
+
+	// TODO why free will be stuck?
+	defer C.free(data)
+
+	result := int(C.wiredtiger_cursor_search_near(c.impl, data, size, &compare))
+	if checkError(result) {
+		return nil, NewError(result, c.s)
+	}
+
+	c.delay = true
+
+	s = &searchCursor{
+		k:      key,
+		cursor: c,
+		match:  int(compare) == 0,
+		direct: int(compare),
+	}
+
+	return
 }
 
 func (c *cursor) remove(key []byte) error {
@@ -442,15 +454,22 @@ func (r *resultCursor) Error() error {
 	return r.err
 }
 
-func (r *resultCursor) Close() error {
+func (r *resultCursor) Close() (err error) {
+	defer func(s *session) {
+		if r.delay {
+			err = s.close()
+		}
+	}(r.s)
 	defer r.s.cursors.releaseCursor(r.cursor)
 	return r.reset()
 }
 
 type searchCursor struct {
 	*cursor
+	prefix []byte
 	k      []byte
 	err    error
+	match  bool
 	direct int // search near flag
 }
 
@@ -459,7 +478,7 @@ func (s *searchCursor) Error() error {
 }
 
 func (s *searchCursor) Valid() bool {
-	return s.exit && s.err != nil
+	return !s.exit && s.err == nil
 }
 
 func (s *searchCursor) Last() bool {
@@ -473,28 +492,36 @@ func (s *searchCursor) Last() bool {
 }
 
 func (s *searchCursor) Next() bool {
-	result := int(C.wiredtiger_cursor_next(s.impl))
-	if checkError(result) {
-		err := NewError(result)
-		if !IsNotFound(err) {
-			s.err = fmt.Errorf("wiredtiger: cursor walk forward for key %s: %v", s.k, err)
-		}
+	if s.match {
+		s.match = false
+	} else {
+		result := int(C.wiredtiger_cursor_next(s.impl))
+		if checkError(result) {
+			err := NewError(result)
+			if !IsNotFound(err) {
+				s.err = fmt.Errorf("wiredtiger: cursor walk forward for key %s: %v", s.k, err)
+			}
 
-		return false
+			return false
+		}
 	}
 
 	return true
 }
 
 func (s *searchCursor) Prev() bool {
-	result := int(C.wiredtiger_cursor_prev(s.impl))
-	if checkError(result) {
-		err := NewError(result)
-		if !IsNotFound(err) {
-			s.err = fmt.Errorf("wiredtiger: cursor walk backward for key %s: %v", s.k, err)
-		}
+	if s.match {
+		s.match = false
+	} else {
+		result := int(C.wiredtiger_cursor_prev(s.impl))
+		if checkError(result) {
+			err := NewError(result)
+			if !IsNotFound(err) {
+				s.err = fmt.Errorf("wiredtiger: cursor walk backward for key %s: %v", s.k, err)
+			}
 
-		return false
+			return false
+		}
 	}
 
 	return true
@@ -535,70 +562,82 @@ func (s *searchCursor) Seek(key driver.Key) bool {
 	s.cursor = c.cursor
 	s.direct = c.direct
 
-	return s.direct < 0
+	return true
 }
 
 func (s *searchCursor) Key() []byte {
-	data, err := s.key()
+	s.match = false
+	key, err := s.key()
 	if err != nil {
 		s.err = fmt.Errorf("wiredtiger: cursor search key %s: %v", s.k, err)
-
-		return nil
 	}
+	data := make([]byte, len(s.prefix)+len(key))
+	copy(data, s.prefix)
+	copy(data[len(s.prefix):], key)
 	return data
 }
 
 func (s *searchCursor) Value() []byte {
+	s.match = false
 	data, err := s.value()
 	if err != nil {
 		s.err = fmt.Errorf("wiredtiger: cursor search value for key %s: %v", s.k, err)
-
-		return nil
 	}
 	return data
 }
 
-func (s *searchCursor) Close() error {
+func (s *searchCursor) Close() (err error) {
+	defer func(ss *session) {
+		if s.delay {
+			err = ss.close()
+		}
+	}(s.s)
 	defer s.s.cursors.releaseCursor(s.cursor)
 	return s.reset()
 }
 
-type invalidCursor struct{}
+type errorCursor struct {
+	err error
+}
 
-var InvalidCursor = &invalidCursor{}
+var InvalidCursor = &errorCursor{}
 
-func (i *invalidCursor) Valid() bool {
+func (e *errorCursor) Valid() bool {
 	return false
 }
 
-func (i *invalidCursor) Next() bool {
+func (e *errorCursor) Next() bool {
 	return false
 }
 
-func (i *invalidCursor) Prev() bool {
+func (e *errorCursor) Prev() bool {
 	return false
 }
 
-func (i *invalidCursor) Last() bool {
+func (e *errorCursor) Last() bool {
 	return false
 }
 
-func (i *invalidCursor) Seek(_ driver.Key) bool {
+func (e *errorCursor) Seek(_ driver.Key) bool {
 	return false
 }
 
-func (i *invalidCursor) Key() []byte {
+func (e *errorCursor) Key() []byte {
 	return nil
 }
 
-func (i *invalidCursor) Value() []byte {
+func (i *errorCursor) Value() []byte {
 	return nil
 }
 
-func (i *invalidCursor) Error() error {
-	return fmt.Errorf("wiredtiger: move to invalid cursor")
+func (e *errorCursor) Error() error {
+	if e.err != nil {
+		return fmt.Errorf("wiredtiger: cursor error: %s", e.err)
+	}
+
+	return nil
 }
 
-func (i *invalidCursor) Close() error {
+func (e *errorCursor) Close() error {
 	return nil
 }

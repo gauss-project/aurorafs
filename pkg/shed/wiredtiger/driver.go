@@ -31,6 +31,7 @@ import "C"
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"runtime"
 	"unsafe"
 
@@ -81,6 +82,25 @@ func (d Driver) Init() driver.Configure {
 	return &c
 }
 
+func checkDirectory(path string) error {
+	f, err := os.Open(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			// TODO change dir perm
+			err = os.Mkdir(path, os.ModePerm)
+			if err != nil {
+				return err
+			}
+		} else {
+			return err
+		}
+	}
+
+	_ = f.Close()
+
+	return nil
+}
+
 func (d Driver) Open(path string) (driver.DB, error) {
 	c := d.Init().(*Configuration)
 
@@ -90,23 +110,13 @@ func (d Driver) Open(path string) (driver.DB, error) {
 		conn   *C.WT_CONNECTION
 	)
 
-	_, err := os.Open(path)
-	if err != nil {
-		if os.IsNotExist(err) {
-			// TODO change dir perm
-			err = os.Mkdir(path, os.ModePerm)
-			if err != nil {
-				return nil, err
-			}
+	if err := checkDirectory(path); err != nil {
+		return nil, err
+	}
 
-			// create journal dir
-			err = os.Mkdir(path+string(os.PathSeparator)+"journal", os.ModePerm)
-			if err != nil {
-				return nil, err
-			}
-		} else {
-			return nil, err
-		}
+	// create journal dir
+	if err := checkDirectory(filepath.Join(path, "journal")); err != nil {
+		return nil, err
 	}
 
 	pathStr := C.CString(path)

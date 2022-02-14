@@ -1,6 +1,8 @@
 package wiredtiger
 
 import (
+	"fmt"
+
 	"github.com/gauss-project/aurorafs/pkg/shed/driver"
 )
 
@@ -11,14 +13,48 @@ const (
 	fieldMetadataKeyPrefix      = "field_"
 	fieldKeyPrefix         byte = 1
 
-	indexMetadataPlaceholder = "index"
-	indexMetadataKeyPrefix   = "index_"
-	indexTablePrefix         = "ind_col_"
+	indexMetadataKeyPrefix = "index_"
+	indexTablePrefix       = "ind_col_"
 
 	stateTableName = "state_collection"
 )
 
-var indexKeyPrefix byte = 48
+var (
+	// Every index has its own key prefix and this value defines the first one.
+	defaultIndexKeyPrefix = []byte{'0'}
+)
+
+func indexKeyPrefixIncr(prefix []byte) error {
+	carry := 0
+	carryFn := func(b *byte) int {
+		carry := 0
+		switch *b {
+		case '9':
+			*b = 'a'
+		case 'z':
+			carry = 1
+			*b = '0'
+		default:
+			*b++
+		}
+		return carry
+	}
+	for i := len(prefix) - 1; i >= 0; i-- {
+		if carry == 1 {
+			carry = carryFn(&prefix[i])
+		}
+		carry = carryFn(&prefix[i])
+		if carry == 0 {
+			break
+		}
+	}
+	if carry == 1 {
+		return fmt.Errorf("reach maximum table number")
+	}
+	return nil
+}
+
+var schema driver.SchemaSpec
 
 func (db *DB) initSchema() error {
 	s := db.pool.Get()
@@ -57,36 +93,59 @@ func (db *DB) initSchema() error {
 		return err
 	}
 
+	schema.Fields = make([]driver.FieldSpec, 0)
+	schema.Indexes = make([]driver.IndexSpec, 0)
+
 	return nil
 }
 
-func (db *DB) GetFieldKey() []byte {
+func (db *DB) DefaultFieldKey() []byte {
 	return []byte{fieldKeyPrefix}
 }
 
-func (db *DB) GetIndexKey() []byte {
-	return []byte{indexKeyPrefix}
+func (db *DB) DefaultIndexKey() []byte {
+	return defaultIndexKeyPrefix
 }
 
 func (db *DB) CreateField(spec driver.FieldSpec) ([]byte, error) {
-	s := db.pool.Get()
-	defer db.pool.Put(s)
-	c, err := s.openCursor(dataSource{dataType: tableSource, sourceName: schemaMetadataTableName}, &cursorOption{Overwrite: false})
-	if err != nil {
-		return nil, err
+	var found bool
+	for _, f := range schema.Fields {
+		if f.Name == spec.Name {
+			if f.Type != spec.Type {
+				return nil, fmt.Errorf("field %q of type %q stored as %q in db", spec.Name, spec.Type, f.Type)
+			}
+			break
+		}
 	}
-	key := append([]byte(fieldMetadataKeyPrefix), []byte(spec.Name)...)
-	err = c.insert(key, []byte(spec.Type))
-	switch {
-	case err == nil:
-		fallthrough
-	case IsDuplicateKey(err):
-		return append([]byte{fieldKeyPrefix}, []byte(spec.Name)...), nil
+	if !found {
+		s := db.pool.Get()
+		defer db.pool.Put(s)
+		c, err := s.openCursor(dataSource{dataType: tableSource, sourceName: schemaMetadataTableName}, &cursorOption{Overwrite: false})
+		if err != nil {
+			return nil, err
+		}
+		key := append([]byte(fieldMetadataKeyPrefix), []byte(spec.Name)...)
+		err = c.insert(key, []byte(spec.Type))
+		switch {
+		case IsDuplicateKey(err):
+			// nothing
+		case err == nil:
+		case err != nil:
+			return nil, err
+		}
+		schema.Fields = append(schema.Fields, spec)
 	}
-	return nil, err
+	return append([]byte{fieldKeyPrefix}, []byte(spec.Name)...), nil
 }
 
 func (db *DB) CreateIndex(spec driver.IndexSpec) ([]byte, error) {
+	currentPrefix := defaultIndexKeyPrefix
+	for _, i := range schema.Indexes {
+		if i.Name == spec.Name {
+			return i.Prefix, nil
+		}
+		currentPrefix = i.Prefix
+	}
 	s := db.pool.Get()
 	defer db.pool.Put(s)
 	c, err := s.openCursor(dataSource{dataType: tableSource, sourceName: schemaMetadataTableName}, &cursorOption{Overwrite: false})
@@ -94,12 +153,21 @@ func (db *DB) CreateIndex(spec driver.IndexSpec) ([]byte, error) {
 		return nil, err
 	}
 	key := append([]byte(indexMetadataKeyPrefix), []byte(spec.Name)...)
-	prefix := indexKeyPrefix
-	err = c.insert(key, []byte(indexMetadataPlaceholder))
+	prefix := make([]byte, len(currentPrefix))
+	copy(prefix, currentPrefix)
+	err = c.insert(key, prefix)
 	switch {
+	case IsDuplicateKey(err):
+		r, _ := c.find(key)
+		value := r.Value()
+		copy(prefix, value)
 	case err == nil:
+		err = indexKeyPrefixIncr(prefix)
+		if err != nil {
+			return nil, err
+		}
 		// create index table
-		err = s.create(dataSource{dataType: tableSource, sourceName: string(append([]byte(indexTablePrefix), prefix))}, &createOption{
+		err = s.create(dataSource{dataType: tableSource, sourceName: string(append([]byte(indexTablePrefix), prefix...))}, &createOption{
 			SourceType:        "file",
 			MemoryPageMax:     10485760, // 10M
 			SplitPct:          90,
@@ -116,12 +184,13 @@ func (db *DB) CreateIndex(spec driver.IndexSpec) ([]byte, error) {
 		if err != nil {
 			return nil, err
 		}
-		fallthrough
-	case IsDuplicateKey(err):
-		indexKeyPrefix++
-		return []byte{prefix}, nil
+	case err != nil:
+		return nil, err
 	}
-	return nil, err
+	spec.Prefix = make([]byte, len(prefix))
+	copy(spec.Prefix, prefix)
+	schema.Indexes = append(schema.Indexes, spec)
+	return spec.Prefix, nil
 }
 
 func (db *DB) RenameIndex(oldName, newName string) (bool, error) {
@@ -137,21 +206,33 @@ func (db *DB) RenameIndex(oldName, newName string) (bool, error) {
 	case err == nil:
 	case IsNotFound(err):
 		return false, nil
-	default:
+	case err != nil:
 		return false, err
 	}
 	defer r.Close()
+	value := r.Value()
 	err = c.remove(key)
 	if err != nil {
 		return false, err
 	}
 	newKey := append([]byte(indexMetadataKeyPrefix), []byte(newName)...)
-	err = c.insert(newKey, []byte(indexMetadataPlaceholder))
+	err = c.insert(newKey, value)
 	switch {
 	case err == nil:
+		for d, i := range schema.Indexes {
+			if i.Name == oldName {
+				i.Name = newName
+				schema.Indexes[d] = i
+				break
+			}
+		}
 		return true, nil
 	case IsDuplicateKey(err):
 		return false, nil
 	}
 	return false, err
+}
+
+func (db *DB) GetSchemaSpec() (driver.SchemaSpec, error) {
+	return schema, nil
 }

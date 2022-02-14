@@ -45,7 +45,6 @@ import (
 	"errors"
 	"fmt"
 	"math"
-	"runtime"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -464,9 +463,6 @@ func newSession(conn *C.WT_CONNECTION, id, locked uint64, overflow bool) (*sessi
 		id:    id,
 		epoch: time.Now(),
 	}
-
-	runtime.SetFinalizer(s, func(impl *session) { _ = impl.close() })
-	runtime.KeepAlive(s)
 
 	if locked != 0 {
 		atomic.StoreUint64(&s.lockId, locked)

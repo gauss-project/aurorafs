@@ -19,7 +19,7 @@ func (b *batch) Put(key driver.Key, value driver.Value) (err error) {
 		return ErrInvalidArgument
 	}
 
-	c, err := b.s.openCursor(obj, nil)
+	c, err := b.s.openCursor(obj, &cursorOption{Overwrite: true})
 	if err != nil {
 		return err
 	}
@@ -39,6 +39,10 @@ func (b *batch) Delete(key driver.Key) (err error) {
 		return ErrInvalidArgument
 	}
 
+	if len(k) == 0 {
+		return nil
+	}
+
 	c, err := b.s.openCursor(obj, nil)
 	if err != nil {
 		return err
@@ -55,20 +59,12 @@ func (b *batch) Delete(key driver.Key) (err error) {
 }
 
 func (b *batch) Commit() (err error) {
-	// if err = b.s.checkpoint(); err != nil {
-	// 	return err
-	// }
 	b.db.pool.Put(b.s)
 	return nil
 }
 
 func (db *DB) NewBatch() driver.Batching {
 	s := db.pool.Get()
-
-	// err := s.checkpoint()
-	// if err != nil {
-	// 	logger.Warnf("cannot create checkpoint: %v", err)
-	// }
 
 	return &batch{
 		db: db,

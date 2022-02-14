@@ -89,14 +89,20 @@ type Options struct {
 // if it exists in database on the given path.
 // metricsPrefix is used for metrics collection for the given DB.
 func NewDB(path string, o *Options) (db *DB, err error) {
-	if o == nil {
-		o = &Options{
-			// pick one database
-			Driver: Drivers()[0],
-		}
+	var drv string
+
+	if o != nil {
+		drv = o.Driver
 	}
 
-	d, ok := drivers[o.Driver]
+	if drv == "" {
+		if len(Drivers()) == 0 {
+			return nil, fmt.Errorf("no available database driver")
+		}
+		drv = Drivers()[0]
+	}
+
+	d, ok := drivers[drv]
 	if !ok {
 		return nil, ErrDriverNotRegister{Name: o.Driver}
 	}

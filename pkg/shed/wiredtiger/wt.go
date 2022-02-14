@@ -13,6 +13,7 @@ int wiredtiger_connection_close(WT_CONNECTION *connection, const char *config) {
 */
 import "C"
 import (
+	"fmt"
 	"syscall"
 	"time"
 
@@ -197,30 +198,36 @@ func (db *DB) Delete(key driver.Key) error {
 
 func (db *DB) Search(query driver.Query) driver.Cursor {
 	s := db.pool.Get()
-	defer db.pool.Put(s)
 
 	var obj dataSource
 
 	// parse source
 	obj, k := parseKey(query.Prefix)
 	if obj.dataType == "" {
-		logger.Warnf("wiredtiger: parse unknown key type: %s", k)
-		return InvalidCursor
+		return &errorCursor{
+			err: fmt.Errorf("wiredtiger: parse unknown key type: %s", k),
+		}
 	}
 
 	c, err := s.openCursor(obj, nil)
 	if err != nil {
-		logger.Errorf("wiredtiger: open cursor for table %s: %v", obj.sourceName, err)
-
-		return InvalidCursor
+		return &errorCursor{
+			err: fmt.Errorf("wiredtiger: open cursor for table %s: %v", obj.sourceName, err),
+		}
 	}
 
 	sc, err := c.search(k)
 	if err != nil {
-		logger.Errorf("wiredtiger: search key %s in table %s: %v", k, obj.sourceName, err)
+		if IsNotFound(err) {
+			return InvalidCursor
+		}
 
-		return InvalidCursor
+		return &errorCursor{
+			err: fmt.Errorf("wiredtiger: search key %s in table %s: %v", k, obj.sourceName, err),
+		}
 	}
+
+	sc.prefix = query.Prefix.Data[:query.Prefix.Prefix]
 
 	return sc
 }

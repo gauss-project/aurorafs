@@ -161,27 +161,26 @@ func (db *DB) updateGC(item shed.Item) (err error) {
 		}
 		item.BinID = i.BinID
 	}
-	// delete current entry from the gc index
-	err = db.gcIndex.DeleteInBatch(batch, item)
-	if err != nil {
-		return err
-	}
 	// update the gc item timestamp in case
 	// it exists
 	var gcItem shed.Item
 	gcItem, err = db.gcIndex.Get(item)
+	if err != nil {
+		if errors.Is(err, driver.ErrNotFound) {
+			return nil
+		}
+		return err
+	}
+	// delete current entry from the gc index
+	err = db.gcIndex.DeleteInBatch(batch, gcItem)
+	if err != nil {
+		return err
+	}
 	item.GCounter = gcItem.GCounter
-	// update access timestamp
 	item.AccessTimestamp = now()
-	if err == nil {
-		err = db.gcIndex.PutInBatch(batch, item)
-		if err != nil {
-			return err
-		}
-	} else {
-		if !errors.Is(err, driver.ErrNotFound) {
-			return err
-		}
+	err = db.gcIndex.PutInBatch(batch, item)
+	if err != nil {
+		return err
 	}
 
 	// update retrieve access index

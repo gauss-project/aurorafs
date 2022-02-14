@@ -18,8 +18,6 @@ package shed
 
 import (
 	"testing"
-
-	"github.com/syndtr/goleveldb/leveldb"
 )
 
 // TestStringField validates put and get operations
@@ -74,10 +72,10 @@ func TestStringField(t *testing.T) {
 	})
 
 	t.Run("put in batch", func(t *testing.T) {
-		batch := new(leveldb.Batch)
+		batch := db.NewBatch()
 		want := "simple string batch value"
 		simpleString.PutInBatch(batch, want)
-		err = db.WriteBatch(batch)
+		err = batch.Commit()
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -90,10 +88,10 @@ func TestStringField(t *testing.T) {
 		}
 
 		t.Run("overwrite", func(t *testing.T) {
-			batch := new(leveldb.Batch)
+			batch := db.NewBatch()
 			want := "overwritten string batch value"
 			simpleString.PutInBatch(batch, want)
-			err = db.WriteBatch(batch)
+			err = batch.Commit()
 			if err != nil {
 				t.Fatal(err)
 			}

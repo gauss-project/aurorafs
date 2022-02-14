@@ -77,9 +77,9 @@ func (d Driver) Open(path string) (driver.DB, error) {
 	if _, err = ldb.getSchema(); err != nil {
 		if errors.Is(err, driver.ErrNotFound) {
 			// Save schema with initialized default fields.
-			if err = ldb.putSchema(schema{
-				Fields:  make(map[string]driver.FieldSpec),
-				Indexes: make(map[byte]driver.IndexSpec),
+			if err = ldb.putSchema(driver.SchemaSpec{
+				Fields:  make([]driver.FieldSpec, 0),
+				Indexes: make([]driver.IndexSpec, 0),
 			}); err != nil {
 				return nil, err
 			}

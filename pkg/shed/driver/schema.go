@@ -9,12 +9,20 @@ type FieldSpec struct {
 // IndexSpec holds information about a particular index.
 // It does not contain index type, as indexes do not have type.
 type IndexSpec struct {
-	Name string `json:"name"`
+	Name   string `json:"name"`
+	Prefix []byte `json:"prefix"`
+}
+
+// SchemaSpec is used to serialize known database structure information.
+type SchemaSpec struct {
+	Fields  []FieldSpec `json:"fields"`  // keys are field names
+	Indexes []IndexSpec `json:"indexes"` // keys are index prefix bytes
 }
 
 type Schema interface {
-	GetFieldKey() []byte
-	GetIndexKey() []byte
+	DefaultFieldKey() []byte
+	DefaultIndexKey() []byte
+	GetSchemaSpec() (SchemaSpec, error)
 	CreateField(spec FieldSpec) ([]byte, error)
 	CreateIndex(spec IndexSpec) ([]byte, error)
 	RenameIndex(oldName, newName string) (bool, error)
