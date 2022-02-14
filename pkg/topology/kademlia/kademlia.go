@@ -524,16 +524,6 @@ func (k *Kad) manage() {
 
 				k.logger.Debug("kademlia: no connected peers, trying bootnodes")
 				k.connectBootNodes(ctx)
-
-				if k.bootNodes != nil && k.bootNodes.Count() > 0 {
-					go func() {
-						_ = k.bootNodes.EachPeer(func(address boson.Address, u uint8) (stop, jumpToNext bool, err error) {
-							k.discovery.NotifyDiscoverWork(address)
-							time.Sleep(time.Second)
-							return false, false, nil
-						})
-					}()
-				}
 			}
 		}
 	}

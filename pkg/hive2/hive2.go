@@ -5,6 +5,10 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"math/rand"
+	"sync"
+	"time"
+
 	"github.com/gauss-project/aurorafs/pkg/addressbook"
 	"github.com/gauss-project/aurorafs/pkg/aurora"
 	"github.com/gauss-project/aurorafs/pkg/boson"
@@ -16,8 +20,6 @@ import (
 	ma "github.com/multiformats/go-multiaddr"
 	manet "github.com/multiformats/go-multiaddr/net"
 	"golang.org/x/sync/semaphore"
-	"sync"
-	"time"
 )
 
 const (
@@ -143,9 +145,13 @@ func (s *Service) onFindNode(ctx context.Context, peer p2p.Peer, stream p2p.Stre
 	target := boson.NewAddress(req.Target)
 	skip := []boson.Address{peer.Address}
 
-	var limit = 1
+	var (
+		limitConn  = 1
+		limitKnown = 1
+	)
 	if req.Limit > 2 {
-		limit = int(req.Limit / 2)
+		limitKnown = int(req.Limit / 2)
+		limitConn = int(req.Limit) - limitKnown
 	}
 
 	addrFunc := func(address boson.Address, u uint8) (stop, jumpToNext bool, err error) {
@@ -158,6 +164,7 @@ func (s *Service) onFindNode(ctx context.Context, peer p2p.Peer, stream p2p.Stre
 			if p != nil {
 				if !s.config.AllowPrivateCIDRs && isPeerPublic && manet.IsPrivateAddr(p.Underlay) {
 					// Don't advertise private CIDRs to the public network.
+					skip = append(skip, p.Overlay)
 					return false, false, nil
 				}
 				resp.Peers = append(resp.Peers, &pb.AuroraAddress{
@@ -165,22 +172,21 @@ func (s *Service) onFindNode(ctx context.Context, peer p2p.Peer, stream p2p.Stre
 					Signature: p.Signature,
 					Overlay:   p.Overlay.Bytes(),
 				})
-				skip = append(skip, p.Overlay)
-
-				if len(resp.Peers) >= limit {
-					return true, false, nil
-				}
 			}
 		}
 		return false, false, nil
 	}
 
 	_ = s.config.Kad.EachPeer(addrFunc)
-	limit = int(req.Limit)
-	if len(resp.Peers) < limit {
-		_ = s.config.Kad.EachKnownPeer(addrFunc)
+	connResult := randPeersLimit(resp.Peers, limitConn)
+	for _, v := range connResult {
+		skip = append(skip, boson.NewAddress(v.Overlay))
 	}
+	resp.Peers = nil
+	_ = s.config.Kad.EachKnownPeer(addrFunc)
+	knownResult := randPeersLimit(resp.Peers, limitKnown)
 
+	resp.Peers = append(connResult, knownResult...)
 	s.metrics.OnFindNodePeers.Add(float64(len(resp.Peers)))
 
 	err = w.WriteMsgWithContext(ctx, resp)
@@ -341,4 +347,16 @@ func (s *Service) Start() {
 
 func (s *Service) IsHive2() bool {
 	return true
+}
+
+func randPeersLimit(peers []*pb.AuroraAddress, limit int) []*pb.AuroraAddress {
+	total := len(peers)
+	if total > limit {
+		rand.Seed(time.Now().UnixNano())
+		rand.Shuffle(total, func(i, j int) {
+			peers[i], peers[j] = peers[j], peers[i]
+		})
+		return peers[:limit]
+	}
+	return peers
 }
