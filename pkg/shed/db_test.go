@@ -21,7 +21,7 @@ import (
 	"testing"
 )
 
-var UseDBForTest = "wiredtiger"
+var TestDriver = "wiredtiger"
 
 // TestNewDB constructs a new DB
 // and validates if the schema is initialized properly.
@@ -96,7 +96,7 @@ func TestDB_persistence(t *testing.T) {
 func newTestDB(t *testing.T) *DB {
 	t.Helper()
 	var path string
-	switch UseDBForTest {
+	switch TestDriver {
 	case "leveldb":
 	case "wiredtiger":
 		dir, err := os.MkdirTemp("", "shed-test")

@@ -308,10 +308,10 @@ func (s *Store) Close() error {
 // Example_store constructs a simple storage implementation using shed package.
 func Example_store() {
 	var path string
-	switch shed.UseDBForTest {
+	switch shed.TestDriver {
 	case "leveldb":
 	case "wiredtiger":
-		dir, err := os.MkdirTemp("", "shed-test")
+		dir, err := os.MkdirTemp("", "example-store")
 		if err != nil {
 			log.Fatal(err)
 		}

@@ -43,7 +43,7 @@ var (
 	ci = chunkinfo.New(routetab.NewMockRouteTable())
 
 	// default db driver
-	dbTest = "wiredtiger"
+	dbDriver = "wiredtiger"
 )
 
 func init() {
@@ -167,10 +167,10 @@ func newTestDB(t testing.TB, o *Options) *DB {
 	}
 	logger := logging.New(io.Discard, 0)
 	var path string
-	switch dbTest {
+	switch dbDriver {
 	case "leveldb":
 	case "wiredtiger":
-		dir, err := os.MkdirTemp("", "shed-test")
+		dir, err := os.MkdirTemp("", "localstore-test")
 		if err != nil {
 			t.Fatal(err)
 		}
