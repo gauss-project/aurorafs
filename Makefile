@@ -20,7 +20,7 @@ LDFLAGS ?= -s -w -X github.com/gauss-project/aurorafs.commitHash="$(COMMIT_HASH)
 GOOS ?= $(shell go env GOOS)
 SHELL ?= bash
 IS_DOCKER ?= false
-DATABASE ?= wiredtiger
+DATABASE ?= leveldb
 LIB_INSTALL_DIR ?= /usr/local
 
 CGO_ENABLED ?= $(shell go env CGO_ENABLED)
