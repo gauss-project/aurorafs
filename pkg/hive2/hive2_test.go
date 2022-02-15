@@ -4,6 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
+	"testing"
+	"time"
+
 	"github.com/gauss-project/aurorafs/pkg/addressbook"
 	"github.com/gauss-project/aurorafs/pkg/aurora"
 	"github.com/gauss-project/aurorafs/pkg/boson"
@@ -19,9 +23,6 @@ import (
 	"github.com/gauss-project/aurorafs/pkg/topology/kademlia"
 	ma "github.com/multiformats/go-multiaddr"
 	"github.com/sirupsen/logrus"
-	"io"
-	"testing"
-	"time"
 )
 
 var (
@@ -146,7 +147,7 @@ func randomAddress(t *testing.T, base boson.Address, po int, underlay string) (a
 	signer = crypto.NewDefaultSigner(pk)
 
 	p := test.RandomAddressAt(base, po)
-	//base, _ := crypto.NewOverlayAddress(pk.PublicKey, networkId)
+	// base, _ := crypto.NewOverlayAddress(pk.PublicKey, networkId)
 	mu, err := ma.NewMultiaddr(underlay + base.String())
 	if err != nil {
 		t.Fatal(err)
@@ -199,7 +200,7 @@ func (s *Node) connectMore(t *testing.T, base boson.Address, po, count, port int
 		p3 := test.RandomAddressAt(base, po)
 		s.connect(t, p3, randomUnderlay(port+i))
 		list = append(list, p3)
-		//t.Logf("po=%d %s", po, p3.String())
+		// t.Logf("po=%d %s", po, p3.String())
 	}
 	return
 }
@@ -209,7 +210,7 @@ func (s *Node) connectMorePublic(t *testing.T, base boson.Address, po, count, po
 		p3 := test.RandomAddressAt(base, po)
 		s.connect(t, p3, randomUnderlayPublic(port+i))
 		list = append(list, p3)
-		//t.Logf("po=%d %s", po, p3.String())
+		// t.Logf("po=%d %s", po, p3.String())
 	}
 	return
 }
@@ -270,16 +271,20 @@ func TestLookupDistances(t *testing.T) {
 
 }
 
-func checkChan(t *testing.T, ch chan boson.Address, list []boson.Address) (total int) {
+func checkChan(t *testing.T, ch chan boson.Address, list []boson.Address) (total int, result []boson.Address) {
 	t.Helper()
 	skip := make([]boson.Address, 0)
 	for {
 		addr := <-ch
 		if addr.IsZero() {
+			result = skip
 			return
 		}
-		if !addr.MemberOf(list) || addr.MemberOf(skip) {
-			t.Fatalf("received expected find %s, got nil", addr.String())
+		if !addr.MemberOf(list) {
+			t.Fatalf("received expected find in list, got %s", addr.String())
+		}
+		if addr.MemberOf(skip) {
+			t.Fatalf("there are duplicate node %s", addr.String())
 		}
 		skip = append(skip, addr)
 		total++
@@ -311,7 +316,7 @@ func TestService_DoFindNode(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		total := checkChan(t, res, nil)
+		total, _ := checkChan(t, res, nil)
 		if total != 0 {
 			t.Fatalf("exp received 0 peer, got %d", total)
 		}
@@ -329,7 +334,7 @@ func TestService_DoFindNode(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		total := checkChan(t, res, p2List)
+		total, _ := checkChan(t, res, p2List)
 		if total != 2 {
 			t.Fatalf("exp received 2 peer, got %d", total)
 		}
@@ -366,7 +371,7 @@ func TestService_PrivateCIDR_DoFindNode(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		total := checkChan(t, res, nil)
+		total, _ := checkChan(t, res, nil)
 		if total != 0 {
 			t.Fatalf("exp received 0 peer, got %d", total)
 		}
@@ -386,7 +391,7 @@ func TestService_PrivateCIDR_DoFindNode(t *testing.T) {
 			t.Fatal(err)
 		}
 		p2List = append(p2List, p3List...)
-		total := checkChan(t, res, p2List)
+		total, _ := checkChan(t, res, p2List)
 		if total != 6 {
 			t.Fatalf("exp received 6 peer, got %d", total)
 		}
@@ -423,7 +428,7 @@ func TestService_PublicCIDR_DoFindNode_AllowPrivateCIDRs_false(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		total := checkChan(t, res, nil)
+		total, _ := checkChan(t, res, nil)
 		if total != 0 {
 			t.Fatalf("exp received 0 peer, got %d", total)
 		}
@@ -442,7 +447,7 @@ func TestService_PublicCIDR_DoFindNode_AllowPrivateCIDRs_false(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		total := checkChan(t, res, p3List)
+		total, _ := checkChan(t, res, p3List)
 		if total != 3 {
 			t.Fatalf("exp received 3 peer, got %d", total)
 		}
@@ -479,7 +484,7 @@ func TestService_PublicCIDR_DoFindNode_AllowPrivateCIDRs_true(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		total := checkChan(t, res, nil)
+		total, _ := checkChan(t, res, nil)
 		if total != 0 {
 			t.Fatalf("exp received 0 peer, got %d", total)
 		}
@@ -499,7 +504,7 @@ func TestService_PublicCIDR_DoFindNode_AllowPrivateCIDRs_true(t *testing.T) {
 			t.Fatal(err)
 		}
 		p2List = append(p2List, p3List...)
-		total := checkChan(t, res, p2List)
+		total, _ := checkChan(t, res, p2List)
 		if total != 6 {
 			t.Fatalf("exp received 6 peer, got %d", total)
 		}
@@ -538,7 +543,7 @@ func TestService_DoFindNodeMax(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		total := checkChan(t, res1, p3List)
+		total, _ := checkChan(t, res1, p3List)
 		if total != 16 {
 			t.Fatalf("exp received 16 peer, got %d", total)
 		}
@@ -546,6 +551,58 @@ func TestService_DoFindNodeMax(t *testing.T) {
 		s03 := a.kad.Snapshot()
 		if s03.Connected != 17 {
 			t.Fatalf("connected expected 17 got %d", s03.Connected)
+		}
+	})
+}
+
+func TestService_DoFindNodeRandom(t *testing.T) {
+	ctx := context.Background()
+
+	a := newTestNode(t, test.RandomAddress(), -1, randomUnderlay(123), false)
+	b := newTestNode(t, test.RandomAddressAt(a.overlay, 1), -1, randomUnderlay(124), false)
+
+	a.stream.SetProtocols(b.Protocol())
+	b.stream.SetProtocols(a.Protocol())
+
+	err := a.kad.Start(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	a.addOne(t, b.addr, true)
+	b.addOne(t, a.addr, true)
+
+	pos := hive2.LookupDistances(a.overlay, b.overlay)
+
+	// connected max
+	p3List := b.connectMore(t, a.overlay, int(pos[1]), 20, 200)
+	t.Run("connected random", func(t *testing.T) {
+		posReq := []int32{pos[1]}
+		res1, err := a.DoFindNode(ctx, a.overlay, b.overlay, posReq, 6)
+		if err != nil {
+			t.Fatal(err)
+		}
+		total, result1 := checkChan(t, res1, p3List)
+		if total != 6 {
+			t.Fatalf("exp received 6 peer, got %d", total)
+		}
+		res2, err := a.DoFindNode(ctx, a.overlay, b.overlay, posReq, 6)
+		if err != nil {
+			t.Fatal(err)
+		}
+		total2, result2 := checkChan(t, res2, p3List)
+		if total2 != 6 {
+			t.Fatalf("exp received 6 peer, got %d", total)
+		}
+
+		var different bool
+		for _, v := range result2 {
+			if !v.MemberOf(result1) {
+				different = true
+			}
+		}
+		if !different {
+			t.Fatalf("Expect 2 results to return a different node,but exactly the same")
 		}
 	})
 }
@@ -558,9 +615,9 @@ func TestService_Lookup(t *testing.T) {
 	c := newTestNode(t, a.overlay, 5, randomUnderlay(125), false)
 
 	a.addOne(t, b.addr, true)
-	//b.addOne(t, a.addr, true)
+	// b.addOne(t, a.addr, true)
 	b.addOne(t, c.addr, true)
-	//c.addOne(t, b.addr, true)
+	// c.addOne(t, b.addr, true)
 
 	a.SetStreamer(streamtest.New(
 		streamtest.WithBaseAddr(a.overlay),
@@ -598,11 +655,11 @@ func TestService_Lookup(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	//t.Logf("a %s", a.overlay)
-	//t.Logf("b %s", b.overlay)
-	//t.Logf("c %s", c.overlay)
-	//pos := hive2.LookupDistances(a.overlay, b.overlay)
-	//b.connectMore(t, a.overlay, int(pos[0]), 2)
+	// t.Logf("a %s", a.overlay)
+	// t.Logf("b %s", b.overlay)
+	// t.Logf("c %s", c.overlay)
+	// pos := hive2.LookupDistances(a.overlay, b.overlay)
+	// b.connectMore(t, a.overlay, int(pos[0]), 2)
 
 	posC := hive2.LookupDistances(a.overlay, c.overlay)
 	c.connectMore(t, a.overlay, int(posC[1]), 3, 200)
