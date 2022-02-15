@@ -7,8 +7,8 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/gauss-project/aurorafs/pkg/shed/driver"
 	"github.com/gauss-project/aurorafs/pkg/storage"
-	"github.com/syndtr/goleveldb/leveldb"
 )
 
 var _ storage.StateStorer = (*store)(nil)
@@ -96,7 +96,7 @@ func (s *store) Iterate(prefix string, iterFunc storage.StateIterFunc) (err erro
 }
 
 // DB implements StateStorer.DB method.
-func (s *store) DB() *leveldb.DB {
+func (s *store) DB() driver.BatchDB {
 	return nil
 }
 

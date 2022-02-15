@@ -21,6 +21,8 @@ import (
 	"testing"
 )
 
+var TestDriver = "wiredtiger"
+
 // TestNewDB constructs a new DB
 // and validates if the schema is initialized properly.
 func TestNewDB(t *testing.T) {
@@ -93,13 +95,26 @@ func TestDB_persistence(t *testing.T) {
 // be called to remove the data.
 func newTestDB(t *testing.T) *DB {
 	t.Helper()
-	db, err := NewDB("", nil)
+	var path string
+	switch TestDriver {
+	case "leveldb":
+	case "wiredtiger":
+		dir, err := os.MkdirTemp("", "shed-test")
+		if err != nil {
+			t.Fatal(err)
+		}
+		path = dir
+	}
+	db, err := NewDB(path, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() {
 		if err := db.Close(); err != nil {
 			t.Fatal(err)
+		}
+		if path != "" {
+			_ = os.RemoveAll(path)
 		}
 	})
 	return db

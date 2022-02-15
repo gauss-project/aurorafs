@@ -18,8 +18,6 @@ package shed
 
 import (
 	"testing"
-
-	"github.com/syndtr/goleveldb/leveldb"
 )
 
 // TestUint64Field validates put and get operations
@@ -74,10 +72,10 @@ func TestUint64Field(t *testing.T) {
 	})
 
 	t.Run("put in batch", func(t *testing.T) {
-		batch := new(leveldb.Batch)
+		batch := db.NewBatch()
 		var want uint64 = 42
 		counter.PutInBatch(batch, want)
-		err = db.WriteBatch(batch)
+		err = batch.Commit()
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -90,10 +88,10 @@ func TestUint64Field(t *testing.T) {
 		}
 
 		t.Run("overwrite", func(t *testing.T) {
-			batch := new(leveldb.Batch)
+			batch := db.NewBatch()
 			var want uint64 = 84
 			counter.PutInBatch(batch, want)
-			err = db.WriteBatch(batch)
+			err = batch.Commit()
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -147,7 +145,7 @@ func TestUint64Field_IncInBatch(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	batch := new(leveldb.Batch)
+	batch := db.NewBatch()
 	var want uint64 = 1
 	got, err := counter.IncInBatch(batch)
 	if err != nil {
@@ -156,7 +154,7 @@ func TestUint64Field_IncInBatch(t *testing.T) {
 	if got != want {
 		t.Errorf("got uint64 %v, want %v", got, want)
 	}
-	err = db.WriteBatch(batch)
+	err = batch.Commit()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -168,7 +166,7 @@ func TestUint64Field_IncInBatch(t *testing.T) {
 		t.Errorf("got uint64 %v, want %v", got, want)
 	}
 
-	batch2 := new(leveldb.Batch)
+	batch2 := db.NewBatch()
 	want = 2
 	got, err = counter.IncInBatch(batch2)
 	if err != nil {
@@ -177,7 +175,7 @@ func TestUint64Field_IncInBatch(t *testing.T) {
 	if got != want {
 		t.Errorf("got uint64 %v, want %v", got, want)
 	}
-	err = db.WriteBatch(batch2)
+	err = batch2.Commit()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -236,7 +234,7 @@ func TestUint64Field_DecInBatch(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	batch := new(leveldb.Batch)
+	batch := db.NewBatch()
 	var want uint64
 	got, err := counter.DecInBatch(batch)
 	if err != nil {
@@ -245,7 +243,7 @@ func TestUint64Field_DecInBatch(t *testing.T) {
 	if got != want {
 		t.Errorf("got uint64 %v, want %v", got, want)
 	}
-	err = db.WriteBatch(batch)
+	err = batch.Commit()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -257,10 +255,10 @@ func TestUint64Field_DecInBatch(t *testing.T) {
 		t.Errorf("got uint64 %v, want %v", got, want)
 	}
 
-	batch2 := new(leveldb.Batch)
+	batch2 := db.NewBatch()
 	want = 42
 	counter.PutInBatch(batch2, want)
-	err = db.WriteBatch(batch2)
+	err = batch2.Commit()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -272,7 +270,7 @@ func TestUint64Field_DecInBatch(t *testing.T) {
 		t.Errorf("got uint64 %v, want %v", got, want)
 	}
 
-	batch3 := new(leveldb.Batch)
+	batch3 := db.NewBatch()
 	want = 41
 	got, err = counter.DecInBatch(batch3)
 	if err != nil {
@@ -281,7 +279,7 @@ func TestUint64Field_DecInBatch(t *testing.T) {
 	if got != want {
 		t.Errorf("got uint64 %v, want %v", got, want)
 	}
-	err = db.WriteBatch(batch3)
+	err = batch3.Commit()
 	if err != nil {
 		t.Fatal(err)
 	}

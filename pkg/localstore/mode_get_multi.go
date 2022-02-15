@@ -23,8 +23,8 @@ import (
 
 	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/shed"
+	"github.com/gauss-project/aurorafs/pkg/shed/driver"
 	"github.com/gauss-project/aurorafs/pkg/storage"
-	"github.com/syndtr/goleveldb/leveldb"
 )
 
 // GetMulti returns chunks from the database. If one of the chunks is not found
@@ -44,7 +44,7 @@ func (db *DB) GetMulti(ctx context.Context, mode storage.ModeGet, addrs ...boson
 
 	out, err := db.getMulti(mode, addrs...)
 	if err != nil {
-		if errors.Is(err, leveldb.ErrNotFound) {
+		if errors.Is(err, driver.ErrNotFound) {
 			return nil, storage.ErrNotFound
 		}
 		return nil, err

@@ -28,9 +28,9 @@ import (
 	"github.com/gauss-project/aurorafs/pkg/chunkinfo"
 	"github.com/gauss-project/aurorafs/pkg/logging"
 	"github.com/gauss-project/aurorafs/pkg/shed"
+	"github.com/gauss-project/aurorafs/pkg/shed/driver"
 	"github.com/gauss-project/aurorafs/pkg/storage"
 	"github.com/prometheus/client_golang/prometheus"
-	"github.com/syndtr/goleveldb/leveldb"
 )
 
 var _ storage.Storer = &DB{}
@@ -120,21 +120,12 @@ type DB struct {
 
 // Options struct holds optional parameters for configuring DB.
 type Options struct {
+	// Driver support: leveldb/wiredtiger
+	Driver string
+
 	// Capacity is a limit that triggers garbage collection when
 	// number of items in gcIndex equals or exceeds it.
 	Capacity uint64
-	// OpenFilesLimit defines the upper bound of open files that the
-	// the localstore should maintain at any point of time. It is
-	// passed on to the shed constructor.
-	OpenFilesLimit uint64
-	// BlockCacheCapacity defines the block cache capacity and is passed
-	// on to shed.
-	BlockCacheCapacity uint64
-	// WriteBuffer defines the size of writer buffer and is passed on to shed.
-	WriteBufferSize uint64
-	// DisableSeeksCompaction toggles the seek driven compactions feature on leveldb
-	// and is passed on to shed.
-	DisableSeeksCompaction bool
 
 	// MetricsPrefix defines a prefix for metrics names.
 	MetricsPrefix string
@@ -181,10 +172,7 @@ func New(path string, baseKey []byte, o *Options, logger logging.Logger) (db *DB
 	}
 
 	shedOpts := &shed.Options{
-		OpenFilesLimit:         o.OpenFilesLimit,
-		BlockCacheCapacity:     o.BlockCacheCapacity,
-		WriteBufferSize:        o.WriteBufferSize,
-		DisableSeeksCompaction: o.DisableSeeksCompaction,
+		Driver: o.Driver,
 	}
 
 	db.shed, err = shed.NewDB(path, shedOpts)
@@ -198,7 +186,7 @@ func New(path string, baseKey []byte, o *Options, logger logging.Logger) (db *DB
 		return nil, err
 	}
 	schemaName, err := db.schemaName.Get()
-	if err != nil && !errors.Is(err, leveldb.ErrNotFound) {
+	if err != nil && !errors.Is(err, driver.ErrNotFound) {
 		return nil, err
 	}
 	if schemaName == "" {

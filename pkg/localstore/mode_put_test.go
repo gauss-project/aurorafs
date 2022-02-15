@@ -20,7 +20,6 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"github.com/gauss-project/aurorafs/pkg/sctx"
 	"math/rand"
 	"strconv"
 	"sync"
@@ -28,8 +27,9 @@ import (
 	"time"
 
 	"github.com/gauss-project/aurorafs/pkg/boson"
+	"github.com/gauss-project/aurorafs/pkg/sctx"
+	"github.com/gauss-project/aurorafs/pkg/shed/driver"
 	"github.com/gauss-project/aurorafs/pkg/storage"
-	"github.com/syndtr/goleveldb/leveldb"
 )
 
 // TestModePutRequest validates ModePutRequest index values on the provided DB.
@@ -60,8 +60,8 @@ func TestModePutRequest(t *testing.T) {
 					newRetrieveIndexesTestWithAccess(db, ch, wantTimestamp, 0)(t)
 				}
 
-				//newItemsCountTest(db.gcIndex, tc.count)(t)
-				//newIndexGCSizeTest(db)(t)
+				// newItemsCountTest(db.gcIndex, tc.count)(t)
+				// newIndexGCSizeTest(db)(t)
 			})
 
 			t.Run("second put", func(t *testing.T) {
@@ -79,8 +79,8 @@ func TestModePutRequest(t *testing.T) {
 					newRetrieveIndexesTestWithAccess(db, ch, storeTimestamp, 0)(t)
 				}
 
-				//newItemsCountTest(db.gcIndex, tc.count)(t)
-				//newIndexGCSizeTest(db)(t)
+				// newItemsCountTest(db.gcIndex, tc.count)(t)
+				// newIndexGCSizeTest(db)(t)
 			})
 		})
 	}
@@ -109,7 +109,7 @@ func TestModePutRequestPin(t *testing.T) {
 				newPinIndexTest(db, ch, nil)(t)
 			}
 
-			//newItemsCountTest(db.gcIndex, tc.count)(t)
+			// newItemsCountTest(db.gcIndex, tc.count)(t)
 		})
 	}
 }
@@ -139,7 +139,7 @@ func TestModePutUpload(t *testing.T) {
 				binIDs[po]++
 
 				newRetrieveIndexesTest(db, ch, wantTimestamp, 0)(t)
-				newPinIndexTest(db, ch, leveldb.ErrNotFound)(t)
+				newPinIndexTest(db, ch, driver.ErrNotFound)(t)
 			}
 		})
 	}
@@ -158,7 +158,7 @@ func TestModePutUploadPin(t *testing.T) {
 
 			chunks := generateTestRandomChunks(tc.count)
 
-			//Add pin test by file
+			// Add pin test by file
 			var FileList []boson.Address
 			for i := 0; i < 20; i++ {
 				FileList = append(FileList, boson.NewAddress([]byte(strconv.Itoa(rand.Int()))))
@@ -183,7 +183,7 @@ func TestModePutUploadPin(t *testing.T) {
 				}
 			}
 
-			//Old business logic test
+			// Old business logic test
 			_, err := db.Put(context.Background(), storage.ModePutUploadPin, chunks...)
 			if err != nil {
 				t.Fatal(err)

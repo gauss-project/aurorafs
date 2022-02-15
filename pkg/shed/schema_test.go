@@ -101,7 +101,7 @@ func TestDB_schemaIndexPrefix(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		if id1 != id2 {
+		if !bytes.Equal(id1, id2) {
 			t.Errorf("schema keys for the same field name are not the same: %v, %v", id1, id2)
 		}
 	})
@@ -117,7 +117,7 @@ func TestDB_schemaIndexPrefix(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		if id1 == id2 {
+		if bytes.Equal(id1, id2) {
 			t.Error("schema ids for the same index name are the same, but must not be")
 		}
 	})
@@ -208,7 +208,7 @@ func TestDB_RenameIndex(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if key1 != key1same {
+		if !bytes.Equal(key1, key1same) {
 			t.Fatal("indexes renamed, but keys are not the same")
 		}
 
@@ -217,7 +217,7 @@ func TestDB_RenameIndex(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if key2 != key2same {
+		if !bytes.Equal(key2, key2same) {
 			t.Fatal("independent index key has changed")
 		}
 
@@ -226,10 +226,10 @@ func TestDB_RenameIndex(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if key1 == key1renew {
+		if bytes.Equal(key1, key1renew) {
 			t.Fatal("renewed index and the original one have the same key")
 		}
-		if key2 == key1renew {
+		if bytes.Equal(key2, key1renew) {
 			t.Fatal("renewed index and the independent one have the same key")
 		}
 	})

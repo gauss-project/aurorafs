@@ -25,8 +25,8 @@ import (
 	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/sctx"
 	"github.com/gauss-project/aurorafs/pkg/shed"
+	"github.com/gauss-project/aurorafs/pkg/shed/driver"
 	"github.com/gauss-project/aurorafs/pkg/storage"
-	"github.com/syndtr/goleveldb/leveldb"
 )
 
 // Put stores Chunks to database and depending
@@ -77,11 +77,11 @@ func (db *DB) put(mode storage.ModePut, rootAddr boson.Address, chs ...boson.Chu
 		}
 	}
 
-	batch := new(leveldb.Batch)
+	batch := db.shed.NewBatch()
 
 	// variables that provide information for operations
 	// to be done after write batch function successfully executes
-	var gcSizeChange int64                      // number to add or subtract from gcSize
+	var gcSizeChange int64 // number to add or subtract from gcSize
 
 	exist = make([]bool, len(chs))
 
@@ -142,7 +142,7 @@ func (db *DB) put(mode storage.ModePut, rootAddr boson.Address, chs ...boson.Chu
 		return nil, err
 	}
 
-	err = db.shed.WriteBatch(batch)
+	err = batch.Commit()
 	if err != nil {
 		return nil, err
 	}
@@ -155,7 +155,7 @@ func (db *DB) put(mode storage.ModePut, rootAddr boson.Address, chs ...boson.Chu
 //  - it does not enter the syncpool
 // The batch can be written to the database.
 // Provided batch and binID map are updated.
-func (db *DB) putRequest(batch *leveldb.Batch, binIDs map[uint8]uint64, item, rootItem shed.Item, forcePin bool) (exists bool, gcSizeChange int64, err error) {
+func (db *DB) putRequest(batch driver.Batching, binIDs map[uint8]uint64, item, rootItem shed.Item, forcePin bool) (exists bool, gcSizeChange int64, err error) {
 	has, err := db.retrievalDataIndex.Has(item)
 	if err != nil {
 		return false, 0, err
@@ -191,7 +191,7 @@ func (db *DB) putRequest(batch *leveldb.Batch, binIDs map[uint8]uint64, item, ro
 //  - put to indexes: retrieve, push, pull
 // The batch can be written to the database.
 // Provided batch and binID map are updated.
-func (db *DB) putUpload(batch *leveldb.Batch, binIDs map[uint8]uint64, item shed.Item) (exists bool, err error) {
+func (db *DB) putUpload(batch driver.Batching, binIDs map[uint8]uint64, item shed.Item) (exists bool, err error) {
 	exists, err = db.retrievalDataIndex.Has(item)
 	if err != nil {
 		return false, err
@@ -213,10 +213,9 @@ func (db *DB) putUpload(batch *leveldb.Batch, binIDs map[uint8]uint64, item shed
 	return false, nil
 }
 
-
 // preserveOrCache is a helper function used to add chunks to either a pinned reserve or gc cache
 // (the retrieval access index and the gc index)
-func (db *DB) preserveOrCache(batch *leveldb.Batch, item, rootItem shed.Item, forcePin bool) (gcSizeChange int64, err error) {
+func (db *DB) preserveOrCache(batch driver.Batching, item, rootItem shed.Item, forcePin bool) (gcSizeChange int64, err error) {
 	if forcePin {
 		return db.setPin(batch, item, rootItem)
 	}
@@ -230,13 +229,13 @@ func (db *DB) preserveOrCache(batch *leveldb.Batch, item, rootItem shed.Item, fo
 // a chunk is added to a node's localstore and given that the chunk is
 // already within that node's NN (thus, it can be added to the gc index
 // safely)
-func (db *DB) setGC(batch *leveldb.Batch, item shed.Item) (gcSizeChange int64, err error) {
+func (db *DB) setGC(batch driver.Batching, item shed.Item) (gcSizeChange int64, err error) {
 	if item.Address == nil {
 		return 0, nil
 	}
 	i, err := db.retrievalAccessIndex.Get(item)
 	if err != nil {
-		if !errors.Is(err, leveldb.ErrNotFound) {
+		if !errors.Is(err, driver.ErrNotFound) {
 			return 0, err
 		}
 		i.Address = item.Address
@@ -256,7 +255,7 @@ func (db *DB) setGC(batch *leveldb.Batch, item shed.Item) (gcSizeChange int64, e
 	}
 	gcItem, err := db.gcIndex.Get(item)
 	if err != nil {
-		if !errors.Is(err, leveldb.ErrNotFound) {
+		if !errors.Is(err, driver.ErrNotFound) {
 			return 0, err
 		}
 		gcItem = item

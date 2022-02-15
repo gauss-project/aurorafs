@@ -24,8 +24,8 @@ import (
 	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/sctx"
 	"github.com/gauss-project/aurorafs/pkg/shed"
+	"github.com/gauss-project/aurorafs/pkg/shed/driver"
 	"github.com/gauss-project/aurorafs/pkg/storage"
-	"github.com/syndtr/goleveldb/leveldb"
 )
 
 // Get returns a chunk from the database. If the chunk is
@@ -45,7 +45,7 @@ func (db *DB) Get(ctx context.Context, mode storage.ModeGet, addr boson.Address)
 
 	out, err := db.get(mode, addr, sctx.GetRootCID(ctx))
 	if err != nil {
-		if errors.Is(err, leveldb.ErrNotFound) {
+		if errors.Is(err, driver.ErrNotFound) {
 			return nil, storage.ErrNotFound
 		}
 		return nil, err
@@ -133,7 +133,7 @@ func (db *DB) updateGC(item shed.Item) (err error) {
 		db.dirtyAddresses = append(db.dirtyAddresses, boson.NewAddress(item.Address))
 	}
 
-	batch := new(leveldb.Batch)
+	batch := db.shed.NewBatch()
 
 	// update accessTimeStamp in retrieve, gc
 
@@ -141,7 +141,7 @@ func (db *DB) updateGC(item shed.Item) (err error) {
 	switch {
 	case err == nil:
 		item.AccessTimestamp = i.AccessTimestamp
-	case errors.Is(err, leveldb.ErrNotFound):
+	case errors.Is(err, driver.ErrNotFound):
 		// no chunk accesses
 	default:
 		return err
@@ -154,34 +154,33 @@ func (db *DB) updateGC(item shed.Item) (err error) {
 	if item.BinID == 0 {
 		i, err = db.retrievalDataIndex.Get(item)
 		if err != nil {
-			if errors.Is(err, leveldb.ErrNotFound) {
+			if errors.Is(err, driver.ErrNotFound) {
 				return db.retrievalAccessIndex.DeleteInBatch(batch, item)
 			}
 			return err
 		}
 		item.BinID = i.BinID
 	}
-	// delete current entry from the gc index
-	err = db.gcIndex.DeleteInBatch(batch, item)
-	if err != nil {
-		return err
-	}
 	// update the gc item timestamp in case
 	// it exists
 	var gcItem shed.Item
 	gcItem, err = db.gcIndex.Get(item)
+	if err != nil {
+		if errors.Is(err, driver.ErrNotFound) {
+			return nil
+		}
+		return err
+	}
+	// delete current entry from the gc index
+	err = db.gcIndex.DeleteInBatch(batch, gcItem)
+	if err != nil {
+		return err
+	}
 	item.GCounter = gcItem.GCounter
-	// update access timestamp
 	item.AccessTimestamp = now()
-	if err == nil {
-		err = db.gcIndex.PutInBatch(batch, item)
-		if err != nil {
-			return err
-		}
-	} else {
-		if !errors.Is(err, leveldb.ErrNotFound) {
-			return err
-		}
+	err = db.gcIndex.PutInBatch(batch, item)
+	if err != nil {
+		return err
 	}
 
 	// update retrieve access index
@@ -190,7 +189,7 @@ func (db *DB) updateGC(item shed.Item) (err error) {
 		return err
 	}
 
-	return db.shed.WriteBatch(batch)
+	return batch.Commit()
 }
 
 // testHookUpdateGC is a hook that can provide

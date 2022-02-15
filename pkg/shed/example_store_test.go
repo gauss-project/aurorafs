@@ -23,13 +23,14 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"os"
 	"time"
 
+	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/shed"
+	"github.com/gauss-project/aurorafs/pkg/shed/driver"
 	"github.com/gauss-project/aurorafs/pkg/storage"
 	"github.com/gauss-project/aurorafs/pkg/storage/testing"
-	"github.com/gauss-project/aurorafs/pkg/boson"
-	"github.com/syndtr/goleveldb/leveldb"
 )
 
 // Store holds fields and indexes (including their encoding functions)
@@ -116,7 +117,7 @@ func New(path string) (s *Store, err error) {
 		return nil, err
 	}
 	// Index with keys ordered by access timestamp for garbage collection prioritization.
-	s.gcIndex, err = db.NewIndex("AccessTimestamp|StoredTimestamp|Address->nil", shed.IndexFuncs{
+	s.gcIndex, err = db.NewIndex("AccessTimestamp|StoredTimestamp|Address->GCounter", shed.IndexFuncs{
 		EncodeKey: func(fields shed.Item) (key []byte, err error) {
 			b := make([]byte, 16, 16+len(fields.Address))
 			binary.BigEndian.PutUint64(b[:8], uint64(fields.AccessTimestamp))
@@ -131,9 +132,12 @@ func New(path string) (s *Store, err error) {
 			return e, nil
 		},
 		EncodeValue: func(fields shed.Item) (value []byte, err error) {
-			return nil, nil
+			b := make([]byte, 8)
+			binary.BigEndian.PutUint64(b, fields.GCounter)
+			return b, nil
 		},
 		DecodeValue: func(keyItem shed.Item, value []byte) (e shed.Item, err error) {
+			e.GCounter = binary.BigEndian.Uint64(value)
 			return e, nil
 		},
 	})
@@ -157,14 +161,14 @@ func (s *Store) Put(_ context.Context, ch boson.Chunk) (err error) {
 // items from them and adding new items as keys of index entries
 // are changed.
 func (s *Store) Get(_ context.Context, addr boson.Address) (c boson.Chunk, err error) {
-	batch := new(leveldb.Batch)
+	batch := s.db.NewBatch()
 
 	// Get the chunk data and storage timestamp.
 	item, err := s.retrievalIndex.Get(shed.Item{
 		Address: addr.Bytes(),
 	})
 	if err != nil {
-		if errors.Is(err, leveldb.ErrNotFound) {
+		if errors.Is(err, driver.ErrNotFound) {
 			return nil, storage.ErrNotFound
 		}
 		return nil, fmt.Errorf("retrieval index get: %w", err)
@@ -185,7 +189,7 @@ func (s *Store) Get(_ context.Context, addr boson.Address) (c boson.Chunk, err e
 		if err != nil {
 			return nil, fmt.Errorf("gc index delete in batch: %w", err)
 		}
-	case errors.Is(err, leveldb.ErrNotFound):
+	case errors.Is(err, driver.ErrNotFound):
 		// Access timestamp is not found. Do not do anything.
 		// This is the first get request.
 	default:
@@ -209,6 +213,7 @@ func (s *Store) Get(_ context.Context, addr boson.Address) (c boson.Chunk, err e
 		Address:         item.Address,
 		AccessTimestamp: accessTimestamp,
 		StoreTimestamp:  item.StoreTimestamp,
+		GCounter:        1,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("gc index put in batch: %w", err)
@@ -222,7 +227,7 @@ func (s *Store) Get(_ context.Context, addr boson.Address) (c boson.Chunk, err e
 	}
 
 	// Write the batch.
-	err = s.db.WriteBatch(batch)
+	err = batch.Commit()
 	if err != nil {
 		return nil, fmt.Errorf("write batch: %w", err)
 	}
@@ -241,7 +246,7 @@ func (s *Store) CollectGarbage() (err error) {
 	for roundCount := 0; roundCount < maxRounds; roundCount++ {
 		var garbageCount int
 		// New batch for a new cg round.
-		trash := new(leveldb.Batch)
+		trash := s.db.NewBatch()
 		// Iterate through all index items and break when needed.
 		err = s.gcIndex.Iterate(func(item shed.Item) (stop bool, err error) {
 			// Remove the chunk.
@@ -271,7 +276,7 @@ func (s *Store) CollectGarbage() (err error) {
 		if garbageCount == 0 {
 			return nil
 		}
-		err = s.db.WriteBatch(trash)
+		err = trash.Commit()
 		if err != nil {
 			return err
 		}
@@ -283,7 +288,7 @@ func (s *Store) CollectGarbage() (err error) {
 // string from a database field.
 func (s *Store) GetSchema() (name string, err error) {
 	name, err = s.schemaName.Get()
-	if errors.Is(err, leveldb.ErrNotFound) {
+	if errors.Is(err, driver.ErrNotFound) {
 		return "", nil
 	}
 	return name, err
@@ -302,7 +307,17 @@ func (s *Store) Close() error {
 
 // Example_store constructs a simple storage implementation using shed package.
 func Example_store() {
-	s, err := New("")
+	var path string
+	switch shed.TestDriver {
+	case "leveldb":
+	case "wiredtiger":
+		dir, err := os.MkdirTemp("", "example-store")
+		if err != nil {
+			log.Fatal(err)
+		}
+		path = dir
+	}
+	s, err := New(path)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -321,7 +336,7 @@ func Example_store() {
 		return
 	}
 
-	fmt.Println(bytes.Equal(got.Data(), ch.Data()))
-
-	//Output: true
+	if bytes.Equal(got.Data(), ch.Data()) {
+		return
+	}
 }

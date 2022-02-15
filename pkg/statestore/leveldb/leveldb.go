@@ -7,29 +7,30 @@ import (
 	"fmt"
 
 	"github.com/gauss-project/aurorafs/pkg/logging"
+	"github.com/gauss-project/aurorafs/pkg/shed/driver"
+	"github.com/gauss-project/aurorafs/pkg/shed/leveldb"
 	"github.com/gauss-project/aurorafs/pkg/storage"
-	"github.com/syndtr/goleveldb/leveldb"
 	ldberr "github.com/syndtr/goleveldb/leveldb/errors"
-	ldbs "github.com/syndtr/goleveldb/leveldb/storage"
-	"github.com/syndtr/goleveldb/leveldb/util"
 )
 
 var _ storage.StateStorer = (*store)(nil)
 
+var leveldbDriver = leveldb.Driver{}
+
 // store uses LevelDB to store values.
 type store struct {
-	db     *leveldb.DB
+	db     driver.BatchDB
 	logger logging.Logger
 }
 
 func NewInMemoryStateStore(l logging.Logger) (storage.StateStorer, error) {
-	ldb, err := leveldb.Open(ldbs.NewMemStorage(), nil)
+	ldb, err := leveldbDriver.Open("")
 	if err != nil {
 		return nil, err
 	}
 
 	s := &store{
-		db:     ldb,
+		db:     ldb.(driver.BatchDB),
 		logger: l,
 	}
 
@@ -42,22 +43,22 @@ func NewInMemoryStateStore(l logging.Logger) (storage.StateStorer, error) {
 
 // NewStateStore creates a new persistent state storage.
 func NewStateStore(path string, l logging.Logger) (storage.StateStorer, error) {
-	db, err := leveldb.OpenFile(path, nil)
+	db, err := leveldbDriver.Open(path)
 	if err != nil {
 		if !ldberr.IsCorrupted(err) {
 			return nil, err
 		}
 
-		l.Warningf("statestore open failed: %v. attempting recovery", err)
-		db, err = leveldb.RecoverFile(path, nil)
-		if err != nil {
-			return nil, fmt.Errorf("statestore recovery: %w", err)
-		}
-		l.Warning("statestore recovery ok! you are kindly request to inform us about the steps that preceded the last aurora shutdown.")
+		// l.Warningf("statestore open failed: %v. attempting recovery", err)
+		// db, err = leveldb.RecoverFile(path, nil)
+		// if err != nil {
+		// 	return nil, fmt.Errorf("statestore recovery: %w", err)
+		// }
+		// l.Warning("statestore recovery ok! you are kindly request to inform us about the steps that preceded the last aurora shutdown.")
 	}
 
 	s := &store{
-		db:     db,
+		db:     db.(driver.BatchDB),
 		logger: l,
 	}
 
@@ -94,9 +95,9 @@ func migrate(s *store) error {
 // Get retrieves a value of the requested key. If no results are found,
 // storage.ErrNotFound will be returned.
 func (s *store) Get(key string, i interface{}) error {
-	data, err := s.db.Get([]byte(key), nil)
+	data, err := s.db.Get(driver.Key{Data: []byte(key)})
 	if err != nil {
-		if errors.Is(err, leveldb.ErrNotFound) {
+		if errors.Is(err, driver.ErrNotFound) {
 			return storage.ErrNotFound
 		}
 		return err
@@ -122,18 +123,20 @@ func (s *store) Put(key string, i interface{}) (err error) {
 		return err
 	}
 
-	return s.db.Put([]byte(key), bytes, nil)
+	return s.db.Put(driver.Key{Data: []byte(key)}, driver.Value{Data: bytes})
 }
 
 // Delete removes entries stored under a specific key.
 func (s *store) Delete(key string) (err error) {
-	return s.db.Delete([]byte(key), nil)
+	return s.db.Delete(driver.Key{Data: []byte(key)})
 }
 
 // Iterate entries that match the supplied prefix.
 func (s *store) Iterate(prefix string, iterFunc storage.StateIterFunc) (err error) {
-	iter := s.db.NewIterator(util.BytesPrefix([]byte(prefix)), nil)
-	defer iter.Release()
+	iter := s.db.Search(driver.Query{Prefix: driver.Key{Data: []byte(prefix)}})
+	defer func() {
+		err = iter.Close()
+	}()
 	for iter.Next() {
 		stop, err := iterFunc(iter.Key(), iter.Value())
 		if err != nil {
@@ -147,9 +150,9 @@ func (s *store) Iterate(prefix string, iterFunc storage.StateIterFunc) (err erro
 }
 
 func (s *store) getSchemaName() (string, error) {
-	name, err := s.db.Get([]byte(dbSchemaKey), nil)
+	name, err := s.db.Get(driver.Key{Data: []byte(dbSchemaKey)})
 	if err != nil {
-		if errors.Is(err, leveldb.ErrNotFound) {
+		if errors.Is(err, driver.ErrNotFound) {
 			return "", storage.ErrNotFound
 		}
 		return "", err
@@ -158,11 +161,11 @@ func (s *store) getSchemaName() (string, error) {
 }
 
 func (s *store) putSchemaName(val string) error {
-	return s.db.Put([]byte(dbSchemaKey), []byte(val), nil)
+	return s.db.Put(driver.Key{Data: []byte(dbSchemaKey)}, driver.Value{Data: []byte(val)})
 }
 
 // DB implements StateStorer.DB method.
-func (s *store) DB() *leveldb.DB {
+func (s *store) DB() driver.BatchDB {
 	return s.db
 }
 

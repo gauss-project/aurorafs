@@ -24,7 +24,7 @@ import (
 	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/chunkinfo"
 	"github.com/gauss-project/aurorafs/pkg/shed"
-	"github.com/syndtr/goleveldb/leveldb"
+	"github.com/gauss-project/aurorafs/pkg/shed/driver"
 )
 
 var (
@@ -87,7 +87,7 @@ func (db *DB) collectGarbage() (collectedCount uint64, done bool, err error) {
 		}
 		totalTimeMetric(db.metrics.TotalTimeCollectGarbage, start)
 	}(time.Now())
-	batch := new(leveldb.Batch)
+	batch := db.shed.NewBatch()
 	target := db.gcTarget()
 
 	// tell the localstore to start logging dirty addresses
@@ -190,7 +190,7 @@ func (db *DB) collectGarbage() (collectedCount uint64, done bool, err error) {
 			i := addressToItem(chunk.Cid)
 			pinItem, err := db.pinIndex.Get(i)
 			if err != nil {
-				if !errors.Is(err, leveldb.ErrNotFound) {
+				if !errors.Is(err, driver.ErrNotFound) {
 					db.logger.Errorf("localstore: collect garbage: get pin state failure: %v", err)
 					break
 				}
@@ -248,7 +248,7 @@ func (db *DB) collectGarbage() (collectedCount uint64, done bool, err error) {
 	db.metrics.GCCommittedCounter.Add(float64(currentCollectedCount))
 	db.gcSize.PutInBatch(batch, currentSize)
 
-	err = db.shed.WriteBatch(batch)
+	err = batch.Commit()
 	if err != nil {
 		db.metrics.GCErrorCounter.Inc()
 		return 0, false, err
@@ -276,12 +276,12 @@ func (db *DB) triggerGarbageCollection() {
 // incGCSizeInBatch changes gcSize field value
 // by change which can be negative. This function
 // must be called under batchMu lock.
-func (db *DB) incGCSizeInBatch(batch *leveldb.Batch, change int64) (err error) {
+func (db *DB) incGCSizeInBatch(batch driver.Batching, change int64) (err error) {
 	if change == 0 {
 		return nil
 	}
 	gcSize, err := db.gcSize.Get()
-	if err != nil && !errors.Is(err, leveldb.ErrNotFound) {
+	if err != nil && !errors.Is(err, driver.ErrNotFound) {
 		return err
 	}
 

@@ -11,7 +11,7 @@ import (
 
 	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/shed"
-	"github.com/syndtr/goleveldb/leveldb"
+	"github.com/gauss-project/aurorafs/pkg/shed/driver"
 )
 
 // PeerConnectionDirection represents peer connection direction.
@@ -188,7 +188,7 @@ func NewCollector(db *shed.DB) (*Collector, error) {
 	c.persistence = &val
 
 	counters := make(map[string]persistentCounters)
-	if err := val.Get(&counters); err != nil && !errors.Is(err, leveldb.ErrNotFound) {
+	if err := val.Get(&counters); err != nil && !errors.Is(err, driver.ErrNotFound) {
 		return nil, err
 	}
 

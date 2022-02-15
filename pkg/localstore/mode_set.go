@@ -24,8 +24,8 @@ import (
 	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/sctx"
 	"github.com/gauss-project/aurorafs/pkg/shed"
+	"github.com/gauss-project/aurorafs/pkg/shed/driver"
 	"github.com/gauss-project/aurorafs/pkg/storage"
-	"github.com/syndtr/goleveldb/leveldb"
 )
 
 // Set updates database indexes for
@@ -56,7 +56,7 @@ func (db *DB) set(mode storage.ModeSet, rootAddr boson.Address, addrs ...boson.A
 		db.dirtyAddresses = append(db.dirtyAddresses, addrs...)
 	}
 
-	batch := new(leveldb.Batch)
+	batch := db.shed.NewBatch()
 
 	// variables that provide information for operations
 	// to be done after write batch function successfully executes
@@ -116,7 +116,7 @@ func (db *DB) set(mode storage.ModeSet, rootAddr boson.Address, addrs ...boson.A
 		return err
 	}
 
-	err = db.shed.WriteBatch(batch)
+	err = batch.Commit()
 	if err != nil {
 		return err
 	}
@@ -129,7 +129,7 @@ func (db *DB) set(mode storage.ModeSet, rootAddr boson.Address, addrs ...boson.A
 //   from push sync index
 // - update to gc index happens given item does not exist in pin index
 // Provided batch is updated.
-func (db *DB) setSync(batch *leveldb.Batch, addr boson.Address, mode storage.ModeSet) (gcSizeChange int64, err error) {
+func (db *DB) setSync(batch driver.Batching, addr boson.Address, mode storage.ModeSet) (gcSizeChange int64, err error) {
 	item := addressToItem(addr)
 
 	// need to get access timestamp here as it is not
@@ -138,7 +138,7 @@ func (db *DB) setSync(batch *leveldb.Batch, addr boson.Address, mode storage.Mod
 
 	i, err := db.retrievalDataIndex.Get(item)
 	if err != nil {
-		if errors.Is(err, leveldb.ErrNotFound) {
+		if errors.Is(err, driver.ErrNotFound) {
 			return 0, nil
 		}
 		return 0, err
@@ -155,7 +155,7 @@ func (db *DB) setSync(batch *leveldb.Batch, addr boson.Address, mode storage.Mod
 			return 0, err
 		}
 		gcSizeChange--
-	case errors.Is(err, leveldb.ErrNotFound):
+	case errors.Is(err, driver.ErrNotFound):
 		// the chunk is not accessed before
 	default:
 		return 0, err
@@ -185,7 +185,7 @@ func (db *DB) setSync(batch *leveldb.Batch, addr boson.Address, mode storage.Mod
 // setRemove removes the chunk by updating indexes:
 //  - delete from retrieve, pull, gc
 // Provided batch is updated.
-func (db *DB) setRemove(batch *leveldb.Batch, addr, rootAddr boson.Address) (gcSizeChange int64, err error) {
+func (db *DB) setRemove(batch driver.Batching, addr, rootAddr boson.Address) (gcSizeChange int64, err error) {
 	item := addressToItem(addr)
 
 	item, err = db.retrievalDataIndex.Get(item)
@@ -197,7 +197,7 @@ func (db *DB) setRemove(batch *leveldb.Batch, addr, rootAddr boson.Address) (gcS
 	switch {
 	case err == nil:
 		item.AccessTimestamp = i.AccessTimestamp
-	case errors.Is(err, leveldb.ErrNotFound):
+	case errors.Is(err, driver.ErrNotFound):
 	default:
 		return 0, err
 	}
@@ -222,7 +222,7 @@ func (db *DB) setRemove(batch *leveldb.Batch, addr, rootAddr boson.Address) (gcS
 				return 0, err
 			}
 		}
-	case errors.Is(err, leveldb.ErrNotFound):
+	case errors.Is(err, driver.ErrNotFound):
 	default:
 		return 0, err
 	}
@@ -245,7 +245,7 @@ func (db *DB) setRemove(batch *leveldb.Batch, addr, rootAddr boson.Address) (gcS
 	switch {
 	case err == nil:
 		rootItem.AccessTimestamp = i.AccessTimestamp
-	case errors.Is(err, leveldb.ErrNotFound):
+	case errors.Is(err, driver.ErrNotFound):
 		return 0, nil
 	default:
 		return 0, err
@@ -262,7 +262,7 @@ func (db *DB) setRemove(batch *leveldb.Batch, addr, rootAddr boson.Address) (gcS
 	var gcItem shed.Item
 	gcItem, err = db.gcIndex.Get(rootItem)
 	if err != nil {
-		if !errors.Is(err, leveldb.ErrNotFound) {
+		if !errors.Is(err, driver.ErrNotFound) {
 			return 0, err
 		}
 		return 0, nil
@@ -294,11 +294,11 @@ func (db *DB) setRemove(batch *leveldb.Batch, addr, rootAddr boson.Address) (gcS
 // setPin increments pin counter for the chunk by updating
 // pin index and sets the chunk to be excluded from garbage collection.
 // Provided batch is updated.
-func (db *DB) setPin(batch *leveldb.Batch, item, rootItem shed.Item) (gcSizeChange int64, err error) {
+func (db *DB) setPin(batch driver.Batching, item, rootItem shed.Item) (gcSizeChange int64, err error) {
 	i, err := db.pinIndex.Get(item)
 	switch {
 	case err == nil:
-	case errors.Is(err, leveldb.ErrNotFound):
+	case errors.Is(err, driver.ErrNotFound):
 	default:
 		return 0, err
 	}
@@ -307,7 +307,7 @@ func (db *DB) setPin(batch *leveldb.Batch, item, rootItem shed.Item) (gcSizeChan
 	if rootItem.Address != nil {
 		i, err = db.retrievalAccessIndex.Get(rootItem)
 		if err != nil {
-			if !errors.Is(err, leveldb.ErrNotFound) {
+			if !errors.Is(err, driver.ErrNotFound) {
 				return 0, err
 			}
 		} else {
@@ -324,7 +324,7 @@ func (db *DB) setPin(batch *leveldb.Batch, item, rootItem shed.Item) (gcSizeChan
 
 			gcItem, err = db.gcIndex.Get(rootItem)
 			if err != nil {
-				if !errors.Is(err, leveldb.ErrNotFound) {
+				if !errors.Is(err, driver.ErrNotFound) {
 					return 0, err
 				}
 			} else {
@@ -356,7 +356,7 @@ func (db *DB) setPin(batch *leveldb.Batch, item, rootItem shed.Item) (gcSizeChan
 
 // setUnpin decrements pin counter for the chunk by updating pin index.
 // Provided batch is updated.
-func (db *DB) setUnpin(batch *leveldb.Batch, item, rootItem shed.Item) (gcSizeChange int64, err error) {
+func (db *DB) setUnpin(batch driver.Batching, item, rootItem shed.Item) (gcSizeChange int64, err error) {
 	// Get the existing pin counter of the chunk
 	i, err := db.pinIndex.Get(item)
 	if err != nil {
@@ -378,7 +378,7 @@ func (db *DB) setUnpin(batch *leveldb.Batch, item, rootItem shed.Item) (gcSizeCh
 	if rootItem.Address != nil {
 		i, err = db.retrievalAccessIndex.Get(rootItem)
 		if err != nil {
-			if !errors.Is(err, leveldb.ErrNotFound) {
+			if !errors.Is(err, driver.ErrNotFound) {
 				return 0, err
 			}
 			rootItem.AccessTimestamp = now()
@@ -401,7 +401,7 @@ func (db *DB) setUnpin(batch *leveldb.Batch, item, rootItem shed.Item) (gcSizeCh
 
 		gcItem, err = db.gcIndex.Get(rootItem)
 		if err != nil {
-			if !errors.Is(err, leveldb.ErrNotFound) {
+			if !errors.Is(err, driver.ErrNotFound) {
 				return 0, err
 			}
 			rootItem.GCounter = 1

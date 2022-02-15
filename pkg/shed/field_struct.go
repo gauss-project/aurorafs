@@ -20,7 +20,7 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/syndtr/goleveldb/leveldb"
+	"github.com/gauss-project/aurorafs/pkg/shed/driver"
 )
 
 // StructField is a helper to store complex structure by
@@ -44,9 +44,9 @@ func (db *DB) NewStructField(name string) (f StructField, err error) {
 }
 
 // Get unmarshals data from the database to a provided val.
-// If the data is not found leveldb.ErrNotFound is returned.
+// If the data is not found driver.ErrNotFound is returned.
 func (f StructField) Get(val interface{}) (err error) {
-	b, err := f.db.Get(f.key)
+	b, err := f.db.Get(fieldKeyPrefixLength, f.key)
 	if err != nil {
 		return err
 	}
@@ -59,15 +59,17 @@ func (f StructField) Put(val interface{}) (err error) {
 	if err != nil {
 		return err
 	}
-	return f.db.Put(f.key, b)
+	return f.db.Put(fieldKeyPrefixLength, f.key, b)
 }
 
 // PutInBatch marshals provided val and puts it into the batch.
-func (f StructField) PutInBatch(batch *leveldb.Batch, val interface{}) (err error) {
+func (f StructField) PutInBatch(batch driver.Batching, val interface{}) (err error) {
 	b, err := json.Marshal(val)
 	if err != nil {
 		return err
 	}
-	batch.Put(f.key, b)
-	return nil
+	return batch.Put(driver.Key{
+		Prefix: fieldKeyPrefixLength,
+		Data:   f.key,
+	}, driver.Value{Data: b})
 }

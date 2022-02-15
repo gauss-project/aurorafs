@@ -16,6 +16,8 @@ import (
 	"github.com/spf13/cobra"
 )
 
+var driver string
+
 func (c *command) initDBCmd() {
 	cmd := &cobra.Command{
 		Use:   "db",

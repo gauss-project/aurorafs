@@ -21,8 +21,8 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/gauss-project/aurorafs/pkg/shed/driver"
 	"github.com/gauss-project/aurorafs/pkg/storage"
-	"github.com/syndtr/goleveldb/leveldb"
 )
 
 // TestModeSetRemove validates ModeSetRemove index values on the provided DB.
@@ -45,7 +45,7 @@ func TestModeSetRemove(t *testing.T) {
 
 			t.Run("retrieve indexes", func(t *testing.T) {
 				for _, ch := range chunks {
-					wantErr := leveldb.ErrNotFound
+					wantErr := driver.ErrNotFound
 					_, err := db.retrievalDataIndex.Get(addressToItem(ch.Address()))
 					if !errors.Is(err, wantErr) {
 						t.Errorf("got error %v, want %v", err, wantErr)

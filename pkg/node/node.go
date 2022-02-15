@@ -66,31 +66,29 @@ type Aurora struct {
 }
 
 type Options struct {
-	DataDir                  string
-	CacheCapacity            uint64
-	DBOpenFilesLimit         uint64
-	DBWriteBufferSize        uint64
-	DBBlockCacheCapacity     uint64
-	DBDisableSeeksCompaction bool
-	HTTPAddr                 string
-	WSAddr                   string
-	APIAddr                  string
-	DebugAPIAddr             string
-	ApiBufferSizeMul         int
-	NATAddr                  string
-	EnableWS                 bool
-	EnableQUIC               bool
-	WelcomeMessage           string
-	Bootnodes                []string
-	OracleEndpoint           string
-	OracleContractAddress    string
-	CORSAllowedOrigins       []string
-	Logger                   logging.Logger
-	Standalone               bool
-	IsDev                    bool
-	TracingEnabled           bool
-	TracingEndpoint          string
-	TracingServiceName       string
+	DataDir               string
+	CacheCapacity         uint64
+	DBDriver              string
+	DBPath                string
+	HTTPAddr              string
+	WSAddr                string
+	APIAddr               string
+	DebugAPIAddr          string
+	ApiBufferSizeMul      int
+	NATAddr               string
+	EnableWS              bool
+	EnableQUIC            bool
+	WelcomeMessage        string
+	Bootnodes             []string
+	OracleEndpoint        string
+	OracleContractAddress string
+	CORSAllowedOrigins    []string
+	Logger                logging.Logger
+	Standalone            bool
+	IsDev                 bool
+	TracingEnabled        bool
+	TracingEndpoint       string
+	TracingServiceName    string
 	// GlobalPinningEnabled     bool
 	// PaymentThreshold         string
 	// PaymentTolerance         string
@@ -318,15 +316,14 @@ func NewAurora(nodeMode aurora.Model, addr string, bosonAddress boson.Address, p
 
 	var path string
 
-	if o.DataDir != "" {
+	if o.DBPath != "" {
+		path = o.DBPath
+	} else if o.DataDir != "" {
 		path = filepath.Join(o.DataDir, "localstore")
 	}
 	lo := &localstore.Options{
-		Capacity:               o.CacheCapacity,
-		OpenFilesLimit:         o.DBOpenFilesLimit,
-		BlockCacheCapacity:     o.DBBlockCacheCapacity,
-		WriteBufferSize:        o.DBWriteBufferSize,
-		DisableSeeksCompaction: o.DBDisableSeeksCompaction,
+		Capacity: o.CacheCapacity,
+		Driver:   o.DBDriver,
 	}
 	storer, err := localstore.New(path, bosonAddress.Bytes(), lo, logger)
 	if err != nil {
