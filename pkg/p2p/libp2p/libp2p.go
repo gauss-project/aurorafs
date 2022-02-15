@@ -6,13 +6,14 @@ import (
 	"crypto/ecdsa"
 	"errors"
 	"fmt"
-	"github.com/gauss-project/aurorafs/pkg/routetab"
-	"github.com/gauss-project/aurorafs/pkg/routetab/pb"
 	"net"
 	"runtime"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/gauss-project/aurorafs/pkg/routetab"
+	"github.com/gauss-project/aurorafs/pkg/routetab/pb"
 
 	au "github.com/gauss-project/aurorafs"
 	"github.com/gauss-project/aurorafs/pkg/addressbook"
@@ -39,7 +40,7 @@ import (
 	nat "github.com/libp2p/go-libp2p-nat"
 	"github.com/libp2p/go-libp2p-peerstore/pstoremem"
 	libp2pquic "github.com/libp2p/go-libp2p-quic-transport"
-	tptu "github.com/libp2p/go-libp2p-transport-upgrader"
+	goyamux "github.com/libp2p/go-libp2p-yamux"
 	basichost "github.com/libp2p/go-libp2p/p2p/host/basic"
 	libp2pping "github.com/libp2p/go-libp2p/p2p/protocol/ping"
 	"github.com/libp2p/go-tcp-transport"
@@ -56,6 +57,11 @@ var (
 const (
 	peerUserAgentTimeout = time.Second
 )
+
+func init() {
+	goyamux.DefaultTransport.AcceptBacklog = 1024
+	goyamux.DefaultTransport.MaxIncomingStreams = 5000
+}
 
 type Service struct {
 	ctx               context.Context
@@ -96,7 +102,7 @@ type Options struct {
 	LightNodeLimit int
 	WelcomeMessage string
 	Transaction    []byte
-	hostFactory    func(context.Context, ...libp2p.Option) (host.Host, error)
+	hostFactory    func(...libp2p.Option) (host.Host, error)
 }
 
 func New(ctx context.Context, signer beecrypto.Signer, networkID uint64, overlay boson.Address, addr string, ab addressbook.Putter, storer storage.StateStorer, lightNodes *lightnode.Container, bootNodes *bootnode.Container, logger logging.Logger, tracer *tracing.Tracer, o Options) (*Service, error) {
@@ -141,8 +147,10 @@ func New(ctx context.Context, signer beecrypto.Signer, networkID uint64, overlay
 	}
 
 	security := libp2p.DefaultSecurity
-	libp2pPeerstore := pstoremem.NewPeerstore()
-
+	libp2pPeerstore, err := pstoremem.NewPeerstore()
+	if err != nil {
+		return nil, err
+	}
 	var natManager basichost.NATManager
 
 	opts := []libp2p.Option{
@@ -169,11 +177,7 @@ func New(ctx context.Context, signer beecrypto.Signer, networkID uint64, overlay
 	}
 
 	transports := []libp2p.Option{
-		libp2p.Transport(func(u *tptu.Upgrader) *tcp.TcpTransport {
-			t := tcp.NewTCPTransport(u)
-			t.DisableReuseport = true
-			return t
-		}),
+		libp2p.Transport(tcp.NewTCPTransport, tcp.DisableReuseport()),
 	}
 
 	if o.EnableWS {
@@ -191,14 +195,14 @@ func New(ctx context.Context, signer beecrypto.Signer, networkID uint64, overlay
 		o.hostFactory = libp2p.New
 	}
 
-	h, err := o.hostFactory(ctx, opts...)
+	h, err := o.hostFactory(opts...)
 	if err != nil {
 		return nil, err
 	}
 
 	// Support same non default security and transport options as
 	// original host.
-	dialer, err := o.hostFactory(ctx, append(transports, security)...)
+	dialer, err := o.hostFactory(append(transports, security)...)
 	if err != nil {
 		return nil, err
 	}
@@ -206,7 +210,7 @@ func New(ctx context.Context, signer beecrypto.Signer, networkID uint64, overlay
 	// If you want to help other peers to figure out if they are behind
 	// NATs, you can launch the server-side of AutoNAT too (AutoRelay
 	// already runs the client)
-	if _, err = autonat.New(ctx, h, autonat.EnableService(dialer.Network())); err != nil {
+	if _, err = autonat.New(h, autonat.EnableService(dialer.Network())); err != nil {
 		return nil, fmt.Errorf("autonat: %w", err)
 	}
 
@@ -238,7 +242,7 @@ func New(ctx context.Context, signer beecrypto.Signer, networkID uint64, overlay
 	// the addresses used are not dialable and hence should be cleaned up. We should create
 	// this host with the same transports and security options to be able to dial to other
 	// peers.
-	pingDialer, err := o.hostFactory(ctx, append(transports, security, libp2p.NoListenAddrs)...)
+	pingDialer, err := o.hostFactory(append(transports, security, libp2p.NoListenAddrs)...)
 	if err != nil {
 		return nil, err
 	}
@@ -279,12 +283,10 @@ func New(ctx context.Context, signer beecrypto.Signer, networkID uint64, overlay
 
 	s.host.SetStreamHandlerMatch(id, matcher, s.handleIncoming)
 
-	h.Network().SetConnHandler(func(_ network.Conn) {
-		s.metrics.HandledConnectionCount.Inc()
-	})
-
+	connMetricNotify := newConnMetricNotify(s.metrics)
 	h.Network().Notify(peerRegistry)       // update peer registry on network events
 	h.Network().Notify(s.handshakeService) // update handshake service on network events
+	h.Network().Notify(connMetricNotify)
 	return s, nil
 }
 
@@ -693,14 +695,14 @@ func (s *Service) Connect(ctx context.Context, addr ma.Multiaddr) (peer *p2p.Pee
 		s.logger.Errorf("internal error while connecting with peer %s", info.ID)
 		_ = handshakeStream.Reset()
 		_ = s.host.Network().ClosePeer(info.ID)
-		return nil, fmt.Errorf("peer blocklisted")
+		return nil, err
 	}
 
 	if blocked {
 		s.logger.Errorf("blocked connection to blocklisted peer %s", info.ID)
 		_ = handshakeStream.Reset()
 		_ = s.host.Network().ClosePeer(info.ID)
-		return nil, fmt.Errorf("peer blocklisted")
+		return nil, p2p.ErrPeerBlocklisted
 	}
 
 	if exists := s.peers.addIfNotExists(stream.Conn(), overlay, i.NodeMode); exists {
@@ -1127,4 +1129,20 @@ func appendSpace(s string) string {
 // userAgent returns a User Agent string passed to the libp2p host to identify peer node.
 func userAgent() string {
 	return fmt.Sprintf("aurora/%s %s %s/%s", au.Version, runtime.Version(), runtime.GOOS, runtime.GOARCH)
+}
+
+func newConnMetricNotify(m metrics) *connectionNotifier {
+	return &connectionNotifier{
+		metrics:  m,
+		Notifiee: new(network.NoopNotifiee),
+	}
+}
+
+type connectionNotifier struct {
+	metrics metrics
+	network.Notifiee
+}
+
+func (c *connectionNotifier) Connected(_ network.Network, _ network.Conn) {
+	c.metrics.HandledConnectionCount.Inc()
 }

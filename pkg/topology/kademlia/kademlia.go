@@ -348,6 +348,10 @@ func (k *Kad) Connection(ctx context.Context, addr *aurora.Address) error {
 		k.logger.Debugf("kademlia: overlay mismatch has occurred to an overlay %q with underlay %q", addr.Overlay, addr.Underlay)
 		remove(addr.Overlay)
 		return err
+	case errors.Is(err, p2p.ErrPeerBlocklisted):
+		k.logger.Debugf("kademlia: peer still in blocklist: %q", addr)
+		k.logger.Warningf("peer still in blocklist")
+		return err
 	case err != nil:
 		k.logger.Debugf("kademlia: peer not reachable from kademlia %q: %v", addr, err)
 		k.logger.Warningf("peer not reachable when attempting to connect")
@@ -815,6 +819,8 @@ func (k *Kad) connect(ctx context.Context, peer boson.Address, ma ma.Multiaddr) 
 		}
 		return i, nil
 	case errors.Is(err, context.Canceled):
+		return nil, err
+	case errors.Is(err, p2p.ErrPeerBlocklisted):
 		return nil, err
 	case err != nil:
 		k.logger.Debugf("kademlia: could not connect to peer %q: %v", peer, err)
