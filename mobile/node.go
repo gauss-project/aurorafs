@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"time"
 
 	aufs "github.com/gauss-project/aurorafs"
@@ -41,7 +42,10 @@ func NewNode(o *Options) (*Node, error) {
 		return nil, err
 	}
 
-	signerConfig, err := configureSigner(o.KeysPath, o.Password, uint64(o.NetworkID), logger)
+	// put keys into dataDir
+	keyPath := filepath.Join(o.DataPath, "keys")
+
+	signerConfig, err := configureSigner(keyPath, o.Password, uint64(o.NetworkID), logger)
 	if err != nil {
 		return nil, err
 	}
