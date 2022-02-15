@@ -16,9 +16,6 @@ import (
 type Driver struct{}
 
 var (
-	defaultBlockSize              = 256 * 1024
-	defaultCompactionTableSize    = 128 * 1024 * 1024
-	defaultCompactionTotalSize    = 5 * 128 * 1024 * 1024
 	defaultOpenFilesLimit         = 256
 	defaultBlockCacheCapacity     = 32 * 1024 * 1024
 	defaultWriteBufferSize        = 32 * 1024 * 1024
@@ -29,9 +26,6 @@ func (d Driver) Init() driver.Configure {
 	var c Configuration
 
 	c.Options(
-		c.SetBlockSize(defaultBlockSize),
-		c.SetCompactionTableSize(defaultCompactionTableSize),
-		c.SetCompactionTotalSize(defaultCompactionTotalSize),
 		c.SetOpenFilesCacheCapacity(defaultOpenFilesLimit),
 		c.SetBlockCacheCapacity(defaultBlockCacheCapacity),
 		c.SetWriteBuffer(defaultWriteBufferSize),
