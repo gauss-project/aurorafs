@@ -49,7 +49,6 @@ type Options struct {
 
 	// security
 	Password string
-	KeysPath string
 	DataPath string
 
 	// leveldb opts
@@ -133,22 +132,6 @@ func (o Options) TrafficEnable(c *node.Options) {
 
 func (o Options) TrafficContractAddr(c *node.Options) {
 	c.TrafficContractAddr = o.FlowContract
-}
-
-func (o Options) DBBlockCacheCapacity(c *node.Options) {
-	c.DBBlockCacheCapacity = uint64(o.BlockCacheCapacity)
-}
-
-func (o Options) DBOpenFilesLimit(c *node.Options) {
-	c.DBOpenFilesLimit = uint64(o.OpenFilesLimit)
-}
-
-func (o Options) DBWriteBufferSize(c *node.Options) {
-	c.DBWriteBufferSize = uint64(o.WriteBufferSize)
-}
-
-func (o Options) DBDisableSeeksCompaction(c *node.Options) {
-	c.DBDisableSeeksCompaction = o.DisableSeeksCompaction
 }
 
 // Export exports Options to node.Options, skipping all other extra fields
