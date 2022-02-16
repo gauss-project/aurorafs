@@ -11,7 +11,7 @@ require (
 	github.com/ethereum/go-ethereum v1.10.11
 	github.com/ethersphere/langos v1.0.0
 	github.com/ethersphere/sw3-bindings/v3 v3.0.3
-	github.com/gauss-project/manifest v0.4.1
+	github.com/gauss-project/manifest v0.4.2
 	github.com/gogf/gf v1.16.6
 	github.com/gogo/protobuf v1.3.2
 	github.com/google/go-cmp v0.5.6
@@ -88,7 +88,6 @@ require (
 	github.com/gopherjs/gopherjs v0.0.0-20200217142428-fce0ec30dd00 // indirect
 	github.com/hashicorp/errwrap v1.0.0 // indirect
 	github.com/hashicorp/hcl v1.0.0 // indirect
-	github.com/hedzr/go-ringbuf v0.9.0 // indirect
 	github.com/holiman/bloomfilter/v2 v2.0.3 // indirect
 	github.com/holiman/uint256 v1.2.0 // indirect
 	github.com/huin/goupnp v1.0.2 // indirect
