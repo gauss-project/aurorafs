@@ -191,11 +191,6 @@ func (d Driver) Open(path string) (driver.DB, error) {
 		}
 	}
 
-	err = db.initSchema()
-	if err != nil {
-		return nil, err
-	}
-
 	return db, nil
 }
 

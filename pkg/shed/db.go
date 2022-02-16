@@ -133,7 +133,10 @@ func NewDBWrap(i driver.BatchDB) (db *DB, err error) {
 		metrics: newMetrics(),
 	}
 
-	db.initSchema()
+	err = db.initSchema()
+	if err != nil {
+		return nil, err
+	}
 
 	// Create a quit channel for the periodic metrics collector and run it.
 	db.quit = make(chan struct{})
