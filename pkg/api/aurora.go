@@ -4,10 +4,12 @@ import (
 	"bytes"
 	"context"
 	"encoding/binary"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"github.com/ethereum/go-ethereum/common"
 	"io"
+	"io/ioutil"
 	"mime"
 	"net/http"
 	"path"
@@ -186,7 +188,6 @@ func (s *server) fileUploadHandler(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
-
 	if strings.ToLower(r.Header.Get(AuroraPinHeader)) == "true" {
 		if err := s.pinning.CreatePin(ctx, manifestReference, false); err != nil {
 			logger.Debugf("aurora upload file: creation of pin for %q failed: %v", manifestReference, err)
@@ -404,45 +405,113 @@ type auroraListResponse struct {
 	Manifest  *ManifestNode       `json:"manifest"`
 }
 
-// auroraListHandler
+type auroraPageResponse struct {
+	Total int                  `json:"total"`
+	List  []auroraListResponse `json:"list"`
+}
+
 func (s *server) auroraListHandler(w http.ResponseWriter, r *http.Request) {
 	var wg sync.WaitGroup
+	var reqs aurora.ApiBody
 	pathVar := ""
 	depth := 1
+	isBody := true
+	pageTotal := 0
 	if r.URL.Query().Get("recursive") != "" {
 		depth = -1
 	}
-	responseList := make([]auroraListResponse, 0)
-	fileListInfo, addressList := s.chunkInfo.GetFileList(s.overlay)
+	r.ParseForm()
+	req, err := ioutil.ReadAll(r.Body)
+	if err != nil {
+		s.logger.Error("aurora list: Request parameter acquisition failed,%v", err.Error())
+		jsonhttp.InternalServerError(w, fmt.Errorf("aurora list: Request parameter acquisition failed,%v", err.Error()))
+		return
+	}
 
-	for _, v := range addressList {
-		info, ok := fileListInfo[v.String()]
-		if ok {
-			pinned, err := s.pinning.HasPin(v)
-			if err != nil {
-				s.logger.Errorf("aurora list: check hash %s pinning err", v)
-				continue
-			}
+	if len(req) == 0 {
+		isBody = false
+	}
 
-			responseList = append(responseList, auroraListResponse{
-				FileHash:  v,
-				Size:      info.TreeSize,
-				FileSize:  info.FileSize,
-				PinState:  pinned,
-				BitVector: info.Bitvector,
-				Register:  false,
-				Manifest:  nil,
-			})
+	if isBody {
+		err = json.Unmarshal(req, &reqs)
+		if err != nil {
+			s.logger.Error("aurora list: Request parameter conversion failed,%v", err.Error())
+			jsonhttp.InternalServerError(w, fmt.Errorf("aurora list: Request parameter conversion failed,%v", err.Error()))
+			return
 		}
 	}
 
-	zeroAddress := boson.NewAddress([]byte{31: 0})
-	sort.Slice(responseList, func(i, j int) bool {
-		closer, _ := responseList[i].FileHash.Closer(zeroAddress, responseList[j].FileHash)
-		return closer
-	})
-	wg.Add(len(responseList))
+	responseList := make([]auroraListResponse, 0)
+	fileListInfo, _ := s.chunkInfo.GetFileList(s.overlay)
 
+	for i, v := range fileListInfo {
+		maniFest, err := s.manifestView(r.Context(), v["rootCid"].(boson.Address).String(), pathVar, depth)
+		if err == nil && maniFest != nil {
+			fileListInfo[i]["manifest.type"] = maniFest.Type
+			fileListInfo[i]["manifest.hash"] = maniFest.Hash
+			fileListInfo[i]["manifest.name"] = maniFest.Name
+			fileListInfo[i]["manifest.size"] = maniFest.Size
+			fileListInfo[i]["manifest.ext"] = maniFest.Extension
+			fileListInfo[i]["manifest.mime"] = maniFest.MimeType
+			fileListInfo[i]["manifest.sub"] = maniFest.Nodes
+			if maniFest.Nodes != nil {
+				var fileSize uint64
+				var maniFestNode ManifestNode
+				for _, mv := range maniFest.Nodes {
+					fileSize = fileSize + mv.Size
+					maniFestNode = *mv
+				}
+				fileListInfo[i]["manifest.sub.type"] = maniFestNode.Type
+				fileListInfo[i]["manifest.sub.hash"] = maniFestNode.Hash
+				fileListInfo[i]["manifest.sub.name"] = maniFestNode.Name
+				fileListInfo[i]["manifest.sub.size"] = fileSize
+				fileListInfo[i]["manifest.sub.ext"] = maniFestNode.Extension
+				fileListInfo[i]["manifest.sub.mime"] = maniFestNode.MimeType
+			}
+		}
+	}
+
+	if isBody {
+		paging := aurora.NewPaging(s.logger, reqs.Limit, reqs.Sort, reqs.Order)
+		fileListInfo = paging.ResponseFilter(fileListInfo, reqs.Filter)
+		fileListInfo = paging.PageSort(fileListInfo, reqs.Sort, reqs.Order)
+		pageTotal = len(fileListInfo)
+		fileListInfo = paging.Page(fileListInfo, reqs.Page)
+	}
+
+	for _, v := range fileListInfo {
+		pinned, err := s.pinning.HasPin(v["rootCid"].(boson.Address))
+		if err != nil {
+			s.logger.Errorf("aurora list: check hash %s pinning err", v)
+			continue
+		}
+		bitvector := aurora.BitVectorApi{
+			Len: v["bitvector.len"].(int),
+			B:   v["bitvector.b"].([]byte),
+		}
+
+		var manifestNode ManifestNode
+		if _, ok := v["manifest.type"]; ok {
+			manifestNode.Type = v["manifest.type"].(string)
+			manifestNode.Hash = v["manifest.hash"].(string)
+			manifestNode.Name = v["manifest.name"].(string)
+			manifestNode.Size = v["manifest.size"].(uint64)
+			manifestNode.Extension = v["manifest.ext"].(string)
+			manifestNode.MimeType = v["manifest.mime"].(string)
+			manifestNode.Nodes = v["manifest.sub"].(map[string]*ManifestNode)
+		}
+
+		responseList = append(responseList, auroraListResponse{
+			FileHash:  v["rootCid"].(boson.Address),
+			Size:      v["treeSize"].(int),
+			FileSize:  v["fileSize"].(int),
+			PinState:  pinned,
+			BitVector: bitvector,
+			Register:  false,
+			Manifest:  &manifestNode,
+		})
+	}
+	wg.Add(len(responseList))
 	type ordHash struct {
 		ord  int
 		hash boson.Address
@@ -480,21 +549,27 @@ func (s *server) auroraListHandler(w http.ResponseWriter, r *http.Request) {
 	}()
 
 	for i, v := range responseList {
-		response := v
-		maniFest, err := s.manifestView(r.Context(), v.FileHash.String(), pathVar, depth)
-		if err == nil && maniFest != nil {
-			response.Manifest = maniFest
-		}
-		responseList[i] = response
-	}
-	for i, v := range responseList {
 		hashChain := ordHash{ord: i, hash: v.FileHash}
 		ch <- hashChain
 	}
 
 	close(ch)
 	wg.Wait()
-	jsonhttp.OK(w, responseList)
+	if !isBody {
+		zeroAddress := boson.NewAddress([]byte{31: 0})
+		sort.Slice(responseList, func(i, j int) bool {
+			closer, _ := responseList[i].FileHash.Closer(zeroAddress, responseList[j].FileHash)
+			return closer
+		})
+		jsonhttp.OK(w, responseList)
+	} else {
+		pageResponseList := auroraPageResponse{
+			Total: pageTotal,
+			List:  responseList,
+		}
+		jsonhttp.OK(w, pageResponseList)
+	}
+
 }
 
 // manifestMetadataLoad returns the value for a key stored in the metadata of

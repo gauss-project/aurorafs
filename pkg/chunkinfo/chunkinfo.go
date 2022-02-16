@@ -40,7 +40,7 @@ type Interface interface {
 
 	IsDiscover(rootCid boson.Address) bool
 
-	GetFileList(overlay boson.Address) (fileListInfo map[string]*aurora.FileInfo, rootList []boson.Address)
+	GetFileList(overlay boson.Address) (fileListInfo []map[string]interface{}, rootList []boson.Address)
 
 	DelFile(rootCid boson.Address, del func()) bool
 
@@ -281,20 +281,20 @@ func (ci *ChunkInfo) IsDiscover(rootCid boson.Address) bool {
 	return false
 }
 
-func (ci *ChunkInfo) GetFileList(overlay boson.Address) (fileListInfo map[string]*aurora.FileInfo, rootList []boson.Address) {
+func (ci *ChunkInfo) GetFileList(overlay boson.Address) (fileListInfo []map[string]interface{}, rootList []boson.Address) {
 	ci.ct.RLock()
 	defer ci.ct.RUnlock()
 	chunkInfo := ci.ct.presence
-	fileListInfo = make(map[string]*aurora.FileInfo)
 	for root, node := range chunkInfo {
 		if v, ok := node[overlay.String()]; ok {
-			file := &aurora.FileInfo{}
-			file.PinState = false
-			file.TreeSize = ci.cp.getRootHash(root)
-			file.FileSize = ci.getRootChunk(root)
-			file.Bitvector.B = v.Bytes()
-			file.Bitvector.Len = v.Len()
-			fileListInfo[root] = file
+			mp := make(map[string]interface{})
+			mp["rootCid"] = boson.MustParseHexAddress(root)
+			mp["pinState"] = false
+			mp["treeSize"] = ci.cp.getRootHash(root)
+			mp["fileSize"] = ci.getRootChunk(root)
+			mp["bitvector.len"] = v.Len()
+			mp["bitvector.b"] = v.Bytes()
+			fileListInfo = append(fileListInfo, mp)
 			rootList = append(rootList, boson.MustParseHexAddress(root))
 		}
 	}
