@@ -420,7 +420,6 @@ func (s *server) auroraListHandler(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Query().Get("recursive") != "" {
 		depth = -1
 	}
-	r.ParseForm()
 	req, err := ioutil.ReadAll(r.Body)
 	if err != nil {
 		s.logger.Error("aurora list: Request parameter acquisition failed,%v", err.Error())
