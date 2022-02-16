@@ -682,15 +682,12 @@ func (k *Kad) connectBootNodes(ctx context.Context) {
 			attempts++
 			k.metrics.TotalBootNodesConnectionAttempts.Inc()
 
-			if err != nil {
-				if !errors.Is(err, p2p.ErrAlreadyConnected) {
-					k.logger.Debugf("connect fail %s: %v", addr, err)
-					k.logger.Warningf("connect to bootnode %s", addr)
-					return false, err
-				}
+			if errors.Is(err, p2p.ErrAlreadyConnected) {
 				k.discovery.NotifyDiscoverWork(peer.Address)
-				k.logger.Debugf("connect to bootnode fail: %v", err)
 				return false, nil
+			}
+			if err != nil {
+				return false, err
 			}
 
 			k.discovery.NotifyDiscoverWork(peer.Address)
@@ -703,8 +700,7 @@ func (k *Kad) connectBootNodes(ctx context.Context) {
 			// connect to max 3 bootnodes
 			return connected >= 3, nil
 		}); err != nil && !errors.Is(err, context.Canceled) {
-			k.logger.Debugf("discover fail %s: %v", addr, err)
-			k.logger.Warningf("discover to bootnode %s", addr)
+			k.logger.Warningf("discover to bootnode fail %s: %v", addr, err)
 			return
 		}
 	}

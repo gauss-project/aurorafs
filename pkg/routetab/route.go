@@ -4,6 +4,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
+	"math/rand"
+	"sync"
+	"sync/atomic"
+	"time"
+
 	"github.com/gauss-project/aurorafs/pkg/addressbook"
 	"github.com/gauss-project/aurorafs/pkg/aurora"
 	"github.com/gauss-project/aurorafs/pkg/boson"
@@ -14,12 +20,7 @@ import (
 	"github.com/gauss-project/aurorafs/pkg/storage"
 	"github.com/gauss-project/aurorafs/pkg/topology/kademlia"
 	"github.com/gauss-project/aurorafs/pkg/topology/lightnode"
-	"io"
-	"math/rand"
 	"resenje.org/singleflight"
-	"sync"
-	"sync/atomic"
-	"time"
 )
 
 const (
@@ -732,30 +733,33 @@ func (s *Service) onRelay(ctx context.Context, p p2p.Peer, stream p2p.Stream) (e
 	readResp := func(ch chan *pb.RouteRelayResp) {
 		for {
 			resp := &pb.RouteRelayResp{}
-			err = forwardReader.ReadMsg(resp)
-			if errors.Is(err, io.EOF) {
+			err = forwardReader.ReadMsgWithContext(ctx, resp)
+			switch err {
+			case context.Canceled, io.EOF:
 				// when next node FullClose
 				errChan <- nil
 				return
-			}
-			if err != nil {
+			case nil:
+				ch <- resp
+				s.logger.Tracef("route: onRelay target %s receive: from %s", target, next)
+			default:
 				content := fmt.Sprintf("route: onRelay read resp from next: %s", err.Error())
 				s.logger.Debug(content)
 				errChan <- fmt.Errorf(content)
 				return
 			}
-			ch <- resp
-			s.logger.Tracef("route: onRelay target %s receive: from %s", target, next)
 		}
 	}
 
 	for {
 		select {
 		case err = <-r.Err:
-			if errors.Is(err, io.EOF) {
+			switch err {
+			case context.Canceled, io.EOF:
 				return nil
+			default:
+				return err
 			}
-			return err
 		case req := <-forwardChan:
 			req.Paths = append(req.Paths, s.self.Bytes())
 			target = boson.NewAddress(req.Dest)
@@ -867,6 +871,8 @@ func (s *Service) PackRelayResp(ctx context.Context, stream p2p.Stream, reqCh ch
 		R:   make(chan []byte, 1),
 		Err: make(chan error, 1),
 	}
+
+	// This relay can only be initiated by the requesting end to close
 	done = make(chan struct{}, 1)
 
 	go func() {
