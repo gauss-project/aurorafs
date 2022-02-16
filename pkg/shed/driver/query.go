@@ -12,7 +12,8 @@ type Value struct {
 }
 
 type Query struct {
-	Prefix Key
+	Prefix      Key
+	MatchPrefix bool
 }
 
 var ErrNotFound = errors.New("key not found")
