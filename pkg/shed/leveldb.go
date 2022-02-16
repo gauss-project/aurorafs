@@ -5,6 +5,10 @@ package shed
 
 import "github.com/gauss-project/aurorafs/pkg/shed/leveldb"
 
+const LEVELDB = "leveldb"
+
+var TestDriver = LEVELDB
+
 func init() {
-	Register("leveldb", leveldb.Driver{})
+	Register(LEVELDB, leveldb.Driver{})
 }

@@ -5,6 +5,10 @@ package shed
 
 import "github.com/gauss-project/aurorafs/pkg/shed/wiredtiger"
 
+const WIREDTIGER = "wiredtiger"
+
+var TestDriver = WIREDTIGER
+
 func init() {
-	Register("wiredtiger", wiredtiger.Driver{})
+	Register(WIREDTIGER, wiredtiger.Driver{})
 }
