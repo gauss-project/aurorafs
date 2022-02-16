@@ -137,7 +137,7 @@ func (s *store) Iterate(prefix string, iterFunc storage.StateIterFunc) (err erro
 	defer func() {
 		err = iter.Close()
 	}()
-	for iter.Next() {
+	for ; iter.Valid(); iter.Next() {
 		stop, err := iterFunc(iter.Key(), iter.Value())
 		if err != nil {
 			return err
