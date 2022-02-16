@@ -1,7 +1,6 @@
 package leveldb
 
 import (
-	"errors"
 	"sync"
 
 	"github.com/gauss-project/aurorafs/pkg/shed/driver"
@@ -66,20 +65,6 @@ func (d Driver) Open(path string) (driver.DB, error) {
 		db:   db,
 		opts: &opts,
 		path: path,
-	}
-
-	if _, err = ldb.getSchema(); err != nil {
-		if errors.Is(err, driver.ErrNotFound) {
-			// Save schema with initialized default fields.
-			if err = ldb.putSchema(driver.SchemaSpec{
-				Fields:  make([]driver.FieldSpec, 0),
-				Indexes: make([]driver.IndexSpec, 0),
-			}); err != nil {
-				return nil, err
-			}
-		} else {
-			return nil, err
-		}
 	}
 
 	return ldb, nil

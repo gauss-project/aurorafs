@@ -41,9 +41,6 @@ import (
 var (
 	// chunkinfo service inject
 	ci = chunkinfo.New(routetab.NewMockRouteTable())
-
-	// default db driver
-	dbDriver = "wiredtiger"
 )
 
 func init() {
@@ -167,7 +164,7 @@ func newTestDB(t testing.TB, o *Options) *DB {
 	}
 	logger := logging.New(io.Discard, 0)
 	var path string
-	switch dbDriver {
+	switch shed.TestDriver {
 	case "leveldb":
 	case "wiredtiger":
 		dir, err := os.MkdirTemp("", "localstore-test")

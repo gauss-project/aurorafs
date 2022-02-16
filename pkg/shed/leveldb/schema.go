@@ -27,6 +27,26 @@ func (l *LevelDB) DefaultIndexKey() []byte {
 	return []byte{keyPrefixIndexStart}
 }
 
+func (l *LevelDB) InitSchema() error {
+	_, err := l.getSchema()
+	if err != nil {
+		if errors.Is(err, driver.ErrNotFound) {
+			// Save schema with initialized default fields.
+			err = l.putSchema(driver.SchemaSpec{
+				Fields:  make([]driver.FieldSpec, 0),
+				Indexes: make([]driver.IndexSpec, 0),
+			})
+			if err != nil {
+				return err
+			}
+		}
+
+		return err
+	}
+
+	return nil
+}
+
 func (l *LevelDB) CreateField(spec driver.FieldSpec) ([]byte, error) {
 	if spec.Name == "" {
 		return nil, errors.New("field name cannot be blank")

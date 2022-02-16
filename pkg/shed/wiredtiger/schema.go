@@ -56,7 +56,7 @@ func indexKeyPrefixIncr(prefix []byte) error {
 
 var schema driver.SchemaSpec
 
-func (db *DB) initSchema() error {
+func (db *DB) InitSchema() error {
 	s := db.pool.Get()
 	defer db.pool.Put(s)
 

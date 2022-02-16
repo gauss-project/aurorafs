@@ -27,9 +27,16 @@ var (
 	indexKeyPrefixLength = 0
 )
 
-func (db *DB) initSchema() {
+func (db *DB) initSchema() error {
+	err := db.backend.InitSchema()
+	if err != nil {
+		return err
+	}
+
 	fieldKeyPrefixLength = len(db.backend.DefaultFieldKey())
 	indexKeyPrefixLength = len(db.backend.DefaultIndexKey())
+
+	return nil
 }
 
 // schemaFieldKey retrieves the complete LevelDB key for

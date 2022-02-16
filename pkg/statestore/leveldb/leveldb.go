@@ -133,11 +133,11 @@ func (s *store) Delete(key string) (err error) {
 
 // Iterate entries that match the supplied prefix.
 func (s *store) Iterate(prefix string, iterFunc storage.StateIterFunc) (err error) {
-	iter := s.db.Search(driver.Query{Prefix: driver.Key{Data: []byte(prefix)}})
+	iter := s.db.Search(driver.Query{Prefix: driver.Key{Data: []byte(prefix)}, MatchPrefix: true})
 	defer func() {
 		err = iter.Close()
 	}()
-	for iter.Next() {
+	for ; iter.Valid(); iter.Next() {
 		stop, err := iterFunc(iter.Key(), iter.Value())
 		if err != nil {
 			return err

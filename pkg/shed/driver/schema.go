@@ -22,6 +22,7 @@ type SchemaSpec struct {
 type Schema interface {
 	DefaultFieldKey() []byte
 	DefaultIndexKey() []byte
+	InitSchema() error
 	GetSchemaSpec() (SchemaSpec, error)
 	CreateField(spec FieldSpec) ([]byte, error)
 	CreateIndex(spec IndexSpec) ([]byte, error)
