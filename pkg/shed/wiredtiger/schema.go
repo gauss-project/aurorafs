@@ -184,6 +184,10 @@ func (db *DB) CreateIndex(spec driver.IndexSpec) ([]byte, error) {
 		if err != nil {
 			return nil, err
 		}
+		err = c.update(key, prefix)
+		if err != nil {
+			return nil, err
+		}
 	case err != nil:
 		return nil, err
 	}
