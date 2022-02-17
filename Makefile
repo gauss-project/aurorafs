@@ -22,8 +22,15 @@ SHELL ?= bash
 IS_DOCKER ?= false
 DATABASE ?= leveldb
 LIB_INSTALL_DIR ?= /usr/local
-
 CGO_ENABLED ?= $(shell go env CGO_ENABLED)
+
+ifeq ($(GOOS), windows)
+WORK_DIR := $(shell pwd | sed -E 's/^\/([a-zA-Z])\//\1\:\//' | sed -E 's/\//\\\\/g' | tr '[:upper:]' '[:lower:]')
+PATH_SEP := ;
+else
+WORK_DIR := $(shell pwd | tr '[:upper:]' '[:lower:]')
+PATH_SEP := :
+endif
 
 .PHONY: all
 all: build lint vet test-race binary
@@ -97,7 +104,7 @@ android: download-vendor
 android:
 	[ -d "dist" ] || mkdir dist
 	$(GO) mod vendor && echo "create go dependency vendor"
-	[ -f "dist/aurora.aar" ] || (GO111MODULE=off $(GOMOBILE) bind -target=android -o=aurora.aar ./mobile && mv -n aurora.aar dist/ && mv -n aurora-sources.jar dist/) || (echo "build android sdk failed" && rm -rf vendor && exit 1)
+	[ -f "dist/aurora.aar" ] || (GO111MODULE=off $(GOMOBILE) bind -tags=leveldb -target=android -o=aurora.aar -ldflags="$(LDFLAGS)" ./mobile && mv -n aurora.aar dist/ && mv -n aurora-sources.jar dist/) || (echo "build android sdk failed" && rm -rf vendor && exit 1)
 	rm -rf vendor
 	echo "android sdk build finished."
 	echo "please import dist/aurora.aar to android studio!"
@@ -109,7 +116,7 @@ ios: download-vendor
 ios:
 	[ -d "dist" ] || mkdir dist
 	$(GO) mod vendor && echo "create go dependency vendor"
-	[ -d "dist/aurora.xcframework" ] || (GO111MODULE=off $(GOMOBILE) bind -target=ios -o=aurora.xcframework ./mobile && mv -n aurora.xcframework dist/) || (echo "build ios framework failed" && rm -rf vendor && exit 1)
+	[ -d "dist/aurora.xcframework" ] || (GO111MODULE=off $(GOMOBILE) bind -tags=leveldb -target=ios -o=aurora.xcframework -ldflags="$(LDFLAGS)" ./mobile && mv -n aurora.xcframework dist/) || (echo "build ios framework failed" && rm -rf vendor && exit 1)
 	rm -rf vendor
 	echo "ios framework build finished."
 	echo "please import dist/aurora.xcframework to xcode!"
@@ -117,7 +124,7 @@ ios:
 .PHONY: check-mobile-tool
 check-mobile-tool: check-version
 check-mobile-tool:
-	check_path=false; for line in $(shell $(GO) env GOPATH | tr ':' '\n'); do if [[ $$PWD = $$line* ]]; then check_path=true; fi; done; $$check_path || (echo "Current path does not match your GOPATH, please check" && exit 1)
+	check_path=false; for line in $(shell $(GO) env GOPATH | tr $(PATH_SEP) '\n' | tr '[:upper:]' '[:lower:]'); do if [[ $(WORK_DIR) =~ ^$$line ]]; then check_path=true; fi; done; $$check_path || (echo "Current path does not match your GOPATH, please check" && exit 1)
 	type ${GOMOBILE} || $(GO) install golang.org/x/mobile/cmd/gomobile@latest
 	type ${GOBIND} || $(GO) install golang.org/x/mobile/cmd/gobind@latest
 
