@@ -25,9 +25,11 @@ LIB_INSTALL_DIR ?= /usr/local
 CGO_ENABLED ?= $(shell go env CGO_ENABLED)
 
 ifeq ($(GOOS), windows)
-WORK_DIR := $(shell pwd | sed -re 's/^\/([a-zA-Z])\//\1\:/' | tr '[:upper:]' '[:lower:]')
+WORK_DIR := $(shell pwd | sed -E 's/^\/([a-zA-Z])\//\1\:\//' | sed -E 's/\//\\\\/g' | tr '[:upper:]' '[:lower:]')
+PATH_SEP := ;
 else
 WORK_DIR := $(shell pwd | tr '[:upper:]' '[:lower:]')
+PATH_SEP := :
 endif
 
 .PHONY: all
@@ -122,7 +124,7 @@ ios:
 .PHONY: check-mobile-tool
 check-mobile-tool: check-version
 check-mobile-tool:
-	check_path=false; for line in $(shell $(GO) env GOPATH | tr ':' '\n' | tr '[:upper:]' '[:lower:]'); do if [[ $(WORK_DIR) = $$line* ]]; then check_path=true; fi; done; $$check_path || (echo "Current path does not match your GOPATH, please check" && exit 1)
+	check_path=false; for line in $(shell $(GO) env GOPATH | tr $(PATH_SEP) '\n' | tr '[:upper:]' '[:lower:]'); do if [[ $(WORK_DIR) =~ ^$$line ]]; then check_path=true; fi; done; $$check_path || (echo "Current path does not match your GOPATH, please check" && exit 1)
 	type ${GOMOBILE} || $(GO) install golang.org/x/mobile/cmd/gomobile@latest
 	type ${GOBIND} || $(GO) install golang.org/x/mobile/cmd/gobind@latest
 
