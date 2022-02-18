@@ -104,6 +104,7 @@ type Options struct {
 	TokenEncryptionKey     string
 	AdminPasswordHash      string
 	RouteAlpha             int32
+	Groups                 interface{}
 }
 
 func NewAurora(nodeMode aurora.Model, addr string, bosonAddress boson.Address, publicKey ecdsa.PublicKey, signer crypto.Signer, networkID uint64, logger logging.Logger, libp2pPrivateKey *ecdsa.PrivateKey, o Options) (b *Aurora, err error) {
@@ -360,6 +361,7 @@ func NewAurora(nodeMode aurora.Model, addr string, bosonAddress boson.Address, p
 
 	group := multicast.NewService(bosonAddress, p2ps, p2ps, kad, route, logger, multicast.Option{Dev: o.IsDev})
 	group.Start()
+	group.AddGroup(p2pCtx, o.Groups)
 	b.groupCloser = group
 
 	err = p2ps.AddProtocol(group.Protocol())

@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/mitchellh/mapstructure"
+	"math/rand"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -91,6 +93,17 @@ func (s *Service) newGroup(gid boson.Address, ch chan Message, observe bool) *Gr
 
 type Option struct {
 	Dev bool
+}
+
+type NetDomain struct {
+	Domain string
+	Addr   string
+}
+type OptionGroup struct {
+	Name      string
+	GType     int
+	Nodes     []string
+	AgentHttp []NetDomain
 }
 
 func NewService(self boson.Address, service p2p.Service, streamer p2p.Streamer, kad topology.Driver, route routetab.RouteTab, logger logging.Logger, o Option) *Service {
@@ -498,6 +511,75 @@ func (s *Service) SubscribeMulticastMsg(gid boson.Address) (c <-chan Message, un
 		}
 	}
 	return nil, unsubscribe, errors.New("the group notfound")
+}
+
+func (s *Service) GetMulticastNode(groupName string) (peer boson.Address, directNode bool, err error) {
+	gid := GenerateGID(groupName)
+	v, ok := s.groups.Load(gid.String())
+	if !ok {
+		return boson.ZeroAddress, false, errors.New("group not found")
+	}
+	group := v.(*Group)
+	rd := rand.New(rand.NewSource(time.Now().UnixNano()))
+	nodeCount := group.connectedPeers.Length()
+
+	if nodeCount > 0 {
+		randKey := rd.Intn(nodeCount)
+		peers := group.connectedPeers.BinPeers(uint8(randKey))
+		return peers[0], true, nil
+	}
+	return boson.ZeroAddress, false, nil
+}
+
+func (s *Service) AddGroup(ctx context.Context, groups interface{}) {
+	if groups == nil {
+		s.logger.Error("Groups are not configured ")
+		return
+	}
+	gSlices, ok := groups.([]interface{})
+	if !ok {
+		s.logger.Error("Groups configuration error ")
+		return
+	}
+	var peers []boson.Address
+	var gAddr boson.Address
+	for _, v := range gSlices {
+		if mp, ok := v.(map[interface{}]interface{}); ok {
+			var optionGroup OptionGroup
+			peers = peers[0:0]
+			if err := mapstructure.Decode(mp, &optionGroup); err != nil {
+				s.logger.Errorf("Groups configuration error:%v ", err.Error())
+				continue
+			}
+			if optionGroup.Name == "" {
+				continue
+			}
+
+			for _, v := range optionGroup.Nodes {
+				if addr, err := boson.ParseHexAddress(v); err == nil {
+					peers = append(peers, addr)
+				}
+			}
+
+			addr, err := boson.ParseHexAddress(optionGroup.Name)
+			if err != nil {
+				gAddr = GenerateGID(optionGroup.Name)
+			} else {
+				gAddr = addr
+			}
+			switch optionGroup.GType {
+			case 0:
+				err = s.JoinGroup(ctx, gAddr, nil, peers...)
+			case 1:
+				err = s.ObserveGroup(gAddr, peers...)
+			}
+			if err != nil {
+				s.logger.Errorf("Groups: Join group failed :%v ", err.Error())
+			}
+		} else {
+			s.logger.Error("Group configuration format is incorrect.")
+		}
+	}
 }
 
 // LeaveGroup For yourself

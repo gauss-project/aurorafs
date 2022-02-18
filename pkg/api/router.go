@@ -2,6 +2,7 @@ package api
 
 import (
 	"fmt"
+	"github.com/gauss-project/aurorafs/pkg/aurora"
 	"net/http"
 	"strings"
 
@@ -41,6 +42,8 @@ func (s *server) setupRouting() {
 	router.HandleFunc("/robots.txt", func(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprintln(w, "User-agent: *\nDisallow: /")
 	})
+
+	router.PathPrefix(aurora.RelayPrefixHttp).HandlerFunc(s.relayDo)
 
 	if s.Restricted {
 		router.Handle("/auth", jsonhttp.MethodHandler{
