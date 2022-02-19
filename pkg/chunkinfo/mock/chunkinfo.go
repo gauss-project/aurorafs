@@ -126,7 +126,7 @@ func (ci *ChunkInfo) IsDiscover(rootCid boson.Address) bool {
 
 	return false
 }
-func (ci *ChunkInfo) GetFileList(overlay boson.Address) (fileListInfo map[string]*aurora.FileInfo, rootList []boson.Address) {
+func (ci *ChunkInfo) GetFileList(overlay boson.Address) (fileListInfo []map[string]interface{}, rootList []boson.Address) {
 	return nil, nil
 }
 
