@@ -24,7 +24,7 @@ type ConnectedInfo struct {
 
 type GroupInfo struct {
 	GroupID   boson.Address   `json:"gid"`
-	Observe   bool            `json:"observe"`
+	Option    GroupOption     `json:"option"`
 	KeepPeers []boson.Address `json:"keepPeers"`
 	KnowPeers []boson.Address `json:"knowPeers"`
 }
@@ -33,4 +33,10 @@ type KadParams struct {
 	Timestamp     time.Time        `json:"timestamp"`     // now
 	Groups        []*GroupInfo     `json:"groups"`        // known
 	ConnectedInfo []*ConnectedInfo `json:"connectedInfo"` // connected info
+}
+
+type GroupOption struct {
+	Observe            bool `json:"observe"`
+	KeepConnectedPeers int  `json:"keepConnectedPeers"`
+	KeepPingPeers      int  `json:"keepPingPeers"`
 }

@@ -18,7 +18,6 @@ import (
 )
 
 const (
-	keepPeers        = 6 // Keep the n available nodes within the group
 	maxKnownPeers    = 20
 	maxTTL           = 10
 	forwardLimit     = 2
@@ -45,7 +44,16 @@ func (s *Service) discover() {
 	var wg sync.WaitGroup
 	s.groups.Range(func(_, value interface{}) bool {
 		v := value.(*Group)
-		if v.connectedPeers.Length()+v.keepPeers.Length() < keepPeers {
+		if v.connectedPeers.Length() < v.option.KeepConnectedPeers {
+			v.keepPeers.EachBin(func(address boson.Address, u uint8) (stop, jumpToNext bool, err error) {
+				_ = s.route.Connect(context.Background(), address)
+				if v.connectedPeers.Length() >= v.option.KeepConnectedPeers {
+					return true, false, err
+				}
+				return false, false, err
+			})
+		}
+		if v.keepPeers.Length() < v.option.KeepPingPeers || v.connectedPeers.Length() < v.option.KeepConnectedPeers {
 			// do find
 			wg.Add(1)
 			go s.doFindGroup(&wg, v)
@@ -58,7 +66,16 @@ func (s *Service) discover() {
 func (s *Service) doFindGroup(wg *sync.WaitGroup, group *Group) {
 	defer wg.Done()
 	limit := func() int {
-		return keepPeers - (group.connectedPeers.Length() + group.keepPeers.Length())
+		var a, b, at, bt int
+		at = group.connectedPeers.Length()
+		bt = group.keepPeers.Length()
+		if group.option.KeepConnectedPeers > at {
+			a = group.option.KeepConnectedPeers - at
+		}
+		if group.option.KeepPingPeers > bt {
+			b = group.option.KeepPingPeers - bt
+		}
+		return a + b
 	}
 	if limit() <= 0 {
 		return

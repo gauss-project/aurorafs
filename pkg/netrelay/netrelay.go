@@ -5,6 +5,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
+	"io/ioutil"
+	"net/http"
+	"strings"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/gauss-project/aurorafs/pkg/aurora"
 	"github.com/gauss-project/aurorafs/pkg/boson"
@@ -13,10 +18,6 @@ import (
 	"github.com/gauss-project/aurorafs/pkg/netrelay/pb"
 	"github.com/gauss-project/aurorafs/pkg/p2p"
 	"github.com/gauss-project/aurorafs/pkg/routetab"
-	"io"
-	"io/ioutil"
-	"net/http"
-	"strings"
 )
 
 type NetRelay interface {
@@ -40,7 +41,7 @@ func (s *Service) RelayHttpDo(w http.ResponseWriter, r *http.Request, address bo
 	url = strings.ReplaceAll(url, aurora.RelayPrefixHttp, "")
 	body, err := ioutil.ReadAll(r.Body)
 	if err != nil {
-		jsonhttp.InternalServerError(w, fmt.Errorf("Error in getting body:%v", err.Error()))
+		jsonhttp.InternalServerError(w, fmt.Errorf("error in getting body:%v", err.Error()))
 		return
 	}
 
@@ -50,7 +51,7 @@ func (s *Service) RelayHttpDo(w http.ResponseWriter, r *http.Request, address bo
 	}
 	header, err := json.Marshal(mpHeader)
 	if err != nil {
-		jsonhttp.InternalServerError(w, fmt.Errorf("Error in getting header:%v", err.Error()))
+		jsonhttp.InternalServerError(w, fmt.Errorf("error in getting header:%v", err.Error()))
 		return
 	}
 

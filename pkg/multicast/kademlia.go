@@ -4,14 +4,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/gauss-project/aurorafs/pkg/aurora"
 	"math/rand"
 	"sync"
 	"sync/atomic"
 	"time"
 
-	"github.com/gogf/gf/util/gconv"
-
+	"github.com/gauss-project/aurorafs/pkg/aurora"
 	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/logging"
 	"github.com/gauss-project/aurorafs/pkg/multicast/model"
@@ -23,6 +21,7 @@ import (
 	topModel "github.com/gauss-project/aurorafs/pkg/topology/model"
 	"github.com/gauss-project/aurorafs/pkg/topology/pslice"
 	"github.com/gogf/gf/os/gcache"
+	"github.com/gogf/gf/util/gconv"
 )
 
 const (
@@ -69,17 +68,23 @@ type Group struct {
 	keepPeers      *pslice.PSlice // Need to maintain the connection with ping
 	knownPeers     *pslice.PSlice
 	srv            *Service
-	observe        bool
+	option         model.GroupOption
 	msgChan        chan Message
 }
 
-func (s *Service) newGroup(gid boson.Address, ch chan Message, observe bool) *Group {
+func (s *Service) newGroup(gid boson.Address, ch chan Message, o model.GroupOption) *Group {
+	if o.KeepConnectedPeers <= 0 {
+		o.KeepConnectedPeers = 3
+	}
+	if o.KeepPingPeers <= 0 {
+		o.KeepPingPeers = 3
+	}
 	g := &Group{
 		gid:        gid,
 		keepPeers:  pslice.New(1, s.self),
 		knownPeers: pslice.New(1, s.self),
 		srv:        s,
-		observe:    observe,
+		option:     o,
 		msgChan:    ch,
 	}
 	conn, ok := s.connectedPeers.Load(gid.String())
@@ -367,7 +372,7 @@ func (s *Service) onMulticast(ctx context.Context, peer p2p.Peer, stream p2p.Str
 
 	notifyLog := true
 	g, ok := s.groups.Load(gid.String())
-	if ok && !g.(*Group).observe {
+	if ok && !g.(*Group).option.Observe {
 		notifyLog = false
 		_ = s.notifyMsg(gid, msg)
 		s.logger.Tracef("%s-multicast receive %s from %s", gid, key, peer.Address)
@@ -406,13 +411,14 @@ func (s *Service) notifyMsg(gid boson.Address, msg Message) (e error) {
 	return nil
 }
 
-func (s *Service) ObserveGroup(gid boson.Address, peers ...boson.Address) error {
+func (s *Service) ObserveGroup(gid boson.Address, option model.GroupOption, peers ...boson.Address) error {
 	var g *Group
 	v, ok := s.groups.Load(gid.String())
 	if ok {
 		g = v.(*Group)
 	} else {
-		g = s.newGroup(gid, nil, true)
+		option.Observe = true
+		g = s.newGroup(gid, nil, option)
 		s.groups.Store(gid.String(), g)
 	}
 	for _, addr := range peers {
@@ -434,28 +440,28 @@ func (s *Service) ObserveGroupCancel(gid boson.Address) error {
 		return errors.New("group not found")
 	}
 	v := g.(*Group)
-	if v.observe {
+	if v.option.Observe {
 		s.groups.Delete(gid.String())
 	}
 	return nil
 }
 
 // JoinGroup Add yourself to the group, along with other nodes (if any)
-func (s *Service) JoinGroup(ctx context.Context, gid boson.Address, ch chan Message, peers ...boson.Address) error {
+func (s *Service) JoinGroup(ctx context.Context, gid boson.Address, ch chan Message, option model.GroupOption, peers ...boson.Address) error {
 	var g *Group
 	value, ok := s.groups.Load(gid.String())
 	if ok {
 		g = value.(*Group)
-		if !g.observe {
+		if !g.option.Observe {
 			return errors.New("it's already in the group")
 		}
 	} else {
-		g = s.newGroup(gid, ch, false)
+		g = s.newGroup(gid, ch, option)
 		s.groups.Store(gid.String(), g)
 	}
-	if g.observe {
+	if g.option.Observe {
 		// observe group join group
-		g.observe = false
+		g.option.Observe = false
 	}
 	for _, v := range peers {
 		if v.Equal(s.self) {
@@ -491,7 +497,7 @@ func (s *Service) SubscribeMulticastMsg(gid boson.Address) (c <-chan Message, un
 	value, ok := s.groups.Load(gid.String())
 	if ok {
 		g = value.(*Group)
-		if !g.observe && g.msgChan == nil {
+		if !g.option.Observe && g.msgChan == nil {
 			g.msgChan = channel
 			return channel, func() { g.msgChan = nil }, nil
 		}
@@ -569,11 +575,16 @@ func (s *Service) AddGroup(ctx context.Context, groups []aurora.ConfigNodeGroup)
 		} else {
 			gAddr = addr
 		}
+		option := model.GroupOption{
+			KeepConnectedPeers: optionGroup.KeepConnectedPeers,
+			KeepPingPeers:      optionGroup.KeepPingPeers,
+		}
 		switch optionGroup.GType {
 		case 0:
-			err = s.JoinGroup(ctx, gAddr, nil, peers...)
+			err = s.JoinGroup(ctx, gAddr, nil, option, peers...)
 		case 1:
-			err = s.ObserveGroup(gAddr, peers...)
+			option.Observe = true
+			err = s.ObserveGroup(gAddr, option, peers...)
 		}
 		if err != nil {
 			s.logger.Errorf("Groups: Join group failed :%v ", err.Error())
@@ -720,7 +731,7 @@ func (s *Service) getModelGroupInfo() (out []*model.GroupInfo) {
 		v := value.(*Group)
 		out = append(out, &model.GroupInfo{
 			GroupID:   v.gid,
-			Observe:   v.observe,
+			Option:    v.option,
 			KeepPeers: peersFunc(v.keepPeers),
 			KnowPeers: peersFunc(v.knownPeers),
 		})
