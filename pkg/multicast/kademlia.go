@@ -199,18 +199,17 @@ func (s *Service) Close() error {
 
 func (s *Service) connectedAddToGroup(gid boson.Address, peers ...boson.Address) {
 	var conn *pslice.PSlice
-	v, ok := s.groups.Load(gid.String())
+	v, ok := s.connectedPeers.Load(gid.String())
 	if ok {
-		g := v.(*Group)
-		conn = g.connectedPeers
+		conn = v.(*pslice.PSlice)
 	} else {
-		v, ok = s.connectedPeers.Load(gid.String())
-		if ok {
-			conn = v.(*pslice.PSlice)
+		g, has := s.groups.Load(gid.String())
+		if has {
+			conn = g.(*Group).connectedPeers
 		} else {
 			conn = pslice.New(1, s.self)
-			s.connectedPeers.Store(gid.String(), conn)
 		}
+		s.connectedPeers.Store(gid.String(), conn)
 	}
 
 	for _, p := range peers {
