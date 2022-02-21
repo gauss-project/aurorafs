@@ -120,19 +120,22 @@ func (s *Service) relayHttpReq(ctx context.Context, p p2p.Peer, stream p2p.Strea
 	}
 	httpResp.Header = headerByte
 	httpResp.Body = body
+	httpResp.Status = int32(res.StatusCode)
 
 	return reqWriter(httpResp)
 }
 
 func (s *Service) SendHttp(ctx context.Context, address boson.Address, req pb.RelayHttpReq) (Response pb.RelayHttpResp, err error) {
-
 	var stream p2p.Stream
 	if s.route.IsNeighbor(address) {
 		stream, err = s.streamer.NewStream(ctx, address, nil, protocolName, protocolVersion, streamRelayHttpReq)
 	} else {
 		stream, err = s.streamer.NewRelayStream(ctx, address, nil, protocolName, protocolVersion, streamRelayHttpReq, false)
 	}
-
+	if err != nil {
+		s.logger.Errorf("[relayMessage] new stream: %w", err)
+		return Response, err
+	}
 	defer func() {
 		if err != nil {
 			_ = stream.Reset()
@@ -141,21 +144,15 @@ func (s *Service) SendHttp(ctx context.Context, address boson.Address, req pb.Re
 		}
 	}()
 
-	if err != nil {
-		s.logger.Errorf("[relayMessage] new stream: %w", err)
-		return Response, err
-	}
 	w, r := protobuf.NewWriterAndReader(stream)
 
 	if err := w.WriteMsgWithContext(ctx, &req); err != nil {
 		return Response, fmt.Errorf("[pyramid info] write message: %w", err)
 	}
 
-	for {
-		if err := r.ReadMsgWithContext(ctx, &Response); err != nil {
-			return Response, fmt.Errorf("[relaymessage] read message: %w", err)
-		}
-		return Response, nil
+	if err := r.ReadMsgWithContext(ctx, &Response); err != nil {
+		return Response, fmt.Errorf("[relaymessage] read message: %w", err)
 	}
+	return Response, nil
 
 }

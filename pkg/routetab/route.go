@@ -707,6 +707,7 @@ func (s *Service) onRelay(ctx context.Context, p p2p.Peer, stream p2p.Stream) (e
 		forwardWriter protobuf.Writer
 		forwardReader protobuf.Reader
 		forwardNext   bool
+		quit          bool
 	)
 
 	errChan := make(chan error, 1)
@@ -716,7 +717,8 @@ func (s *Service) onRelay(ctx context.Context, p p2p.Peer, stream p2p.Stream) (e
 	defer func() {
 		if forwardStream != nil {
 			go func() {
-				_ = forwardStream.FullClose()
+				quit = true
+				_ = forwardStream.Reset()
 			}()
 		}
 	}()
@@ -733,7 +735,10 @@ func (s *Service) onRelay(ctx context.Context, p p2p.Peer, stream p2p.Stream) (e
 	readResp := func(ch chan *pb.RouteRelayResp) {
 		for {
 			resp := &pb.RouteRelayResp{}
-			err = forwardReader.ReadMsgWithContext(ctx, resp)
+			err = forwardReader.ReadMsg(resp)
+			if quit {
+				return
+			}
 			switch err {
 			case context.Canceled, io.EOF:
 				// when next node FullClose
@@ -822,39 +827,41 @@ func (s *Service) PackRelayReq(ctx context.Context, stream p2p.Stream, req *pb.R
 	done = make(chan struct{}, 1)
 
 	go func() {
-		ctx, cancel := context.WithCancel(ctx)
+		var quit bool
 		w, r := protobuf.NewWriterAndReader(stream)
 		var err error
 		defer func() {
-			_ = stream.FullClose()
+			quit = true
+			_ = stream.Reset()
 		}()
 		go func() {
 			for {
-				select {
-				case <-done:
-					cancel()
-					return
-				case <-ctx.Done():
-					return
-				case p := <-write.W:
-					req.Data = p
-					err = w.WriteMsg(req)
-					write.Err <- err
-					if err != nil {
-						return
+				resp := &pb.RouteRelayResp{}
+				err = r.ReadMsg(resp)
+				if err != nil {
+					if quit {
+						err = nil
 					}
+					read.Err <- err
+					return
 				}
+				read.R <- resp.Data
 			}
 		}()
-
 		for {
-			resp := &pb.RouteRelayResp{}
-			err = r.ReadMsgWithContext(ctx, resp)
-			if err != nil {
-				read.Err <- err
+			select {
+			case <-done:
 				return
+			case <-ctx.Done():
+				return
+			case p := <-write.W:
+				req.Data = p
+				err = w.WriteMsg(req)
+				write.Err <- err
+				if err != nil {
+					return
+				}
 			}
-			read.R <- resp.Data
 		}
 	}()
 	return
@@ -876,40 +883,45 @@ func (s *Service) PackRelayResp(ctx context.Context, stream p2p.Stream, reqCh ch
 	done = make(chan struct{}, 1)
 
 	go func() {
+		var quit bool
 		w, r := protobuf.NewWriterAndReader(stream)
 		var err error
 		defer func() {
-			_ = stream.FullClose()
+			quit = true
+			_ = stream.Reset()
 		}()
 
 		first := true
 
 		go func() {
 			for {
-				select {
-				case <-ctx.Done():
-					return
-				case p := <-write.W:
-					err = w.WriteMsg(&pb.RouteRelayResp{Data: p})
-					write.Err <- err
-					if err != nil {
-						return
+				req := &pb.RouteRelayReq{}
+				err = r.ReadMsg(req)
+				if err != nil {
+					if quit {
+						err = nil
 					}
+					read.Err <- err
+					return
 				}
+				if first {
+					first = false
+					reqCh <- req
+				}
+				read.R <- req.Data
 			}
 		}()
 		for {
-			req := &pb.RouteRelayReq{}
-			err = r.ReadMsgWithContext(ctx, req)
-			if err != nil {
-				read.Err <- err
+			select {
+			case <-ctx.Done():
 				return
+			case p := <-write.W:
+				err = w.WriteMsg(&pb.RouteRelayResp{Data: p})
+				write.Err <- err
+				if err != nil {
+					return
+				}
 			}
-			if first {
-				first = false
-				reqCh <- req
-			}
-			read.R <- req.Data
 		}
 	}()
 	return

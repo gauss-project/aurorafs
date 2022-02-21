@@ -73,11 +73,11 @@ type Group struct {
 }
 
 func (s *Service) newGroup(gid boson.Address, ch chan Message, o model.GroupOption) *Group {
-	if o.KeepConnectedPeers <= 0 {
-		o.KeepConnectedPeers = 3
+	if o.KeepConnectedPeers < 0 {
+		o.KeepConnectedPeers = 0
 	}
-	if o.KeepPingPeers <= 0 {
-		o.KeepPingPeers = 3
+	if o.KeepPingPeers < 0 {
+		o.KeepPingPeers = 0
 	}
 	g := &Group{
 		gid:        gid,

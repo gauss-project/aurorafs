@@ -70,14 +70,14 @@ func (s *Service) RelayHttpDo(w http.ResponseWriter, r *http.Request, address bo
 		resMpHeader := make(map[string]string)
 		err = json.Unmarshal(resp.Header, &resMpHeader)
 		if err != nil {
-			jsonhttp.InternalServerError(w, fmt.Errorf("Error in returning header parsing:%v", err.Error()))
+			jsonhttp.InternalServerError(w, fmt.Errorf("error in returning header parsing:%v", err.Error()))
 			return
 		}
 		for k, v := range resMpHeader {
 			w.Header().Set(k, v)
 		}
 	}
-
+	w.WriteHeader(int(resp.Status))
 	io.Copy(w, bytes.NewBuffer(resp.Body))
 
 }
