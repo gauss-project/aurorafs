@@ -43,7 +43,7 @@ func (s *server) setupRouting() {
 		fmt.Fprintln(w, "User-agent: *\nDisallow: /")
 	})
 
-	router.PathPrefix(aurora.RelayPrefixHttp).HandlerFunc(s.relayDo)
+	router.PathPrefix(aurora.RelayPrefixHttp + "/{gname}/{domain}").HandlerFunc(s.relayDo)
 
 	if s.Restricted {
 		router.Handle("/auth", jsonhttp.MethodHandler{

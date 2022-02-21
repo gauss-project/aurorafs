@@ -15,10 +15,9 @@ import (
 )
 
 const (
-	protocolName        = "netrelay"
-	protocolVersion     = "2.0.0"
-	streamRelayHttpReq  = "httpreq"
-	streamRelayHttpResp = "httpresp"
+	protocolName       = "netrelay"
+	protocolVersion    = "2.0.0"
+	streamRelayHttpReq = "httpreq"
 )
 
 func (s *Service) Protocol() p2p.ProtocolSpec {
@@ -36,6 +35,7 @@ func (s *Service) Protocol() p2p.ProtocolSpec {
 
 func (s *Service) relayHttpReq(ctx context.Context, p p2p.Peer, stream p2p.Stream) (err error) {
 	var httpResp pb.RelayHttpResp
+
 	w, r := protobuf.NewWriterAndReader(stream)
 
 	defer func() {
@@ -123,11 +123,23 @@ func (s *Service) relayHttpReq(ctx context.Context, p p2p.Peer, stream p2p.Strea
 	return reqWriter(httpResp)
 }
 
-func (s *Service) SendHttp(ctx context.Context, address boson.Address, req pb.RelayHttpReq, irectNode bool) (Response pb.RelayHttpResp, err error) {
-	if err := s.route.Connect(ctx, address); err != nil {
-		return Response, err
+func (s *Service) SendHttp(ctx context.Context, address boson.Address, req pb.RelayHttpReq) (Response pb.RelayHttpResp, err error) {
+
+	var stream p2p.Stream
+	if s.route.IsNeighbor(address) {
+		stream, err = s.streamer.NewStream(ctx, address, nil, protocolName, protocolVersion, streamRelayHttpReq)
+	} else {
+		stream, err = s.streamer.NewRelayStream(ctx, address, nil, protocolName, protocolVersion, streamRelayHttpReq, false)
 	}
-	stream, err := s.streamer.NewStream(ctx, address, nil, protocolName, protocolVersion, streamRelayHttpReq)
+
+	defer func() {
+		if err != nil {
+			_ = stream.Reset()
+		} else {
+			go stream.FullClose()
+		}
+	}()
+
 	if err != nil {
 		s.logger.Errorf("[relayMessage] new stream: %w", err)
 		return Response, err

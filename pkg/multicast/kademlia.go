@@ -502,12 +502,12 @@ func (s *Service) SubscribeMulticastMsg(gid boson.Address) (c <-chan Message, un
 	return nil, unsubscribe, errors.New("the group notfound")
 }
 
-func (s *Service) GetMulticastNode(groupName string) (peer boson.Address, directNode bool, err error) {
+func (s *Service) GetMulticastNode(groupName string) (peer boson.Address, err error) {
 	peer = boson.ZeroAddress
 	gid := GenerateGID(groupName)
 	v, ok := s.groups.Load(gid.String())
 	if !ok {
-		return peer, false, errors.New("group not found")
+		return peer, errors.New("group not found")
 	}
 
 	group := v.(*Group)
@@ -526,7 +526,7 @@ func (s *Service) GetMulticastNode(groupName string) (peer boson.Address, direct
 			}
 		})
 		if !peer.Equal(boson.ZeroAddress) {
-			return peer, true, nil
+			return peer, nil
 		}
 	}
 
@@ -542,10 +542,10 @@ func (s *Service) GetMulticastNode(groupName string) (peer boson.Address, direct
 			}
 		})
 		if !peer.Equal(boson.ZeroAddress) {
-			return peer, true, nil
+			return peer, nil
 		}
 	}
-	return boson.ZeroAddress, false, nil
+	return boson.ZeroAddress, nil
 }
 
 func (s *Service) AddGroup(ctx context.Context, groups []aurora.ConfigNodeGroup) {

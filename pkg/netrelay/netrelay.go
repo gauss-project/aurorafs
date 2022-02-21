@@ -20,7 +20,7 @@ import (
 )
 
 type NetRelay interface {
-	RelayHttpDo(w http.ResponseWriter, r *http.Request, address boson.Address, irectNode bool)
+	RelayHttpDo(w http.ResponseWriter, r *http.Request, address boson.Address)
 }
 type Service struct {
 	streamer p2p.Streamer
@@ -34,7 +34,7 @@ func New(streamer p2p.Streamer, logging logging.Logger, groups []aurora.ConfigNo
 	return &Service{streamer: streamer, logger: logging, groups: groups, route: route}
 }
 
-func (s *Service) RelayHttpDo(w http.ResponseWriter, r *http.Request, address boson.Address, irectNode bool) {
+func (s *Service) RelayHttpDo(w http.ResponseWriter, r *http.Request, address boson.Address) {
 	mpHeader := make(map[string]string)
 	url := r.URL.String()
 	url = strings.ReplaceAll(url, aurora.RelayPrefixHttp, "")
@@ -55,11 +55,11 @@ func (s *Service) RelayHttpDo(w http.ResponseWriter, r *http.Request, address bo
 	}
 
 	var msg pb.RelayHttpReq
-	msg.Url = strings.ReplaceAll(r.URL.String(), aurora.RelayPrefixHttp, "")
+	msg.Url = url
 	msg.Method = []byte(method)
 	msg.Body = body
 	msg.Header = header
-	resp, err := s.SendHttp(context.Background(), address, msg, irectNode)
+	resp, err := s.SendHttp(context.Background(), address, msg)
 	if err != nil {
 		jsonhttp.InternalServerError(w, err)
 		return
