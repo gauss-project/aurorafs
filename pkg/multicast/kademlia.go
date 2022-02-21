@@ -554,19 +554,20 @@ func (s *Service) GetMulticastNode(groupName string) (peer boson.Address, err er
 	return boson.ZeroAddress, nil
 }
 
-func (s *Service) AddGroup(ctx context.Context, groups []aurora.ConfigNodeGroup) {
+func (s *Service) AddGroup(ctx context.Context, groups []aurora.ConfigNodeGroup) error {
 	var peers []boson.Address
 	var gAddr boson.Address
 	for _, optionGroup := range groups {
-		peers = peers[0:0]
 		if optionGroup.Name == "" {
 			continue
 		}
 
 		for _, v := range optionGroup.Nodes {
-			if addr, err := boson.ParseHexAddress(v); err == nil {
-				peers = append(peers, addr)
+			addr, err := boson.ParseHexAddress(v)
+			if err != nil {
+				return fmt.Errorf("add group %w", err)
 			}
+			peers = append(peers, addr)
 		}
 
 		addr, err := boson.ParseHexAddress(optionGroup.Name)
@@ -589,7 +590,9 @@ func (s *Service) AddGroup(ctx context.Context, groups []aurora.ConfigNodeGroup)
 		if err != nil {
 			s.logger.Errorf("Groups: Join group failed :%v ", err.Error())
 		}
+		return err
 	}
+	return nil
 }
 
 // LeaveGroup For yourself

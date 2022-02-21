@@ -2,9 +2,10 @@ package api
 
 import (
 	"fmt"
-	"github.com/gauss-project/aurorafs/pkg/aurora"
 	"net/http"
 	"strings"
+
+	"github.com/gauss-project/aurorafs/pkg/aurora"
 
 	"github.com/gauss-project/aurorafs/pkg/auth"
 
@@ -199,6 +200,18 @@ func (s *server) setupRouting() {
 			s.newTracingHandler("aurora-RegisterRemove"),
 			web.FinalHandlerFunc(s.fileRegisterRemove),
 		),
+	})
+
+	handle("/group/{gid}", jsonhttp.MethodHandler{
+		"POST":   http.HandlerFunc(s.groupJoinHandler),
+		"DELETE": http.HandlerFunc(s.groupLeaveHandler),
+	})
+	handle("/group/observe/{gid}", jsonhttp.MethodHandler{
+		"POST":   http.HandlerFunc(s.groupObserveHandler),
+		"DELETE": http.HandlerFunc(s.groupObserveCancelHandler),
+	})
+	handle("/multicast/{gid}", jsonhttp.MethodHandler{
+		"POST": http.HandlerFunc(s.multicastMsg),
 	})
 
 	s.newLoopbackRouter(router)

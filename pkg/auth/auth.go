@@ -238,6 +238,9 @@ func applyPolicies(e *casbin.Enforcer) error {
 		{"consumer", "/manifest/*", "GET"},
 		{"consumer", "/manifest/*/*", "GET"},
 		{"creator", "/pins/*", "(GET)|(DELETE)|(POST)"},
+		{"consumer", "/multicast/*", "POST"},
+		{"consumer", "/group/*", "(DELETE)|(POST)"},
+		{"consumer", "/group/observe/*", "(DELETE)|(POST)"},
 		{"maintainer", "/pins", "GET"},
 
 		// debug api
@@ -263,10 +266,7 @@ func applyPolicies(e *casbin.Enforcer) error {
 		{"maintainer", "/transaction", "POST"},
 
 		// multicast
-		{"maintainer", "/multicast/*", "POST"},
 		{"maintainer", "/topology/group", "GET"},
-		{"maintainer", "/group/*", "(DELETE)|(POST)"},
-		{"maintainer", "/group/observe/*", "(DELETE)|(POST)"},
 	})
 
 	return err
