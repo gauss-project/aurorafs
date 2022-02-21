@@ -522,17 +522,9 @@ func (s *Service) GetMulticastNode(groupName string) (peer boson.Address, err er
 	rd := rand.New(rand.NewSource(time.Now().UnixNano()))
 	nodeCount := group.connectedPeers.Length()
 
-	i := 0
 	if nodeCount > 0 {
 		randKey := rd.Intn(nodeCount)
-		group.connectedPeers.EachBin(func(address boson.Address, u uint8) (stop, jumpToNext bool, err error) {
-			if i == randKey {
-				peer = address
-				return true, false, nil
-			} else {
-				return false, true, nil
-			}
-		})
+		peer = group.connectedPeers.BinPeers(0)[randKey]
 		if !peer.Equal(boson.ZeroAddress) {
 			return peer, nil
 		}
@@ -541,14 +533,7 @@ func (s *Service) GetMulticastNode(groupName string) (peer boson.Address, err er
 	nodeCount = group.keepPeers.Length()
 	if nodeCount > 0 {
 		randKey := rd.Intn(nodeCount)
-		group.keepPeers.EachBin(func(address boson.Address, u uint8) (stop, jumpToNext bool, err error) {
-			if i == randKey {
-				peer = address
-				return true, false, nil
-			} else {
-				return false, true, nil
-			}
-		})
+		peer = group.keepPeers.BinPeers(0)[randKey]
 		if !peer.Equal(boson.ZeroAddress) {
 			return peer, nil
 		}
