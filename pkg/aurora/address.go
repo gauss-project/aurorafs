@@ -60,6 +60,17 @@ type ChunkInfoSourceApi struct {
 	ChunkSource   []ChunkSourceApi `json:"chunkSource"`
 }
 
+type ConfigNetDomain struct {
+	Domain string
+	Addr   string
+}
+type ConfigNodeGroup struct {
+	Name      string
+	GType     int
+	Nodes     []string
+	AgentHttp []ConfigNetDomain
+}
+
 func NewAddress(signer crypto.Signer, underlay ma.Multiaddr, overlay boson.Address, networkID uint64) (*Address, error) {
 	underlayBinary, err := underlay.MarshalBinary()
 	if err != nil {

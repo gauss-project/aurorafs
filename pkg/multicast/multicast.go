@@ -2,6 +2,7 @@ package multicast
 
 import (
 	"context"
+	"github.com/gauss-project/aurorafs/pkg/aurora"
 
 	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/multicast/model"
@@ -19,7 +20,7 @@ type GroupInterface interface {
 	SubscribeLogContent() (c <-chan LogContent, unsubscribe func())
 	SubscribeMulticastMsg(gid boson.Address) (c <-chan Message, unsubscribe func(), err error)
 	GetMulticastNode(groupName string) (peer boson.Address, directNode bool, err error)
-	AddGroup(ctx context.Context, groups interface{}) error
+	AddGroup(ctx context.Context, groups []aurora.ConfigNodeGroup)
 }
 
 type Message struct {
