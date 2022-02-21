@@ -145,6 +145,7 @@ func (c *command) initStartCmd() (err error) {
 				TokenEncryptionKey:     c.config.GetString(optionNameTokenEncryptionKey),
 				AdminPasswordHash:      c.config.GetString(optionNameAdminPasswordHash),
 				RouteAlpha:             c.config.GetInt32(optionNameRouteAlpha),
+				Groups:                 c.config.Get(optionNameGroups),
 			})
 			if err != nil {
 				return err

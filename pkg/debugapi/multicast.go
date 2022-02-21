@@ -10,6 +10,7 @@ import (
 	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/jsonhttp"
 	"github.com/gauss-project/aurorafs/pkg/multicast"
+	"github.com/gauss-project/aurorafs/pkg/multicast/model"
 	"github.com/gauss-project/aurorafs/pkg/multicast/pb"
 	"github.com/gorilla/mux"
 )
@@ -33,7 +34,7 @@ func (s *Service) groupJoinHandler(w http.ResponseWriter, r *http.Request) {
 		gid = multicast.GenerateGID(str)
 	}
 
-	err = s.group.JoinGroup(r.Context(), gid, nil)
+	err = s.group.JoinGroup(r.Context(), gid, nil, model.GroupOption{})
 	if err != nil {
 		s.logger.Errorf("multicast join group: %v", err)
 		jsonhttp.InternalServerError(w, err)
@@ -87,7 +88,7 @@ func (s *Service) groupObserveHandler(w http.ResponseWriter, r *http.Request) {
 		gid = multicast.GenerateGID(str)
 	}
 
-	err = s.group.ObserveGroup(gid)
+	err = s.group.ObserveGroup(gid, model.GroupOption{})
 	if err != nil {
 		s.logger.Errorf("multicast observe group: %v", err)
 		jsonhttp.InternalServerError(w, err)

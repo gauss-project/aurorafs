@@ -10,9 +10,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+
 	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/crypto"
-
 	ma "github.com/multiformats/go-multiaddr"
 )
 
@@ -58,6 +58,19 @@ type ChunkSourceApi struct {
 type ChunkInfoSourceApi struct {
 	PyramidSource string           `json:"pyramidSource"`
 	ChunkSource   []ChunkSourceApi `json:"chunkSource"`
+}
+
+type ConfigNetDomain struct {
+	Domain string
+	Addr   string
+}
+type ConfigNodeGroup struct {
+	Name               string
+	GType              int // 0 join 1 observe
+	KeepConnectedPeers int `mapstructure:"keep-connected-peers"`
+	KeepPingPeers      int `mapstructure:"keep-ping-peers"`
+	Nodes              []string
+	AgentHttp          []ConfigNetDomain `mapstructure:"agent-http"`
 }
 
 func NewAddress(signer crypto.Signer, underlay ma.Multiaddr, overlay boson.Address, networkID uint64) (*Address, error) {

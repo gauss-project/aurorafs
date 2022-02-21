@@ -61,6 +61,7 @@ const (
 	optionNameTokenEncryptionKey  = "token-encryption-key"
 	optionNameAdminPasswordHash   = "admin-password"
 	optionNameRouteAlpha          = "route-alpha"
+	optionNameGroups              = "groups"
 )
 
 func init() {

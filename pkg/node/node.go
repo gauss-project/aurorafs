@@ -29,6 +29,7 @@ import (
 	"github.com/gauss-project/aurorafs/pkg/logging"
 	"github.com/gauss-project/aurorafs/pkg/metrics"
 	"github.com/gauss-project/aurorafs/pkg/multicast"
+	"github.com/gauss-project/aurorafs/pkg/netrelay"
 	"github.com/gauss-project/aurorafs/pkg/netstore"
 	"github.com/gauss-project/aurorafs/pkg/p2p/libp2p"
 	"github.com/gauss-project/aurorafs/pkg/pingpong"
@@ -43,6 +44,7 @@ import (
 	"github.com/gauss-project/aurorafs/pkg/topology/lightnode"
 	"github.com/gauss-project/aurorafs/pkg/tracing"
 	"github.com/gauss-project/aurorafs/pkg/traversal"
+	"github.com/mitchellh/mapstructure"
 	ma "github.com/multiformats/go-multiaddr"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/sync/errgroup"
@@ -104,6 +106,7 @@ type Options struct {
 	TokenEncryptionKey     string
 	AdminPasswordHash      string
 	RouteAlpha             int32
+	Groups                 interface{}
 }
 
 func NewAurora(nodeMode aurora.Model, addr string, bosonAddress boson.Address, publicKey ecdsa.PublicKey, signer crypto.Signer, networkID uint64, logger logging.Logger, libp2pPrivateKey *ecdsa.PrivateKey, o Options) (b *Aurora, err error) {
@@ -194,7 +197,6 @@ func NewAurora(nodeMode aurora.Model, addr string, bosonAddress boson.Address, p
 	addressBook := addressbook.New(stateStore)
 	lightNodes := lightnode.NewContainer(bosonAddress)
 	bootNodes := bootnode.NewContainer(bosonAddress)
-
 	p2ps, err := libp2p.New(p2pCtx, signer, networkID, bosonAddress, addr, addressBook, stateStore, lightNodes, bootNodes, logger, tracer, libp2p.Options{
 		PrivateKey:     libp2pPrivateKey,
 		NATAddr:        o.NATAddr,
@@ -352,6 +354,14 @@ func NewAurora(nodeMode aurora.Model, addr string, bosonAddress boson.Address, p
 	storer.WithChunkInfo(chunkInfo)
 	retrieve.Config(chunkInfo)
 
+	var configGroups []aurora.ConfigNodeGroup
+	if o.Groups != nil {
+		err = mapstructure.Decode(o.Groups, &configGroups)
+		if err != nil {
+			logger.Debugf("Group configuration acquisition failed: %v", err)
+		}
+	}
+
 	multiResolver := multiresolver.NewMultiResolver(
 		multiresolver.WithConnectionConfigs(o.ResolverConnectionCfgs),
 		multiresolver.WithLogger(o.Logger),
@@ -360,9 +370,16 @@ func NewAurora(nodeMode aurora.Model, addr string, bosonAddress boson.Address, p
 
 	group := multicast.NewService(bosonAddress, p2ps, p2ps, kad, route, logger, multicast.Option{Dev: o.IsDev})
 	group.Start()
+	group.AddGroup(p2pCtx, configGroups)
 	b.groupCloser = group
 
 	err = p2ps.AddProtocol(group.Protocol())
+	if err != nil {
+		return nil, err
+	}
+
+	relay := netrelay.New(p2ps, logger, configGroups, route)
+	err = p2ps.AddProtocol(relay.Protocol())
 	if err != nil {
 		return nil, err
 	}
@@ -371,7 +388,7 @@ func NewAurora(nodeMode aurora.Model, addr string, bosonAddress boson.Address, p
 	if o.APIAddr != "" {
 		// API server
 		apiService = api.New(ns, multiResolver, bosonAddress, chunkInfo, traversalService, pinningService,
-			authenticator, logger, tracer, apiInterface, commonChain, oracleChain,
+			authenticator, logger, tracer, apiInterface, commonChain, oracleChain, relay, group,
 			api.Options{
 				CORSAllowedOrigins: o.CORSAllowedOrigins,
 				GatewayMode:        o.GatewayMode,

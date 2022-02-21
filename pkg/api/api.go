@@ -7,6 +7,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/gauss-project/aurorafs/pkg/multicast"
+	"github.com/gauss-project/aurorafs/pkg/netrelay"
 	"io"
 	"io/ioutil"
 	"math"
@@ -112,6 +114,8 @@ type server struct {
 	auroraChainSate sync.Map
 	tranProcess     sync.Map
 	transactionChan chan TransactionResponse
+	multicast       multicast.GroupInterface
+	netRelay        netrelay.NetRelay
 }
 
 type Options struct {
@@ -135,7 +139,8 @@ const (
 // New will create a and initialize a new API service.
 func New(storer storage.Storer, resolver resolver.Interface, addr boson.Address, chunkInfo chunkinfo.Interface,
 	traversalService traversal.Traverser, pinning pinning.Interface, auth authenticator, logger logging.Logger,
-	tracer *tracing.Tracer, traffic traffic.ApiInterface, commonChain chain.Common, oracleChain chain.Resolver, o Options) Service {
+	tracer *tracing.Tracer, traffic traffic.ApiInterface, commonChain chain.Common, oracleChain chain.Resolver, netRelay netrelay.NetRelay,
+	multicast multicast.GroupInterface, o Options) Service {
 	s := &server{
 		auth:            auth,
 		storer:          storer,
@@ -153,6 +158,8 @@ func New(storer storage.Storer, resolver resolver.Interface, addr boson.Address,
 		quit:            make(chan struct{}),
 		traffic:         traffic,
 		transactionChan: make(chan TransactionResponse, 10),
+		multicast:       multicast,
+		netRelay:        netRelay,
 	}
 
 	BufferSizeMul = o.BufferSizeMul

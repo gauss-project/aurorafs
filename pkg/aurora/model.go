@@ -14,6 +14,7 @@ const (
 )
 
 const bitVictorNodeModeLen = 1
+const RelayPrefixHttp = "/group/http"
 
 func NewModel() Model {
 	bv, _ := bitvector.New(bitVictorNodeModeLen)
