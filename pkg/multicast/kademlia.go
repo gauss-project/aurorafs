@@ -267,7 +267,10 @@ func (s *Service) getGIDsByte() [][]byte {
 	GIDs := make([][]byte, 0)
 	s.groups.Range(func(key, value interface{}) bool {
 		gid := boson.MustParseHexAddress(gconv.String(key))
-		GIDs = append(GIDs, gid.Bytes())
+		g := value.(*Group)
+		if !g.option.Observe {
+			GIDs = append(GIDs, gid.Bytes())
+		}
 		return true
 	})
 	return GIDs
