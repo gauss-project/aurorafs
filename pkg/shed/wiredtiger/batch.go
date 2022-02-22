@@ -1,6 +1,8 @@
 package wiredtiger
 
 import (
+	"runtime"
+
 	"github.com/gauss-project/aurorafs/pkg/shed/driver"
 )
 
@@ -59,15 +61,19 @@ func (b *batch) Delete(key driver.Key) (err error) {
 }
 
 func (b *batch) Commit() (err error) {
-	b.db.pool.Put(b.s)
 	return nil
 }
 
 func (db *DB) NewBatch() driver.Batching {
 	s := db.pool.Get()
-
-	return &batch{
+	b := &batch{
 		db: db,
 		s:  s,
 	}
+
+	runtime.SetFinalizer(b, func(o *batch) {
+		o.db.pool.Put(o.s)
+	})
+
+	return b
 }
