@@ -374,6 +374,7 @@ paths:
           $ref: "AuroraCommon.yaml#/components/responses/404"
         default:
           description: Default response
+
   "/topology":
     get:
       description: Get topology of known network
@@ -386,6 +387,19 @@ paths:
             application/json:
               schema:
                 $ref: "AuroraCommon.yaml#/components/schemas/Topology"
+
+  "/topology/group":
+    get:
+      description: Get topology of known groups
+      tags:
+        - Connectivity
+      responses:
+        "200":
+          description: groups topology of the aurorafs node
+          content:
+            application/json:
+              schema:
+                $ref: "AuroraCommon.yaml#/components/schemas/TopologyGroup"
 
   "/welcome-message":
     get:

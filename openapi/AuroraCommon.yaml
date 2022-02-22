@@ -55,6 +55,60 @@ components:
         ipv6:
           type: string
 
+    TopologyGroup:
+      type: object
+      properties:
+        connected:
+          type: integer
+        timestamp:
+          $ref: "#/components/schemas/DateTime"
+        groups:
+          type: array
+          items:
+            - properties:
+                gid:
+                  type: string
+                option:
+                  type: object
+                  properties:
+                    observe:
+                      type: boolean
+                    keepConnectedPeers:
+                      type: integer
+                    keepPingPeers:
+                      type: integer
+                keepPeers:
+                  type: array
+                knowPeers:
+                  type: array
+        connectedInfo:
+          type: array
+          items:
+            - properties:
+                gid:
+                  type: string
+                connected:
+                  type: integer
+                connectedPeers:
+                  type: array
+                  items:
+                    - properties:
+                        address:
+                          type: string
+                        metrics:
+                          type: object
+                          properties:
+                            lastSeenTimestamp:
+                              type: integer
+                            sessionConnectionRetry:
+                              type: integer
+                            connectionTotalDuration:
+                              type: integer
+                            sessionConnectionDuration:
+                              type: integer
+                            sessionConnectionDirection:
+                              type: string
+
     Topology:
       type: object
       properties:
