@@ -370,10 +370,12 @@ func NewAurora(nodeMode aurora.Model, addr string, bosonAddress boson.Address, p
 
 	group := multicast.NewService(bosonAddress, p2ps, p2ps, kad, route, logger, multicast.Option{Dev: o.IsDev})
 	group.Start()
-	group.AddGroup(p2pCtx, configGroups)
 	b.groupCloser = group
-
 	err = p2ps.AddProtocol(group.Protocol())
+	if err != nil {
+		return nil, err
+	}
+	err = group.AddGroup(p2pCtx, configGroups)
 	if err != nil {
 		return nil, err
 	}

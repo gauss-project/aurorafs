@@ -4,7 +4,9 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"net/http"
 	"strings"
@@ -48,7 +50,7 @@ func (s *Service) relayHttpReq(ctx context.Context, p p2p.Peer, stream p2p.Strea
 	}()
 
 	reqWriter := func(resp pb.RelayHttpResp) error {
-		if err := w.WriteMsgWithContext(ctx, &resp); err != nil {
+		if err = w.WriteMsgWithContext(ctx, &resp); err != nil {
 			s.logger.Errorf("[relayMessage-relayHttpReq] write hash message: %w", err)
 			return fmt.Errorf("[relayMessage-relayHttpReq] write hash message: %w", err)
 		}
@@ -146,11 +148,11 @@ func (s *Service) SendHttp(ctx context.Context, address boson.Address, req pb.Re
 
 	w, r := protobuf.NewWriterAndReader(stream)
 
-	if err := w.WriteMsgWithContext(ctx, &req); err != nil {
+	if err = w.WriteMsgWithContext(ctx, &req); err != nil {
 		return Response, fmt.Errorf("[pyramid info] write message: %w", err)
 	}
 
-	if err := r.ReadMsgWithContext(ctx, &Response); err != nil {
+	if err = r.ReadMsgWithContext(ctx, &Response); err != nil && !errors.Is(err, io.EOF) {
 		return Response, fmt.Errorf("[relaymessage] read message: %w", err)
 	}
 	return Response, nil

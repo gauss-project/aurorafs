@@ -66,7 +66,7 @@ type ConfigNetDomain struct {
 }
 type ConfigNodeGroup struct {
 	Name               string
-	GType              int // 0 join 1 observe
+	GType              int `mapstructure:"type"` // 0 join 1 observe
 	KeepConnectedPeers int `mapstructure:"keep-connected-peers"`
 	KeepPingPeers      int `mapstructure:"keep-ping-peers"`
 	Nodes              []string

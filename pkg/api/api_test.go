@@ -2,6 +2,13 @@ package api_test
 
 import (
 	"errors"
+	"io"
+	"net/http"
+	"net/http/httptest"
+	"net/url"
+	"testing"
+	"time"
+
 	"github.com/gauss-project/aurorafs/pkg/api"
 	mockauth "github.com/gauss-project/aurorafs/pkg/auth/mock"
 	"github.com/gauss-project/aurorafs/pkg/boson"
@@ -13,13 +20,7 @@ import (
 	"github.com/gauss-project/aurorafs/pkg/storage"
 	"github.com/gauss-project/aurorafs/pkg/traversal"
 	"github.com/gorilla/websocket"
-	"io"
-	"net/http"
-	"net/http/httptest"
-	"net/url"
 	"resenje.org/web"
-	"testing"
-	"time"
 )
 
 type testServerOptions struct {
@@ -53,7 +54,7 @@ func newTestServer(t *testing.T, o testServerOptions) (*http.Client, *websocket.
 	}
 	serverAddress := boson.MustParseHexAddress("01")
 
-	s := api.New(o.Storer, o.Resolver, serverAddress, o.ChunkInfo, o.Traversal, o.Pinning, o.Authenticator, o.Logger, nil, nil, nil, nil,
+	s := api.New(o.Storer, o.Resolver, serverAddress, o.ChunkInfo, o.Traversal, o.Pinning, o.Authenticator, o.Logger, nil, nil, nil, nil, nil, nil,
 		api.Options{
 			CORSAllowedOrigins: o.CORSAllowedOrigins,
 			GatewayMode:        o.GatewayMode,
@@ -67,7 +68,7 @@ func newTestServer(t *testing.T, o testServerOptions) (*http.Client, *websocket.
 	var (
 		httpClient = &http.Client{
 			Transport: web.RoundTripperFunc(func(r *http.Request) (*http.Response, error) {
-				u, err := url.Parse(ts.URL + r.URL.String()) //ts.URL
+				u, err := url.Parse(ts.URL + r.URL.String()) // ts.URL
 				if err != nil {
 					return nil, err
 				}
@@ -174,9 +175,9 @@ func TestParseName(t *testing.T) {
 				}))
 		}
 
-		//s := api.New(nil, tC.res, nil, nil, tC.log, nil, api.Options{}).(*api.Server)
+		// s := api.New(nil, tC.res, nil, nil, tC.log, nil, api.Options{}).(*api.Server)
 
-		//t.Run(tC.desc, func(t *testing.T) {
+		// t.Run(tC.desc, func(t *testing.T) {
 		//	got, err := s.ResolveNameOrAddress(tC.name)
 		//	if err != nil && !errors.Is(err, tC.wantErr) {
 		//		t.Fatalf("bad error: %v", err)
@@ -185,7 +186,7 @@ func TestParseName(t *testing.T) {
 		//		t.Errorf("got %s, want %s", got, tC.wantAdr)
 		//	}
 		//
-		//})
+		// })
 	}
 }
 

@@ -21,7 +21,7 @@ type GroupInterface interface {
 	SubscribeLogContent() (c <-chan LogContent, unsubscribe func())
 	SubscribeMulticastMsg(gid boson.Address) (c <-chan Message, unsubscribe func(), err error)
 	GetMulticastNode(groupName string) (peer boson.Address, err error)
-	AddGroup(ctx context.Context, groups []aurora.ConfigNodeGroup)
+	AddGroup(ctx context.Context, groups []aurora.ConfigNodeGroup) error
 }
 
 type Message struct {

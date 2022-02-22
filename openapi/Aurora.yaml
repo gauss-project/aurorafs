@@ -1,11 +1,11 @@
 openapi: 3.0.3
 info:
-  version: 1.2.4
+  version: 1.3.0
   title: Aurora API
   description: "A list of the currently provided Interfaces to interact with the boson, implementing file operations and sending messages"
 
 security:
-  - {}
+  - { }
 
 externalDocs:
   description: Browse the documentation @ the aurorafs Docs
@@ -94,7 +94,7 @@ paths:
       tags:
         - Bytes
       parameters:
-#        - $ref: "AuroraCommon.yaml#/components/parameters/AuroraTagParameter"
+        #        - $ref: "AuroraCommon.yaml#/components/parameters/AuroraTagParameter"
         - $ref: "AuroraCommon.yaml#/components/parameters/AuroraPinParameter"
         - $ref: "AuroraCommon.yaml#/components/parameters/AuroraEncryptParameter"
       requestBody:
@@ -106,9 +106,9 @@ paths:
       responses:
         "201":
           description: Ok
-#          headers:
-#            "Aurora-tag":
-#              $ref: "AuroraCommon.yaml#/components/headers/AuroraTag"
+          #          headers:
+          #            "Aurora-tag":
+          #              $ref: "AuroraCommon.yaml#/components/headers/AuroraTag"
           content:
             application/json:
               schema:
@@ -151,7 +151,7 @@ paths:
       tags:
         - Chunk
       parameters:
-#        - $ref: "AuroraCommon.yaml#/components/parameters/AuroraTagParameter"
+        #        - $ref: "AuroraCommon.yaml#/components/parameters/AuroraTagParameter"
         - $ref: "AuroraCommon.yaml#/components/parameters/AuroraPinParameter"
       requestBody:
         content:
@@ -281,8 +281,8 @@ paths:
           headers:
             "aurora-recovery-targets":
               $ref: "AuroraCommon.yaml#/components/headers/AuroraRecoveryTargets"
-#           "aurora-feed-index":
-#             $ref: "AuroraCommon.yaml#/components/headers/AuroraFeedIndex"
+          #           "aurora-feed-index":
+          #             $ref: "AuroraCommon.yaml#/components/headers/AuroraFeedIndex"
           content:
             application/octet-stream:
               schema:
@@ -609,6 +609,127 @@ paths:
                 $ref: "AuroraCommon.yaml#/components/schemas/ChequeTrafficHash"
         "403":
           $ref: "AuroraCommon.yaml#/components/responses/GatewayForbidden"
+        "500":
+          $ref: "AuroraCommon.yaml#/components/responses/500"
+        default:
+          description: Default response
+
+  "/group/{gid}":
+    parameters:
+      - in: path
+        name: gid
+        schema:
+          $ref: "AuroraCommon.yaml#/components/schemas/BosonAddress"
+        required: true
+        description: group address
+    post:
+      summary: "Join to group with the given gid"
+      tags:
+        - Group
+      responses:
+        "200":
+          description: success
+          content:
+            application/json:
+              schema:
+                $ref: "AuroraCommon.yaml#/components/schemas/Response"
+        "500":
+          $ref: "AuroraCommon.yaml#/components/responses/500"
+        default:
+          description: Default response
+    delete:
+      summary: "Leave the group with the given gid"
+      tags:
+        - Group
+      parameters:
+        - in: path
+          name: gid
+          schema:
+            $ref: "AuroraCommon.yaml#/components/schemas/BosonAddress"
+          required: true
+          description: group address
+      responses:
+        "200":
+          description: success
+          content:
+            application/json:
+              schema:
+                $ref: "AuroraCommon.yaml#/components/schemas/Response"
+        "500":
+          $ref: "AuroraCommon.yaml#/components/responses/500"
+        default:
+          description: Default response
+
+  "/group/observe/{gid}":
+    parameters:
+      - in: path
+        name: gid
+        schema:
+          $ref: "AuroraCommon.yaml#/components/schemas/BosonAddress"
+        required: true
+        description: group address
+    post:
+      summary: "observe to group with the given gid"
+      tags:
+        - Group
+      responses:
+        "200":
+          description: success
+          content:
+            application/json:
+              schema:
+                $ref: "AuroraCommon.yaml#/components/schemas/Response"
+        "500":
+          $ref: "AuroraCommon.yaml#/components/responses/500"
+        default:
+          description: Default response
+    delete:
+      summary: "cancel observe the group with the given gid"
+      tags:
+        - Group
+      parameters:
+        - in: path
+          name: gid
+          schema:
+            $ref: "AuroraCommon.yaml#/components/schemas/BosonAddress"
+          required: true
+          description: group address
+      responses:
+        "200":
+          description: success
+          content:
+            application/json:
+              schema:
+                $ref: "AuroraCommon.yaml#/components/schemas/Response"
+        "500":
+          $ref: "AuroraCommon.yaml#/components/responses/500"
+        default:
+          description: Default response
+
+  "/multicast/{gid}":
+    parameters:
+      - in: path
+        name: gid
+        schema:
+          $ref: "AuroraCommon.yaml#/components/schemas/BosonAddress"
+        required: true
+        description: group address
+    post:
+      summary: "send a message to group with the given gid"
+      tags:
+        - Group
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        "200":
+          description: success
+          content:
+            application/json:
+              schema:
+                $ref: "AuroraCommon.yaml#/components/schemas/Response"
         "500":
           $ref: "AuroraCommon.yaml#/components/responses/500"
         default:

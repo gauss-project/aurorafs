@@ -199,18 +199,17 @@ func (s *Service) Close() error {
 
 func (s *Service) connectedAddToGroup(gid boson.Address, peers ...boson.Address) {
 	var conn *pslice.PSlice
-	v, ok := s.groups.Load(gid.String())
+	v, ok := s.connectedPeers.Load(gid.String())
 	if ok {
-		g := v.(*Group)
-		conn = g.connectedPeers
+		conn = v.(*pslice.PSlice)
 	} else {
-		v, ok = s.connectedPeers.Load(gid.String())
-		if ok {
-			conn = v.(*pslice.PSlice)
+		g, has := s.groups.Load(gid.String())
+		if has {
+			conn = g.(*Group).connectedPeers
 		} else {
 			conn = pslice.New(1, s.self)
-			s.connectedPeers.Store(gid.String(), conn)
 		}
+		s.connectedPeers.Store(gid.String(), conn)
 	}
 
 	for _, p := range peers {
@@ -267,7 +266,10 @@ func (s *Service) getGIDsByte() [][]byte {
 	GIDs := make([][]byte, 0)
 	s.groups.Range(func(key, value interface{}) bool {
 		gid := boson.MustParseHexAddress(gconv.String(key))
-		GIDs = append(GIDs, gid.Bytes())
+		g := value.(*Group)
+		if !g.option.Observe {
+			GIDs = append(GIDs, gid.Bytes())
+		}
 		return true
 	})
 	return GIDs
@@ -520,17 +522,9 @@ func (s *Service) GetMulticastNode(groupName string) (peer boson.Address, err er
 	rd := rand.New(rand.NewSource(time.Now().UnixNano()))
 	nodeCount := group.connectedPeers.Length()
 
-	i := 0
 	if nodeCount > 0 {
 		randKey := rd.Intn(nodeCount)
-		group.connectedPeers.EachBin(func(address boson.Address, u uint8) (stop, jumpToNext bool, err error) {
-			if i == randKey {
-				peer = address
-				return true, false, nil
-			} else {
-				return false, true, nil
-			}
-		})
+		peer = group.connectedPeers.BinPeers(0)[randKey]
 		if !peer.Equal(boson.ZeroAddress) {
 			return peer, nil
 		}
@@ -539,14 +533,7 @@ func (s *Service) GetMulticastNode(groupName string) (peer boson.Address, err er
 	nodeCount = group.keepPeers.Length()
 	if nodeCount > 0 {
 		randKey := rd.Intn(nodeCount)
-		group.keepPeers.EachBin(func(address boson.Address, u uint8) (stop, jumpToNext bool, err error) {
-			if i == randKey {
-				peer = address
-				return true, false, nil
-			} else {
-				return false, true, nil
-			}
-		})
+		peer = group.keepPeers.BinPeers(0)[randKey]
 		if !peer.Equal(boson.ZeroAddress) {
 			return peer, nil
 		}
@@ -554,19 +541,20 @@ func (s *Service) GetMulticastNode(groupName string) (peer boson.Address, err er
 	return boson.ZeroAddress, nil
 }
 
-func (s *Service) AddGroup(ctx context.Context, groups []aurora.ConfigNodeGroup) {
+func (s *Service) AddGroup(ctx context.Context, groups []aurora.ConfigNodeGroup) error {
 	var peers []boson.Address
 	var gAddr boson.Address
 	for _, optionGroup := range groups {
-		peers = peers[0:0]
 		if optionGroup.Name == "" {
 			continue
 		}
 
 		for _, v := range optionGroup.Nodes {
-			if addr, err := boson.ParseHexAddress(v); err == nil {
-				peers = append(peers, addr)
+			addr, err := boson.ParseHexAddress(v)
+			if err != nil {
+				return fmt.Errorf("add group %w", err)
 			}
+			peers = append(peers, addr)
 		}
 
 		addr, err := boson.ParseHexAddress(optionGroup.Name)
@@ -589,7 +577,9 @@ func (s *Service) AddGroup(ctx context.Context, groups []aurora.ConfigNodeGroup)
 		if err != nil {
 			s.logger.Errorf("Groups: Join group failed :%v ", err.Error())
 		}
+		return err
 	}
+	return nil
 }
 
 // LeaveGroup For yourself

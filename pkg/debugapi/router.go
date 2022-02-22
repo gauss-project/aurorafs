@@ -112,17 +112,6 @@ func (s *Service) newRouter() *mux.Router {
 		handle("/topology/group", jsonhttp.MethodHandler{
 			"GET": http.HandlerFunc(s.groupsTopologyHandler),
 		})
-		handle("/group/{gid}", jsonhttp.MethodHandler{
-			"POST":   http.HandlerFunc(s.groupJoinHandler),
-			"DELETE": http.HandlerFunc(s.groupLeaveHandler),
-		})
-		handle("/group/observe/{gid}", jsonhttp.MethodHandler{
-			"POST":   http.HandlerFunc(s.groupObserveHandler),
-			"DELETE": http.HandlerFunc(s.groupObserveCancelHandler),
-		})
-		handle("/multicast/{gid}", jsonhttp.MethodHandler{
-			"POST": http.HandlerFunc(s.multicastMsg),
-		})
 	}
 	handle("/route/{peer-id}", jsonhttp.MethodHandler{
 		"GET":    http.HandlerFunc(s.getRouteHandel),
