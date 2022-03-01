@@ -107,6 +107,9 @@ type Options struct {
 	AdminPasswordHash      string
 	RouteAlpha             int32
 	Groups                 interface{}
+	EnableApiTLS           bool
+	TlsCrtFile             string
+	TlsKeyFile             string
 }
 
 func NewAurora(nodeMode aurora.Model, addr string, bosonAddress boson.Address, publicKey ecdsa.PublicKey, signer crypto.Signer, networkID uint64, logger logging.Logger, libp2pPrivateKey *ecdsa.PrivateKey, o Options) (b *Aurora, err error) {
@@ -174,7 +177,12 @@ func NewAurora(nodeMode aurora.Model, addr string, bosonAddress boson.Address, p
 		go func() {
 			logger.Infof("debug api address: %s", debugAPIListener.Addr())
 
-			if err := debugAPIServer.Serve(debugAPIListener); err != nil && err != http.ErrServerClosed {
+			if o.EnableApiTLS {
+				err = debugAPIServer.ServeTLS(debugAPIListener, o.TlsCrtFile, o.TlsKeyFile)
+			} else {
+				err = debugAPIServer.Serve(debugAPIListener)
+			}
+			if err != nil && err != http.ErrServerClosed {
 				logger.Debugf("debug api server: %v", err)
 				logger.Error("unable to serve debug api")
 			}
@@ -413,7 +421,14 @@ func NewAurora(nodeMode aurora.Model, addr string, bosonAddress boson.Address, p
 		go func() {
 			logger.Infof("api address: %s", apiListener.Addr())
 
-			if err := apiServer.Serve(apiListener); err != nil && err != http.ErrServerClosed {
+			if o.EnableApiTLS {
+				err = apiServer.ServeTLS(apiListener, o.TlsCrtFile, o.TlsKeyFile)
+
+			} else {
+				err = apiServer.Serve(apiListener)
+			}
+
+			if err != nil && err != http.ErrServerClosed {
 				logger.Debugf("api server: %v", err)
 				logger.Error("unable to serve api")
 			}

@@ -62,6 +62,9 @@ const (
 	optionNameAdminPasswordHash   = "admin-password"
 	optionNameRouteAlpha          = "route-alpha"
 	optionNameGroups              = "groups"
+	optionNameEnableApiTls        = "enable-api-tls"
+	optionNameTlsCRT              = "tls-crt-file"
+	optionNameTlsKey              = "tls-key-file"
 )
 
 func init() {
