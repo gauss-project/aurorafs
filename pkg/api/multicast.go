@@ -1,6 +1,8 @@
 package api
 
 import (
+	"fmt"
+	"github.com/gogf/gf/encoding/gjson"
 	"io/ioutil"
 	"net/http"
 
@@ -95,4 +97,40 @@ func (s *server) groupObserveCancelHandler(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	jsonhttp.OK(w, nil)
+}
+
+func (s *server) sendMsg(w http.ResponseWriter, r *http.Request) {
+	str := mux.Vars(r)["gid"]
+	gid, err := boson.ParseHexAddress(str)
+	if err != nil {
+		gid = multicast.GenerateGID(str)
+	}
+	req, err := ioutil.ReadAll(r.Body)
+	if err != nil {
+		jsonhttp.InternalServerError(w, err)
+		return
+	}
+	j, err := gjson.DecodeToJson(req)
+	if err != nil {
+		jsonhttp.InternalServerError(w, err)
+		return
+	}
+	dest := j.GetString("dest")
+	target, err := boson.ParseHexAddress(dest)
+	if err != nil {
+		jsonhttp.InternalServerError(w, err)
+		return
+	}
+	tp := j.GetInt("type")
+	if multicast.SendOption(tp) == multicast.SendStream {
+		jsonhttp.InternalServerError(w, fmt.Errorf("send option %d not support", tp))
+		return
+	}
+	body := j.GetBytes("body")
+	out := s.multicast.SendMessage(r.Context(), body, gid, target, multicast.SendOption(tp))
+	if out.Err != nil {
+		jsonhttp.InternalServerError(w, err)
+		return
+	}
+	jsonhttp.OK(w, out.Resp)
 }

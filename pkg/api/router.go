@@ -210,8 +210,11 @@ func (s *server) setupRouting() {
 		"POST":   http.HandlerFunc(s.groupObserveHandler),
 		"DELETE": http.HandlerFunc(s.groupObserveCancelHandler),
 	})
-	handle("/multicast/{gid}", jsonhttp.MethodHandler{
+	handle("/group/multicast/{gid}", jsonhttp.MethodHandler{
 		"POST": http.HandlerFunc(s.multicastMsg),
+	})
+	handle("/group/send/{gid}", jsonhttp.MethodHandler{
+		"POST": http.HandlerFunc(s.sendMsg),
 	})
 
 	s.newLoopbackRouter(router)

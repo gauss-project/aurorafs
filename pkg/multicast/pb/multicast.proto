@@ -31,3 +31,8 @@ message Notify {
   int32 status = 1; // 1 join group ,2 leave group
   repeated bytes gids = 2;
 }
+
+message GroupMsg {
+  bytes gid = 1;
+  bytes data = 2;
+}

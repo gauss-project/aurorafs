@@ -706,7 +706,7 @@ paths:
         default:
           description: Default response
 
-  "/multicast/{gid}":
+  "/group/multicast/{gid}":
     parameters:
       - in: path
         name: gid

@@ -30,6 +30,7 @@ const (
 	streamHandshake = "handshake"
 	streamFindGroup = "findGroup"
 	streamMulticast = "multicast"
+	streamMessage   = "message"
 	streamNotify    = "notify"
 
 	handshakeTimeout = time.Second * 15
@@ -134,6 +135,10 @@ func (s *Service) Protocol() p2p.ProtocolSpec {
 			{
 				Name:    streamNotify,
 				Handler: s.onNotify,
+			},
+			{
+				Name:    streamMessage,
+				Handler: s.onMessage,
 			},
 		},
 	}
@@ -510,37 +515,6 @@ func (s *Service) SubscribeMulticastMsg(gid boson.Address) (c <-chan Message, un
 	return nil, unsubscribe, errors.New("the group notfound")
 }
 
-func (s *Service) GetMulticastNode(groupName string) (peer boson.Address, err error) {
-	peer = boson.ZeroAddress
-	gid := GenerateGID(groupName)
-	v, ok := s.groups.Load(gid.String())
-	if !ok {
-		return peer, errors.New("group not found")
-	}
-
-	group := v.(*Group)
-	rd := rand.New(rand.NewSource(time.Now().UnixNano()))
-	nodeCount := group.connectedPeers.Length()
-
-	if nodeCount > 0 {
-		randKey := rd.Intn(nodeCount)
-		peer = group.connectedPeers.BinPeers(0)[randKey]
-		if !peer.Equal(boson.ZeroAddress) {
-			return peer, nil
-		}
-	}
-
-	nodeCount = group.keepPeers.Length()
-	if nodeCount > 0 {
-		randKey := rd.Intn(nodeCount)
-		peer = group.keepPeers.BinPeers(0)[randKey]
-		if !peer.Equal(boson.ZeroAddress) {
-			return peer, nil
-		}
-	}
-	return boson.ZeroAddress, nil
-}
-
 func (s *Service) AddGroup(ctx context.Context, groups []aurora.ConfigNodeGroup) error {
 	var peers []boson.Address
 	var gAddr boson.Address
@@ -789,4 +763,135 @@ func (s *Service) notifyLogContent(data LogContent) {
 		default:
 		}
 	}
+}
+
+func (s *Service) GetGroupPeers(groupName string) (out *GroupPeers, err error) {
+	gid := GenerateGID(groupName)
+	v, ok := s.groups.Load(gid.String())
+	if !ok {
+		return nil, errors.New("group not found")
+	}
+	group := v.(*Group)
+
+	out = &GroupPeers{
+		Connected: group.connectedPeers.BinPeers(0),
+		Keep:      group.keepPeers.BinPeers(0),
+	}
+	return
+}
+
+func (s *Service) GetMulticastNode(groupName string) (peer boson.Address, err error) {
+	v, err := s.GetGroupPeers(groupName)
+	if err != nil {
+		return boson.ZeroAddress, err
+	}
+
+	rd := rand.New(rand.NewSource(time.Now().UnixNano()))
+	nodeCount := len(v.Connected)
+
+	if nodeCount > 0 {
+		randKey := rd.Intn(nodeCount)
+		peer = v.Connected[randKey]
+		return
+	}
+
+	nodeCount = len(v.Keep)
+	if nodeCount > 0 {
+		randKey := rd.Intn(nodeCount)
+		peer = v.Keep[randKey]
+		return
+	}
+	return boson.ZeroAddress, nil
+}
+
+func (s *Service) SendMessage(ctx context.Context, data []byte, gid, dest boson.Address, tp SendOption) (out SendResult) {
+	var stream p2p.Stream
+	if !s.route.IsNeighbor(dest) {
+		stream, out.Err = s.stream.NewRelayStream(ctx, dest, nil, protocolName, protocolVersion, streamMessage, false)
+	} else {
+		stream, out.Err = s.stream.NewStream(ctx, dest, nil, protocolName, protocolVersion, streamMessage)
+	}
+
+	req := &pb.GroupMsg{
+		Gid:  gid.Bytes(),
+		Data: data,
+	}
+	switch tp {
+	case SendOnly: // only send
+		w := protobuf.NewWriter(stream)
+		out.Err = w.WriteMsgWithContext(ctx, req)
+	case SendReceive: // send receive
+		w, r := protobuf.NewWriterAndReader(stream)
+		out.Err = w.WriteMsgWithContext(ctx, req)
+		if out.Err != nil {
+			return
+		}
+		res := &pb.GroupMsg{}
+		out.Err = r.ReadMsgWithContext(ctx, res)
+		if out.Err != nil {
+			return
+		}
+		out.Resp = res.Data
+	case SendStream: // keep stream
+		w, r := protobuf.NewWriterAndReader(stream)
+		out.Read = make(chan []byte, 1)
+		out.Write = make(chan []byte, 1)
+		out.Close = make(chan struct{}, 1)
+		out.ErrCh = make(chan error, 1)
+		go func() {
+			defer stream.Reset()
+			for {
+				select {
+				case d := <-out.Write:
+					err := w.WriteMsgWithContext(ctx, &pb.GroupMsg{Data: d, Gid: gid.Bytes()})
+					if err != nil {
+						out.ErrCh <- err
+						return
+					}
+				case <-out.Close:
+					return
+				}
+			}
+		}()
+		go func() {
+			defer stream.Reset()
+			for {
+				res := &pb.GroupMsg{}
+				err := r.ReadMsgWithContext(ctx, res)
+				if err != nil {
+					out.ErrCh <- err
+					return
+				}
+				out.Read <- res.Data
+			}
+		}()
+	default:
+		out.Err = fmt.Errorf("send option %d not support", tp)
+	}
+	return
+}
+
+func (s *Service) onMessage(ctx context.Context, peer p2p.Peer, stream p2p.Stream) error {
+	r := protobuf.NewReader(stream)
+	info := &pb.GroupMsg{}
+	err := r.ReadMsgWithContext(ctx, info)
+	if err != nil {
+		return err
+	}
+
+	msg := Message{
+		GID:  boson.NewAddress(info.Gid),
+		Data: info.Data,
+		From: peer.Address,
+	}
+
+	s.groups.Range(func(_, value interface{}) bool {
+		g := value.(*Group)
+		if g.gid.Equal(msg.GID) && !g.option.Observe {
+			_ = s.notifyMsg(msg.GID, msg)
+			return false
+		}
+		return true
+	})
+	return nil
 }
