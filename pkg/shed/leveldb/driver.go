@@ -1,6 +1,8 @@
 package leveldb
 
 import (
+	"encoding/json"
+	"reflect"
 	"sync"
 
 	"github.com/gauss-project/aurorafs/pkg/shed/driver"
@@ -21,26 +23,38 @@ var (
 	defaultDisableSeeksCompaction = false
 )
 
-func (d Driver) Init() driver.Configure {
+func (d Driver) Open(path, options string) (driver.DB, error) {
 	var c Configuration
 
-	c.Options(
+	exported := c.Options(
 		c.SetOpenFilesCacheCapacity(defaultOpenFilesLimit),
 		c.SetBlockCacheCapacity(defaultBlockCacheCapacity),
 		c.SetWriteBuffer(defaultWriteBufferSize),
 		c.SetDisableSeeksCompaction(defaultDisableSeeksCompaction),
 	)
 
-	return &c
-}
-
-func (d Driver) Open(path string) (driver.DB, error) {
-	i := d.Init().(*Configuration)
-
-	var opts opt.Options
-	if i != nil {
-		opts = opt.Options(*i)
+	if options != "" {
+		var override opt.Options
+		err := json.Unmarshal([]byte(options), &override)
+		if err != nil {
+			return nil, err
+		}
+		rv := reflect.ValueOf(override)
+		rt := reflect.TypeOf(override)
+		cv := reflect.ValueOf(&c) // must be pointer
+		for i := 0; i < rt.NumField(); i++ {
+			f := rv.Field(i)
+			name := rt.Field(i).Name
+			if _, ok := exported[name]; ok {
+				ft := cv.Elem().FieldByName(name)
+				if ft.Kind() != reflect.Interface && !f.IsZero() {
+					ft.Set(f)
+				}
+			}
+		}
 	}
+
+	opts := opt.Options(c)
 
 	var (
 		err error

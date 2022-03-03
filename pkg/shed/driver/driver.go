@@ -3,8 +3,7 @@ package driver
 import "io"
 
 type Driver interface {
-	Open(dsn string) (DB, error)
-	Init() Configure
+	Open(dsn, options string) (DB, error)
 }
 
 type DB interface {
