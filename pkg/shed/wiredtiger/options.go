@@ -27,7 +27,7 @@ const (
 	optionVerbose       = "verbose"
 )
 
-type Configuration string
+type Configuration map[string]string
 
 const (
 	optionSeparator = ','
@@ -93,16 +93,6 @@ func structToList(v interface{}, embed bool) string {
 	for i := 0; i < rt.NumField(); i++ {
 		f := rt.Field(i)
 		ft := rv.Field(i)
-		key := f.Tag.Get("key")
-		if key == "" {
-			key = camelToSnake(f.Name)
-		}
-		if key == "-" {
-			if !ft.IsZero() {
-				res = append(res, camelToSnake(f.Name))
-			}
-			continue
-		}
 		var value string
 		switch ft.Kind() {
 		case reflect.Bool:
@@ -137,6 +127,16 @@ func structToList(v interface{}, embed bool) string {
 				value = ft.Convert(rs).String()
 			}
 		}
+		key := f.Tag.Get("key")
+		if key == "" {
+			key = camelToSnake(f.Name)
+		}
+		if key == "-" {
+			if !ft.IsZero() {
+				res = append(res, camelToSnake(f.Name))
+			}
+			continue
+		}
 		res = append(res, key+string(optionJoiner)+value)
 	}
 
@@ -147,54 +147,60 @@ func structToList(v interface{}, embed bool) string {
 	return strings.Join(res, string(optionSeparator))
 }
 
-func (c *Configuration) Options(opts ...driver.Option) {
-	list := make([]string, len(opts))
-	i := 0
+func (c *Configuration) Options(opts ...driver.Option) map[string]struct{} {
+	cnf := make(map[string]string, len(opts))
+	exported := make(map[string]struct{})
 
 	for _, opt := range opts {
-		list[i] = opt.Identity() + string(optionJoiner)
+		var value string
 
 		switch opt.Identity() {
 		case optionCacheSize:
-			list[i] += opt.Value().(DiskSize).String()
+			value = opt.Value().(DiskSize).String()
 		case optionCacheOverhead:
-			list[i] += strconv.Itoa(opt.Value().(int))
+			value = strconv.Itoa(opt.Value().(int))
 		case optionConfigBase:
-			list[i] += strconv.FormatBool(opt.Value().(bool))
+			value = strconv.FormatBool(opt.Value().(bool))
 		case optionCheckpoint:
-			list[i] += structToList(opt.Value().(Checkpoint), true)
+			value = structToList(opt.Value().(Checkpoint), true)
 		case optionCreate:
-			list[i] += strconv.FormatBool(opt.Value().(bool))
+			value = strconv.FormatBool(opt.Value().(bool))
 		case optionDebugMode:
-			list[i] += structToList(opt.Value().(DebugMode), true)
+			value = structToList(opt.Value().(DebugMode), true)
 		case optionEviction:
-			list[i] += structToList(opt.Value().(Eviction), true)
+			value = structToList(opt.Value().(Eviction), true)
 		case optionFileManager:
-			list[i] += structToList(opt.Value().(FileManger), true)
+			value = structToList(opt.Value().(FileManger), true)
 		case optionLog:
-			list[i] += structToList(opt.Value().(Log), true)
+			value = structToList(opt.Value().(Log), true)
 		case optionSessionMax:
-			list[i] += strconv.Itoa(opt.Value().(int))
+			value = strconv.Itoa(opt.Value().(int))
 		case optionStatistics:
 			var r string
 			for _, policy := range opt.Value().([]StatisticsPolicy) {
 				r += string(policy) + ","
 			}
-			list[i] += "(" + strings.TrimRight(r, ",") + ")"
+			value = "(" + strings.TrimRight(r, ",") + ")"
 		case optionStatisticsLog:
-			list[i] += structToList(opt.Value().(StatisticsLog), true)
+			value = structToList(opt.Value().(StatisticsLog), true)
 		case optionExtensions:
-			list[i] += opt.Value().(string)
+			value = opt.Value().(string)
 		case optionVerbose:
-			list[i] += opt.Value().(string)
+			value = opt.Value().(string)
 		default:
-			i-- // discard wrong setting
+			panic("unsupported option:" + opt.Identity())
 		}
 
-		i++
+		if opt.Exported() {
+			exported[opt.Identity()] = struct{}{}
+		}
+
+		cnf[opt.Identity()] = value
 	}
 
-	*c = Configuration(strings.Join(list, string(optionSeparator)))
+	*c = cnf
+
+	return exported
 }
 
 type ByteType int
@@ -228,7 +234,7 @@ func (ds DiskSize) String() string {
 }
 
 func (c *Configuration) SetCacheSize(n DiskSize) driver.Option {
-	o := driver.NewOption(optionCacheSize, DiskSize{})
+	o := driver.NewOption(optionCacheSize, DiskSize{}, true)
 	if (n.Type == MB && n.Size < 1) || (n.Type == TB && n.Size > 10) {
 		n = DiskSize{Size: 100, Type: MB}
 	}
@@ -237,7 +243,7 @@ func (c *Configuration) SetCacheSize(n DiskSize) driver.Option {
 }
 
 func (c *Configuration) SetCacheOverhead(n int) driver.Option {
-	o := driver.NewOption(optionCacheOverhead, int(0))
+	o := driver.NewOption(optionCacheOverhead, int(0), false)
 	if n < 0 || n > 30 {
 		n = 8
 	}
@@ -246,7 +252,7 @@ func (c *Configuration) SetCacheOverhead(n int) driver.Option {
 }
 
 func (c *Configuration) SetCreate(b bool) driver.Option {
-	o := driver.NewOption(optionCreate, false)
+	o := driver.NewOption(optionCreate, false, false)
 	o.Set(b)
 	return o
 }
@@ -257,7 +263,7 @@ type Checkpoint struct {
 }
 
 func (c *Configuration) SetCheckpoint(cp Checkpoint) driver.Option {
-	o := driver.NewOption(optionCheckpoint, Checkpoint{})
+	o := driver.NewOption(optionCheckpoint, Checkpoint{}, false)
 	if cp.LogSize.Size < 0 || (cp.LogSize.Type == GB && cp.LogSize.Size > 2) || cp.LogSize.Type == TB {
 		cp.LogSize = DiskSize{Size: 0}
 	}
@@ -266,7 +272,7 @@ func (c *Configuration) SetCheckpoint(cp Checkpoint) driver.Option {
 }
 
 func (c *Configuration) SetConfigBase(b bool) driver.Option {
-	o := driver.NewOption(optionConfigBase, false)
+	o := driver.NewOption(optionConfigBase, false, false)
 	o.Set(b)
 	return o
 }
@@ -279,7 +285,7 @@ type DebugMode struct {
 }
 
 func (c *Configuration) SetDebugMode(m DebugMode) driver.Option {
-	o := driver.NewOption(optionDebugMode, DebugMode{})
+	o := driver.NewOption(optionDebugMode, DebugMode{}, false)
 	if m.CheckpointRetention < 0 || m.CheckpointRetention > 1024 {
 		m.CheckpointRetention = 0
 	}
@@ -293,7 +299,7 @@ type Eviction struct {
 }
 
 func (c *Configuration) SetEviction(e Eviction) driver.Option {
-	o := driver.NewOption(optionEviction, Eviction{})
+	o := driver.NewOption(optionEviction, Eviction{}, false)
 	if e.ThreadsMax < 1 || e.ThreadsMax > 20 {
 		e.ThreadsMax = 8
 	}
@@ -314,7 +320,7 @@ type FileManger struct {
 }
 
 func (c *Configuration) SetFileManager(f FileManger) driver.Option {
-	o := driver.NewOption(optionFileManager, FileManger{})
+	o := driver.NewOption(optionFileManager, FileManger{}, false)
 	if f.CloseHandleMinimum < 0 {
 		f.CloseHandleMinimum = 250
 	}
@@ -346,7 +352,7 @@ const (
 )
 
 func (c *Configuration) SetLog(l Log) driver.Option {
-	o := driver.NewOption(optionLog, Log{})
+	o := driver.NewOption(optionLog, Log{}, false)
 	if strings.HasPrefix(l.Path, string(os.PathSeparator)) {
 		panic("log path should be a relative path under database home")
 	}
@@ -355,7 +361,7 @@ func (c *Configuration) SetLog(l Log) driver.Option {
 }
 
 func (c *Configuration) SetSessionMax(n int) driver.Option {
-	o := driver.NewOption(optionSessionMax, int(0))
+	o := driver.NewOption(optionSessionMax, int(0), false)
 	if n < 1 {
 		n = 100
 	}
@@ -372,7 +378,7 @@ const (
 )
 
 func (c *Configuration) SetStatistics(s []StatisticsPolicy) driver.Option {
-	o := driver.NewOption(optionStatistics, []StatisticsPolicy{StatisticsAll})
+	o := driver.NewOption(optionStatistics, []StatisticsPolicy{StatisticsAll}, false)
 	o.Set(s)
 	return o
 }
@@ -382,7 +388,7 @@ type StatisticsLog struct {
 }
 
 func (c *Configuration) SetStatisticsLog(l StatisticsLog) driver.Option {
-	o := driver.NewOption(optionStatisticsLog, StatisticsLog{})
+	o := driver.NewOption(optionStatisticsLog, StatisticsLog{}, false)
 	if l.Wait < 0 || l.Wait > 100000 {
 		l.Wait = 0
 	}
@@ -391,7 +397,7 @@ func (c *Configuration) SetStatisticsLog(l StatisticsLog) driver.Option {
 }
 
 func (c *Configuration) SetExtensions(s string) driver.Option {
-	o := driver.NewOption(optionExtensions, "")
+	o := driver.NewOption(optionExtensions, "", false)
 	if len(s) != 0 {
 		o.Set(s)
 	}
@@ -399,9 +405,19 @@ func (c *Configuration) SetExtensions(s string) driver.Option {
 }
 
 func (c *Configuration) SetVerbose(s string) driver.Option {
-	o := driver.NewOption(optionVerbose, "")
+	o := driver.NewOption(optionVerbose, "", false)
 	if len(s) != 0 {
 		o.Set(s)
 	}
 	return o
+}
+
+func (c Configuration) String() string {
+	var opts []string
+
+	for k, v := range c {
+		opts = append(opts, k+string(optionJoiner)+v)
+	}
+
+	return strings.Join(opts, string(optionSeparator))
 }

@@ -30,8 +30,8 @@ func init() {
 }
 
 type DB struct {
+	config  Configuration
 	conn    *C.WT_CONNECTION
-	config  *Configuration
 	pool    *sessionPool
 	closing chan struct{}
 }

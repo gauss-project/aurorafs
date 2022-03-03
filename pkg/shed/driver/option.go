@@ -8,20 +8,26 @@ import (
 type Option interface {
 	Identity() string
 	Value() interface{}
+	Exported() bool
 }
 
 type Configure interface {
-	Options(opts ...Option)
+	Options(opts ...Option) (exported map[string]struct{})
 }
 
 type OptionValue struct {
-	key   string
-	typ   reflect.Type
-	value interface{}
+	key    string
+	typ    reflect.Type
+	value  interface{}
+	export bool
 }
 
-func NewOption(key string, initial interface{}) *OptionValue {
-	return &OptionValue{key: key, typ: reflect.TypeOf(initial)}
+func NewOption(key string, initial interface{}, export bool) *OptionValue {
+	return &OptionValue{
+		key:    key,
+		typ:    reflect.TypeOf(initial),
+		export: export,
+	}
 }
 
 func (ov *OptionValue) Set(v interface{}) {
@@ -82,4 +88,8 @@ func (ov *OptionValue) Identity() string {
 
 func (ov *OptionValue) Value() interface{} {
 	return ov.value
+}
+
+func (ov *OptionValue) Exported() bool {
+	return ov.export
 }

@@ -26,6 +26,7 @@ import (
 	"errors"
 	"fmt"
 	"sort"
+	"strings"
 	"sync"
 
 	"github.com/gauss-project/aurorafs/pkg/shed/driver"
@@ -89,10 +90,19 @@ type Options struct {
 // if it exists in database on the given path.
 // metricsPrefix is used for metrics collection for the given DB.
 func NewDB(path string, o *Options) (db *DB, err error) {
-	var drv string
+	var (
+		drv    string
+		config string
+	)
 
 	if o != nil {
-		drv = o.Driver
+		idx := strings.IndexByte(o.Driver, ':')
+		if idx == -1 {
+			drv = o.Driver
+		} else {
+			drv = o.Driver[:idx]
+			config = o.Driver[idx+1:]
+		}
 	}
 
 	if drv == "" {
@@ -104,10 +114,10 @@ func NewDB(path string, o *Options) (db *DB, err error) {
 
 	d, ok := drivers[drv]
 	if !ok {
-		return nil, ErrDriverNotRegister{Name: o.Driver}
+		return nil, ErrDriverNotRegister{Name: drv}
 	}
 
-	i, err := d.Open(path)
+	i, err := d.Open(path, config)
 
 	if err != nil {
 		return nil, err
@@ -115,7 +125,7 @@ func NewDB(path string, o *Options) (db *DB, err error) {
 
 	bi, ok := i.(driver.BatchDB)
 	if !ok {
-		return nil, fmt.Errorf("current backend %s not support batching", o.Driver)
+		return nil, fmt.Errorf("current backend %s not support batching", drv)
 	}
 
 	return NewDBWrap(bi)
