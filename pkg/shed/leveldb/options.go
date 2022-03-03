@@ -6,10 +6,7 @@ import (
 )
 
 const (
-	optionBlockSize              = "blockSize"
 	optionBlockCacheCapacity     = "blockCacheCapacity"
-	optionCompactionTableSize    = "compactionTableSize"
-	optionCompactionTotalSize    = "compactionTotalSize"
 	optionOpenFilesCacheCapacity = "openFilesCacheCapacity"
 	optionWriteBuffer            = "writeBuffer"
 	optionDisableSeeksCompaction = "disableSeeksCompaction"
@@ -20,14 +17,8 @@ type Configuration opt.Options
 func (c *Configuration) Options(opts ...driver.Option) {
 	for _, o := range opts {
 		switch o.Identity() {
-		case optionBlockSize:
-			c.BlockSize = o.Value().(int)
 		case optionBlockCacheCapacity:
 			c.BlockCacheCapacity = o.Value().(int)
-		case optionCompactionTableSize:
-			c.CompactionTableSize = o.Value().(int)
-		case optionCompactionTotalSize:
-			c.CompactionTotalSize = o.Value().(int)
 		case optionOpenFilesCacheCapacity:
 			c.OpenFilesCacheCapacity = o.Value().(int)
 		case optionDisableSeeksCompaction:
@@ -36,27 +27,9 @@ func (c *Configuration) Options(opts ...driver.Option) {
 	}
 }
 
-func (c *Configuration) SetBlockSize(n int) driver.Option {
-	o := driver.NewOption(optionBlockSize, int(0))
-	o.Set(n)
-	return o
-}
-
 // SetBlockCacheCapacity defines the block cache capacity.
 func (c *Configuration) SetBlockCacheCapacity(n int) driver.Option {
 	o := driver.NewOption(optionBlockCacheCapacity, int(0))
-	o.Set(n)
-	return o
-}
-
-func (c *Configuration) SetCompactionTableSize(n int) driver.Option {
-	o := driver.NewOption(optionCompactionTableSize, int(0))
-	o.Set(n)
-	return o
-}
-
-func (c *Configuration) SetCompactionTotalSize(n int) driver.Option {
-	o := driver.NewOption(optionCompactionTotalSize, int(0))
 	o.Set(n)
 	return o
 }
