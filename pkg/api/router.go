@@ -202,7 +202,7 @@ func (s *server) setupRouting() {
 		),
 	})
 
-	handle("/group/{gid}", jsonhttp.MethodHandler{
+	handle("/group/join/{gid}", jsonhttp.MethodHandler{
 		"POST":   http.HandlerFunc(s.groupJoinHandler),
 		"DELETE": http.HandlerFunc(s.groupLeaveHandler),
 	})
@@ -213,8 +213,11 @@ func (s *server) setupRouting() {
 	handle("/group/multicast/{gid}", jsonhttp.MethodHandler{
 		"POST": http.HandlerFunc(s.multicastMsg),
 	})
-	handle("/group/send/{gid}", jsonhttp.MethodHandler{
-		"POST": http.HandlerFunc(s.sendMsg),
+	handle("/group/notify/{gid}/{target}", jsonhttp.MethodHandler{
+		"POST": http.HandlerFunc(s.notify),
+	})
+	handle("/group/send/{gid}/{target}", jsonhttp.MethodHandler{
+		"POST": http.HandlerFunc(s.sendReceive),
 	})
 
 	s.newLoopbackRouter(router)

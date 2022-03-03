@@ -653,11 +653,7 @@ func (s *Service) onNotify(ctx context.Context, peer p2p.Peer, stream p2p.Stream
 
 func (s *Service) sendData(ctx context.Context, address boson.Address, streamName string, msg protobuf.Message) (err error) {
 	var stream p2p.Stream
-	if !s.route.IsNeighbor(address) {
-		stream, err = s.stream.NewRelayStream(ctx, address, nil, protocolName, protocolVersion, streamName, false)
-	} else {
-		stream, err = s.stream.NewStream(ctx, address, nil, protocolName, protocolVersion, streamName)
-	}
+	stream, err = s.getStream(ctx, address, streamName)
 	if err != nil {
 		s.logger.Error(err)
 		return err
@@ -804,13 +800,52 @@ func (s *Service) GetMulticastNode(groupName string) (peer boson.Address, err er
 	return boson.ZeroAddress, nil
 }
 
+func (s *Service) getStream(ctx context.Context, dest boson.Address, streamName string) (stream p2p.Stream, err error) {
+	if !s.route.IsNeighbor(dest) {
+		stream, err = s.stream.NewRelayStream(ctx, dest, nil, protocolName, protocolVersion, streamName, false)
+	} else {
+		stream, err = s.stream.NewStream(ctx, dest, nil, protocolName, protocolVersion, streamName)
+	}
+	return
+}
+
+func (s *Service) Send(ctx context.Context, data []byte, gid, dest boson.Address) (err error) {
+	var stream p2p.Stream
+	stream, err = s.getStream(ctx, dest, streamMessage)
+	req := &pb.GroupMsg{
+		Gid:  gid.Bytes(),
+		Data: data,
+		Type: int32(SendOnly),
+	}
+	w := protobuf.NewWriter(stream)
+	return w.WriteMsgWithContext(ctx, req)
+}
+
+func (s *Service) SendReceive(ctx context.Context, data []byte, gid, dest boson.Address) (result []byte, err error) {
+	var stream p2p.Stream
+	stream, err = s.getStream(ctx, dest, streamMessage)
+	req := &pb.GroupMsg{
+		Gid:  gid.Bytes(),
+		Data: data,
+		Type: int32(SendReceive),
+	}
+	w, r := protobuf.NewWriterAndReader(stream)
+	err = w.WriteMsgWithContext(ctx, req)
+	if err != nil {
+		return
+	}
+	res := &pb.GroupMsg{}
+	err = r.ReadMsgWithContext(ctx, res)
+	if err != nil {
+		return
+	}
+	result = res.Data
+	return
+}
+
 func (s *Service) SendMessage(ctx context.Context, data []byte, gid, dest boson.Address, tp SendOption) (out SendResult) {
 	var stream p2p.Stream
-	if !s.route.IsNeighbor(dest) {
-		stream, out.Err = s.stream.NewRelayStream(ctx, dest, nil, protocolName, protocolVersion, streamMessage, false)
-	} else {
-		stream, out.Err = s.stream.NewStream(ctx, dest, nil, protocolName, protocolVersion, streamMessage)
-	}
+	stream, out.Err = s.getStream(ctx, dest, streamMessage)
 
 	req := &pb.GroupMsg{
 		Gid:  gid.Bytes(),

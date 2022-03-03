@@ -15,14 +15,9 @@ func (s *Service) Handshake(ctx context.Context, addr boson.Address) (err error)
 	ctx, cancel := context.WithTimeout(ctx, handshakeTimeout)
 	defer cancel()
 	var stream p2p.Stream
-	s.logger.Infof("start to handshake with %s", addr)
-	if s.route.IsNeighbor(addr) {
-		stream, err = s.stream.NewStream(ctx, addr, nil, protocolName, protocolVersion, streamHandshake)
-	} else {
-		stream, err = s.stream.NewRelayStream(ctx, addr, nil, protocolName, protocolVersion, streamHandshake, false)
-	}
-	s.logger.Tracef("group: create handshake stream")
+	stream, err = s.getStream(ctx, addr, streamHandshake)
 	if err != nil {
+		s.logger.Tracef("group: handshake new stream %s %s", addr, err)
 		return
 	}
 	w, r := protobuf.NewWriterAndReader(stream)

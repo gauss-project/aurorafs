@@ -24,6 +24,8 @@ type GroupInterface interface {
 	GetGroupPeers(groupName string) (out *GroupPeers, err error)
 	GetMulticastNode(groupName string) (peer boson.Address, err error)
 	SendMessage(ctx context.Context, data []byte, gid, dest boson.Address, tp SendOption) (out SendResult)
+	SendReceive(ctx context.Context, data []byte, gid, dest boson.Address) (result []byte, err error)
+	Send(ctx context.Context, data []byte, gid, dest boson.Address) (err error)
 }
 
 type Message struct {
