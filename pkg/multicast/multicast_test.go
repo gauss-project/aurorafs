@@ -8,6 +8,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/gauss-project/aurorafs/pkg/boson/test"
 	"github.com/gauss-project/aurorafs/pkg/logging"
+	"github.com/gauss-project/aurorafs/pkg/multicast/model"
 	mockRoute "github.com/gauss-project/aurorafs/pkg/routetab/mock"
 	"github.com/gauss-project/aurorafs/pkg/topology/kademlia/mock"
 	"github.com/sirupsen/logrus"
@@ -47,7 +48,7 @@ func TestService_NotifyMsg(t *testing.T) {
 	s := NewService(test.RandomAddress(), nil, nil, kad, &route, logger, Option{Dev: true})
 	ctx := context.Background()
 	ch := make(chan Message, 1)
-	err := s.JoinGroup(ctx, gid, ch)
+	err := s.JoinGroup(ctx, gid, ch, model.GroupOption{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -68,7 +69,7 @@ func TestService_ObserveGroup(t *testing.T) {
 	route := mockRoute.NewMockRouteTable()
 	kad := mock.NewMockKademlia()
 	s := NewService(test.RandomAddress(), nil, nil, kad, &route, logger, Option{Dev: true})
-	err := s.ObserveGroup(gid)
+	err := s.ObserveGroup(gid, model.GroupOption{})
 	if err != nil {
 		t.Fatal(err)
 	}

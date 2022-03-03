@@ -614,7 +614,7 @@ paths:
         default:
           description: Default response
 
-  "/group/{gid}":
+  "/group/join/{gid}":
     parameters:
       - in: path
         name: gid
@@ -626,6 +626,16 @@ paths:
       summary: "Join to group with the given gid"
       tags:
         - Group
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                peers:
+                  type: array
+                  items:
+                    - $ref: "AuroraCommon.yaml#/components/schemas/BosonAddress"
       responses:
         "200":
           description: success
@@ -672,6 +682,16 @@ paths:
       summary: "observe to group with the given gid"
       tags:
         - Group
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                peers:
+                  type: array
+                  items:
+                    - $ref: "AuroraCommon.yaml#/components/schemas/BosonAddress"
       responses:
         "200":
           description: success
@@ -706,7 +726,7 @@ paths:
         default:
           description: Default response
 
-  "/multicast/{gid}":
+  "/group/multicast/{gid}":
     parameters:
       - in: path
         name: gid
@@ -716,6 +736,76 @@ paths:
         description: group address
     post:
       summary: "send a message to group with the given gid"
+      tags:
+        - Group
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        "200":
+          description: success
+          content:
+            application/json:
+              schema:
+                $ref: "AuroraCommon.yaml#/components/schemas/Response"
+        "500":
+          $ref: "AuroraCommon.yaml#/components/responses/500"
+        default:
+          description: Default response
+
+  "/group/send/{gid}/{target}":
+    parameters:
+      - in: path
+        name: gid
+        schema:
+          $ref: "AuroraCommon.yaml#/components/schemas/BosonAddress"
+        required: true
+        description: group address
+      - in: path
+        name: target
+        schema:
+          $ref: "AuroraCommon.yaml#/components/schemas/BosonAddress"
+        required: true
+        description: target address
+    post:
+      summary: "Send a message to the node in the group with the given gid."
+      tags:
+        - Group
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        "200":
+          description: success
+          content:
+            application/json:
+              schema:
+                $ref: "AuroraCommon.yaml#/components/schemas/Response"
+        "500":
+          $ref: "AuroraCommon.yaml#/components/responses/500"
+        default:
+          description: Default response
+
+  "/group/notify/{gid}/{target}":
+    parameters:
+      - in: path
+        name: gid
+        schema:
+          $ref: "AuroraCommon.yaml#/components/schemas/BosonAddress"
+        required: true
+        description: group address
+      - in: path
+        name: target
+        schema:
+          $ref: "AuroraCommon.yaml#/components/schemas/BosonAddress"
+        required: true
+        description: target address
+    post:
+      summary: "Send a message to the node in the group with the given gid. no result"
       tags:
         - Group
       requestBody:

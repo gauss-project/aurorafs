@@ -354,11 +354,7 @@ func (s *Service) getForwardNodesDefault(gid boson.Address, skip ...boson.Addres
 
 func (s *Service) getGroupNode(ctx context.Context, target boson.Address, req *pb.FindGroupReq) (out []boson.Address, err error) {
 	var stream p2p.Stream
-	if s.route.IsNeighbor(target) {
-		stream, err = s.stream.NewStream(ctx, target, nil, protocolName, protocolVersion, streamFindGroup)
-	} else {
-		stream, err = s.stream.NewRelayStream(ctx, target, nil, protocolName, protocolVersion, streamFindGroup, false)
-	}
+	stream, err = s.getStream(ctx, target, streamFindGroup)
 	if err != nil {
 		s.logger.Errorf("getGroupNode new stream %s", err)
 		return
