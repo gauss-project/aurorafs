@@ -1,7 +1,6 @@
 package multicast
 
 import (
-	"context"
 	"io"
 	"testing"
 
@@ -41,39 +40,16 @@ func TestGroupID(t *testing.T) {
 	}
 }
 
-func TestService_NotifyMsg(t *testing.T) {
-	gid := GenerateGID("gid1")
-	route := mockRoute.NewMockRouteTable()
-	kad := mock.NewMockKademlia()
-	s := NewService(test.RandomAddress(), nil, nil, kad, &route, logger, Option{Dev: true})
-	ctx := context.Background()
-	ch := make(chan Message, 1)
-	err := s.JoinGroup(ctx, gid, ch, model.GroupOption{})
-	if err != nil {
-		t.Fatal(err)
-	}
-	err = s.notifyMsg(gid, Message{})
-	if err != nil {
-		t.Fatal(err)
-	}
-	close(ch)
-	err = s.notifyMsg(gid, Message{})
-	// t.Log(err)
-	if err == nil {
-		t.Fatal(err)
-	}
-}
-
 func TestService_ObserveGroup(t *testing.T) {
 	gid := GenerateGID("gid1")
 	route := mockRoute.NewMockRouteTable()
 	kad := mock.NewMockKademlia()
 	s := NewService(test.RandomAddress(), nil, nil, kad, &route, logger, Option{Dev: true})
-	err := s.ObserveGroup(gid, model.GroupOption{})
+	err := s.observeGroup(gid, model.ConfigNodeGroup{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = s.ObserveGroupCancel(gid)
+	err = s.RemoveGroup(gid, model.GTypeObserve)
 	if err != nil {
 		t.Fatal(err)
 	}

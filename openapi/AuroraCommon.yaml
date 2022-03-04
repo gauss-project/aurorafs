@@ -55,6 +55,28 @@ components:
         ipv6:
           type: string
 
+    ConfigNodeGroup:
+      type: object
+      properties:
+        name:
+          type: string
+          description: "group name"
+        type:
+          type: number
+          description: "0 join group, 1 observe group"
+        keep-connected-peers:
+          type: number
+          required: true
+          description: "the param must"
+        keep-ping-peers:
+          type: number
+          required: true
+          description: "the param must"
+        nodes:
+          type: array
+          items:
+            - $ref: "AuroraCommon.yaml#/components/schemas/BosonAddress"
+
     TopologyGroup:
       type: object
       properties:
@@ -69,14 +91,7 @@ components:
                 gid:
                   type: string
                 option:
-                  type: object
-                  properties:
-                    observe:
-                      type: boolean
-                    keepConnectedPeers:
-                      type: integer
-                    keepPingPeers:
-                      type: integer
+                  $ref: "#/components/schemas/ConfigNodeGroup"
                 keepPeers:
                   type: array
                 knowPeers:

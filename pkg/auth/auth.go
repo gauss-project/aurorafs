@@ -238,6 +238,7 @@ func applyPolicies(e *casbin.Enforcer) error {
 		{"consumer", "/manifest/*", "GET"},
 		{"consumer", "/manifest/*/*", "GET"},
 		{"creator", "/pins/*", "(GET)|(DELETE)|(POST)"},
+		{"consumer", "/group/peers/*", "GET"},
 		{"consumer", "/group/multicast/*", "POST"},
 		{"consumer", "/group/send/*/*", "POST"},
 		{"consumer", "/group/notify/*/*", "POST"},

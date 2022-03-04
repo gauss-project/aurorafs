@@ -621,7 +621,7 @@ paths:
         schema:
           $ref: "AuroraCommon.yaml#/components/schemas/BosonAddress"
         required: true
-        description: group address
+        description: group address or name
     post:
       summary: "Join to group with the given gid"
       tags:
@@ -630,12 +630,7 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              properties:
-                peers:
-                  type: array
-                  items:
-                    - $ref: "AuroraCommon.yaml#/components/schemas/BosonAddress"
+              $ref: "AuroraCommon.yaml#/components/schemas/ConfigNodeGroup"
       responses:
         "200":
           description: success
@@ -677,7 +672,7 @@ paths:
         schema:
           $ref: "AuroraCommon.yaml#/components/schemas/BosonAddress"
         required: true
-        description: group address
+        description: group address or name
     post:
       summary: "observe to group with the given gid"
       tags:
@@ -686,12 +681,7 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              properties:
-                peers:
-                  type: array
-                  items:
-                    - $ref: "AuroraCommon.yaml#/components/schemas/BosonAddress"
+              $ref: "AuroraCommon.yaml#/components/schemas/ConfigNodeGroup"
       responses:
         "200":
           description: success
@@ -820,6 +810,39 @@ paths:
             application/json:
               schema:
                 $ref: "AuroraCommon.yaml#/components/schemas/Response"
+        "500":
+          $ref: "AuroraCommon.yaml#/components/responses/500"
+        default:
+          description: Default response
+
+  "/group/peers/{gid}":
+    parameters:
+      - in: path
+        name: gid
+        schema:
+          $ref: "AuroraCommon.yaml#/components/schemas/BosonAddress"
+        required: true
+        description: group address
+    get:
+      summary: "Get the peers in the group with the given gid"
+      tags:
+        - Group
+      responses:
+        "200":
+          description: success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  connected:
+                    type: array
+                    items:
+                      - $ref: "AuroraCommon.yaml#/components/schemas/BosonAddress"
+                  keep:
+                    type: array
+                    items:
+                      - $ref: "AuroraCommon.yaml#/components/schemas/BosonAddress"
         "500":
           $ref: "AuroraCommon.yaml#/components/responses/500"
         default:
