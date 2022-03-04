@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/gauss-project/aurorafs/pkg/retrieval/aco"
+	"github.com/gauss-project/aurorafs/pkg/sctx"
 	"github.com/gauss-project/aurorafs/pkg/settlement/chain"
 	"reflect"
 	"resenje.org/singleflight"
@@ -49,6 +50,11 @@ type Interface interface {
 	OnChunkRetrieved(cid, rootCid, sourceOverlay boson.Address) error
 
 	GetChunkInfoSource(rootCid boson.Address) aurora.ChunkInfoSourceApi
+}
+
+type File struct {
+	RootCid   boson.Address
+	Bitvector aurora.BitVectorApi
 }
 
 type chunkPutEntry interface {
@@ -155,6 +161,7 @@ func (ci *ChunkInfo) InitChunkInfo() error {
 func (ci *ChunkInfo) Init(ctx context.Context, authInfo []byte, rootCid boson.Address) bool {
 
 	key := fmt.Sprintf("%s%s", rootCid, "chunkinfo")
+	topCtx := ctx
 	v, _, _ := ci.singleflight.Do(ctx, key, func(ctx context.Context) (interface{}, error) {
 		if ci.cd.isExists(rootCid) {
 			return true, nil
@@ -162,9 +169,12 @@ func (ci *ChunkInfo) Init(ctx context.Context, authInfo []byte, rootCid boson.Ad
 		if ci.ct.isDownload(rootCid, ci.addr) {
 			return true, nil
 		}
-		overlays := ci.oracleChain.GetNodesFromCid(rootCid.Bytes())
-		if len(overlays) <= 0 {
-			return false, nil
+		overlays, _ := sctx.GetTargets(topCtx)
+		if overlays == nil {
+			overlays = ci.oracleChain.GetNodesFromCid(rootCid.Bytes())
+			if len(overlays) <= 0 {
+				return false, nil
+			}
 		}
 		return ci.FindChunkInfo(context.Background(), authInfo, rootCid, overlays), nil
 	})

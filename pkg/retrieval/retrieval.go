@@ -119,7 +119,7 @@ func (s *Service) RetrieveChunk(ctx context.Context, rootAddr, chunkAddr boson.A
 		ticker := time.NewTicker(retrieveRetryIntervalDuration)
 		defer ticker.Stop()
 
-		routeList := s.getRetrievalRouteList(rootAddr, chunkAddr)
+		routeList := s.getRetrievalRouteList(topCtx, rootAddr, chunkAddr)
 		if len(routeList) == 0 {
 			return nil, fmt.Errorf("no route available")
 		}
@@ -397,7 +397,17 @@ func (s *Service) handler(ctx context.Context, p p2p.Peer, stream p2p.Stream) (e
 	return nil
 }
 
-func (s *Service) getRetrievalRouteList(rootAddr, chunkAddr boson.Address) []aco.Route {
+func (s *Service) getRetrievalRouteList(ctx context.Context, rootAddr, chunkAddr boson.Address) []aco.Route {
+
+	targets, _ := sctx.GetTargets(ctx)
+	routList := make([]aco.Route, 0)
+	if targets != nil {
+		for _, target := range targets {
+			route := aco.Route{LinkNode: target, TargetNode: target}
+			routList = append(routList, route)
+		}
+		return routList
+	}
 	chunkResult := s.chunkinfo.GetChunkInfo(rootAddr, chunkAddr)
 	if len(chunkResult) == 0 {
 		// return nil, fmt.Errorf("no result from chunkinfo")
@@ -406,7 +416,6 @@ func (s *Service) getRetrievalRouteList(rootAddr, chunkAddr boson.Address) []aco
 
 	directRouteAcoIndexList := s.acoServer.GetRouteAcoIndex(chunkResult, totalRouteCount)
 
-	routList := make([]aco.Route, 0)
 	for _, acoIndex := range directRouteAcoIndexList {
 		curRoute := chunkResult[acoIndex]
 		routList = append(routList, curRoute)
