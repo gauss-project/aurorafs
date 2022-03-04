@@ -62,6 +62,9 @@ const (
 	optionNameAdminPasswordHash   = "admin-password"
 	optionNameRouteAlpha          = "route-alpha"
 	optionNameGroups              = "groups"
+	optionNameEnableApiTls        = "enable-api-tls"
+	optionNameTlsCRT              = "tls-crt-file"
+	optionNameTlsKey              = "tls-key-file"
 )
 
 func init() {
@@ -235,6 +238,9 @@ func (c *command) setAllFlags(cmd *cobra.Command) {
 	cmd.Flags().String(optionNameTokenEncryptionKey, "", "admin username to get the security token")
 	cmd.Flags().String(optionNameAdminPasswordHash, "", "bcrypt hash of the admin password to get the security token")
 	cmd.Flags().Int32(optionNameRouteAlpha, 2, "each find route will return alpha routes")
+	cmd.Flags().Bool(optionNameEnableApiTls, false, "enable https to api/debug api")
+	cmd.Flags().String(optionNameTlsKey, "", "https private key file path")
+	cmd.Flags().String(optionNameTlsCRT, "", "https certificate file path")
 }
 
 func newLogger(cmd *cobra.Command, verbosity string) (logging.Logger, error) {

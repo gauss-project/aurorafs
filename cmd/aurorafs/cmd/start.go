@@ -146,6 +146,9 @@ func (c *command) initStartCmd() (err error) {
 				AdminPasswordHash:      c.config.GetString(optionNameAdminPasswordHash),
 				RouteAlpha:             c.config.GetInt32(optionNameRouteAlpha),
 				Groups:                 c.config.Get(optionNameGroups),
+				EnableApiTLS:           c.config.GetBool(optionNameEnableApiTls),
+				TlsCrtFile:             c.config.GetString(optionNameTlsCRT),
+				TlsKeyFile:             c.config.GetString(optionNameTlsKey),
 			})
 			if err != nil {
 				return err

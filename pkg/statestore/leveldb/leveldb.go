@@ -24,7 +24,7 @@ type store struct {
 }
 
 func NewInMemoryStateStore(l logging.Logger) (storage.StateStorer, error) {
-	ldb, err := leveldbDriver.Open("")
+	ldb, err := leveldbDriver.Open("", "")
 	if err != nil {
 		return nil, err
 	}
@@ -43,7 +43,7 @@ func NewInMemoryStateStore(l logging.Logger) (storage.StateStorer, error) {
 
 // NewStateStore creates a new persistent state storage.
 func NewStateStore(path string, l logging.Logger) (storage.StateStorer, error) {
-	db, err := leveldbDriver.Open(path)
+	db, err := leveldbDriver.Open(path, "")
 	if err != nil {
 		if !ldberr.IsCorrupted(err) {
 			return nil, err

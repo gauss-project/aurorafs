@@ -4,6 +4,7 @@ package wiredtiger
 #cgo CFLAGS: -I/usr/local/include
 #cgo LDFLAGS: -L/usr/local/lib -lwiredtiger
 
+#include <string.h>
 #include <stdlib.h>
 #include <wiredtiger.h>
 
@@ -29,6 +30,7 @@ int wiredtiger_query_timestamp(WT_CONNECTION *connection, char * hex_timestamp, 
 */
 import "C"
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -59,29 +61,6 @@ var (
 	defaultVerbose       = "[recovery_progress,checkpoint_progress,compact_progress]"
 )
 
-func (d Driver) Init() driver.Configure {
-	var c Configuration
-
-	c.Options(
-		c.SetCreate(defaultCreate),
-		c.SetCacheSize(defaultCacheSize),
-		c.SetCacheOverhead(defaultCacheOverhead),
-		c.SetCheckpoint(defaultCheckpoint),
-		c.SetConfigBase(defaultConfigBase),
-		c.SetDebugMode(defaultDebugMode),
-		c.SetEviction(defaultEviction),
-		c.SetFileManager(defaultFileManager),
-		c.SetLog(defaultLog),
-		c.SetSessionMax(defaultSessionMax),
-		c.SetStatistics(defaultStatistics),
-		c.SetStatisticsLog(defaultStatisticsLog),
-		c.SetExtensions(defaultExtensions),
-		c.SetVerbose(defaultVerbose),
-	)
-
-	return &c
-}
-
 func checkDirectory(path string) error {
 	f, err := os.Open(path)
 	if err != nil {
@@ -101,14 +80,45 @@ func checkDirectory(path string) error {
 	return nil
 }
 
-func (d Driver) Open(path string) (driver.DB, error) {
-	c := d.Init().(*Configuration)
-
+func (d Driver) Open(path, options string) (driver.DB, error) {
 	var (
+		config Configuration
 		result int
 		parser *C.WT_CONFIG_PARSER
 		conn   *C.WT_CONNECTION
 	)
+
+	exported := config.Options(
+		config.SetCreate(defaultCreate),
+		config.SetCacheSize(defaultCacheSize),
+		config.SetCacheOverhead(defaultCacheOverhead),
+		config.SetCheckpoint(defaultCheckpoint),
+		config.SetConfigBase(defaultConfigBase),
+		config.SetDebugMode(defaultDebugMode),
+		config.SetEviction(defaultEviction),
+		config.SetFileManager(defaultFileManager),
+		config.SetLog(defaultLog),
+		config.SetSessionMax(defaultSessionMax),
+		config.SetStatistics(defaultStatistics),
+		config.SetStatisticsLog(defaultStatisticsLog),
+		config.SetExtensions(defaultExtensions),
+		config.SetVerbose(defaultVerbose),
+	)
+
+	// override user config
+	if options != "" {
+		var override map[string]string
+		err := json.Unmarshal([]byte(options), &override)
+		if err != nil {
+			return nil, err
+		}
+
+		for k, v := range override {
+			if _, ok := exported[k]; ok {
+				config[k] = v
+			}
+		}
+	}
 
 	if err := checkDirectory(path); err != nil {
 		return nil, err
@@ -120,12 +130,12 @@ func (d Driver) Open(path string) (driver.DB, error) {
 	}
 
 	pathStr := C.CString(path)
-	configStr := C.CString(string(*c))
+	configStr := C.CString(config.String())
 
 	defer C.free(unsafe.Pointer(pathStr))
 	defer C.free(unsafe.Pointer(configStr))
 
-	result = int(C.wiredtiger_config_parser_open(nil, configStr, C.size_t(len(string(*c))), &parser))
+	result = int(C.wiredtiger_config_parser_open(nil, configStr, C.size_t(C.strlen(configStr)), &parser))
 	if checkError(result) {
 		return nil, NewError(result)
 	}
@@ -148,7 +158,7 @@ func (d Driver) Open(path string) (driver.DB, error) {
 		return nil, NewError(result)
 	}
 
-	fmt.Println(*c)
+	fmt.Println(config)
 
 	result = int(C.wiredtiger_open(pathStr, nil, configStr, &conn))
 	if checkError(result) {
@@ -163,7 +173,7 @@ func (d Driver) Open(path string) (driver.DB, error) {
 
 	db := &DB{
 		conn:    conn,
-		config:  c,
+		config:  config,
 		pool:    pool,
 		closing: make(chan struct{}),
 	}
