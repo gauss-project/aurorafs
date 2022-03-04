@@ -315,7 +315,7 @@ func (s *Service) Multicast(info *pb.MulticastMsg, skip ...boson.Address) error 
 	if ok {
 		v := g.(*Group)
 		if v.connectedPeers.Length() == 0 && v.keepPeers.Length() == 0 {
-			s.discover()
+			s.discover(v)
 		}
 		if v.connectedPeers.Length() == 0 && v.keepPeers.Length() == 0 {
 			return nil
@@ -437,6 +437,7 @@ func (s *Service) observeGroup(gid boson.Address, option model.ConfigNodeGroup) 
 			g.keepPeers.Add(addr)
 		}
 	}
+	go s.discover(g)
 	return nil
 }
 
@@ -484,7 +485,7 @@ func (s *Service) joinGroup(gid boson.Address, option model.ConfigNodeGroup) err
 		Status: int32(NotifyJoinGroup),
 		Gids:   [][]byte{gid.Bytes()},
 	})
-
+	go s.discover(g)
 	s.logger.Infof("join group success %s", gid)
 	return nil
 }
