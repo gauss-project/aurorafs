@@ -7,7 +7,6 @@ import (
 	"context"
 	"crypto/ecdsa"
 	"fmt"
-	"github.com/gauss-project/aurorafs/pkg/crypto/cert"
 	"io"
 	"log"
 	"math/big"
@@ -15,6 +14,8 @@ import (
 	"net/http"
 	"path/filepath"
 	"time"
+
+	"github.com/gauss-project/aurorafs/pkg/crypto/cert"
 
 	"github.com/gauss-project/aurorafs/pkg/accounting"
 	"github.com/gauss-project/aurorafs/pkg/addressbook"
@@ -30,6 +31,7 @@ import (
 	"github.com/gauss-project/aurorafs/pkg/logging"
 	"github.com/gauss-project/aurorafs/pkg/metrics"
 	"github.com/gauss-project/aurorafs/pkg/multicast"
+	"github.com/gauss-project/aurorafs/pkg/multicast/model"
 	"github.com/gauss-project/aurorafs/pkg/netrelay"
 	"github.com/gauss-project/aurorafs/pkg/netstore"
 	"github.com/gauss-project/aurorafs/pkg/p2p/libp2p"
@@ -45,7 +47,7 @@ import (
 	"github.com/gauss-project/aurorafs/pkg/topology/lightnode"
 	"github.com/gauss-project/aurorafs/pkg/tracing"
 	"github.com/gauss-project/aurorafs/pkg/traversal"
-	"github.com/mitchellh/mapstructure"
+	"github.com/gogf/gf/util/gconv"
 	ma "github.com/multiformats/go-multiaddr"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/sync/errgroup"
@@ -372,14 +374,6 @@ func NewAurora(nodeMode aurora.Model, addr string, bosonAddress boson.Address, p
 	storer.WithChunkInfo(chunkInfo)
 	retrieve.Config(chunkInfo)
 
-	var configGroups []aurora.ConfigNodeGroup
-	if o.Groups != nil {
-		err = mapstructure.Decode(o.Groups, &configGroups)
-		if err != nil {
-			logger.Debugf("Group configuration acquisition failed: %v", err)
-		}
-	}
-
 	multiResolver := multiresolver.NewMultiResolver(
 		multiresolver.WithConnectionConfigs(o.ResolverConnectionCfgs),
 		multiresolver.WithLogger(o.Logger),
@@ -393,9 +387,17 @@ func NewAurora(nodeMode aurora.Model, addr string, bosonAddress boson.Address, p
 	if err != nil {
 		return nil, err
 	}
-	err = group.AddGroup(p2pCtx, configGroups)
-	if err != nil {
-		return nil, err
+	var configGroups []model.ConfigNodeGroup
+	if o.Groups != nil {
+		err = gconv.Struct(o.Groups, &configGroups)
+		if err != nil {
+			logger.Errorf("Group configuration acquisition failed: %v", err)
+			return nil, err
+		}
+		err = group.AddGroup(configGroups)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	relay := netrelay.New(p2ps, logger, configGroups, route)

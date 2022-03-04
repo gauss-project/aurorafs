@@ -25,7 +25,7 @@ const (
 )
 
 func (s *Service) StartDiscover() {
-	s.discover()
+	s.discover(nil)
 	go func() {
 		ticker := time.NewTicker(discoverInterval)
 		defer ticker.Stop()
@@ -34,16 +34,15 @@ func (s *Service) StartDiscover() {
 			case <-s.close:
 				return
 			case <-ticker.C:
-				s.discover()
+				s.discover(nil)
+				ticker.Reset(discoverInterval)
 			}
 		}
 	}()
 }
 
-func (s *Service) discover() {
-	var wg sync.WaitGroup
-	s.groups.Range(func(_, value interface{}) bool {
-		v := value.(*Group)
+func (s *Service) discover(g *Group) {
+	doFunc := func(wg *sync.WaitGroup, v *Group) {
 		if v.connectedPeers.Length() < v.option.KeepConnectedPeers {
 			v.keepPeers.EachBin(func(address boson.Address, u uint8) (stop, jumpToNext bool, err error) {
 				_ = s.route.Connect(context.Background(), address)
@@ -56,10 +55,19 @@ func (s *Service) discover() {
 		if v.keepPeers.Length() < v.option.KeepPingPeers || v.connectedPeers.Length() < v.option.KeepConnectedPeers {
 			// do find
 			wg.Add(1)
-			go s.doFindGroup(&wg, v)
+			go s.doFindGroup(wg, v)
 		}
-		return true
-	})
+	}
+	var wg sync.WaitGroup
+	if g != nil {
+		doFunc(&wg, g)
+	} else {
+		s.groups.Range(func(_, value interface{}) bool {
+			v := value.(*Group)
+			doFunc(&wg, v)
+			return true
+		})
+	}
 	wg.Wait()
 }
 
@@ -186,31 +194,31 @@ func (s *Service) doFindGroup(wg *sync.WaitGroup, group *Group) {
 		}
 		fallthrough
 	default:
-		skipPeers := make([]boson.Address, 0)
-		for addr := range skip {
-			skipPeers = append(skipPeers, boson.MustParseHexAddress(addr))
-		}
-		nodes := s.getForwardNodes(group.gid, skipPeers...)
-
-		s.logger.Tracef("doFindGroup default %s got %d nodes", group.gid, len(nodes))
-
-		for _, addr := range nodes {
-			lim := limit()
-			if lim <= 0 {
-				return
-			}
-			finds, err := s.getGroupNode(context.Background(), addr, &pb.FindGroupReq{
-				Gid:   group.gid.Bytes(),
-				Limit: int32(lim),
-				Ttl:   0,
-				Paths: s.getSkipInGroupPeers(group.gid),
-			})
-			if err != nil || len(finds) == 0 {
-				continue
-			}
-			s.logger.Tracef("doFindGroup got %d node in group %s from forward %s", len(finds), group.gid, addr)
-			s.keepAddToGroup(group.gid, finds...)
-		}
+		// skipPeers := make([]boson.Address, 0)
+		// for addr := range skip {
+		// 	skipPeers = append(skipPeers, boson.MustParseHexAddress(addr))
+		// }
+		// nodes := s.getForwardNodes(group.gid, skipPeers...)
+		//
+		// s.logger.Tracef("doFindGroup default %s got %d nodes", group.gid, len(nodes))
+		//
+		// for _, addr := range nodes {
+		// 	lim := limit()
+		// 	if lim <= 0 {
+		// 		return
+		// 	}
+		// 	finds, err := s.getGroupNode(context.Background(), addr, &pb.FindGroupReq{
+		// 		Gid:   group.gid.Bytes(),
+		// 		Limit: int32(lim),
+		// 		Ttl:   0,
+		// 		Paths: s.getSkipInGroupPeers(group.gid),
+		// 	})
+		// 	if err != nil || len(finds) == 0 {
+		// 		continue
+		// 	}
+		// 	s.logger.Tracef("doFindGroup got %d node in group %s from forward %s", len(finds), group.gid, addr)
+		// 	s.keepAddToGroup(group.gid, finds...)
+		// }
 	}
 
 }
@@ -226,10 +234,10 @@ func (s *Service) getForwardNodes(gid boson.Address, skip ...boson.Address) (nod
 		s.logger.Tracef("multicast forward get self group %d", len(nodes))
 		return nodes
 	}
-	nodes = s.getForwardNodesDefault(gid, skip...)
-	if len(nodes) > 0 {
-		s.logger.Tracef("multicast forward get default %d", len(nodes))
-	}
+	// nodes = s.getForwardNodesDefault(gid, skip...)
+	// if len(nodes) > 0 {
+	// 	s.logger.Tracef("multicast forward get default %d", len(nodes))
+	// }
 	return
 }
 
@@ -323,7 +331,7 @@ func (s *Service) getForwardNodesSelfGroup(gid boson.Address, skip ...boson.Addr
 	return
 }
 
-// Get forwarding nodes step 2
+// Get forwarding nodes step 3
 func (s *Service) getForwardNodesDefault(gid boson.Address, skip ...boson.Address) (nodes []boson.Address) {
 	depth := s.kad.NeighborhoodDepth()
 	po := boson.Proximity(s.self.Bytes(), gid.Bytes())

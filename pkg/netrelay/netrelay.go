@@ -15,6 +15,7 @@ import (
 	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/jsonhttp"
 	"github.com/gauss-project/aurorafs/pkg/logging"
+	"github.com/gauss-project/aurorafs/pkg/multicast/model"
 	"github.com/gauss-project/aurorafs/pkg/netrelay/pb"
 	"github.com/gauss-project/aurorafs/pkg/p2p"
 	"github.com/gauss-project/aurorafs/pkg/routetab"
@@ -28,10 +29,10 @@ type Service struct {
 	logger   logging.Logger
 	address  common.Address
 	route    routetab.RouteTab
-	groups   []aurora.ConfigNodeGroup
+	groups   []model.ConfigNodeGroup
 }
 
-func New(streamer p2p.Streamer, logging logging.Logger, groups []aurora.ConfigNodeGroup, route routetab.RouteTab) *Service {
+func New(streamer p2p.Streamer, logging logging.Logger, groups []model.ConfigNodeGroup, route routetab.RouteTab) *Service {
 	return &Service{streamer: streamer, logger: logging, groups: groups, route: route}
 }
 

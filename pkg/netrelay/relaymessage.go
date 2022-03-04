@@ -152,7 +152,10 @@ func (s *Service) SendHttp(ctx context.Context, address boson.Address, req pb.Re
 		return Response, fmt.Errorf("[pyramid info] write message: %w", err)
 	}
 
-	if err = r.ReadMsgWithContext(ctx, &Response); err != nil && !errors.Is(err, io.EOF) {
+	if err = r.ReadMsgWithContext(ctx, &Response); err != nil {
+		if errors.Is(err, io.EOF) {
+			err = fmt.Errorf("stream is closed")
+		}
 		return Response, fmt.Errorf("[relaymessage] read message: %w", err)
 	}
 	return Response, nil

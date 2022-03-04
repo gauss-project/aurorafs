@@ -24,7 +24,7 @@ type ConnectedInfo struct {
 
 type GroupInfo struct {
 	GroupID   boson.Address   `json:"gid"`
-	Option    GroupOption     `json:"option"`
+	Option    ConfigNodeGroup `json:"option"`
 	KeepPeers []boson.Address `json:"keepPeers"`
 	KnowPeers []boson.Address `json:"knowPeers"`
 }
@@ -35,8 +35,22 @@ type KadParams struct {
 	ConnectedInfo []*ConnectedInfo `json:"connectedInfo"` // connected info
 }
 
-type GroupOption struct {
-	Observe            bool `json:"observe"`
-	KeepConnectedPeers int  `json:"keepConnectedPeers"`
-	KeepPingPeers      int  `json:"keepPingPeers"`
+type ConfigNetDomain struct {
+	Domain string `json:"domain"`
+	Addr   string `json:"addr"`
 }
+type ConfigNodeGroup struct {
+	Name               string            `json:"name"`
+	GType              GType             `json:"type,omitempty"` // 0 join 1 observe
+	KeepConnectedPeers int               `json:"keep-connected-peers"`
+	KeepPingPeers      int               `json:"keep-ping-peers"`
+	Nodes              []boson.Address   `json:"nodes,omitempty"`
+	AgentHttp          []ConfigNetDomain `json:"agent-http,omitempty"`
+}
+
+type GType int
+
+const (
+	GTypeJoin GType = iota
+	GTypeObserve
+)

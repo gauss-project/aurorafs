@@ -1,6 +1,8 @@
 package api
 
 import (
+	"encoding/json"
+	"fmt"
 	"io/ioutil"
 	"net/http"
 
@@ -9,43 +11,42 @@ import (
 	"github.com/gauss-project/aurorafs/pkg/multicast"
 	"github.com/gauss-project/aurorafs/pkg/multicast/model"
 	"github.com/gauss-project/aurorafs/pkg/multicast/pb"
-	"github.com/gogf/gf/encoding/gjson"
 	"github.com/gorilla/mux"
 )
 
-func (s *server) groupJoinHandler(w http.ResponseWriter, r *http.Request) {
-	str := mux.Vars(r)["gid"]
-	gid, err := boson.ParseHexAddress(str)
-	if err != nil {
-		gid = multicast.GenerateGID(str)
-	}
+func (s *server) addGroup(w http.ResponseWriter, r *http.Request, gType model.GType) {
+	gid := mux.Vars(r)["gid"]
 	body, err := ioutil.ReadAll(r.Body)
 	if err != nil {
 		jsonhttp.InternalServerError(w, err)
 		return
 	}
-	j, err := gjson.DecodeToJson(body)
+	var req model.ConfigNodeGroup
+	if len(body) == 0 {
+		jsonhttp.BadRequest(w, fmt.Errorf("missing parameters"))
+		return
+	}
+	err = json.Unmarshal(body, &req)
 	if err != nil {
 		jsonhttp.InternalServerError(w, err)
 		return
 	}
-	list := j.GetArray("peers")
-	var peers []boson.Address
-	for _, v := range list {
-		addr, err := boson.ParseHexAddress(v.(string))
-		if err != nil {
-			jsonhttp.InternalServerError(w, err)
-			return
-		}
-		peers = append(peers, addr)
+	if req.KeepPingPeers < 1 && req.KeepConnectedPeers < 1 {
+		jsonhttp.BadRequest(w, fmt.Errorf("keep_ping_peers or keep_connected_peers must > 0"))
+		return
 	}
-	err = s.multicast.JoinGroup(r.Context(), gid, nil, model.GroupOption{}, peers...)
+	req.Name = gid
+	req.GType = gType
+	err = s.multicast.AddGroup([]model.ConfigNodeGroup{req})
 	if err != nil {
-		s.logger.Errorf("multicast join group: %v", err)
 		jsonhttp.InternalServerError(w, err)
 		return
 	}
 	jsonhttp.OK(w, nil)
+}
+
+func (s *server) groupJoinHandler(w http.ResponseWriter, r *http.Request) {
+	s.addGroup(w, r, model.GTypeJoin)
 }
 
 func (s *server) groupLeaveHandler(w http.ResponseWriter, r *http.Request) {
@@ -54,7 +55,7 @@ func (s *server) groupLeaveHandler(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		gid = multicast.GenerateGID(str)
 	}
-	err = s.multicast.LeaveGroup(gid)
+	err = s.multicast.RemoveGroup(gid, model.GTypeJoin)
 	if err != nil {
 		s.logger.Errorf("multicast join group: %v", err)
 		jsonhttp.InternalServerError(w, err)
@@ -87,38 +88,7 @@ func (s *server) multicastMsg(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *server) groupObserveHandler(w http.ResponseWriter, r *http.Request) {
-	str := mux.Vars(r)["gid"]
-	gid, err := boson.ParseHexAddress(str)
-	if err != nil {
-		gid = multicast.GenerateGID(str)
-	}
-	body, err := ioutil.ReadAll(r.Body)
-	if err != nil {
-		jsonhttp.InternalServerError(w, err)
-		return
-	}
-	j, err := gjson.DecodeToJson(body)
-	if err != nil {
-		jsonhttp.InternalServerError(w, err)
-		return
-	}
-	list := j.GetArray("peers")
-	var peers []boson.Address
-	for _, v := range list {
-		addr, err := boson.ParseHexAddress(v.(string))
-		if err != nil {
-			jsonhttp.InternalServerError(w, err)
-			return
-		}
-		peers = append(peers, addr)
-	}
-	err = s.multicast.ObserveGroup(gid, model.GroupOption{}, peers...)
-	if err != nil {
-		s.logger.Errorf("multicast observe group: %v", err)
-		jsonhttp.InternalServerError(w, err)
-		return
-	}
-	jsonhttp.OK(w, nil)
+	s.addGroup(w, r, model.GTypeObserve)
 }
 
 func (s *server) groupObserveCancelHandler(w http.ResponseWriter, r *http.Request) {
@@ -127,7 +97,7 @@ func (s *server) groupObserveCancelHandler(w http.ResponseWriter, r *http.Reques
 	if err != nil {
 		gid = multicast.GenerateGID(str)
 	}
-	err = s.multicast.ObserveGroupCancel(gid)
+	err = s.multicast.RemoveGroup(gid, model.GTypeObserve)
 	if err != nil {
 		s.logger.Errorf("multicast cancel observe group: %v", err)
 		jsonhttp.InternalServerError(w, err)
@@ -152,6 +122,10 @@ func (s *server) sendReceive(w http.ResponseWriter, r *http.Request) {
 	body, err := ioutil.ReadAll(r.Body)
 	if err != nil {
 		jsonhttp.InternalServerError(w, err)
+		return
+	}
+	if len(body) == 0 {
+		jsonhttp.BadRequest(w, fmt.Errorf("missing body"))
 		return
 	}
 	out, err := s.multicast.SendReceive(r.Context(), body, gid, target)
@@ -180,10 +154,24 @@ func (s *server) notify(w http.ResponseWriter, r *http.Request) {
 		jsonhttp.InternalServerError(w, err)
 		return
 	}
+	if len(body) == 0 {
+		jsonhttp.BadRequest(w, fmt.Errorf("missing body"))
+		return
+	}
 	err = s.multicast.Send(r.Context(), body, gid, target)
 	if err != nil {
 		jsonhttp.InternalServerError(w, err)
 		return
 	}
 	jsonhttp.OK(w, nil)
+}
+
+func (s *server) peers(w http.ResponseWriter, r *http.Request) {
+	groupName := mux.Vars(r)["gid"]
+	peers, err := s.multicast.GetGroupPeers(groupName)
+	if err != nil {
+		jsonhttp.InternalServerError(w, err)
+		return
+	}
+	jsonhttp.OK(w, peers)
 }

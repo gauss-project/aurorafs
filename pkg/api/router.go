@@ -219,6 +219,9 @@ func (s *server) setupRouting() {
 	handle("/group/send/{gid}/{target}", jsonhttp.MethodHandler{
 		"POST": http.HandlerFunc(s.sendReceive),
 	})
+	handle("/group/peers/{gid}", jsonhttp.MethodHandler{
+		"GET": http.HandlerFunc(s.peers),
+	})
 
 	s.newLoopbackRouter(router)
 
