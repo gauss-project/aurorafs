@@ -74,7 +74,7 @@ func (cs *chunkInfoSource) initChunkInfoSource() error {
 			return false, err
 		}
 
-		var vb bitVector
+		var vb BitVector
 		if err = cs.storer.Get(key, &vb); err != nil {
 			return false, err
 		}
@@ -128,7 +128,7 @@ func (ci *ChunkInfo) UpdateChunkInfoSource(rootCid, sourceOverlay boson.Address,
 	v := ci.getCidSort(rootCid, cid)
 	vb.Set(v)
 	// db
-	return ci.cs.storer.Put(generateKey(chunkSourceKeyPrefix, rootCid, sourceOverlay), &bitVector{B: vb.Bytes(), Len: vb.Len()})
+	return ci.cs.storer.Put(generateKey(chunkSourceKeyPrefix, rootCid, sourceOverlay), &BitVector{B: vb.Bytes(), Len: vb.Len()})
 
 }
 
