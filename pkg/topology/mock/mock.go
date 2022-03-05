@@ -2,8 +2,9 @@ package mock
 
 import (
 	"context"
-	"github.com/gauss-project/aurorafs/pkg/topology/model"
 	"sync"
+
+	"github.com/gauss-project/aurorafs/pkg/topology/model"
 
 	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/p2p"
@@ -100,7 +101,7 @@ func (d *mock) DisconnectForce(addr boson.Address, reason string) error {
 	return p2p.ErrPeerNotFound
 }
 
-func (d *mock) Disconnected(peer p2p.Peer) {
+func (d *mock) Disconnected(peer p2p.Peer, reason string) {
 	d.mtx.Lock()
 	defer d.mtx.Unlock()
 
@@ -190,7 +191,7 @@ func (d *mock) SubscribePeersChange() (c <-chan struct{}, unsubscribe func()) {
 	return c, unsubscribe
 }
 
-func (d *mock) SubscribePeerState(state p2p.PeerState) (c <-chan p2p.Peer, unsubscribe func()) {
+func (d *mock) SubscribePeerState() (c <-chan p2p.PeerInfo, unsubscribe func()) {
 	return c, unsubscribe
 }
 

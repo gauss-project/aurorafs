@@ -58,7 +58,7 @@ type Picker interface {
 
 type Notifier interface {
 	Connected(context.Context, Peer, bool) error
-	Disconnected(Peer)
+	Disconnected(peer Peer, reason string)
 	Announce(ctx context.Context, peer boson.Address, fullnode bool) error
 	AnnounceTo(ctx context.Context, addressee, peer boson.Address, fullnode bool) error
 }
@@ -125,6 +125,13 @@ type StreamSpec struct {
 type Peer struct {
 	Address boson.Address `json:"address"`
 	Mode    aurora.Model  `json:"mode"`
+}
+
+type PeerInfo struct {
+	Overlay boson.Address `json:"overlay"`
+	Mode    []byte        `json:"mode"`
+	State   PeerState     `json:"state"`
+	Reason  string        `json:"reason"`
 }
 
 type WriterChan struct {

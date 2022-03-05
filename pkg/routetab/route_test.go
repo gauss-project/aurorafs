@@ -3,14 +3,15 @@ package routetab_test
 import (
 	"context"
 	"errors"
-	"github.com/gauss-project/aurorafs/pkg/shed"
-	"github.com/gauss-project/aurorafs/pkg/topology/kademlia"
-	"github.com/gauss-project/aurorafs/pkg/topology/lightnode"
 	"io"
 	"math/rand"
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/gauss-project/aurorafs/pkg/shed"
+	"github.com/gauss-project/aurorafs/pkg/topology/kademlia"
+	"github.com/gauss-project/aurorafs/pkg/topology/lightnode"
 
 	"github.com/gauss-project/aurorafs/pkg/addressbook"
 	"github.com/gauss-project/aurorafs/pkg/aurora"
@@ -154,7 +155,7 @@ func (s *Node) addOne(t *testing.T, peer *aurora.Address, connect bool) {
 		t.Fatal(err)
 	}
 	if connect {
-		err := s.kad.Connected(context.TODO(), p2p.Peer{Address: peer.Overlay}, true)
+		err := s.kad.Connected(context.TODO(), p2p.Peer{Address: peer.Overlay, Mode: aurora.NewModel().SetMode(aurora.FullNode)}, true)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -433,7 +434,7 @@ func createTopology(t *testing.T, total int) []*Node {
 	nodes := make([]*Node, 0)
 	for i := 0; i < total; i++ {
 		nodes = append(nodes, newTestNode(t))
-		//t.Log("node", i, nodes[i].overlay)
+		// t.Log("node", i, nodes[i].overlay)
 		if i > 0 {
 			nodes[i].addOne(t, nodes[i-1].addr, true)
 			nodes[i-1].addOne(t, nodes[i].addr, true)
