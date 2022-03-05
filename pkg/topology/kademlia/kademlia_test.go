@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/gauss-project/aurorafs/pkg/topology/model"
 	"io"
 	"math/rand"
 	"reflect"
@@ -12,6 +11,8 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/gauss-project/aurorafs/pkg/topology/model"
 
 	"github.com/gauss-project/aurorafs/pkg/shed"
 	ma "github.com/multiformats/go-multiaddr"
@@ -627,7 +628,7 @@ func TestNotifierHooks(t *testing.T) {
 	}
 
 	// disconnect the peer, expect error
-	kad.Disconnected(p2p.Peer{Address: peer})
+	kad.Disconnected(p2p.Peer{Address: peer}, "")
 	_, err = kad.ClosestPeer(addr, true)
 	if !errors.Is(err, topology.ErrNotFound) {
 		t.Fatalf("expected topology.ErrNotFound but got %v", err)
@@ -1404,7 +1405,7 @@ func newTestKademliaWithAddrDiscovery(
 ) (boson.Address, *kademlia.Kad, addressbook.Interface, *mock.Discovery, beeCrypto.Signer) {
 	t.Helper()
 
-	metricsDB, err := shed.NewDB("", nil)
+	metricsDB, err := shed.NewDB("", &shed.Options{Driver: "leveldb"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1505,7 +1506,7 @@ func p2pMock(ab addressbook.Interface, signer beeCrypto.Signer, counter, failedC
 }
 
 func removeOne(k *kademlia.Kad, peer boson.Address) {
-	k.Disconnected(p2p.Peer{Address: peer})
+	k.Disconnected(p2p.Peer{Address: peer}, "")
 }
 
 const underlayBase = "/ip4/127.0.0.1/tcp/1634/dns/"
@@ -1524,7 +1525,7 @@ func connectOne(t *testing.T, signer beeCrypto.Signer, k *kademlia.Kad, ab addre
 	if err := ab.Put(peer, *auroraAddr); err != nil {
 		t.Fatal(err)
 	}
-	err = k.Connected(context.Background(), p2p.Peer{Address: peer}, false)
+	err = k.Connected(context.Background(), p2p.Peer{Address: peer, Mode: aurora.NewModel().SetMode(aurora.FullNode)}, false)
 
 	if !errors.Is(err, expErr) {
 		t.Fatalf("expected error %v , got %v", expErr, err)

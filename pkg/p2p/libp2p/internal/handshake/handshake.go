@@ -4,10 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/gauss-project/aurorafs/pkg/topology/lightnode"
-	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/gauss-project/aurorafs/pkg/topology/lightnode"
 
 	"github.com/gauss-project/aurorafs/pkg/aurora"
 	"github.com/gauss-project/aurorafs/pkg/boson"
@@ -17,7 +17,6 @@ import (
 	"github.com/gauss-project/aurorafs/pkg/p2p/libp2p/internal/handshake/pb"
 	"github.com/gauss-project/aurorafs/pkg/p2p/protobuf"
 
-	"github.com/libp2p/go-libp2p-core/network"
 	libp2ppeer "github.com/libp2p/go-libp2p-core/peer"
 	ma "github.com/multiformats/go-multiaddr"
 )
@@ -37,9 +36,6 @@ const (
 var (
 	// ErrNetworkIDIncompatible is returned if response from the other peer does not have valid networkID.
 	ErrNetworkIDIncompatible = errors.New("incompatible network ID")
-
-	// ErrHandshakeDuplicate is returned  if the handshake response has been received by an already processed peer.
-	ErrHandshakeDuplicate = errors.New("duplicate handshake")
 
 	// ErrInvalidAck is returned if data in received in ack is not valid (invalid signature for example).
 	ErrInvalidAck = errors.New("invalid ack")
@@ -69,12 +65,9 @@ type Service struct {
 	nodeMode              aurora.Model
 	networkID             uint64
 	welcomeMessage        atomic.Value
-	receivedHandshakes    map[libp2ppeer.ID]struct{}
-	receivedHandshakesMu  sync.Mutex
 	logger                logging.Logger
 	libp2pID              libp2ppeer.ID
 	metrics               metrics
-	network.Notifiee      // handshake service can be the receiver for network.Notify
 	picker                p2p.Picker
 	lightNodes            lightnode.LightNodes
 	lightNodeLimit        int
@@ -92,11 +85,9 @@ func New(signer crypto.Signer, advertisableAddresser AdvertisableAddressResolver
 		overlay:               overlay,
 		networkID:             networkID,
 		nodeMode:              nodeMode,
-		receivedHandshakes:    make(map[libp2ppeer.ID]struct{}),
 		logger:                logger,
 		libp2pID:              ownPeerID,
 		metrics:               newMetrics(),
-		Notifiee:              new(network.NoopNotifiee),
 		lightNodes:            lightNodes,
 		lightNodeLimit:        lightLimit,
 	}
@@ -147,7 +138,7 @@ func (s *Service) Handshake(ctx context.Context, stream p2p.Stream, peerMultiadd
 	}
 
 	if s.libp2pID != observedUnderlayAddrInfo.ID {
-		//NOTE eventually we will return error here, but for now we want to gather some statistics
+		// NOTE eventually we will return error here, but for now we want to gather some statistics
 		s.logger.Warningf("received peer ID %s does not match ours: %s", observedUnderlayAddrInfo.ID, s.libp2pID)
 	}
 
@@ -210,14 +201,6 @@ func (s *Service) Handle(ctx context.Context, stream p2p.Stream, remoteMultiaddr
 	ctx, cancel := context.WithTimeout(ctx, handshakeTimeout)
 	defer cancel()
 
-	s.receivedHandshakesMu.Lock()
-	if _, exists := s.receivedHandshakes[remotePeerID]; exists {
-		s.receivedHandshakesMu.Unlock()
-		return nil, ErrHandshakeDuplicate
-	}
-
-	s.receivedHandshakes[remotePeerID] = struct{}{}
-	s.receivedHandshakesMu.Unlock()
 	w, r := protobuf.NewWriterAndReader(stream)
 	fullRemoteMA, err := buildFullMA(remoteMultiaddr, remotePeerID)
 	if err != nil {
@@ -322,13 +305,6 @@ func (s *Service) Handle(ctx context.Context, stream p2p.Stream, remoteMultiaddr
 		Address:  remoteBzzAddress,
 		NodeMode: mode,
 	}, nil
-}
-
-// Disconnected is called when the peer disconnects.
-func (s *Service) Disconnected(_ network.Network, c network.Conn) {
-	s.receivedHandshakesMu.Lock()
-	defer s.receivedHandshakesMu.Unlock()
-	delete(s.receivedHandshakes, c.RemotePeer())
 }
 
 // SetWelcomeMessage sets the new handshake welcome message.

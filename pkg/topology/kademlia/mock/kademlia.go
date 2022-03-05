@@ -2,9 +2,10 @@ package mock
 
 import (
 	"context"
+	"sync"
+
 	"github.com/gauss-project/aurorafs/pkg/aurora"
 	"github.com/gauss-project/aurorafs/pkg/topology/model"
-	"sync"
 
 	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/p2p"
@@ -86,7 +87,7 @@ func (m *Mock) DisconnectForce(addr boson.Address, reason string) error {
 	m.Disconnected(p2p.Peer{
 		Address: addr,
 		Mode:    aurora.NewModel(),
-	})
+	}, reason)
 	return nil
 }
 
@@ -160,7 +161,7 @@ func (m *Mock) Connected(_ context.Context, peer p2p.Peer, _ bool) error {
 }
 
 // Disconnected is called when a peer disconnects.
-func (m *Mock) Disconnected(peer p2p.Peer) {
+func (m *Mock) Disconnected(peer p2p.Peer, reason string) {
 	m.mtx.Lock()
 	defer m.mtx.Unlock()
 
@@ -206,7 +207,7 @@ func (m *Mock) SubscribePeersChange() (c <-chan struct{}, unsubscribe func()) {
 	return channel, unsubscribe
 }
 
-func (m *Mock) SubscribePeerState(state p2p.PeerState) (c <-chan p2p.Peer, unsubscribe func()) {
+func (m *Mock) SubscribePeerState() (c <-chan p2p.PeerInfo, unsubscribe func()) {
 	panic("implement me")
 }
 

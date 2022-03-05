@@ -3,9 +3,10 @@ package mock
 import (
 	"context"
 	"errors"
-	"github.com/gauss-project/aurorafs/pkg/routetab/pb"
 	"net"
 	"time"
+
+	"github.com/gauss-project/aurorafs/pkg/routetab/pb"
 
 	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/p2p"
@@ -123,7 +124,7 @@ func (s *Service) Disconnect(overlay boson.Address, reason string) error {
 	}
 
 	if s.notifierFunc != nil {
-		s.notifierFunc.Disconnected(p2p.Peer{Address: overlay})
+		s.notifierFunc.Disconnected(p2p.Peer{Address: overlay}, "")
 	}
 
 	return s.disconnectFunc(overlay, reason)

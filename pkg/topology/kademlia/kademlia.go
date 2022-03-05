@@ -95,8 +95,8 @@ type Kad struct {
 	manageC           chan struct{} // trigger the manage forever loop to connect to new peers
 	peerSig           []chan struct{}
 	peerSigMtx        sync.Mutex
-	peerStateSig      map[p2p.PeerState][]chan p2p.Peer
-	peerStateSigMtx   sync.RWMutex
+	peerStateSig      []chan p2p.PeerInfo
+	peerStateSigMtx   sync.Mutex
 	logger            logging.Logger // logger
 	nodeMode          aurora.Model   // indicates whether the node working mode
 	collector         *im.Collector
@@ -166,7 +166,6 @@ func New(
 		bootnodes:         o.Bootnodes,
 		bootNodes:         bootNodes,
 		manageC:           make(chan struct{}, 1),
-		peerStateSig:      make(map[p2p.PeerState][]chan p2p.Peer),
 		waitNext:          waitnext.New(),
 		logger:            logger,
 		nodeMode:          o.NodeMode,
@@ -174,7 +173,6 @@ func New(
 		quit:              make(chan struct{}),
 		halt:              make(chan struct{}),
 		done:              make(chan struct{}),
-		wg:                sync.WaitGroup{},
 		metrics:           newMetrics(),
 		pruneFunc:         o.PruneFunc,
 		radius:            boson.MaxPO,
@@ -958,7 +956,11 @@ func (k *Kad) Outbound(peer p2p.Peer) {
 
 	k.notifyManageLoop()
 	k.notifyPeerSig()
-	k.notifyPeerState(p2p.PeerStateConnectOut, peer)
+	k.notifyPeerState(p2p.PeerInfo{
+		Overlay: peer.Address,
+		Mode:    peer.Mode.Bv.Bytes(),
+		State:   p2p.PeerStateConnectOut,
+	})
 }
 
 func (k *Kad) Pick(peer p2p.Peer) bool {
@@ -1024,12 +1026,16 @@ func (k *Kad) onConnected(ctx context.Context, peer p2p.Peer) error {
 
 	k.notifyManageLoop()
 	k.notifyPeerSig()
-	k.notifyPeerState(p2p.PeerStateConnectIn, peer)
+	k.notifyPeerState(p2p.PeerInfo{
+		Overlay: peer.Address,
+		Mode:    peer.Mode.Bv.Bytes(),
+		State:   p2p.PeerStateConnectIn,
+	})
 	return nil
 }
 
 // Disconnected is called when peer disconnects.
-func (k *Kad) Disconnected(peer p2p.Peer) {
+func (k *Kad) Disconnected(peer p2p.Peer, reason string) {
 	k.logger.Debugf("kademlia: disconnected peer %s", peer.Address)
 
 	k.connectedPeers.Remove(peer.Address)
@@ -1045,7 +1051,13 @@ func (k *Kad) Disconnected(peer p2p.Peer) {
 
 	k.notifyManageLoop()
 	k.notifyPeerSig()
-	k.notifyPeerState(p2p.PeerStateDisconnect, peer)
+
+	k.notifyPeerState(p2p.PeerInfo{
+		Overlay: peer.Address,
+		Mode:    peer.Mode.Bv.Bytes(),
+		State:   p2p.PeerStateDisconnect,
+		Reason:  reason,
+	})
 }
 
 // DisconnectForce only debug calls
@@ -1289,32 +1301,23 @@ func (k *Kad) SubscribePeersChange() (c <-chan struct{}, unsubscribe func()) {
 	return channel, unsubscribe
 }
 
-func (k *Kad) SubscribePeerState(state p2p.PeerState) (c <-chan p2p.Peer, unsubscribe func()) {
-	channel := make(chan p2p.Peer, 1)
+func (k *Kad) SubscribePeerState() (c <-chan p2p.PeerInfo, unsubscribe func()) {
+	channel := make(chan p2p.PeerInfo, 1)
 	var closeOnce sync.Once
 
 	k.peerStateSigMtx.Lock()
 	defer k.peerStateSigMtx.Unlock()
 
-	m, ok := k.peerStateSig[state]
-	if !ok {
-		m = make([]chan p2p.Peer, 0)
-	}
-	m = append(m, channel)
-	k.peerStateSig[state] = m
+	k.peerStateSig = append(k.peerStateSig, channel)
 
 	unsubscribe = func() {
 		k.peerStateSigMtx.Lock()
 		defer k.peerStateSigMtx.Unlock()
-		mp, has := k.peerStateSig[state]
-		if has {
-			for i, c := range mp {
-				if c == channel {
-					mp = append(mp[:i], mp[i+1:]...)
-					break
-				}
+		for i, c := range k.peerStateSig {
+			if c == channel {
+				k.peerStateSig = append(k.peerStateSig[:i], k.peerStateSig[i+1:]...)
+				break
 			}
-			k.peerStateSig[state] = mp
 		}
 		closeOnce.Do(func() { close(channel) })
 	}
@@ -1322,13 +1325,13 @@ func (k *Kad) SubscribePeerState(state p2p.PeerState) (c <-chan p2p.Peer, unsubs
 	return channel, unsubscribe
 }
 
-func (k *Kad) notifyPeerState(state p2p.PeerState, peer p2p.Peer) {
-	k.peerStateSigMtx.RLock()
-	mp, ok := k.peerStateSig[state]
-	k.peerStateSigMtx.RUnlock()
-	if ok {
-		for _, ch := range mp {
-			ch <- peer
+func (k *Kad) notifyPeerState(peer p2p.PeerInfo) {
+	k.peerStateSigMtx.Lock()
+	defer k.peerStateSigMtx.Unlock()
+	for _, c := range k.peerStateSig {
+		select {
+		case c <- peer:
+		default:
 		}
 	}
 }

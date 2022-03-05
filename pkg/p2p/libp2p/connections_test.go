@@ -541,12 +541,12 @@ func TestConnectRepeatHandshake(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if _, err := s2.HandshakeService().Handshake(ctx, libp2p.NewStream(stream), info.Addrs[0], info.ID); err == nil {
-		t.Fatalf("expected stream error")
+	if _, err := s2.HandshakeService().Handshake(ctx, libp2p.NewStream(stream), info.Addrs[0], info.ID); err != nil {
+		t.Fatal(err)
 	}
 
-	expectPeersEventually(t, s2)
-	expectPeersEventually(t, s1)
+	expectPeersEventually(t, s2, overlay1)
+	expectPeersEventually(t, s1, overlay2)
 }
 
 func TestBlocklisting(t *testing.T) {
@@ -1162,7 +1162,7 @@ func (n *notifiee) Connected(c context.Context, p p2p.Peer, f bool) error {
 	return n.connected(c, p, f)
 }
 
-func (n *notifiee) Disconnected(p p2p.Peer) {
+func (n *notifiee) Disconnected(p p2p.Peer, reason string) {
 	n.disconnected(p)
 }
 

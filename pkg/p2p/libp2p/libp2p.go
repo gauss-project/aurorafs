@@ -284,8 +284,7 @@ func New(ctx context.Context, signer beecrypto.Signer, networkID uint64, overlay
 	s.host.SetStreamHandlerMatch(id, matcher, s.handleIncoming)
 
 	connMetricNotify := newConnMetricNotify(s.metrics)
-	h.Network().Notify(peerRegistry)       // update peer registry on network events
-	h.Network().Notify(s.handshakeService) // update handshake service on network events
+	h.Network().Notify(peerRegistry) // update peer registry on network events
 	h.Network().Notify(connMetricNotify)
 	return s, nil
 }
@@ -769,8 +768,11 @@ func (s *Service) Disconnect(overlay boson.Address, reason string) error {
 
 	s.logger.Debugf("libp2p disconnect: disconnecting peer %s reason: %s", overlay, reason)
 
-	// found is checked at the bottom of the function
 	found, full, peerID := s.peers.remove(overlay)
+	if !found {
+		s.logger.Debugf("libp2p disconnect: peer %s not found", overlay)
+		return p2p.ErrPeerNotFound
+	}
 
 	_ = s.host.Network().ClosePeer(peerID)
 
@@ -787,7 +789,7 @@ func (s *Service) Disconnect(overlay boson.Address, reason string) error {
 	s.protocolsmu.RUnlock()
 
 	if s.notifier != nil {
-		s.notifier.Disconnected(peer)
+		s.notifier.Disconnected(peer, reason)
 	}
 	if s.lightNodes != nil {
 		s.lightNodes.Disconnected(peer)
@@ -796,38 +798,23 @@ func (s *Service) Disconnect(overlay boson.Address, reason string) error {
 		s.bootNodes.Disconnected(peer)
 	}
 
-	if !found {
-		s.logger.Debugf("libp2p disconnect: peer %s not found", overlay)
-		return p2p.ErrPeerNotFound
-	}
-
 	return nil
 }
 
 // disconnected is a registered peer registry event
-func (s *Service) disconnected(address boson.Address) {
-	peer := p2p.Peer{Address: address}
-	peerID, found := s.peers.peerID(address)
-	if found {
-		// peerID might not always be found on shutdown
-		md, found := s.peers.mode(peerID)
-		if found {
-			peer.Mode = md
-		}
-	}
+func (s *Service) disconnected(peer p2p.Peer) {
 	s.protocolsmu.RLock()
 	for _, tn := range s.protocols {
 		if tn.DisconnectIn != nil {
 			if err := tn.DisconnectIn(peer); err != nil {
-				s.logger.Debugf("disconnectIn: protocol: %s, version:%s, peer: %s: %v", tn.Name, tn.Version, address.String(), err)
+				s.logger.Debugf("disconnectIn: protocol: %s, version:%s, peer: %s: %v", tn.Name, tn.Version, peer.Address.String(), err)
 			}
 		}
 	}
-
 	s.protocolsmu.RUnlock()
 
 	if s.notifier != nil {
-		s.notifier.Disconnected(peer)
+		s.notifier.Disconnected(peer, "")
 	}
 	if s.lightNodes != nil {
 		s.lightNodes.Disconnected(peer)

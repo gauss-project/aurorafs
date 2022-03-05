@@ -3,9 +3,10 @@ package libp2p
 import (
 	"bytes"
 	"context"
-	"github.com/gauss-project/aurorafs/pkg/aurora"
 	"sort"
 	"sync"
+
+	"github.com/gauss-project/aurorafs/pkg/aurora"
 
 	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/p2p"
@@ -27,7 +28,7 @@ type peerRegistry struct {
 }
 
 type disconnecter interface {
-	disconnected(boson.Address)
+	disconnected(peer p2p.Peer)
 }
 
 func newPeerRegistry() *peerRegistry {
@@ -76,9 +77,13 @@ func (r *peerRegistry) Disconnected(_ network.Network, c network.Conn) {
 		cancel()
 	}
 	delete(r.streams, peerID)
+	mode := r.modes[peerID]
 	delete(r.modes, peerID)
 	r.mu.Unlock()
-	r.disconnecter.disconnected(overlay)
+	r.disconnecter.disconnected(p2p.Peer{
+		Address: overlay,
+		Mode:    mode,
+	})
 
 }
 
