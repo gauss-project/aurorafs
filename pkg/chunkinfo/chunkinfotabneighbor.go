@@ -38,7 +38,7 @@ func (ci *ChunkInfo) initChunkInfoTabNeighbor() error {
 		if err != nil {
 			return true, err
 		}
-		var vb bitVector
+		var vb BitVector
 		if err := ci.storer.Get(key, &vb); err != nil {
 			return true, err
 		}
@@ -78,14 +78,23 @@ func (ci *ChunkInfo) updateNeighborChunkInfo(rootCid, cid boson.Address, overlay
 	bv, ok := ci.ct.presence[rc][over]
 
 	v := ci.getCidSort(rootCid, cid)
-	//if v < 0 {
-	// todo
-	//ci.chunkPutChanUpdate(context.Background(), ci.cp, ci.cp.updateCidSort, rootCid, cid, 0)
-	//v = 0
-	//}
 	bv.Set(v)
+	bit := BitVector{B: bv.Bytes(), Len: bv.Len()}
+	if overlay.Equal(ci.addr) {
+		ci.Publish(fmt.Sprintf("%s%s", "down", rootCid.String()), BitVectorInfo{
+			RootCid:   rootCid,
+			Bitvector: bit,
+		})
+	} else {
+		ci.Publish(fmt.Sprintf("%s%s", "retrieval", rootCid.String()), BitVectorInfo{
+			RootCid:   rootCid,
+			Overlay:   overlay,
+			Bitvector: bit,
+		})
+	}
+
 	// db
-	return ci.storer.Put(generateKey(keyPrefix, rootCid, overlay), &bitVector{B: bv.Bytes(), Len: bv.Len()})
+	return ci.storer.Put(generateKey(keyPrefix, rootCid, overlay), &bit)
 }
 
 func (ci *ChunkInfo) putChunkInfoNeighbor(rootCid, overlay boson.Address) error {
@@ -100,7 +109,7 @@ func (ci *ChunkInfo) putChunkInfoNeighbor(rootCid, overlay boson.Address) error 
 	if !ok {
 		b, _ := bitvector.New(v)
 		ci.ct.putChunkInfoTabNeighbor(rootCid, overlay, *b)
-		return ci.storer.Put(generateKey(keyPrefix, rootCid, overlay), &bitVector{B: b.Bytes(), Len: b.Len()})
+		return ci.storer.Put(generateKey(keyPrefix, rootCid, overlay), &BitVector{B: b.Bytes(), Len: b.Len()})
 	}
 	return nil
 }

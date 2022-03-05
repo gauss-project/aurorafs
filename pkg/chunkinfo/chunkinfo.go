@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/gauss-project/aurorafs/pkg/retrieval/aco"
+	"github.com/gauss-project/aurorafs/pkg/sctx"
 	"github.com/gauss-project/aurorafs/pkg/settlement/chain"
 	"reflect"
 	"resenje.org/singleflight"
@@ -68,7 +69,6 @@ type chunkPutRes struct {
 	data interface{}
 }
 
-// ChunkInfo
 type ChunkInfo struct {
 	addr         boson.Address
 	storer       storage.StateStorer
@@ -89,9 +89,10 @@ type ChunkInfo struct {
 	singleflight singleflight.Group
 	oracleChain  chain.Resolver
 	cs           *chunkInfoSource
+	pubSubLk     sync.RWMutex
+	pubSub       map[string]chan interface{}
 }
 
-// New
 func New(addr boson.Address, streamer p2p.Streamer, logger logging.Logger, traversal traversal.Traverser, storer storage.StateStorer, route routetab.RouteTab, oracleChain chain.Resolver) *ChunkInfo {
 	chunkinfo := &ChunkInfo{
 		addr:        addr,
@@ -108,6 +109,7 @@ func New(addr boson.Address, streamer p2p.Streamer, logger logging.Logger, trave
 		traversal:   traversal,
 		oracleChain: oracleChain,
 		cs:          newChunkSource(storer, logger),
+		pubSub:      make(map[string]chan interface{}),
 	}
 	chunkinfo.triggerTimeOut()
 	chunkinfo.cleanDiscoverTrigger()
@@ -131,9 +133,15 @@ type RootCIDResponse struct {
 	Addresses []string `json:"addresses"`
 }
 
-type bitVector struct {
+type BitVector struct {
 	Len int    `json:"len"`
 	B   []byte `json:"b"`
+}
+
+type BitVectorInfo struct {
+	RootCid   boson.Address
+	Overlay   boson.Address
+	Bitvector BitVector
 }
 
 func (ci *ChunkInfo) InitChunkInfo() error {
@@ -155,6 +163,7 @@ func (ci *ChunkInfo) InitChunkInfo() error {
 func (ci *ChunkInfo) Init(ctx context.Context, authInfo []byte, rootCid boson.Address) bool {
 
 	key := fmt.Sprintf("%s%s", rootCid, "chunkinfo")
+	topCtx := ctx
 	v, _, _ := ci.singleflight.Do(ctx, key, func(ctx context.Context) (interface{}, error) {
 		if ci.cd.isExists(rootCid) {
 			return true, nil
@@ -162,9 +171,12 @@ func (ci *ChunkInfo) Init(ctx context.Context, authInfo []byte, rootCid boson.Ad
 		if ci.ct.isDownload(rootCid, ci.addr) {
 			return true, nil
 		}
-		overlays := ci.oracleChain.GetNodesFromCid(rootCid.Bytes())
-		if len(overlays) <= 0 {
-			return false, nil
+		overlays, _ := sctx.GetTargets(topCtx)
+		if overlays == nil {
+			overlays = ci.oracleChain.GetNodesFromCid(rootCid.Bytes())
+			if len(overlays) <= 0 {
+				return false, nil
+			}
 		}
 		return ci.FindChunkInfo(context.Background(), authInfo, rootCid, overlays), nil
 	})
@@ -174,7 +186,6 @@ func (ci *ChunkInfo) Init(ctx context.Context, authInfo []byte, rootCid boson.Ad
 	return v.(bool)
 }
 
-// FindChunkInfo
 func (ci *ChunkInfo) FindChunkInfo(ctx context.Context, authInfo []byte, rootCid boson.Address, overlays []boson.Address) bool {
 	ticker := time.NewTicker(chunkInfoRetryIntervalDuration)
 	defer ticker.Stop()
@@ -231,7 +242,6 @@ func (ci *ChunkInfo) findChunkInfo(ctx context.Context, authInfo []byte, rootCid
 	go ci.doFindChunkInfo(ctx, authInfo, rootCid)
 }
 
-// GetChunkInfo
 func (ci *ChunkInfo) GetChunkInfo(rootCid boson.Address, cid boson.Address) []aco.Route {
 	return ci.getChunkInfo(rootCid, cid)
 }
@@ -244,12 +254,10 @@ func (ci *ChunkInfo) GetChunkInfoServerOverlays(rootCid boson.Address) []aurora.
 	return ci.getChunkInfoServerOverlays(rootCid)
 }
 
-// CancelFindChunkInfo
 func (ci *ChunkInfo) CancelFindChunkInfo(rootCid boson.Address) {
 	ci.cpd.cancelPendingFinder(rootCid)
 }
 
-// OnChunkTransferred
 func (ci *ChunkInfo) OnChunkTransferred(cid, rootCid boson.Address, overlay, target boson.Address) error {
 	ci.syncLk.Lock()
 	defer ci.syncLk.Unlock()
@@ -342,7 +350,6 @@ func (ci *ChunkInfo) DelDiscover(rootCid boson.Address) {
 	ci.chunkPutChanUpdate(context.Background(), ci.cd, ci.delDiscoverPresence, rootCid)
 }
 
-//Record every chunk source.
 func (ci *ChunkInfo) OnChunkRetrieved(cid, rootCid, sourceOverlay boson.Address) error {
 	ci.syncLk.Lock()
 	defer ci.syncLk.Unlock()
@@ -450,6 +457,50 @@ func (ci *ChunkInfo) pyramidCheck(rootCid, overlay, target boson.Address) error 
 		}
 	}
 	return nil
+}
+
+func (ci *ChunkInfo) SubscribeDownloadProgress(rootCids []boson.Address) (c <-chan interface{}, unsubscribe func(), err error) {
+	channel := make(chan interface{}, len(rootCids))
+	for _, rootCid := range rootCids {
+		ci.Subscribe(fmt.Sprintf("%s%s", "down", rootCid.String()), channel)
+	}
+	unsubscribe = func() {
+		for _, rootCid := range rootCids {
+			ci.UnSubscribe(fmt.Sprintf("%s%s", "down", rootCid.String()))
+		}
+	}
+	return channel, unsubscribe, nil
+}
+
+func (ci *ChunkInfo) SubscribeRetrievalProgress(rootCid boson.Address) (c <-chan interface{}, unsubscribe func(), err error) {
+	channel := make(chan interface{}, 1)
+	ci.Subscribe(fmt.Sprintf("%s%s", "retrieval", rootCid.String()), channel)
+	unsubscribe = func() {
+		ci.UnSubscribe(fmt.Sprintf("%s%s", "retrieval", rootCid.String()))
+	}
+	return channel, unsubscribe, nil
+}
+
+func (ci *ChunkInfo) Subscribe(key string, c chan interface{}) {
+	ci.pubSubLk.Lock()
+	defer ci.pubSubLk.Unlock()
+	if _, ok := ci.pubSub[key]; !ok {
+		ci.pubSub[key] = c
+	}
+}
+
+func (ci *ChunkInfo) UnSubscribe(key string) {
+	ci.pubSubLk.Lock()
+	defer ci.pubSubLk.Unlock()
+	delete(ci.pubSub, key)
+}
+
+func (ci *ChunkInfo) Publish(key string, data interface{}) {
+	ci.pubSubLk.RLock()
+	defer ci.pubSubLk.RUnlock()
+	if c, ok := ci.pubSub[key]; ok {
+		c <- data
+	}
 }
 
 func generateKey(keyPrefix string, rootCid, overlay boson.Address) string {

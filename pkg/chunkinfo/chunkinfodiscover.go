@@ -42,7 +42,7 @@ func (ci *ChunkInfo) initChunkInfoDiscover() error {
 		if err != nil {
 			return true, err
 		}
-		var vb bitVector
+		var vb BitVector
 		if err := ci.storer.Get(key, &vb); err != nil {
 			return true, err
 		}
@@ -188,7 +188,7 @@ func (ci *ChunkInfo) updateChunkInfo(rootCid, overlay boson.Address, bv []byte) 
 		}
 	}
 	// db
-	if err := ci.storer.Put(generateKey(discoverKeyPrefix, rootCid, overlay), &bitVector{B: vb.bit.Bytes(), Len: vb.bit.Len()}); err != nil {
+	if err := ci.storer.Put(generateKey(discoverKeyPrefix, rootCid, overlay), &BitVector{B: vb.bit.Bytes(), Len: vb.bit.Len()}); err != nil {
 		ci.logger.Errorf("chunk discover: put store error")
 	}
 }
