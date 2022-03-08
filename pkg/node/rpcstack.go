@@ -26,6 +26,12 @@ type httpConfig struct {
 	prefix             string // path prefix on which to mount http handler
 }
 
+type serverTLS struct {
+	Enable       bool
+	CertFilePath string
+	KeyFilePath  string
+}
+
 // wsConfig is the JSON-RPC/Websocket configuration
 type wsConfig struct {
 	Origins []string
@@ -58,6 +64,7 @@ type httpServer struct {
 
 	// These are set by setListenAddr.
 	endpoint string
+	tls      serverTLS
 
 	handlerNames map[string]string
 }
@@ -72,7 +79,7 @@ func newHTTPServer(log logging.Logger, timeouts rpc.HTTPTimeouts) *httpServer {
 
 // setListenAddr configures the listening address of the server.
 // The address can only be set while the server isn't running.
-func (h *httpServer) setListenAddr(addr string) error {
+func (h *httpServer) setListenAddr(addr string, tls serverTLS) error {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
@@ -81,6 +88,7 @@ func (h *httpServer) setListenAddr(addr string) error {
 	}
 
 	h.endpoint = addr
+	h.tls = tls
 	return nil
 }
 
@@ -124,22 +132,25 @@ func (h *httpServer) start() error {
 	}
 	h.listener = listener
 	go func() {
+		if h.tls.Enable {
+			_ = h.server.ServeTLS(listener, h.tls.CertFilePath, h.tls.KeyFilePath)
+		}
 		_ = h.server.Serve(listener)
 	}()
 
 	if h.wsAllowed() {
-		url := fmt.Sprintf("ws://%v", listener.Addr())
+		url := fmt.Sprintf("%s", listener.Addr())
 		if h.wsConfig.prefix != "" {
 			url += h.wsConfig.prefix
 		}
-		h.log.Infof("WebSocket enabled url=%s", url)
+		h.log.Infof("rpc websocket address: %s", listener.Addr())
 	}
 	// if server is websocket only, return after logging
 	if !h.rpcAllowed() {
 		return nil
 	}
 	// Log http endpoint.
-	h.log.Info("HTTP server started",
+	h.log.Info("rpc http server started",
 		" endpoint=", listener.Addr(),
 		" prefix=", h.httpConfig.prefix,
 		" cors=", strings.Join(h.httpConfig.CorsAllowedOrigins, ","),
@@ -156,7 +167,7 @@ func (h *httpServer) start() error {
 	for _, path := range paths {
 		name := h.handlerNames[path]
 		if !logged[name] {
-			h.log.Infof("%s enabled url http://%s%s", name, listener.Addr().String(), path)
+			h.log.Infof("%s enabled url %s/%s", name, listener.Addr(), path)
 			logged[name] = true
 		}
 	}
