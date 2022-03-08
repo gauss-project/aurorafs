@@ -58,9 +58,18 @@ type Service struct {
 	groups         sync.Map
 	msgSeq         uint64
 	close          chan struct{}
+	sessionStream  sync.Map // key= sessionID, value= *WsStream
 
 	logSig    []chan LogContent
 	logSigMtx sync.Mutex
+}
+
+type WsStream struct {
+	done       chan struct{} // after w write successful
+	sendOption SendOption
+	stream     p2p.Stream
+	r          protobuf.Reader
+	w          protobuf.Writer
 }
 
 type PeersSubClient struct {
@@ -849,66 +858,45 @@ func (s *Service) SendReceive(ctx context.Context, data []byte, gid, dest boson.
 	return
 }
 
-func (s *Service) SendMessage(ctx context.Context, data []byte, gid, dest boson.Address, tp SendOption) (out SendResult) {
+func (s *Service) GetSendStream(ctx context.Context, gid, dest boson.Address) (out SendStreamCh, err error) {
 	var stream p2p.Stream
-	stream, out.Err = s.getStream(ctx, dest, streamMessage)
-
-	req := &pb.GroupMsg{
-		Gid:  gid.Bytes(),
-		Data: data,
+	stream, err = s.getStream(ctx, dest, streamMessage)
+	if err != nil {
+		return
 	}
-	switch tp {
-	case SendOnly: // only send
-		w := protobuf.NewWriter(stream)
-		out.Err = w.WriteMsgWithContext(ctx, req)
-	case SendReceive: // send receive
-		w, r := protobuf.NewWriterAndReader(stream)
-		out.Err = w.WriteMsgWithContext(ctx, req)
-		if out.Err != nil {
-			return
-		}
-		res := &pb.GroupMsg{}
-		out.Err = r.ReadMsgWithContext(ctx, res)
-		if out.Err != nil {
-			return
-		}
-		out.Resp = res.Data
-	case SendStream: // keep stream
-		w, r := protobuf.NewWriterAndReader(stream)
-		out.Read = make(chan []byte, 1)
-		out.Write = make(chan []byte, 1)
-		out.Close = make(chan struct{}, 1)
-		out.ErrCh = make(chan error, 1)
-		go func() {
-			defer stream.Reset()
-			for {
-				select {
-				case d := <-out.Write:
-					err := w.WriteMsgWithContext(ctx, &pb.GroupMsg{Data: d, Gid: gid.Bytes()})
-					if err != nil {
-						out.ErrCh <- err
-						return
-					}
-				case <-out.Close:
-					return
-				}
-			}
-		}()
-		go func() {
-			defer stream.Reset()
-			for {
-				res := &pb.GroupMsg{}
-				err := r.ReadMsgWithContext(ctx, res)
+	w, r := protobuf.NewWriterAndReader(stream)
+	out.Read = make(chan []byte, 1)
+	out.ReadErr = make(chan error, 1)
+	out.Write = make(chan []byte, 1)
+	out.WriteErr = make(chan error, 1)
+	out.Close = make(chan struct{}, 1)
+	go func() {
+		defer stream.Reset()
+		for {
+			select {
+			case d := <-out.Write:
+				err = w.WriteMsgWithContext(ctx, &pb.GroupMsg{Data: d, Gid: gid.Bytes(), Type: int32(SendStream)})
 				if err != nil {
-					out.ErrCh <- err
+					out.WriteErr <- err
 					return
 				}
-				out.Read <- res.Data
+			case <-out.Close:
+				return
 			}
-		}()
-	default:
-		out.Err = fmt.Errorf("send option %d not support", tp)
-	}
+		}
+	}()
+	go func() {
+		defer stream.Reset()
+		for {
+			res := &pb.GroupMsg{}
+			err = r.ReadMsgWithContext(ctx, res)
+			if err != nil {
+				out.ReadErr <- err
+				return
+			}
+			out.Read <- res.Data
+		}
+	}()
 	return
 }
 
@@ -926,10 +914,25 @@ func (s *Service) onMessage(ctx context.Context, peer p2p.Peer, stream p2p.Strea
 		From: peer.Address,
 	}
 
+	st := &WsStream{
+		sendOption: SendOption(info.Type),
+		stream:     stream,
+	}
+	switch st.sendOption {
+	case SendOnly:
+	case SendReceive:
+		msg.SessionID = rpc.NewID()
+		st.w = protobuf.NewWriter(stream)
+	case SendStream:
+		msg.SessionID = rpc.NewID()
+		st.w = protobuf.NewWriter(stream)
+		st.r = r
+	}
+
 	s.groups.Range(func(_, value interface{}) bool {
 		g := value.(*Group)
 		if g.gid.Equal(msg.GID) && g.option.GType == model.GTypeJoin {
-			_ = s.notifyMessage(msg.GID, msg)
+			_ = s.notifyMessage(msg.GID, msg, st)
 			return false
 		}
 		return true
@@ -955,7 +958,7 @@ func (s *Service) SubscribeGroupMessage(gid boson.Address) (c <-chan GroupMessag
 	return nil, unsubscribe, errors.New("the group notfound")
 }
 
-func (s *Service) notifyMessage(gid boson.Address, msg GroupMessage) (e error) {
+func (s *Service) notifyMessage(gid boson.Address, msg GroupMessage, st *WsStream) (e error) {
 	g, ok := s.groups.Load(gid.String())
 	if ok {
 		v := g.(*Group)
@@ -975,8 +978,45 @@ func (s *Service) notifyMessage(gid boson.Address, msg GroupMessage) (e error) {
 		case v.groupMessageCh <- msg:
 		default:
 		}
+		switch st.sendOption {
+		case SendReceive:
+			go func() {
+				st.done = make(chan struct{}, 1)
+				s.sessionStream.Store(msg.SessionID, st)
+				defer s.sessionStream.Delete(msg.SessionID)
+				timeout := time.Second * 5
+				select {
+				case <-time.After(timeout):
+					s.logger.Debugf("sessionID %s timeout %s when wait receive reply from websocket", msg.SessionID, timeout)
+					st.stream.Reset()
+				case <-st.done:
+				}
+			}()
+		case SendStream:
+		}
 	}
 	return nil
+}
+
+func (s *Service) replyGroupMessage(sessionID string, data []byte) (err error) {
+	v, ok := s.sessionStream.Load(rpc.ID(sessionID))
+	if !ok {
+		return fmt.Errorf("sessionID %s is invalid or has expired", sessionID)
+	}
+	st := v.(*WsStream)
+	defer func() {
+		if err != nil {
+			st.stream.Reset()
+		} else {
+			switch st.sendOption {
+			case SendReceive:
+				st.done <- struct{}{}
+			}
+		}
+	}()
+	return st.w.WriteMsg(&pb.GroupMsg{
+		Data: data,
+	})
 }
 
 func (s *Service) notifyGroupPeers(gid boson.Address) {

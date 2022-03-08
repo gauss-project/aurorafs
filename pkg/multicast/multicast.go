@@ -6,6 +6,7 @@ import (
 	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/multicast/model"
 	"github.com/gauss-project/aurorafs/pkg/multicast/pb"
+	"github.com/gauss-project/aurorafs/pkg/rpc"
 )
 
 type GroupInterface interface {
@@ -18,7 +19,7 @@ type GroupInterface interface {
 	SubscribeMulticastMsg(gid boson.Address) (c <-chan Message, unsubscribe func(), err error)
 	GetGroupPeers(groupName string) (out *GroupPeers, err error)
 	GetMulticastNode(groupName string) (peer boson.Address, err error)
-	SendMessage(ctx context.Context, data []byte, gid, dest boson.Address, tp SendOption) (out SendResult)
+	GetSendStream(ctx context.Context, gid, dest boson.Address) (out SendStreamCh, err error)
 	SendReceive(ctx context.Context, data []byte, gid, dest boson.Address) (result []byte, err error)
 	Send(ctx context.Context, data []byte, gid, dest boson.Address) (err error)
 }
@@ -34,10 +35,10 @@ type Message struct {
 }
 
 type GroupMessage struct {
-	SessionID string
-	GID       boson.Address
-	Data      []byte
-	From      boson.Address
+	SessionID rpc.ID        `json:"sessionID,omitempty"`
+	GID       boson.Address `json:"gid"`
+	Data      []byte        `json:"data"`
+	From      boson.Address `json:"from"`
 }
 
 type LogContent struct {
@@ -59,11 +60,10 @@ const (
 	SendStream
 )
 
-type SendResult struct {
-	Read  chan []byte
-	Write chan []byte
-	Close chan struct{}
-	ErrCh chan error
-	Resp  []byte
-	Err   error
+type SendStreamCh struct {
+	Read     chan []byte
+	ReadErr  chan error
+	Write    chan []byte
+	WriteErr chan error
+	Close    chan struct{}
 }

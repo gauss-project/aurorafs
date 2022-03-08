@@ -774,7 +774,11 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "AuroraCommon.yaml#/components/schemas/Response"
+                type: object
+                properties:
+                  data:
+                    type: string
+                    description: base64 string
         "500":
           $ref: "AuroraCommon.yaml#/components/responses/500"
         default:
@@ -845,5 +849,20 @@ paths:
                       - $ref: "AuroraCommon.yaml#/components/schemas/BosonAddress"
         "500":
           $ref: "AuroraCommon.yaml#/components/responses/500"
+        default:
+          description: Default response
+
+  "/apiPort":
+    get:
+      summary: Get debugapi/rpc port of node
+      tags:
+        - Status
+      responses:
+        "200":
+          description: debugapi/rpc port of node
+          content:
+            application/json:
+              schema:
+                $ref: "AuroraCommon.yaml#/components/schemas/ApiPort"
         default:
           description: Default response

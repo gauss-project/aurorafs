@@ -417,6 +417,8 @@ func NewAurora(nodeMode aurora.Model, addr string, bosonAddress boson.Address, p
 				WsPingPeriod:       60 * time.Second,
 				BufferSizeMul:      o.ApiBufferSizeMul,
 				Restricted:         o.Restricted,
+				DebugApiAddr:       o.DebugAPIAddr,
+				RPCWSAddr:          o.WSAddr,
 			})
 		apiListener, err := net.Listen("tcp", o.APIAddr)
 		if err != nil {
