@@ -114,3 +114,43 @@ func (a *apiService) RetrievalProgress(ctx context.Context, rootCid string) (*rp
 	}()
 	return sub, nil
 }
+
+func (a *apiService) RootCidStatus(ctx context.Context) (*rpc.Subscription, error) {
+	notifier, supported := rpc.NotifierFromContext(ctx)
+	if !supported {
+		return &rpc.Subscription{}, rpc.ErrNotificationsUnsupported
+	}
+	sub := notifier.CreateSubscription()
+
+	c, unsub := a.ci.SubscribeRootCidStatus()
+	var mutex sync.Mutex
+	rootCidMap := make(map[string]RootCidStatusEven)
+	go func() {
+		ticker := time.NewTicker(time.Second * 1)
+		defer ticker.Stop()
+		for {
+			select {
+			case data := <-c:
+				root := data.(RootCidStatusEven)
+				mutex.Lock()
+				rootCidMap[root.RootCid.String()] = root
+				mutex.Unlock()
+			case <-ticker.C:
+				mutex.Lock()
+				rootList := make([]RootCidStatusEven, 0, len(rootCidMap))
+				for overlay, bit := range rootCidMap {
+					rootList = append(rootList, bit)
+					delete(rootCidMap, overlay)
+				}
+				mutex.Unlock()
+				if len(rootList) > 0 {
+					_ = notifier.Notify(sub.ID, rootList)
+				}
+			case <-sub.Err():
+				unsub()
+				return
+			}
+		}
+	}()
+	return sub, nil
+}

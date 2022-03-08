@@ -22,6 +22,17 @@ type chunkInfoTabNeighbor struct {
 	overlays      map[string][]boson.Address
 	serverPutChan chan chunkPut
 }
+type RootCidStatusEven struct {
+	RootCid boson.Address
+	Status  RootCidStatus
+}
+
+type RootCidStatus = int
+
+const (
+	RootCid_DEL RootCidStatus = iota
+	RootCid_ADD
+)
 
 func newChunkInfoTabNeighbor() *chunkInfoTabNeighbor {
 	return &chunkInfoTabNeighbor{overlays: make(map[string][]boson.Address), presence: make(map[string]map[string]*bitvector.BitVector),
@@ -65,7 +76,7 @@ func (cn *chunkInfoTabNeighbor) putChunkInfoTabNeighbor(rootCid, overlay boson.A
 }
 
 // updateNeighborChunkInfo
-func (ci *ChunkInfo) updateNeighborChunkInfo(rootCid, cid boson.Address, overlay, target boson.Address) error {
+func (ci *ChunkInfo) updateNeighborChunkInfo(rootCid, cid boson.Address, overlay boson.Address) error {
 	rc := rootCid.String()
 	over := overlay.String()
 	_, ok := ci.ct.presence[rc]
@@ -107,6 +118,12 @@ func (ci *ChunkInfo) putChunkInfoNeighbor(rootCid, overlay boson.Address) error 
 	_, ok := ci.ct.presence[rootCid.String()][overlay.String()]
 
 	if !ok {
+		if overlay.Equal(ci.addr) {
+			ci.Publish("status", RootCidStatusEven{
+				RootCid: rootCid,
+				Status:  RootCid_ADD,
+			})
+		}
 		b, _ := bitvector.New(v)
 		ci.ct.putChunkInfoTabNeighbor(rootCid, overlay, *b)
 		return ci.storer.Put(generateKey(keyPrefix, rootCid, overlay), &BitVector{B: b.Bytes(), Len: b.Len()})
@@ -134,7 +151,7 @@ func (ci *ChunkInfo) initNeighborChunkInfo(rootCid, peer boson.Address, cids [][
 			ci.logger.Errorf("chunkInfo:UpdateChunkInfoSource error:%v", err)
 			return
 		}
-		err = ci.updateNeighborChunkInfo(rootCid, c, ci.addr, boson.ZeroAddress)
+		err = ci.updateNeighborChunkInfo(rootCid, c, ci.addr)
 		if err != nil {
 			ci.logger.Errorf("chunkInfo:updateNeighborChunkInfo error:%v", err)
 			return
@@ -211,7 +228,10 @@ func (ci *ChunkInfo) delPresence(rootCid boson.Address) bool {
 
 	delete(ci.ct.presence, rootCid.String())
 	delete(ci.ct.overlays, rootCid.String())
-
+	ci.Publish("status", RootCidStatusEven{
+		RootCid: rootCid,
+		Status:  RootCid_DEL,
+	})
 	return true
 }
 

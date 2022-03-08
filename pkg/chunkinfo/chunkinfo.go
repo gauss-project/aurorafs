@@ -264,7 +264,7 @@ func (ci *ChunkInfo) OnChunkTransferred(cid, rootCid boson.Address, overlay, tar
 	if err := ci.pyramidCheck(rootCid, overlay, target); err != nil {
 		return err
 	}
-	return ci.chunkPutChanUpdate(context.Background(), ci.ct, ci.updateNeighborChunkInfo, rootCid, cid, overlay, target).err
+	return ci.chunkPutChanUpdate(context.Background(), ci.ct, ci.updateNeighborChunkInfo, rootCid, cid, overlay).err
 }
 
 func (ci *ChunkInfo) GetChunkPyramid(rootCid boson.Address) []*PyramidCidNum {
@@ -356,7 +356,7 @@ func (ci *ChunkInfo) OnChunkRetrieved(cid, rootCid, sourceOverlay boson.Address)
 	if err := ci.pyramidCheck(rootCid, ci.addr, sourceOverlay); err != nil {
 		return err
 	}
-	if err := ci.chunkPutChanUpdate(context.Background(), ci.ct, ci.updateNeighborChunkInfo, rootCid, cid, ci.addr, sourceOverlay).err; err != nil {
+	if err := ci.chunkPutChanUpdate(context.Background(), ci.ct, ci.updateNeighborChunkInfo, rootCid, cid, ci.addr).err; err != nil {
 		return err
 	}
 	if err := ci.chunkPutChanUpdate(context.Background(), ci.cs, ci.cs.updatePyramidSource, rootCid, sourceOverlay).err; err != nil {
@@ -479,6 +479,15 @@ func (ci *ChunkInfo) SubscribeRetrievalProgress(rootCid boson.Address) (c <-chan
 		ci.UnSubscribe(fmt.Sprintf("%s%s", "retrieval", rootCid.String()))
 	}
 	return channel, unsubscribe, nil
+}
+
+func (ci *ChunkInfo) SubscribeRootCidStatus() (c <-chan interface{}, unsubscribe func()) {
+	channel := make(chan interface{}, 1)
+	ci.Subscribe("status", channel)
+	unsubscribe = func() {
+		ci.UnSubscribe("status")
+	}
+	return channel, unsubscribe
 }
 
 func (ci *ChunkInfo) Subscribe(key string, c chan interface{}) {
