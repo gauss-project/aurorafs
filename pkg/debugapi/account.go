@@ -3,14 +3,15 @@ package debugapi
 import (
 	"bytes"
 	"encoding/hex"
-	"github.com/gauss-project/aurorafs/pkg/crypto"
-	"github.com/gauss-project/aurorafs/pkg/jsonhttp"
-	"github.com/gauss-project/aurorafs/pkg/keystore/file"
-	"github.com/gogf/gf/encoding/gjson"
 	"io"
 	"io/ioutil"
 	"net/http"
 	"path/filepath"
+
+	"github.com/gauss-project/aurorafs/pkg/crypto"
+	"github.com/gauss-project/aurorafs/pkg/jsonhttp"
+	"github.com/gauss-project/aurorafs/pkg/keystore/file"
+	"github.com/gogf/gf/v2/encoding/gjson"
 )
 
 func (s *Service) importKeyHandler(w http.ResponseWriter, r *http.Request) {
@@ -26,9 +27,9 @@ func (s *Service) importKeyHandler(w http.ResponseWriter, r *http.Request) {
 		jsonhttp.InternalServerError(w, err)
 		return
 	}
-	password := j.GetString("password")
-	keyJson := j.GetString("keystore")
-	pkData := j.GetString("private_key")
+	password := j.Get("password").String()
+	keyJson := j.Get("keystore").String()
+	pkData := j.Get("private_key").String()
 	if pkData == "" && keyJson == "" {
 		jsonhttp.InternalServerError(w, "Please enter the private_key or keystore")
 		return
@@ -73,8 +74,8 @@ func (s *Service) exportKeyHandler(w http.ResponseWriter, r *http.Request) {
 		jsonhttp.InternalServerError(w, err)
 		return
 	}
-	password := j.GetString("password")
-	tp := j.GetString("type")
+	password := j.Get("password").String()
+	tp := j.Get("type").String()
 	if tp == "private" {
 		privateKey, _, err := f.Key("boson", password)
 		if err != nil {
