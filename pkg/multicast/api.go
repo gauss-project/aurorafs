@@ -104,3 +104,8 @@ func (a *apiService) Peers(ctx context.Context, name string) (*rpc.Subscription,
 	}
 	return sub, nil
 }
+
+// Reply to the group message to give the session ID
+func (a *apiService) Reply(sessionID string, data []byte) error {
+	return a.s.replyGroupMessage(sessionID, data)
+}

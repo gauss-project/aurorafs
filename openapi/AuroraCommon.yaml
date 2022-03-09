@@ -372,6 +372,14 @@ components:
         auth:
           type: boolean
 
+    ApiPort:
+      type: object
+      properties:
+        debugApiPort:
+          type: string
+        rpcWsPort:
+          type: string
+
     BosonAddress:
       type: string
       pattern: "^[A-Fa-f0-9]{64}$"

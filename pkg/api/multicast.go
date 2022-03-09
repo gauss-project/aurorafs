@@ -133,7 +133,9 @@ func (s *server) sendReceive(w http.ResponseWriter, r *http.Request) {
 		jsonhttp.InternalServerError(w, err)
 		return
 	}
-	jsonhttp.OK(w, out)
+	jsonhttp.OK(w, struct {
+		Data []byte `json:"data"`
+	}{Data: out})
 }
 
 func (s *server) notify(w http.ResponseWriter, r *http.Request) {

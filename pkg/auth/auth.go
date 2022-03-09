@@ -225,6 +225,7 @@ func (e encrypter) decrypt(data []byte) ([]byte, error) {
 
 func applyPolicies(e *casbin.Enforcer) error {
 	_, err := e.AddPolicies([][]string{
+		{"consumer", "/apiPort", "GET"},
 		{"consumer", "/bytes/*", "GET"},
 		{"creator", "/bytes", "POST"},
 		{"consumer", "/chunks/*", "GET"},

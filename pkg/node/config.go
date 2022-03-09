@@ -14,6 +14,9 @@ var (
 )
 
 type Config struct {
+	EnableApiTLS     bool
+	TlsCrtFile       string
+	TlsKeyFile       string
 	DebugAPIAddr     string
 	APIAddr          string
 	DataDir          string

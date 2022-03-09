@@ -183,17 +183,15 @@ func NewAurora(nodeMode aurora.Model, addr string, bosonAddress boson.Address, p
 		}
 
 		go func() {
-			logger.Infof("debug api address: %s", debugAPIListener.Addr())
-
 			if o.EnableApiTLS {
+				logger.Infof("debug api address: https://%s", debugAPIListener.Addr())
 				err = debugAPIServer.ServeTLS(debugAPIListener, o.TlsCrtFile, o.TlsKeyFile)
 				if err != nil {
-					logger.Errorf("debug api server enable tls: %v", err)
-					err = debugAPIServer.Serve(debugAPIListener)
+					logger.Errorf("debug api server enable https: %v", err)
 				}
-			} else {
-				err = debugAPIServer.Serve(debugAPIListener)
 			}
+			logger.Infof("debug api address: http://%s", debugAPIListener.Addr())
+			err = debugAPIServer.Serve(debugAPIListener)
 			if err != nil && err != http.ErrServerClosed {
 				logger.Debugf("debug api server: %v", err)
 				logger.Error("unable to serve debug api")
@@ -417,6 +415,8 @@ func NewAurora(nodeMode aurora.Model, addr string, bosonAddress boson.Address, p
 				WsPingPeriod:       60 * time.Second,
 				BufferSizeMul:      o.ApiBufferSizeMul,
 				Restricted:         o.Restricted,
+				DebugApiAddr:       o.DebugAPIAddr,
+				RPCWSAddr:          o.WSAddr,
 			})
 		apiListener, err := net.Listen("tcp", o.APIAddr)
 		if err != nil {
@@ -431,18 +431,15 @@ func NewAurora(nodeMode aurora.Model, addr string, bosonAddress boson.Address, p
 		}
 
 		go func() {
-			logger.Infof("api address: %s", apiListener.Addr())
-
 			if o.EnableApiTLS {
+				logger.Infof("api address: https://%s", apiListener.Addr())
 				err = apiServer.ServeTLS(apiListener, o.TlsCrtFile, o.TlsKeyFile)
 				if err != nil {
 					logger.Errorf("api server enable https: %v", err)
-					err = apiServer.Serve(apiListener)
 				}
-			} else {
-				err = apiServer.Serve(apiListener)
 			}
-
+			logger.Infof("api address: http://%s", apiListener.Addr())
+			err = apiServer.Serve(apiListener)
 			if err != nil && err != http.ErrServerClosed {
 				logger.Debugf("api server: %v", err)
 				logger.Error("unable to serve api")
@@ -493,6 +490,9 @@ func NewAurora(nodeMode aurora.Model, addr string, bosonAddress boson.Address, p
 	}
 
 	stack, err := NewRPC(logger, Config{
+		EnableApiTLS: o.EnableApiTLS,
+		TlsCrtFile:   o.TlsCrtFile,
+		TlsKeyFile:   o.TlsKeyFile,
 		DebugAPIAddr: o.DebugAPIAddr,
 		APIAddr:      o.APIAddr,
 		//

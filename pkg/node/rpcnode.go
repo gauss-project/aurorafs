@@ -172,6 +172,12 @@ func (n *Node) startRPC() error {
 		}
 	}
 
+	tls := serverTLS{
+		Enable:       n.config.EnableApiTLS,
+		CertFilePath: n.config.TlsCrtFile,
+		KeyFilePath:  n.config.TlsKeyFile,
+	}
+
 	// Configure HTTP.
 	if n.config.HTTPAddr != "" {
 		config := httpConfig{
@@ -180,7 +186,7 @@ func (n *Node) startRPC() error {
 			Modules:            n.config.HTTPModules,
 			prefix:             n.config.HTTPPathPrefix,
 		}
-		if err := n.http.setListenAddr(n.config.HTTPAddr); err != nil {
+		if err := n.http.setListenAddr(n.config.HTTPAddr, tls); err != nil {
 			return err
 		}
 		if err := n.http.enableRPC(n.rpcAPIs, config); err != nil {
@@ -196,7 +202,7 @@ func (n *Node) startRPC() error {
 			Origins: n.config.WSOrigins,
 			prefix:  n.config.WSPathPrefix,
 		}
-		if err := server.setListenAddr(n.config.WSAddr); err != nil {
+		if err := server.setListenAddr(n.config.WSAddr, tls); err != nil {
 			return err
 		}
 		if err := server.enableWS(n.rpcAPIs, config); err != nil {

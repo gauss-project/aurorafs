@@ -7,8 +7,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/gauss-project/aurorafs/pkg/multicast"
-	"github.com/gauss-project/aurorafs/pkg/netrelay"
 	"io"
 	"io/ioutil"
 	"math"
@@ -19,7 +17,6 @@ import (
 	"unicode/utf8"
 
 	"github.com/ethereum/go-ethereum/common"
-
 	"github.com/gauss-project/aurorafs/pkg/auth"
 	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/chunkinfo"
@@ -28,6 +25,8 @@ import (
 	"github.com/gauss-project/aurorafs/pkg/jsonhttp"
 	"github.com/gauss-project/aurorafs/pkg/logging"
 	m "github.com/gauss-project/aurorafs/pkg/metrics"
+	"github.com/gauss-project/aurorafs/pkg/multicast"
+	"github.com/gauss-project/aurorafs/pkg/netrelay"
 	"github.com/gauss-project/aurorafs/pkg/pinning"
 	"github.com/gauss-project/aurorafs/pkg/resolver"
 	"github.com/gauss-project/aurorafs/pkg/settlement/chain"
@@ -124,6 +123,8 @@ type Options struct {
 	WsPingPeriod       time.Duration
 	BufferSizeMul      int
 	Restricted         bool
+	DebugApiAddr       string
+	RPCWSAddr          string
 }
 type TransactionResponse struct {
 	Hash     common.Hash

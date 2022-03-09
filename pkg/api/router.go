@@ -2,6 +2,7 @@ package api
 
 import (
 	"fmt"
+	"net"
 	"net/http"
 	"strings"
 
@@ -62,6 +63,10 @@ func (s *server) setupRouting() {
 			),
 		})
 	}
+
+	handle("/apiPort", jsonhttp.MethodHandler{
+		"GET": http.HandlerFunc(s.apiPort),
+	})
 
 	handle("/bytes", jsonhttp.MethodHandler{
 		"POST": web.ChainHandlers(
@@ -290,4 +295,28 @@ func (s *server) gatewayModeForbidHeadersHandler(h http.Handler) http.Handler {
 		}
 		h.ServeHTTP(w, r)
 	})
+}
+
+func (s *server) apiPort(w http.ResponseWriter, r *http.Request) {
+	type out struct {
+		DebugApiPort string `json:"debugApiPort"`
+		RpcWsPort    string `json:"rpcWsPort"`
+	}
+
+	_, p1, err := net.SplitHostPort(s.DebugApiAddr)
+	if err != nil {
+		jsonhttp.InternalServerError(w, err)
+		return
+	}
+	_, p2, err := net.SplitHostPort(s.RPCWSAddr)
+	if err != nil {
+		jsonhttp.InternalServerError(w, err)
+		return
+	}
+	resp := &out{
+		DebugApiPort: p1,
+		RpcWsPort:    p2,
+	}
+
+	jsonhttp.OK(w, resp)
 }
