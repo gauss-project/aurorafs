@@ -26,7 +26,7 @@ import (
 
 const (
 	protocolName    = "multicast"
-	protocolVersion = "1.0.0"
+	protocolVersion = "1.1.0"
 	streamHandshake = "handshake"
 	streamFindGroup = "findGroup"
 	streamMulticast = "multicast"
