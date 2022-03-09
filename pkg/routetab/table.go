@@ -3,15 +3,16 @@ package routetab
 import (
 	"encoding/json"
 	"errors"
+	"strings"
+	"sync"
+	"time"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/crypto/bls"
 	"github.com/gauss-project/aurorafs/pkg/routetab/pb"
 	"github.com/gauss-project/aurorafs/pkg/storage"
-	"github.com/gogf/gf/util/gconv"
-	"strings"
-	"sync"
-	"time"
+	"github.com/gogf/gf/v2/util/gconv"
 )
 
 const (

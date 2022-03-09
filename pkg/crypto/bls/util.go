@@ -2,7 +2,8 @@ package bls
 
 import (
 	"crypto/sha256"
-	"github.com/gogf/gf/util/gconv"
+
+	"github.com/gogf/gf/v2/util/gconv"
 	bls12381 "github.com/kilic/bls12-381"
 )
 

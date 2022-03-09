@@ -1,7 +1,9 @@
 package multicast
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"math/rand"
@@ -20,13 +22,12 @@ import (
 	"github.com/gauss-project/aurorafs/pkg/topology"
 	topModel "github.com/gauss-project/aurorafs/pkg/topology/model"
 	"github.com/gauss-project/aurorafs/pkg/topology/pslice"
-	"github.com/gogf/gf/os/gcache"
-	"github.com/gogf/gf/util/gconv"
+	"github.com/gogf/gf/v2/util/gconv"
 )
 
 const (
 	protocolName    = "multicast"
-	protocolVersion = "1.1.0"
+	protocolVersion = "1.2.0"
 	streamHandshake = "handshake"
 	streamFindGroup = "findGroup"
 	streamMulticast = "multicast"
@@ -222,7 +223,6 @@ func (s *Service) Close() error {
 
 func (s *Service) connectedAddToGroup(gid boson.Address, peers ...boson.Address) {
 	var (
-		g    *Group
 		conn *pslice.PSlice
 	)
 	v, ok := s.connectedPeers.Load(gid.String())
@@ -231,8 +231,7 @@ func (s *Service) connectedAddToGroup(gid boson.Address, peers ...boson.Address)
 	} else {
 		value, has := s.groups.Load(gid.String())
 		if has {
-			g = value.(*Group)
-			conn = g.connectedPeers
+			conn = value.(*Group).connectedPeers
 		} else {
 			conn = pslice.New(1, s.self)
 		}
@@ -241,10 +240,12 @@ func (s *Service) connectedAddToGroup(gid boson.Address, peers ...boson.Address)
 
 	for _, p := range peers {
 		conn.Add(p)
-		if g != nil {
-			g.keepPeers.Remove(p)
-			g.knownPeers.Remove(p)
-		}
+		s.groups.Range(func(_, value interface{}) bool {
+			gr := value.(*Group)
+			gr.keepPeers.Remove(p)
+			gr.knownPeers.Remove(p)
+			return true
+		})
 	}
 	s.notifyGroupPeers(gid)
 }
@@ -286,6 +287,11 @@ func (s *Service) leaveConnectedAll(peers ...boson.Address) {
 		if conn.Length() == 0 {
 			s.connectedPeers.Delete(key)
 		}
+		g, ok := s.groups.Load(gconv.String(key))
+		if ok {
+			gid := g.(*Group).gid
+			s.notifyGroupPeers(gid)
+		}
 		return true
 	})
 }
@@ -312,7 +318,7 @@ func (s *Service) Multicast(info *pb.MulticastMsg, skip ...boson.Address) error 
 	origin := boson.NewAddress(info.Origin)
 
 	key := fmt.Sprintf("Multicast_%s_%d", origin, info.Id)
-	setOK, err := gcache.SetIfNotExist(key, 1, multicastMsgCache)
+	setOK, err := cache.SetIfNotExist(cacheCtx, key, 1, multicastMsgCache)
 	if err != nil {
 		return err
 	}
@@ -376,7 +382,7 @@ func (s *Service) onMulticast(ctx context.Context, peer p2p.Peer, stream p2p.Str
 	origin := boson.NewAddress(info.Origin)
 
 	key := fmt.Sprintf("onMulticast_%s_%d", origin, info.Id)
-	setOK, err := gcache.SetIfNotExist(key, 1, multicastMsgCache)
+	setOK, err := cache.SetIfNotExist(cacheCtx, key, 1, multicastMsgCache)
 	if err != nil {
 		return err
 	}
@@ -777,6 +783,7 @@ func (s *Service) GetGroupPeers(groupName string) (out *GroupPeers, err error) {
 	gid, err := boson.ParseHexAddress(groupName)
 	if err != nil {
 		gid = GenerateGID(groupName)
+		err = nil
 	}
 	v, ok := s.groups.Load(gid.String())
 	if !ok {
@@ -1028,6 +1035,17 @@ func (s *Service) notifyGroupPeers(gid boson.Address) {
 	if err != nil {
 		return
 	}
+	key := "notifyGroupPeers"
+	b, _ := json.Marshal(peers)
+	has, _ := cache.Contains(cacheCtx, key)
+	if has {
+		v := cache.MustGet(cacheCtx, key)
+		if bytes.Equal(b, v.Bytes()) {
+			return
+		}
+	}
+	_ = cache.Set(cacheCtx, key, b, 0)
+
 	g := value.(*Group)
 	g.groupPeersCh.Range(func(key, value interface{}) bool {
 		client := value.(*PeersSubClient)
@@ -1078,6 +1096,13 @@ func (s *Service) subscribeGroupPeers(gid boson.Address, client *PeersSubClient)
 	if ok {
 		g = value.(*Group)
 		g.groupPeersCh.Store(client.sub.ID, client)
+		go func() {
+			peers, err := s.GetGroupPeers(gid.String())
+			if err != nil {
+				return
+			}
+			_ = client.notify.Notify(client.sub.ID, peers)
+		}()
 		return nil
 	}
 	return errors.New("the group notfound")
