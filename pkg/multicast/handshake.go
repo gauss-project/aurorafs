@@ -20,6 +20,13 @@ func (s *Service) Handshake(ctx context.Context, addr boson.Address) (err error)
 		s.logger.Tracef("group: handshake new stream %s %s", addr, err)
 		return
 	}
+	defer func() {
+		if err != nil {
+			stream.Reset()
+		} else {
+			stream.FullClose()
+		}
+	}()
 	w, r := protobuf.NewWriterAndReader(stream)
 
 	GIDs := s.getGIDsByte()
