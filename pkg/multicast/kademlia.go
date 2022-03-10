@@ -828,12 +828,25 @@ func (s *Service) getStream(ctx context.Context, dest boson.Address, streamName 
 	} else {
 		stream, err = s.stream.NewStream(ctx, dest, nil, protocolName, protocolVersion, streamName)
 	}
+	if err != nil {
+		err = fmt.Errorf("p2p stream create failed, %s", err)
+	}
 	return
 }
 
 func (s *Service) Send(ctx context.Context, data []byte, gid, dest boson.Address) (err error) {
 	var stream p2p.Stream
 	stream, err = s.getStream(ctx, dest, streamMessage)
+	if err != nil {
+		return
+	}
+	defer func() {
+		if err != nil {
+			stream.Reset()
+		} else {
+			stream.FullClose()
+		}
+	}()
 	req := &pb.GroupMsg{
 		Gid:  gid.Bytes(),
 		Data: data,
@@ -846,6 +859,16 @@ func (s *Service) Send(ctx context.Context, data []byte, gid, dest boson.Address
 func (s *Service) SendReceive(ctx context.Context, data []byte, gid, dest boson.Address) (result []byte, err error) {
 	var stream p2p.Stream
 	stream, err = s.getStream(ctx, dest, streamMessage)
+	if err != nil {
+		return
+	}
+	defer func() {
+		if err != nil {
+			stream.Reset()
+		} else {
+			stream.FullClose()
+		}
+	}()
 	req := &pb.GroupMsg{
 		Gid:  gid.Bytes(),
 		Data: data,
@@ -927,10 +950,7 @@ func (s *Service) onMessage(ctx context.Context, peer p2p.Peer, stream p2p.Strea
 	}
 	switch st.sendOption {
 	case SendOnly:
-	case SendReceive:
-		msg.SessionID = rpc.NewID()
-		st.w = protobuf.NewWriter(stream)
-	case SendStream:
+	case SendReceive, SendStream:
 		msg.SessionID = rpc.NewID()
 		st.w = protobuf.NewWriter(stream)
 		st.r = r
@@ -991,12 +1011,23 @@ func (s *Service) notifyMessage(gid boson.Address, msg GroupMessage, st *WsStrea
 				st.done = make(chan struct{}, 1)
 				s.sessionStream.Store(msg.SessionID, st)
 				defer s.sessionStream.Delete(msg.SessionID)
-				timeout := time.Second * 5
+				timeout := time.Second * 30
 				select {
 				case <-time.After(timeout):
-					s.logger.Debugf("sessionID %s timeout %s when wait receive reply from websocket", msg.SessionID, timeout)
+					s.logger.Debugf("group: sessionID %s timeout %s when wait receive reply from websocket", msg.SessionID, timeout)
 					st.stream.Reset()
 				case <-st.done:
+				}
+			}()
+			go func() {
+				for {
+					var nothing protobuf.Message
+					err := st.r.ReadMsg(nothing)
+					if err != nil {
+						s.logger.Tracef("group: sessionID %s close from the sender", msg.SessionID)
+						close(st.done)
+						return
+					}
 				}
 			}()
 		case SendStream:
@@ -1017,7 +1048,9 @@ func (s *Service) replyGroupMessage(sessionID string, data []byte) (err error) {
 		} else {
 			switch st.sendOption {
 			case SendReceive:
-				st.done <- struct{}{}
+				s.logger.Tracef("group: sessionID %s reply success", sessionID)
+				close(st.done)
+				st.stream.FullClose()
 			}
 		}
 	}()
