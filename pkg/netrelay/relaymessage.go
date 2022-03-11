@@ -63,7 +63,7 @@ func (s *Service) relayHttpReq(ctx context.Context, p p2p.Peer, stream p2p.Strea
 		return fmt.Errorf("[relayMessage-relayHttpReq] read http req message: %w", err)
 	}
 
-	s.logger.Tracef("[relayMessage-relayHttpReq] got http info req.")
+	s.logger.Tracef("[relayMessage-relayHttpReq] got http info req: %s", httpReq.Url)
 
 	urls := strings.Split(httpReq.Url, "/")
 

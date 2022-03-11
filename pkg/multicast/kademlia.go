@@ -66,6 +66,7 @@ type Service struct {
 }
 
 type WsStream struct {
+	doneOnce   sync.Once
 	done       chan struct{} // after w write successful
 	sendOption SendOption
 	stream     p2p.Stream
@@ -1025,7 +1026,9 @@ func (s *Service) notifyMessage(gid boson.Address, msg GroupMessage, st *WsStrea
 					err := st.r.ReadMsg(nothing)
 					if err != nil {
 						s.logger.Tracef("group: sessionID %s close from the sender", msg.SessionID)
-						close(st.done)
+						st.doneOnce.Do(func() {
+							close(st.done)
+						})
 						return
 					}
 				}
@@ -1049,7 +1052,9 @@ func (s *Service) replyGroupMessage(sessionID string, data []byte) (err error) {
 			switch st.sendOption {
 			case SendReceive:
 				s.logger.Tracef("group: sessionID %s reply success", sessionID)
-				close(st.done)
+				st.doneOnce.Do(func() {
+					close(st.done)
+				})
 				st.stream.FullClose()
 			}
 		}
