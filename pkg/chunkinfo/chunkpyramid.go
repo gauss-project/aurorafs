@@ -81,8 +81,8 @@ func (ci *ChunkInfo) updateChunkPyramid(rootCid boson.Address, pyramids [][][]by
 	for k := range trie {
 		if _, ok := py[k]; !ok {
 			hashMax++
-			ci.cp.putChunk(boson.MustParseHexAddress(k))
 		}
+		ci.cp.putChunk(boson.MustParseHexAddress(k))
 	}
 	ci.cp.hashData[rootCid.String()] = chunkInfo{
 		chunkMax: chunkMax,
@@ -231,8 +231,8 @@ func (ci *ChunkInfo) getUnRepeatChunk(rootCid boson.Address) []*PyramidCidNum {
 		if c > 1 {
 			continue
 		}
-		over := boson.MustParseHexAddress(overlay)
 		if _, ok := v.cids[overlay]; !ok {
+			over := boson.MustParseHexAddress(overlay)
 			pcn := PyramidCidNum{Cid: over, Number: 1}
 			cids = append(cids, &pcn)
 		}
