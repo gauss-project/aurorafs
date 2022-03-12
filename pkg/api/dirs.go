@@ -370,7 +370,7 @@ func (s *server) auroraDeleteHandler(w http.ResponseWriter, r *http.Request) {
 			}
 
 			for i := 0; i < chunk.Number; i++ {
-				err = s.storer.Set(r.Context(), storage.ModeSetRemove, chunk.Cid)
+				err := s.storer.Set(r.Context(), storage.ModeSetRemove, chunk.Cid)
 				if err != nil {
 					if errors.Is(err, driver.ErrNotFound) {
 						continue
@@ -378,19 +378,15 @@ func (s *server) auroraDeleteHandler(w http.ResponseWriter, r *http.Request) {
 
 					s.logger.Debugf("aurora delete: remove chunk: %w", err)
 					s.logger.Errorf("aurora delete: remove chunk %s", chunk.Cid)
-					jsonhttp.InternalServerError(w, "aurora deleting occur error")
-					return
 				}
 			}
 		}
 
-		err = s.storer.Set(r.Context(), storage.ModeSetRemove, hash)
+		err := s.storer.Set(r.Context(), storage.ModeSetRemove, hash)
 		if err != nil {
 			if !errors.Is(err, driver.ErrNotFound) {
 				s.logger.Debugf("aurora delete: remove chunk: %w", err)
 				s.logger.Errorf("aurora delete: remove chunk %s", hash)
-				jsonhttp.InternalServerError(w, "aurora deleting occur error")
-				return
 			}
 		}
 	}
