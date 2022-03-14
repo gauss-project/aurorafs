@@ -8,6 +8,7 @@ import (
 	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/logging"
 	"github.com/gauss-project/aurorafs/pkg/p2p"
+	"github.com/gauss-project/aurorafs/pkg/rpc"
 	"github.com/gauss-project/aurorafs/pkg/settlement"
 	"github.com/gauss-project/aurorafs/pkg/settlement/traffic"
 	chequePkg "github.com/gauss-project/aurorafs/pkg/settlement/traffic/cheque"
@@ -36,6 +37,11 @@ type Service struct {
 	trafficMu         sync.RWMutex
 	trafficInfo       sync.Map
 	address           common.Address
+}
+
+func (s *Service) API() rpc.API {
+	//TODO implement me
+	panic("implement me")
 }
 
 func New(streamer p2p.Streamer, logger logging.Logger, store storage.StateStorer, address common.Address) *Service {

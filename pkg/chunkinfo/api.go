@@ -28,7 +28,7 @@ func (a *apiService) DownloadProgress(ctx context.Context, rootCids []string) (*
 	}
 	sub := notifier.CreateSubscription()
 
-	rcids := make([]boson.Address, len(rootCids))
+	rcids := make([]boson.Address, 0, len(rootCids))
 	for _, rootCid := range rootCids {
 		rcid, err := boson.ParseHexAddress(rootCid)
 		if err != nil {
