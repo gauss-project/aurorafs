@@ -58,6 +58,10 @@ var schema driver.SchemaSpec
 
 func (db *DB) InitSchema() error {
 	s := db.pool.Get()
+	if s == nil {
+		return ErrSessionHasClosed
+	}
+
 	defer db.pool.Put(s)
 
 	tableOption := &createOption{
@@ -119,6 +123,9 @@ func (db *DB) CreateField(spec driver.FieldSpec) ([]byte, error) {
 	}
 	if !found {
 		s := db.pool.Get()
+		if s == nil {
+			return nil, ErrSessionHasClosed
+		}
 		defer db.pool.Put(s)
 		c, err := s.openCursor(dataSource{dataType: tableSource, sourceName: schemaMetadataTableName}, &cursorOption{Overwrite: false})
 		if err != nil {
@@ -147,6 +154,9 @@ func (db *DB) CreateIndex(spec driver.IndexSpec) ([]byte, error) {
 		currentPrefix = i.Prefix
 	}
 	s := db.pool.Get()
+	if s == nil {
+		return nil, ErrSessionHasClosed
+	}
 	defer db.pool.Put(s)
 	c, err := s.openCursor(dataSource{dataType: tableSource, sourceName: schemaMetadataTableName}, &cursorOption{Overwrite: false})
 	if err != nil {
@@ -160,6 +170,7 @@ func (db *DB) CreateIndex(spec driver.IndexSpec) ([]byte, error) {
 	case IsDuplicateKey(err):
 		r, _ := c.find(key)
 		value := r.Value()
+		_ = r.Close()
 		copy(prefix, value)
 	case err == nil:
 		err = indexKeyPrefixIncr(prefix)
@@ -199,6 +210,9 @@ func (db *DB) CreateIndex(spec driver.IndexSpec) ([]byte, error) {
 
 func (db *DB) RenameIndex(oldName, newName string) (bool, error) {
 	s := db.pool.Get()
+	if s == nil {
+		return false, ErrSessionHasClosed
+	}
 	defer db.pool.Put(s)
 	c, err := s.openCursor(dataSource{dataType: tableSource, sourceName: schemaMetadataTableName}, &cursorOption{Overwrite: false})
 	if err != nil {

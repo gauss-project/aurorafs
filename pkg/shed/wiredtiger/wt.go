@@ -45,14 +45,15 @@ func (db *DB) Close() error {
 
 	go func() {
 		s := db.pool.Get()
-		err := s.checkpoint()
-		if err != nil {
-			logger.Errorf("wiredtiger: create checkpoint: %v", err)
+		defer db.pool.Put(s)
+		if s != nil {
+			err := s.checkpoint()
+			if err != nil {
+				logger.Errorf("wiredtiger: create checkpoint: %v", err)
+			}
 		}
 
-		db.pool.Put(s)
-
-		err = db.pool.Close()
+		err := db.pool.Close()
 		if err != nil {
 			logger.Errorf("wiredtiger: close session pool: %v", err)
 		}
@@ -96,6 +97,10 @@ func parseKey(key driver.Key) (dataSource, []byte) {
 
 func (db *DB) Get(key driver.Key) ([]byte, error) {
 	s := db.pool.Get()
+	if s == nil {
+		return nil, ErrSessionHasClosed
+	}
+
 	defer db.pool.Put(s)
 
 	// parse source
@@ -125,6 +130,10 @@ func (db *DB) Get(key driver.Key) ([]byte, error) {
 
 func (db *DB) Has(key driver.Key) (bool, error) {
 	s := db.pool.Get()
+	if s == nil {
+		return false, ErrSessionHasClosed
+	}
+
 	defer db.pool.Put(s)
 
 	var obj dataSource
@@ -156,6 +165,10 @@ func (db *DB) Has(key driver.Key) (bool, error) {
 
 func (db *DB) Put(key driver.Key, value driver.Value) error {
 	s := db.pool.Get()
+	if s == nil {
+		return ErrSessionHasClosed
+	}
+
 	defer db.pool.Put(s)
 
 	var obj dataSource
@@ -177,6 +190,10 @@ func (db *DB) Put(key driver.Key, value driver.Value) error {
 
 func (db *DB) Delete(key driver.Key) error {
 	s := db.pool.Get()
+	if s == nil {
+		return ErrSessionHasClosed
+	}
+
 	defer db.pool.Put(s)
 
 	var obj dataSource
@@ -196,8 +213,19 @@ func (db *DB) Delete(key driver.Key) error {
 	return c.remove(k)
 }
 
-func (db *DB) Search(query driver.Query) driver.Cursor {
+func (db *DB) Search(query driver.Query) (cursor driver.Cursor) {
 	s := db.pool.Get()
+	if s == nil {
+		return &errorCursor{
+			err: ErrSessionHasClosed,
+		}
+	}
+
+	defer func() {
+		if _, ok := cursor.(*errorCursor); ok {
+			db.pool.Put(s)
+		}
+	}()
 
 	var obj dataSource
 
@@ -234,8 +262,9 @@ func (db *DB) Search(query driver.Query) driver.Cursor {
 
 func (db *DB) GetSnapshot() (driver.Snapshot, error) {
 	s := db.pool.Get()
-	return &snapshot{
-		s:  s,
-		db: db,
-	}, nil
+	if s == nil {
+		return nil, ErrSessionHasClosed
+	}
+
+	return &snapshot{s: s}, nil
 }

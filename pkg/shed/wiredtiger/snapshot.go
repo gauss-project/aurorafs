@@ -9,7 +9,6 @@ import (
 
 type snapshot struct {
 	s      *session
-	db     *DB
 	mu     sync.RWMutex
 	closed bool
 }
@@ -70,6 +69,6 @@ func (s *snapshot) Close() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.closed = true
-	s.db.pool.Put(s.s)
+	s.s.ref.Put(s.s)
 	return nil
 }

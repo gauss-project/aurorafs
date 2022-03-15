@@ -106,21 +106,19 @@ import (
 	"container/list"
 	"fmt"
 	"strings"
+	"sync"
 	"unsafe"
 
 	"github.com/gauss-project/aurorafs/pkg/shed/driver"
 )
 
 type cursorCache struct {
-	size    uint64
-	count   int
-	index   uint64
+	lock    sync.RWMutex
 	cursors *list.List
 }
 
-func newCursorCache(size uint64) *cursorCache {
+func newCursorCache() *cursorCache {
 	return &cursorCache{
-		size:    size,
 		cursors: new(list.List),
 	}
 }
@@ -133,54 +131,35 @@ type cursorOption struct {
 }
 
 func (cc *cursorCache) newCursor(s *session, uri string, opt *cursorOption) (*cursor, error) {
-	cc.count++
-
 	// try to find from cache first
-	if !opt.ReadOnce {
-		for i := cc.cursors.Front(); i != nil; i = i.Next() {
-			c := i.Value.(*cursor)
-			if c.uri == uri {
-				cc.cursors.Remove(i)
-				return c, nil
+	cc.lock.RLock()
+	for i := cc.cursors.Front(); i != nil; i = i.Next() {
+		c := i.Value.(*cursor)
+		if c.uri == uri {
+			cc.lock.RUnlock()
+			err := c.reset()
+			if err != nil {
+				logger.Errorf("wiredtiger: release cursor(%s#%d): %v", c.uri, c.s.id, err)
 			}
+			return c, nil
 		}
 	}
+	cc.lock.RUnlock()
 
+	cc.lock.Lock()
+	defer cc.lock.Unlock()
 	c, err := openCursor(s, uri, structToList(*opt, false))
 	if err != nil {
 		return nil, err
 	}
 
+	cc.cursors.PushFront(c)
+
 	return c, nil
 }
 
 func (cc *cursorCache) releaseCursor(c *cursor) {
-	cc.count--
-
-	err := c.reset()
-	if err != nil {
-		logger.Errorf("wiredtiger: release cursor(%s#%d): %v", c.uri, c.s.id, err)
-	}
-
-	cc.index++
-	c.gen = cc.index
-	cc.cursors.PushFront(c)
-
-	for cc.cursors.Len() > 0 {
-		i := cc.cursors.Back()
-		if i != nil {
-			ci := i.Value.(*cursor)
-			if cc.index-ci.gen <= cc.size {
-				break
-			}
-
-			cc.cursors.Remove(i)
-			err = ci.close()
-			if err != nil {
-				logger.Errorf("wiredtiger: clean old cursor(%s#%d): %v", c.uri, c.s.id, err)
-			}
-		}
-	}
+	// TODO
 }
 
 func (cc *cursorCache) closeAll(uri string) error {
@@ -188,6 +167,8 @@ func (cc *cursorCache) closeAll(uri string) error {
 
 	var errRet error
 
+	cc.lock.Lock()
+	defer cc.lock.Unlock()
 	for i := cc.cursors.Front(); i != nil; i = i.Next() {
 		c := i.Value.(*cursor)
 		if all || c.uri == uri {
@@ -203,15 +184,14 @@ func (cc *cursorCache) closeAll(uri string) error {
 }
 
 type cursor struct {
-	s     *session
-	impl  *C.WT_CURSOR
-	typ   dataType
-	gen   uint64
-	uri   string
-	kf    string // key format
-	vf    string // value format
-	exit  bool
-	delay bool
+	s    *session
+	impl *C.WT_CURSOR
+	lock sync.RWMutex
+	typ  dataType
+	uri  string
+	kf   string // key format
+	vf   string // value format
+	exit bool
 }
 
 func openCursor(s *session, uri, config string) (*cursor, error) {
@@ -243,6 +223,9 @@ func openCursor(s *session, uri, config string) (*cursor, error) {
 }
 
 func (c *cursor) insert(key, value []byte) error {
+	c.lock.Lock()
+	defer c.lock.Unlock()
+
 	if len(key) == 0 {
 		return ErrInvalidArgument
 	}
@@ -269,6 +252,9 @@ func (c *cursor) insert(key, value []byte) error {
 }
 
 func (c *cursor) update(key, value []byte) error {
+	c.lock.Lock()
+	defer c.lock.Unlock()
+
 	if len(key) == 0 {
 		return ErrInvalidArgument
 	}
@@ -295,19 +281,22 @@ func (c *cursor) update(key, value []byte) error {
 }
 
 func (c *cursor) find(key []byte) (*resultCursor, error) {
+	c.lock.RLock()
+
 	if len(key) == 0 {
+		c.lock.RUnlock()
 		return nil, ErrNotFound
 	}
 
 	data := C.CBytes(key) // unsafe.Pointer
 	size := C.size_t(len(key))
 
-	// TODO why free will be stuck?
 	defer C.free(data)
 
 	result := int(C.wiredtiger_cursor_search(c.impl, data, size))
 	if checkError(result) {
-		return nil, NewError(result, c.s)
+		c.lock.RUnlock()
+		return nil, NewError(result)
 	}
 
 	return &resultCursor{cursor: c, k: key}, nil
@@ -322,18 +311,18 @@ func (c *cursor) search(key []byte) (s *searchCursor, err error) {
 		key = []byte{0}
 	}
 
+	c.lock.RLock()
+
 	data = C.CBytes(key)
 	size = C.size_t(len(key))
 
-	// TODO why free will be stuck?
 	defer C.free(data)
 
 	result := int(C.wiredtiger_cursor_search_near(c.impl, data, size, &compare))
 	if checkError(result) {
-		return nil, NewError(result, c.s)
+		c.lock.RUnlock()
+		return nil, NewError(result)
 	}
-
-	c.delay = true
 
 	s = &searchCursor{
 		k:      key,
@@ -346,7 +335,10 @@ func (c *cursor) search(key []byte) (s *searchCursor, err error) {
 }
 
 func (c *cursor) remove(key []byte) error {
+	c.lock.Lock()
+
 	if len(key) == 0 {
+		c.lock.Unlock()
 		return ErrInvalidArgument
 	}
 
@@ -357,12 +349,15 @@ func (c *cursor) remove(key []byte) error {
 
 	result := int(C.wiredtiger_cursor_remove(c.impl, data, size))
 	if checkError(result) {
+		c.lock.Unlock()
 		return NewError(result, c.s)
 	}
 
+	c.lock.Unlock()
 	return nil
 }
 
+// key: Must be called by locked-state
 func (c *cursor) key() ([]byte, error) {
 	var item C.WT_ITEM
 
@@ -374,6 +369,7 @@ func (c *cursor) key() ([]byte, error) {
 	return C.GoBytes(item.data, C.int(item.size)), nil
 }
 
+// value: Must be called by locked-state
 func (c *cursor) value() ([]byte, error) {
 	var item C.WT_ITEM
 
@@ -386,14 +382,20 @@ func (c *cursor) value() ([]byte, error) {
 }
 
 func (c *cursor) reset() error {
+	c.lock.Lock()
+	defer c.lock.Unlock()
+
 	result := int(C.wiredtiger_cursor_reset(c.impl))
 	if checkError(result) {
 		return NewError(result, c.s)
 	}
+
 	return nil
 }
 
 func (c *cursor) close() error {
+	c.lock.Lock()
+	defer c.lock.Unlock()
 	if !c.exit {
 		c.exit = true
 		result := int(C.wiredtiger_cursor_close(c.impl))
@@ -454,14 +456,11 @@ func (r *resultCursor) Error() error {
 	return r.err
 }
 
-func (r *resultCursor) Close() (err error) {
-	defer func(s *session) {
-		if r.delay {
-			err = s.close()
-		}
-	}(r.s)
-	defer r.s.cursors.releaseCursor(r.cursor)
-	return r.reset()
+func (r *resultCursor) Close() error {
+	r.cursor.lock.RUnlock()
+	r.s.cursors.releaseCursor(r.cursor)
+
+	return nil
 }
 
 type searchCursor struct {
@@ -482,12 +481,14 @@ func (s *searchCursor) Valid() bool {
 }
 
 func (s *searchCursor) Last() bool {
+	s.cursor.lock.RUnlock()
 	err := s.reset()
 	if err != nil {
 		s.err = err
 		return false
 	}
 
+	s.cursor.lock.RLock()
 	return s.Prev()
 }
 
@@ -551,6 +552,7 @@ func (s *searchCursor) Seek(key driver.Key) bool {
 		}
 	}
 
+	s.cursor.lock.RUnlock()
 	c, err := s.search(k)
 
 	if err != nil {
@@ -586,14 +588,14 @@ func (s *searchCursor) Value() []byte {
 	return data
 }
 
-func (s *searchCursor) Close() (err error) {
-	defer func(ss *session) {
-		if s.delay {
-			err = ss.close()
-		}
-	}(s.s)
-	defer s.s.cursors.releaseCursor(s.cursor)
-	return s.reset()
+func (s *searchCursor) Close() error {
+	s.cursor.lock.RUnlock()
+	s.s.cursors.releaseCursor(s.cursor)
+
+	// put session
+	s.s.ref.Put(s.s)
+
+	return nil
 }
 
 type errorCursor struct {

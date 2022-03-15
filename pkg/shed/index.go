@@ -343,7 +343,7 @@ func (f Index) Iterate(fn IndexIterFunc, options *IterateOptions) (err error) {
 		},
 	})
 	defer func() {
-		err = it.Close()
+		_ = it.Close()
 	}()
 
 	ok := it.Valid()
