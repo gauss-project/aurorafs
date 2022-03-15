@@ -25,6 +25,7 @@ type trafficCheque struct {
 	ReceivedSettlements *big.Int      `json:"receivedSettlements"`
 	Total               *big.Int      `json:"total"`
 	UnCashed            *big.Int      `json:"unCashed"`
+	Status              int           `json:"status"`
 }
 
 func (s *server) trafficInfo(w http.ResponseWriter, r *http.Request) {
@@ -69,6 +70,7 @@ func (s *server) trafficCheques(w http.ResponseWriter, r *http.Request) {
 			ReceivedSettlements: v.ReceivedSettlements,
 			Total:               v.Total,
 			UnCashed:            v.Uncashed,
+			Status:              v.Status,
 		}
 		chequeList = append(chequeList, cheque)
 	}
