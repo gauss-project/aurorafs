@@ -36,6 +36,7 @@ type Traffic struct {
 	transferChequeTraffic *big.Int
 	retrieveTraffic       *big.Int
 	transferTraffic       *big.Int
+	status                CashStatus
 }
 
 type TrafficPeer struct {
@@ -52,7 +53,15 @@ type TrafficCheque struct {
 	ReceivedSettlements *big.Int      `json:"receivedSettlements"`
 	Total               *big.Int      `json:"total"`
 	Uncashed            *big.Int      `json:"uncashed"`
+	Status              CashStatus    `json:"status"`
 }
+
+type CashStatus = int
+
+const (
+	UnOperation CashStatus = iota
+	Operation
+)
 
 type cashCheque struct {
 	txHash       common.Hash
@@ -178,6 +187,7 @@ func newTraffic() *Traffic {
 		transferChequeTraffic: big.NewInt(0),
 		retrieveTraffic:       big.NewInt(0),
 		transferTraffic:       big.NewInt(0),
+		status:                UnOperation,
 	}
 }
 func NewTrafficInfo() *TrafficInfo {
@@ -385,6 +395,7 @@ func (s *Service) CashCheque(ctx context.Context, peer boson.Address) (common.Ha
 	if err != nil {
 		return common.Hash{}, err
 	}
+	s.getTraffic(chainAddress).updateStatus(Operation)
 	s.cashChequeChan <- cashCheque{
 		txHash:       c,
 		peer:         peer,
@@ -436,6 +447,7 @@ func (s *Service) TrafficCheques() ([]*TrafficCheque, error) {
 				ReceivedSettlements: traffic.transferChequeTraffic,
 				Total:               new(big.Int).Sub(traffic.transferTraffic, traffic.retrieveTraffic),
 				Uncashed:            new(big.Int).Sub(traffic.transferChequeTraffic, traffic.transferChainTraffic),
+				Status:              traffic.status,
 			}
 			if trafficCheque.OutstandingTraffic.Cmp(big.NewInt(0)) == 0 && trafficCheque.SentSettlements.Cmp(big.NewInt(0)) == 0 && trafficCheque.ReceivedSettlements.Cmp(big.NewInt(0)) == 0 {
 				continue
@@ -786,6 +798,8 @@ func (s *Service) cashChequeReceiptUpdate() {
 
 		for cashInfo := range s.cashChequeChan {
 			status, err := tranReceipt(cashInfo.txHash)
+			traffic := s.getTraffic(cashInfo.chainAddress)
+			traffic.updateStatus(UnOperation)
 			if err != nil {
 				s.Publish(fmt.Sprintf("CashOut:%s", cashInfo.peer.String()),
 					CashOutStatus{Overlay: cashInfo.peer, Status: false})
@@ -797,6 +811,7 @@ func (s *Service) cashChequeReceiptUpdate() {
 					s.logger.Errorf("traffic:cashChequeReceiptUpdate - %v ", err.Error())
 					continue
 				}
+				s.PublishHeader()
 				s.Publish(fmt.Sprintf("CashOut:%s", cashInfo.peer.String()),
 					CashOutStatus{Overlay: cashInfo.peer, Status: true})
 			} else {
@@ -889,6 +904,13 @@ func (s *Service) PublishTrafficCheque(overlay common.Address) {
 		ReceivedSettlements: traffic.transferChequeTraffic,
 		Total:               new(big.Int).Sub(traffic.transferTraffic, traffic.retrieveTraffic),
 		Uncashed:            new(big.Int).Sub(traffic.transferChequeTraffic, traffic.transferChainTraffic),
+		Status:              traffic.status,
 	}
 	s.Publish(fmt.Sprintf("TrafficCheque:%s", overlay.String()), *trafficCheque)
+}
+
+func (t *Traffic) updateStatus(status CashStatus) {
+	t.Lock()
+	defer t.Unlock()
+	t.status = status
 }
