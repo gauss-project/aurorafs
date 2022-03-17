@@ -52,7 +52,7 @@ type TrafficCheque struct {
 	SentSettlements     *big.Int      `json:"sentSettlements"`
 	ReceivedSettlements *big.Int      `json:"receivedSettlements"`
 	Total               *big.Int      `json:"total"`
-	Uncashed            *big.Int      `json:"uncashed"`
+	Uncashed            *big.Int      `json:"unCashed"`
 	Status              CashStatus    `json:"status"`
 }
 
@@ -812,6 +812,7 @@ func (s *Service) cashChequeReceiptUpdate() {
 					continue
 				}
 				s.PublishHeader()
+				s.PublishTrafficCheque(cashInfo.chainAddress)
 				s.Publish(fmt.Sprintf("CashOut:%s", cashInfo.peer.String()),
 					CashOutStatus{Overlay: cashInfo.peer, Status: true})
 			} else {
