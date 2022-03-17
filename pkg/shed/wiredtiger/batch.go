@@ -13,6 +13,11 @@ func (b *batch) Put(key driver.Key, value driver.Value) (err error) {
 }
 
 func (b *batch) Delete(key driver.Key) (err error) {
+	defer func() {
+		if IsNotFound(err) {
+			err = driver.ErrNotFound
+		}
+	}()
 	return b.db.Delete(key)
 }
 

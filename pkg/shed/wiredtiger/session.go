@@ -42,95 +42,154 @@ int wiredtiger_session_close(WT_SESSION *session, const char *config) {
 import "C"
 import (
 	"errors"
-	"fmt"
-	"math"
+	"runtime"
 	"sync"
 	"sync/atomic"
-	"time"
 	"unsafe"
 )
 
 var sessionMaxSize uint64
 
 type sessionPool struct {
-	conn    *C.WT_CONNECTION
-	session *session
-	lock    sync.Mutex
-	wakeup  chan struct{}
-	id      uint64
-	closed  bool
+	sessions map[string]*session
+	conn     *C.WT_CONNECTION
+	lock     sync.RWMutex
+	closed   bool
 }
 
 func newSessionPool(conn *C.WT_CONNECTION) (*sessionPool, error) {
 	p := &sessionPool{
-		conn:   conn,
-		wakeup: make(chan struct{}),
-	}
-
-	s, err := newSession(p.conn, p.getSessionID())
-	if err != nil {
-		return nil, err
-	}
-
-	p.lock.Lock()
-	s.pooled(p)
-	p.lock.Unlock()
-
-	select {
-	case p.wakeup <- struct{}{}:
-	default:
+		conn:     conn,
+		sessions: make(map[string]*session),
 	}
 
 	return p, nil
 }
 
-func (p *sessionPool) getSessionID() uint64 {
-	id := atomic.AddUint64(&p.id, 1)
-	if id == math.MaxUint64 {
-		if !atomic.CompareAndSwapUint64(&p.id, math.MaxUint64-1, 1) {
-			id = atomic.AddUint64(&p.id, 1)
-		}
-	}
-	return id
-}
-
 var ErrSessionHasClosed = errors.New("session has closed")
 
-func (p *sessionPool) Get() *session {
-	err := setTimestamp(p.conn, fmt.Sprintf("%d", time.Now().UnixMilli()), true)
-	if err != nil {
-		logger.Warnf("set stable timestamp: %v", err)
+// func (p *sessionPool) Read(table string) *session {
+// 	p.lock.RLock()
+//
+// 	if p.closed {
+// 		p.lock.RUnlock()
+// 		return nil
+// 	}
+//
+// 	if s, ok := p.sessions[table]; ok {
+// 		if atomic.LoadInt32(&s.closing) == 1 {
+// 			return nil
+// 		}
+// 		if atomic.LoadUint32(&s.inuse) == 0 {
+// 			p.lock.RUnlock()
+// 			return s
+// 		}
+// 	}
+//
+// 	p.lock.RUnlock()
+//
+// 	s, err := newSession(p.conn)
+// 	if err != nil {
+// 		logger.Errorf("create session: %v", err)
+//
+// 		return nil
+// 	}
+//
+// 	// link session pool
+// 	s.ref = p
+//
+// 	return s
+// }
+
+func (p *sessionPool) Get(table string) *session {
+	// TODO move it
+	// err := setTimestamp(p.conn, fmt.Sprintf("%d", time.Now().UnixMilli()), true)
+	// if err != nil {
+	// 	logger.Warnf("set stable timestamp: %v", err)
+	// }
+
+	p.lock.RLock()
+
+	if p.closed {
+		p.lock.RUnlock()
+		return nil
 	}
 
-	t := time.NewTicker(500 * time.Millisecond)
-	defer t.Stop()
+	if s, ok := p.sessions[table]; ok {
+		p.lock.RUnlock()
+		for {
+			if atomic.LoadInt32(&s.closing) == 1 {
+				return nil
+			}
+			if !atomic.CompareAndSwapUint32(&s.inuse, 0, 1) {
+				runtime.Gosched()
+				continue
+			}
+			return s
+		}
+	}
 
+	p.lock.RUnlock()
+
+	// put new session
 	p.lock.Lock()
 
-	for p.session == nil {
-		if p.closed {
-			p.lock.Unlock()
-			return nil
-		}
-
+	// double check
+	if s, ok := p.sessions[table]; ok {
 		p.lock.Unlock()
-		<-t.C
-		p.lock.Lock()
+		for {
+			if atomic.LoadInt32(&s.closing) == 1 {
+				return nil
+			}
+			if !atomic.CompareAndSwapUint32(&s.inuse, 0, 1) {
+				runtime.Gosched()
+				continue
+			}
+			return s
+		}
 	}
 
-	defer func() {
-		p.session = nil
-		p.lock.Unlock()
-	}()
+	s, err := newSession(p.conn)
+	if err != nil {
+		logger.Errorf("create session: %v", err)
 
-	return p.session
+		return nil
+	}
+
+	// link session pool
+	s.ref = p
+
+	p.sessions[table] = s
+	p.lock.Unlock()
+
+	return s
 }
 
 func (p *sessionPool) Put(s *session) {
-	p.lock.Lock()
-	p.session = s
-	p.lock.Unlock()
+	for {
+	retry:
+		if atomic.LoadUint32(&s.inuse) == 0 {
+			return
+		}
+		if !atomic.CompareAndSwapUint32(&s.inuse, 1, 0) {
+			if atomic.LoadUint32(&s.inuse) == 1 {
+				goto retry
+			}
+
+			runtime.Gosched()
+			continue
+		}
+
+		return
+	}
 }
+
+// func (p *sessionPool) CloseRead(s *session) {
+// 	err := s.close()
+// 	if err != nil {
+// 		logger.Errorf("close session for read: %v", err)
+// 	}
+// }
 
 func (p *sessionPool) Close() error {
 	p.lock.Lock()
@@ -138,24 +197,32 @@ func (p *sessionPool) Close() error {
 
 	// set flag to closed
 	p.closed = true
-	close(p.wakeup)
 
-	if p.session == nil {
-		return nil
+	var err error
+
+	for _, session := range p.sessions {
+		err = session.checkpoint()
+		if err != nil {
+			logger.Errorf("wiredtiger: create checkpoint: %v", err)
+		}
+		err = session.close()
+		if err != nil {
+			logger.Errorf("close session: %v", err)
+		}
 	}
 
-	return p.session.close()
+	return nil
 }
 
 type session struct {
 	ref     *sessionPool
 	impl    *C.WT_SESSION
-	id      uint64
+	inuse   uint32
 	closing int32
 	cursors *cursorCache
 }
 
-func newSession(conn *C.WT_CONNECTION, id uint64) (*session, error) {
+func newSession(conn *C.WT_CONNECTION) (*session, error) {
 	var sessionImpl *C.WT_SESSION
 
 	configStr := C.CString("isolation=snapshot")
@@ -167,18 +234,13 @@ func newSession(conn *C.WT_CONNECTION, id uint64) (*session, error) {
 	}
 
 	s := &session{
-		impl: sessionImpl,
-		id:   id,
+		impl:  sessionImpl,
+		inuse: 0,
 	}
 
 	s.cursors = newCursorCache()
 
 	return s, nil
-}
-
-func (s *session) pooled(p *sessionPool) {
-	p.session = s
-	s.ref = p
 }
 
 func (s *session) strerror(code int) error {
@@ -320,6 +382,7 @@ func (s *session) close() error {
 		// already closing
 		return nil
 	}
+	atomic.StoreUint32(&s.inuse, 0)
 	err := s.cursors.closeAll("")
 	if err != nil {
 		return err

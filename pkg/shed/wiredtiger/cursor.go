@@ -15,6 +15,10 @@ int wiredtiger_session_open_cursor(WT_SESSION *session, const char *uri, WT_CURS
 	return 0;
 }
 
+int wiredtiger_cursor_reconfigure(WT_CURSOR *cursor, const char *config) {
+	return cursor->reconfigure(cursor, config);
+}
+
 int wiredtiger_cursor_get_key(WT_CURSOR *cursor, WT_ITEM *v) {
 	return cursor->get_key(cursor, v);
 }
@@ -103,24 +107,23 @@ int wiredtiger_cursor_close(WT_CURSOR *cursor) {
 */
 import "C"
 import (
-	"container/list"
+	"errors"
 	"fmt"
+	"runtime"
 	"strings"
-	"sync"
+	"sync/atomic"
 	"unsafe"
 
 	"github.com/gauss-project/aurorafs/pkg/shed/driver"
 )
 
 type cursorCache struct {
-	lock    sync.RWMutex
-	cursors *list.List
+	inuse  uint32
+	cursor *cursor
 }
 
 func newCursorCache() *cursorCache {
-	return &cursorCache{
-		cursors: new(list.List),
-	}
+	return &cursorCache{}
 }
 
 type cursorOption struct {
@@ -130,63 +133,73 @@ type cursorOption struct {
 	Overwrite bool
 }
 
+var ErrCursorHasClosed = errors.New("cursor has closed")
+
 func (cc *cursorCache) newCursor(s *session, uri string, opt *cursorOption) (*cursor, error) {
-	// try to find from cache first
-	cc.lock.RLock()
-	for i := cc.cursors.Front(); i != nil; i = i.Next() {
-		c := i.Value.(*cursor)
-		if c.uri == uri {
-			cc.lock.RUnlock()
-			err := c.reset()
-			if err != nil {
-				logger.Errorf("wiredtiger: release cursor(%s#%d): %v", c.uri, c.s.id, err)
-			}
-			return c, nil
+	optStr := structToList(*opt, false)
+
+	for {
+		if atomic.LoadUint32(&cc.inuse) == 2 {
+			return nil, ErrCursorHasClosed
 		}
+		if !atomic.CompareAndSwapUint32(&cc.inuse, 0, 1) {
+			runtime.Gosched()
+			continue
+		}
+
+		if cc.cursor != nil {
+			// reconfigure
+			cfg := C.CString(optStr)
+
+			result := int(C.wiredtiger_cursor_reconfigure(cc.cursor.impl, cfg))
+			if checkError(result) {
+				return nil, NewError(result, cc.cursor.s)
+			}
+
+			C.free(unsafe.Pointer(cfg))
+
+			return cc.cursor, nil
+		}
+
+		c, err := openCursor(s, uri, optStr)
+		if err != nil {
+			return nil, err
+		}
+
+		cc.cursor = c
+
+		atomic.StoreUint32(&cc.inuse, 1)
+
+		return c, nil
 	}
-	cc.lock.RUnlock()
-
-	cc.lock.Lock()
-	defer cc.lock.Unlock()
-	c, err := openCursor(s, uri, structToList(*opt, false))
-	if err != nil {
-		return nil, err
-	}
-
-	cc.cursors.PushFront(c)
-
-	return c, nil
 }
 
 func (cc *cursorCache) releaseCursor(c *cursor) {
-	// TODO
-}
-
-func (cc *cursorCache) closeAll(uri string) error {
-	all := uri == ""
-
-	var errRet error
-
-	cc.lock.Lock()
-	defer cc.lock.Unlock()
-	for i := cc.cursors.Front(); i != nil; i = i.Next() {
-		c := i.Value.(*cursor)
-		if all || c.uri == uri {
-			err := c.close()
-			if err != nil {
-				errRet = err
-			}
-			cc.cursors.Remove(i)
-		}
+	err := c.reset()
+	if err != nil {
+		logger.Errorf("reset cursor: %v", err)
 	}
 
-	return errRet
+	atomic.StoreUint32(&cc.inuse, 0)
+}
+
+func (cc *cursorCache) closeAll(_ string) error {
+	if cc.cursor != nil {
+		err := cc.cursor.close()
+		if err != nil {
+			return err
+		}
+		cc.cursor = nil
+	}
+
+	atomic.StoreUint32(&cc.inuse, 2)
+
+	return nil
 }
 
 type cursor struct {
 	s    *session
 	impl *C.WT_CURSOR
-	lock sync.RWMutex
 	typ  dataType
 	uri  string
 	kf   string // key format
@@ -223,9 +236,6 @@ func openCursor(s *session, uri, config string) (*cursor, error) {
 }
 
 func (c *cursor) insert(key, value []byte) error {
-	c.lock.Lock()
-	defer c.lock.Unlock()
-
 	if len(key) == 0 {
 		return ErrInvalidArgument
 	}
@@ -252,9 +262,6 @@ func (c *cursor) insert(key, value []byte) error {
 }
 
 func (c *cursor) update(key, value []byte) error {
-	c.lock.Lock()
-	defer c.lock.Unlock()
-
 	if len(key) == 0 {
 		return ErrInvalidArgument
 	}
@@ -281,10 +288,7 @@ func (c *cursor) update(key, value []byte) error {
 }
 
 func (c *cursor) find(key []byte) (*resultCursor, error) {
-	c.lock.RLock()
-
 	if len(key) == 0 {
-		c.lock.RUnlock()
 		return nil, ErrNotFound
 	}
 
@@ -295,7 +299,6 @@ func (c *cursor) find(key []byte) (*resultCursor, error) {
 
 	result := int(C.wiredtiger_cursor_search(c.impl, data, size))
 	if checkError(result) {
-		c.lock.RUnlock()
 		return nil, NewError(result)
 	}
 
@@ -311,8 +314,6 @@ func (c *cursor) search(key []byte) (s *searchCursor, err error) {
 		key = []byte{0}
 	}
 
-	c.lock.RLock()
-
 	data = C.CBytes(key)
 	size = C.size_t(len(key))
 
@@ -320,7 +321,6 @@ func (c *cursor) search(key []byte) (s *searchCursor, err error) {
 
 	result := int(C.wiredtiger_cursor_search_near(c.impl, data, size, &compare))
 	if checkError(result) {
-		c.lock.RUnlock()
 		return nil, NewError(result)
 	}
 
@@ -335,10 +335,7 @@ func (c *cursor) search(key []byte) (s *searchCursor, err error) {
 }
 
 func (c *cursor) remove(key []byte) error {
-	c.lock.Lock()
-
 	if len(key) == 0 {
-		c.lock.Unlock()
 		return ErrInvalidArgument
 	}
 
@@ -349,11 +346,9 @@ func (c *cursor) remove(key []byte) error {
 
 	result := int(C.wiredtiger_cursor_remove(c.impl, data, size))
 	if checkError(result) {
-		c.lock.Unlock()
 		return NewError(result, c.s)
 	}
 
-	c.lock.Unlock()
 	return nil
 }
 
@@ -382,9 +377,6 @@ func (c *cursor) value() ([]byte, error) {
 }
 
 func (c *cursor) reset() error {
-	c.lock.Lock()
-	defer c.lock.Unlock()
-
 	result := int(C.wiredtiger_cursor_reset(c.impl))
 	if checkError(result) {
 		return NewError(result, c.s)
@@ -394,8 +386,6 @@ func (c *cursor) reset() error {
 }
 
 func (c *cursor) close() error {
-	c.lock.Lock()
-	defer c.lock.Unlock()
 	if !c.exit {
 		c.exit = true
 		result := int(C.wiredtiger_cursor_close(c.impl))
@@ -457,9 +447,6 @@ func (r *resultCursor) Error() error {
 }
 
 func (r *resultCursor) Close() error {
-	r.cursor.lock.RUnlock()
-	r.s.cursors.releaseCursor(r.cursor)
-
 	return nil
 }
 
@@ -481,14 +468,12 @@ func (s *searchCursor) Valid() bool {
 }
 
 func (s *searchCursor) Last() bool {
-	s.cursor.lock.RUnlock()
 	err := s.reset()
 	if err != nil {
 		s.err = err
 		return false
 	}
 
-	s.cursor.lock.RLock()
 	return s.Prev()
 }
 
@@ -552,7 +537,6 @@ func (s *searchCursor) Seek(key driver.Key) bool {
 		}
 	}
 
-	s.cursor.lock.RUnlock()
 	c, err := s.search(k)
 
 	if err != nil {
@@ -589,7 +573,6 @@ func (s *searchCursor) Value() []byte {
 }
 
 func (s *searchCursor) Close() error {
-	s.cursor.lock.RUnlock()
 	s.s.cursors.releaseCursor(s.cursor)
 
 	// put session

@@ -44,15 +44,6 @@ func (db *DB) Close() error {
 	quit := make(chan struct{})
 
 	go func() {
-		s := db.pool.Get()
-		defer db.pool.Put(s)
-		if s != nil {
-			err := s.checkpoint()
-			if err != nil {
-				logger.Errorf("wiredtiger: create checkpoint: %v", err)
-			}
-		}
-
 		err := db.pool.Close()
 		if err != nil {
 			logger.Errorf("wiredtiger: close session pool: %v", err)
@@ -96,13 +87,6 @@ func parseKey(key driver.Key) (dataSource, []byte) {
 }
 
 func (db *DB) Get(key driver.Key) ([]byte, error) {
-	s := db.pool.Get()
-	if s == nil {
-		return nil, ErrSessionHasClosed
-	}
-
-	defer db.pool.Put(s)
-
 	// parse source
 	obj, k := parseKey(key)
 	if obj.dataType == "" {
@@ -110,10 +94,19 @@ func (db *DB) Get(key driver.Key) ([]byte, error) {
 		return nil, ErrInvalidArgument
 	}
 
+	s := db.pool.Get(obj.String())
+	if s == nil {
+		return nil, ErrSessionHasClosed
+	}
+
+	defer db.pool.Put(s)
+
 	c, err := s.openCursor(obj, nil)
 	if err != nil {
 		return nil, err
 	}
+
+	defer s.closeCursor(c)
 
 	result, err := c.find(k)
 	if err != nil {
@@ -129,13 +122,6 @@ func (db *DB) Get(key driver.Key) ([]byte, error) {
 }
 
 func (db *DB) Has(key driver.Key) (bool, error) {
-	s := db.pool.Get()
-	if s == nil {
-		return false, ErrSessionHasClosed
-	}
-
-	defer db.pool.Put(s)
-
 	var obj dataSource
 
 	// parse source
@@ -145,10 +131,19 @@ func (db *DB) Has(key driver.Key) (bool, error) {
 		return false, ErrInvalidArgument
 	}
 
+	s := db.pool.Get(obj.String())
+	if s == nil {
+		return false, ErrSessionHasClosed
+	}
+
+	defer db.pool.Put(s)
+
 	c, err := s.openCursor(obj, nil)
 	if err != nil {
 		return false, err
 	}
+
+	defer s.closeCursor(c)
 
 	result, err := c.find(k)
 	if err != nil {
@@ -164,13 +159,6 @@ func (db *DB) Has(key driver.Key) (bool, error) {
 }
 
 func (db *DB) Put(key driver.Key, value driver.Value) error {
-	s := db.pool.Get()
-	if s == nil {
-		return ErrSessionHasClosed
-	}
-
-	defer db.pool.Put(s)
-
 	var obj dataSource
 
 	// parse source
@@ -179,23 +167,25 @@ func (db *DB) Put(key driver.Key, value driver.Value) error {
 		logger.Warnf("wiredtiger: parse unknown key type: %s", k)
 		return ErrInvalidArgument
 	}
+
+	s := db.pool.Get(obj.String())
+	if s == nil {
+		return ErrSessionHasClosed
+	}
+
+	defer db.pool.Put(s)
 
 	c, err := s.openCursor(obj, &cursorOption{Overwrite: true})
 	if err != nil {
 		return err
 	}
 
+	defer s.closeCursor(c)
+
 	return c.insert(k, value.Data)
 }
 
 func (db *DB) Delete(key driver.Key) error {
-	s := db.pool.Get()
-	if s == nil {
-		return ErrSessionHasClosed
-	}
-
-	defer db.pool.Put(s)
-
 	var obj dataSource
 
 	// parse source
@@ -205,28 +195,24 @@ func (db *DB) Delete(key driver.Key) error {
 		return ErrInvalidArgument
 	}
 
+	s := db.pool.Get(obj.String())
+	if s == nil {
+		return ErrSessionHasClosed
+	}
+
+	defer db.pool.Put(s)
+
 	c, err := s.openCursor(obj, nil)
 	if err != nil {
 		return err
 	}
 
+	defer s.closeCursor(c)
+
 	return c.remove(k)
 }
 
-func (db *DB) Search(query driver.Query) (cursor driver.Cursor) {
-	s := db.pool.Get()
-	if s == nil {
-		return &errorCursor{
-			err: ErrSessionHasClosed,
-		}
-	}
-
-	defer func() {
-		if _, ok := cursor.(*errorCursor); ok {
-			db.pool.Put(s)
-		}
-	}()
-
+func (db *DB) Search(query driver.Query) (c driver.Cursor) {
 	var obj dataSource
 
 	// parse source
@@ -237,14 +223,33 @@ func (db *DB) Search(query driver.Query) (cursor driver.Cursor) {
 		}
 	}
 
-	c, err := s.openCursor(obj, nil)
+	s := db.pool.Get(obj.String())
+	if s == nil {
+		return &errorCursor{
+			err: ErrSessionHasClosed,
+		}
+	}
+
+	var cursor *cursor
+
+	defer func() {
+		if _, ok := c.(*errorCursor); ok {
+			if cursor != nil {
+				s.closeCursor(cursor)
+			}
+
+			db.pool.Put(s)
+		}
+	}()
+
+	cursor, err := s.openCursor(obj, nil)
 	if err != nil {
 		return &errorCursor{
 			err: fmt.Errorf("wiredtiger: open cursor for table %s: %v", obj.sourceName, err),
 		}
 	}
 
-	sc, err := c.search(k)
+	sc, err := cursor.search(k)
 	if err != nil {
 		if IsNotFound(err) {
 			return InvalidCursor
@@ -261,9 +266,15 @@ func (db *DB) Search(query driver.Query) (cursor driver.Cursor) {
 }
 
 func (db *DB) GetSnapshot() (driver.Snapshot, error) {
-	s := db.pool.Get()
-	if s == nil {
-		return nil, ErrSessionHasClosed
+	s, err := newSession(db.conn)
+	if err != nil {
+		return nil, err
+	}
+
+	// TODO
+	err = setTimestamp(db.conn, fmt.Sprintf("%d", time.Now().UnixMilli()), true)
+	if err != nil {
+		return nil, err
 	}
 
 	return &snapshot{s: s}, nil
