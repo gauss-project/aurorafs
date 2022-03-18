@@ -17,20 +17,28 @@ import (
 type Driver struct{}
 
 var (
+	defaultBlockSize              = 4 * 1024
 	defaultOpenFilesLimit         = 256
 	defaultBlockCacheCapacity     = 32 * 1024 * 1024
 	defaultWriteBufferSize        = 32 * 1024 * 1024
+	defaultCompactionTableSize    = 2 * 1024 * 1024
+	defaultCompactionTotalSize    = 10 * 1024 * 1024
 	defaultDisableSeeksCompaction = false
+	defaultDisableSync            = false
 )
 
 func (d Driver) Open(path, options string) (driver.DB, error) {
 	var c Configuration
 
 	exported := c.Options(
+		c.SetBlockSize(defaultBlockSize),
 		c.SetOpenFilesCacheCapacity(defaultOpenFilesLimit),
 		c.SetBlockCacheCapacity(defaultBlockCacheCapacity),
 		c.SetWriteBuffer(defaultWriteBufferSize),
+		c.SetCompactionTableSize(defaultCompactionTableSize),
+		c.SetCompactionTotalSize(defaultCompactionTotalSize),
 		c.SetDisableSeeksCompaction(defaultDisableSeeksCompaction),
+		c.SetNoSync(defaultDisableSync),
 	)
 
 	if options != "" {
