@@ -3,9 +3,10 @@ package chunkinfo
 import (
 	"context"
 	"fmt"
+	"sync"
+
 	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/chunkinfo/pb"
-	"sync"
 )
 
 // chunkPyramid Pyramid
@@ -39,7 +40,7 @@ func newChunkPyramid() *chunkPyramid {
 	chunkPayramid := &chunkPyramid{
 		hashData:       make(map[string]chunkInfo),
 		chunk:          make(map[string]uint),
-		pyramidPutChan: make(chan chunkPut, 200)}
+		pyramidPutChan: make(chan chunkPut, 1000)}
 	return chunkPayramid
 }
 
@@ -266,7 +267,7 @@ func (ci *ChunkInfo) getCidSort(rootCid, cid boson.Address) int {
 	return pyramid.cids[cid.String()].sort
 }
 
-//func (cp *chunkPyramid) updateCidSort(rootCid, cid boson.Address, sort int) {
+// func (cp *chunkPyramid) updateCidSort(rootCid, cid boson.Address, sort int) {
 //
 //	v, ok := cp.pyramid[rootCid.String()][cid.String()]
 //	if !ok {
@@ -274,7 +275,7 @@ func (ci *ChunkInfo) getCidSort(rootCid, cid boson.Address) int {
 //	}
 //	v.sort = sort
 //	cp.pyramid[rootCid.String()][cid.String()] = v
-//}
+// }
 
 func (ci *ChunkInfo) getRootChunk(rootCid string) int {
 	ci.cp.RLock()
