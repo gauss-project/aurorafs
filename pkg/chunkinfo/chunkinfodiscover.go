@@ -2,14 +2,15 @@ package chunkinfo
 
 import (
 	"context"
+	"strings"
+	"sync"
+	"time"
+
 	"github.com/gauss-project/aurorafs/pkg/aurora"
 	"github.com/gauss-project/aurorafs/pkg/bitvector"
 	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/chunkinfo/pb"
 	"github.com/gauss-project/aurorafs/pkg/retrieval/aco"
-	"strings"
-	"sync"
-	"time"
 )
 
 var discoverKeyPrefix = "discover-"
@@ -60,7 +61,7 @@ func (ci *ChunkInfo) initChunkInfoDiscover() error {
 
 func newChunkInfoDiscover() *chunkInfoDiscover {
 	discover := &chunkInfoDiscover{presence: make(map[string]map[string]*discoverBitVector),
-		discoverPutChan: make(chan chunkPut, 200),
+		discoverPutChan: make(chan chunkPut, 1000),
 	}
 
 	return discover

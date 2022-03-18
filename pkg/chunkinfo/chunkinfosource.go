@@ -3,19 +3,20 @@ package chunkinfo
 import (
 	"context"
 	"fmt"
+	"strings"
+	"sync"
+
 	"github.com/gauss-project/aurorafs/pkg/aurora"
 	"github.com/gauss-project/aurorafs/pkg/bitvector"
 	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/logging"
 	"github.com/gauss-project/aurorafs/pkg/storage"
-	"strings"
-	"sync"
 )
 
 type sourceInfo struct {
-	//Pyramid source overlay
+	// Pyramid source overlay
 	PyramidSource string
-	//Chunk obtained by each overlay
+	// Chunk obtained by each overlay
 	ChunkSource map[string]*bitvector.BitVector
 }
 
@@ -36,7 +37,7 @@ func newChunkSource(store storage.StateStorer, logger logging.Logger) *chunkInfo
 		storer:        store,
 		logger:        logger,
 		presence:      make(map[string]*sourceInfo),
-		sourcePutChan: make(chan chunkPut, 200)}
+		sourcePutChan: make(chan chunkPut, 1000)}
 }
 
 func (cs *chunkInfoSource) initChunkInfoSource() error {

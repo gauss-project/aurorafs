@@ -3,12 +3,13 @@ package chunkinfo
 import (
 	"context"
 	"fmt"
+	"strings"
+	"sync"
+
 	"github.com/gauss-project/aurorafs/pkg/aurora"
 	"github.com/gauss-project/aurorafs/pkg/bitvector"
 	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/chunkinfo/pb"
-	"strings"
-	"sync"
 )
 
 var keyPrefix = "chunk-"
@@ -36,7 +37,7 @@ const (
 
 func newChunkInfoTabNeighbor() *chunkInfoTabNeighbor {
 	return &chunkInfoTabNeighbor{overlays: make(map[string][]boson.Address), presence: make(map[string]map[string]*bitvector.BitVector),
-		serverPutChan: make(chan chunkPut, 200)}
+		serverPutChan: make(chan chunkPut, 1000)}
 }
 
 func (ci *ChunkInfo) initChunkInfoTabNeighbor() error {
