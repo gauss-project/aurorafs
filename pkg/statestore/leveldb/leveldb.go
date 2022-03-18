@@ -43,7 +43,7 @@ func NewInMemoryStateStore(l logging.Logger) (storage.StateStorer, error) {
 
 // NewStateStore creates a new persistent state storage.
 func NewStateStore(path string, l logging.Logger) (storage.StateStorer, error) {
-	db, err := leveldbDriver.Open(path, "")
+	db, err := leveldbDriver.Open(path, "{\"NoSync\":true}")
 	if err != nil {
 		if !ldberr.IsCorrupted(err) {
 			return nil, err
