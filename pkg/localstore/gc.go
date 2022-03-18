@@ -189,11 +189,7 @@ func (db *DB) collectGarbage() (collectedCount uint64, done bool, err error) {
 		for _, chunk := range chunkHashes {
 			i := addressToItem(chunk.Cid)
 			pinItem, err := db.pinIndex.Get(i)
-			if err != nil {
-				if !errors.Is(err, driver.ErrNotFound) {
-					db.logger.Errorf("localstore: collect garbage: get pin state failure: %v", err)
-					break
-				}
+			if err == nil {
 				if pinItem.PinCounter > uint64(chunk.Number) {
 					pinItem.PinCounter -= uint64(chunk.Number)
 					err = db.pinIndex.Put(pinItem)
@@ -206,13 +202,14 @@ func (db *DB) collectGarbage() (collectedCount uint64, done bool, err error) {
 				err = db.pinIndex.DeleteInBatch(batch, pinItem)
 				if err != nil {
 					db.logger.Errorf("localstore: collect garbage: delete chunk pin: %v", err)
-					break
 				}
+			}
+			if !errors.Is(err, driver.ErrNotFound) {
+				db.logger.Errorf("localstore: collect garbage: get pin state failure: %v", err)
 			}
 			err = db.retrievalDataIndex.DeleteInBatch(batch, i)
 			if err != nil {
 				db.logger.Errorf("localstore: collect garbage: delete chunk data: %v", err)
-				break
 			}
 			gcCount++
 			db.logger.Tracef("localstore: collect garbage: chunk %s has deleted", chunk.Cid)
@@ -247,6 +244,11 @@ func (db *DB) collectGarbage() (collectedCount uint64, done bool, err error) {
 
 	db.metrics.GCCommittedCounter.Add(float64(currentCollectedCount))
 	db.gcSize.PutInBatch(batch, currentSize)
+
+	gcSize, err = db.gcSize.Get()
+	if err == nil {
+		db.logger.Tracef("current gc size: %d\n", gcSize)
+	}
 
 	err = batch.Commit()
 	if err != nil {

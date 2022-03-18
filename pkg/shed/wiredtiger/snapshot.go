@@ -9,7 +9,6 @@ import (
 
 type snapshot struct {
 	s      *session
-	db     *DB
 	mu     sync.RWMutex
 	closed bool
 }
@@ -30,6 +29,7 @@ func (s *snapshot) Get(key driver.Key) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
+	defer s.s.closeCursor(c)
 	r, err := c.find(k)
 	if err != nil {
 		if IsNotFound(err) {
@@ -55,6 +55,7 @@ func (s *snapshot) Has(key driver.Key) (bool, error) {
 	if err != nil {
 		return false, err
 	}
+	defer s.s.closeCursor(c)
 	r, err := c.find(k)
 	if err != nil {
 		if IsNotFound(err) {
@@ -70,6 +71,5 @@ func (s *snapshot) Close() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.closed = true
-	s.db.pool.Put(s.s)
-	return nil
+	return s.s.close()
 }

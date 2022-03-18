@@ -57,8 +57,10 @@ func indexKeyPrefixIncr(prefix []byte) error {
 var schema driver.SchemaSpec
 
 func (db *DB) InitSchema() error {
-	s := db.pool.Get()
-	defer db.pool.Put(s)
+	s, err := newSession(db.conn)
+	if err != nil {
+		return err
+	}
 
 	tableOption := &createOption{
 		SourceType:        "file",
@@ -76,7 +78,7 @@ func (db *DB) InitSchema() error {
 	}
 
 	// create metadata
-	err := s.create(dataSource{dataType: tableSource, sourceName: schemaMetadataTableName}, tableOption)
+	err = s.create(dataSource{dataType: tableSource, sourceName: schemaMetadataTableName}, tableOption)
 	if err != nil {
 		return err
 	}
@@ -96,7 +98,7 @@ func (db *DB) InitSchema() error {
 	schema.Fields = make([]driver.FieldSpec, 0)
 	schema.Indexes = make([]driver.IndexSpec, 0)
 
-	return nil
+	return s.close()
 }
 
 func (db *DB) DefaultFieldKey() []byte {
@@ -118,12 +120,17 @@ func (db *DB) CreateField(spec driver.FieldSpec) ([]byte, error) {
 		}
 	}
 	if !found {
-		s := db.pool.Get()
+		obj := dataSource{dataType: tableSource, sourceName: schemaMetadataTableName}
+		s := db.pool.Get(obj.String())
+		if s == nil {
+			return nil, ErrSessionHasClosed
+		}
 		defer db.pool.Put(s)
-		c, err := s.openCursor(dataSource{dataType: tableSource, sourceName: schemaMetadataTableName}, &cursorOption{Overwrite: false})
+		c, err := s.openCursor(obj, &cursorOption{Overwrite: false})
 		if err != nil {
 			return nil, err
 		}
+		defer s.closeCursor(c)
 		key := append([]byte(fieldMetadataKeyPrefix), []byte(spec.Name)...)
 		err = c.insert(key, []byte(spec.Type))
 		switch {
@@ -146,12 +153,17 @@ func (db *DB) CreateIndex(spec driver.IndexSpec) ([]byte, error) {
 		}
 		currentPrefix = i.Prefix
 	}
-	s := db.pool.Get()
+	obj := dataSource{dataType: tableSource, sourceName: schemaMetadataTableName}
+	s := db.pool.Get(obj.String())
+	if s == nil {
+		return nil, ErrSessionHasClosed
+	}
 	defer db.pool.Put(s)
 	c, err := s.openCursor(dataSource{dataType: tableSource, sourceName: schemaMetadataTableName}, &cursorOption{Overwrite: false})
 	if err != nil {
 		return nil, err
 	}
+	defer s.closeCursor(c)
 	key := append([]byte(indexMetadataKeyPrefix), []byte(spec.Name)...)
 	prefix := make([]byte, len(currentPrefix))
 	copy(prefix, currentPrefix)
@@ -160,6 +172,7 @@ func (db *DB) CreateIndex(spec driver.IndexSpec) ([]byte, error) {
 	case IsDuplicateKey(err):
 		r, _ := c.find(key)
 		value := r.Value()
+		_ = r.Close()
 		copy(prefix, value)
 	case err == nil:
 		err = indexKeyPrefixIncr(prefix)
@@ -198,12 +211,17 @@ func (db *DB) CreateIndex(spec driver.IndexSpec) ([]byte, error) {
 }
 
 func (db *DB) RenameIndex(oldName, newName string) (bool, error) {
-	s := db.pool.Get()
+	obj := dataSource{dataType: tableSource, sourceName: schemaMetadataTableName}
+	s := db.pool.Get(obj.String())
+	if s == nil {
+		return false, ErrSessionHasClosed
+	}
 	defer db.pool.Put(s)
 	c, err := s.openCursor(dataSource{dataType: tableSource, sourceName: schemaMetadataTableName}, &cursorOption{Overwrite: false})
 	if err != nil {
 		return false, err
 	}
+	defer s.closeCursor(c)
 	key := append([]byte(indexMetadataKeyPrefix), []byte(oldName)...)
 	r, err := c.find(key)
 	switch {

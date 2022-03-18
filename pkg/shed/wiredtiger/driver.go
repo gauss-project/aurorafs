@@ -34,7 +34,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"runtime"
 	"unsafe"
 
 	"github.com/gauss-project/aurorafs/pkg/shed/driver"
@@ -165,8 +164,7 @@ func (d Driver) Open(path, options string) (driver.DB, error) {
 		return nil, NewError(result)
 	}
 
-	poolSize := runtime.NumCPU()
-	pool, err := newSessionPool(conn, uint64(poolSize))
+	pool, err := newSessionPool(conn)
 	if err != nil {
 		return nil, err
 	}

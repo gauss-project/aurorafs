@@ -41,413 +41,188 @@ int wiredtiger_session_close(WT_SESSION *session, const char *config) {
 */
 import "C"
 import (
-	"container/list"
 	"errors"
-	"fmt"
-	"math"
+	"runtime"
 	"sync"
 	"sync/atomic"
-	"time"
 	"unsafe"
 )
 
 var sessionMaxSize uint64
 
-type sessionPoolStat struct {
-	lived      uint64
-	txnLived   uint64
-	lastOpen   time.Time // locked by pool.lock
-	lastCommit time.Time
-}
-
 type sessionPool struct {
-	conn   *C.WT_CONNECTION
-	list   *stack
-	append *list.List
-	lock   *sync.Mutex // lock append
-	size   uint64
-	stat   *sessionPoolStat
-	id     uint64
-	closed bool
+	sessions map[string]*session
+	conn     *C.WT_CONNECTION
+	lock     sync.RWMutex
+	closed   bool
 }
 
-type stack struct {
-	top unsafe.Pointer
-	len uint64
-}
-
-func NewStack() *stack {
-	return &stack{}
-}
-
-type link struct {
-	next unsafe.Pointer
-	v    interface{}
-}
-
-func (s *stack) pop() interface{} {
-	var top, next unsafe.Pointer
-	var item *link
-	for {
-		top = atomic.LoadPointer(&s.top)
-		if top == nil {
-			return nil
-		}
-		item = (*link)(top)
-		next = atomic.LoadPointer(&item.next)
-		if atomic.CompareAndSwapPointer(&s.top, top, next) {
-			atomic.AddUint64(&s.len, ^uint64(0))
-			return item.v
-		}
-	}
-}
-
-// Push pushes a value on top of the stack.
-func (s *stack) push(v interface{}) {
-	item := link{v: v}
-	var top unsafe.Pointer
-	for {
-		top = atomic.LoadPointer(&s.top)
-		item.next = top
-		if atomic.CompareAndSwapPointer(&s.top, top, unsafe.Pointer(&item)) {
-			atomic.AddUint64(&s.len, 1)
-			return
-		}
-	}
-}
-
-func newSessionPool(conn *C.WT_CONNECTION, size uint64) (*sessionPool, error) {
+func newSessionPool(conn *C.WT_CONNECTION) (*sessionPool, error) {
 	p := &sessionPool{
-		list: NewStack(),
-		conn: conn,
-		size: size,
-		lock: new(sync.Mutex),
-		stat: new(sessionPoolStat),
+		conn:     conn,
+		sessions: make(map[string]*session),
 	}
-
-	// init append list
-	p.append = new(list.List)
-
-	// clear session before now
-	p.stat.lastOpen = time.Now()
 
 	return p, nil
 }
 
-func (p *sessionPool) getSessionID() uint64 {
-	id := atomic.AddUint64(&p.id, 1)
-	if id == math.MaxUint64 {
-		if !atomic.CompareAndSwapUint64(&p.id, math.MaxUint64-1, 1) {
-			id = atomic.AddUint64(&p.id, 1)
-		}
-	}
-	return id
-}
+var ErrSessionHasClosed = errors.New("session has closed")
 
-func (p *sessionPool) dequeue() *session {
-	p.lock.Lock()
-	defer p.lock.Unlock()
-	i := p.append.Back()
-	if i == nil {
+// func (p *sessionPool) Read(table string) *session {
+// 	p.lock.RLock()
+//
+// 	if p.closed {
+// 		p.lock.RUnlock()
+// 		return nil
+// 	}
+//
+// 	if s, ok := p.sessions[table]; ok {
+// 		if atomic.LoadInt32(&s.closing) == 1 {
+// 			return nil
+// 		}
+// 		if atomic.LoadUint32(&s.inuse) == 0 {
+// 			p.lock.RUnlock()
+// 			return s
+// 		}
+// 	}
+//
+// 	p.lock.RUnlock()
+//
+// 	s, err := newSession(p.conn)
+// 	if err != nil {
+// 		logger.Errorf("create session: %v", err)
+//
+// 		return nil
+// 	}
+//
+// 	// link session pool
+// 	s.ref = p
+//
+// 	return s
+// }
+
+func (p *sessionPool) Get(table string) *session {
+	// TODO move it
+	// err := setTimestamp(p.conn, fmt.Sprintf("%d", time.Now().UnixMilli()), true)
+	// if err != nil {
+	// 	logger.Warnf("set stable timestamp: %v", err)
+	// }
+
+	p.lock.RLock()
+
+	if p.closed {
+		p.lock.RUnlock()
 		return nil
 	}
-	s := i.Value.(*session)
-	p.append.Remove(i)
-	return s
-}
 
-func (p *sessionPool) enqueue(s *session, refresh bool) {
-	if refresh {
-		s.refresh()
-	}
-	s.overflow(1)
-	p.lock.Lock()
-	p.append.PushBack(s)
-	if p.stat.lastOpen.Before(s.epoch) {
-		p.stat.lastOpen = s.epoch
-	}
-	p.lock.Unlock()
-}
-
-func (p *sessionPool) evict() (removed uint64) {
-	p.lock.Lock()
-	defer p.lock.Unlock()
-
-	logger.Println("session pool evict start")
-	for i := p.append.Front(); i != nil; i = i.Next() {
-		e := i.Value.(*session)
-		if time.Since(e.epoch) < gcPeriod {
-			break
-		}
-		locked := atomic.LoadUint64(&e.lockId)
-		if locked != 0 {
-			continue
-		}
-		err := e.close()
-		if err != nil {
-			logger.Errorf("wiredtiger: session %d remove queue: %v", e.id, err)
-		}
-		p.append.Remove(i)
-		removed++
-	}
-	if i := p.append.Front(); i != nil {
-		p.stat.lastOpen = i.Value.(*session).epoch
-	} else {
-		p.stat.lastOpen = time.Now()
-	}
-
-	return
-}
-
-func (p *sessionPool) getLazy(locked uint64, check bool) *session {
-	var (
-		s   *session
-		err error
-	)
-	l := atomic.LoadUint64(&p.stat.lived)
-	fmt.Println("current session lived", l)
-	if l < p.size {
-		i := p.list.pop()
-		if i == nil {
-			logger.Println("create session")
-			s, err = newSession(p.conn, p.getSessionID(), locked, false)
-			if err != nil {
-				logger.Errorf("wiredtiger: create session: %v", err)
-
-				return p.get(locked)
-			}
-			p.list.push(s)
-		} else {
-			s = i.(*session)
+	if s, ok := p.sessions[table]; ok {
+		p.lock.RUnlock()
+		for {
 			if atomic.LoadInt32(&s.closing) == 1 {
-				return p.get(locked)
+				return nil
 			}
-			if atomic.LoadUint64(&s.lockId) != 0 {
-				p.list.push(s)
-				logger.Println("create session by locked")
-				s, err = newSession(p.conn, p.getSessionID(), locked, false)
-				if err != nil {
-					logger.Errorf("wiredtiger: create session: %v", err)
-
-					return p.get(locked)
-				}
+			if !atomic.CompareAndSwapUint32(&s.inuse, 0, 1) {
+				runtime.Gosched()
+				continue
 			}
-		}
-		atomic.AddUint64(&p.stat.lived, 1)
-		return s
-	}
-	if l == p.size {
-		// double check
-		logger.Println("double check")
-		if !check {
-			return p.getLazy(locked, !check)
+			return s
 		}
 	}
-	if l == sessionMaxSize {
-		logger.Warnf("wiredtiger: current session reach max size %d", sessionMaxSize)
-		removed := p.evict()
-		if removed > 0 {
-			if !atomic.CompareAndSwapUint64(&p.stat.lived, l, l-removed) {
-				return p.get(locked)
+
+	p.lock.RUnlock()
+
+	// put new session
+	p.lock.Lock()
+
+	// double check
+	if s, ok := p.sessions[table]; ok {
+		p.lock.Unlock()
+		for {
+			if atomic.LoadInt32(&s.closing) == 1 {
+				return nil
 			}
+			if !atomic.CompareAndSwapUint32(&s.inuse, 0, 1) {
+				runtime.Gosched()
+				continue
+			}
+			return s
 		}
 	}
-	s = p.dequeue()
-	if s == nil || atomic.LoadUint64(&s.lockId) != 0 {
-		logger.Println("new oversize session")
-		s, err = newSession(p.conn, p.getSessionID(), locked, true)
-		if err != nil {
-			logger.Errorf("wiredtiger: create session over list: %v", err)
 
-			return p.get(locked)
-		}
-		p.enqueue(s, false)
-		atomic.AddUint64(&p.stat.lived, 1)
-	}
-	if atomic.LoadInt32(&s.closing) == 1 {
-		return p.get(locked)
-	}
-	return s
-}
-
-func (p *sessionPool) get(locked uint64) *session {
-	if p.closed {
-		return newFailSession(p.getSessionID(), locked, true)
-	}
-	return p.getLazy(locked, locked != 0)
-}
-
-func (p *sessionPool) Get() *session {
-	// return p.get(0)
-	s, _ := newSession(p.conn, p.getSessionID(), 0, false)
-
-	err := setTimestamp(p.conn, fmt.Sprintf("%d", time.Now().UnixMilli()), true)
+	s, err := newSession(p.conn)
 	if err != nil {
-		logger.Warnf("cannot set stable timestamp: %v", err)
+		logger.Errorf("create session: %v", err)
+
+		return nil
 	}
 
+	// link session pool
+	s.ref = p
+
+	p.sessions[table] = s
+	p.lock.Unlock()
+
 	return s
 }
 
-func (p *sessionPool) Lock(id uint64) *session {
-	// atomic.AddUint64(&p.stat.txnLived, 1)
-	// return p.get(id)
-	s, _ := newSession(p.conn, p.getSessionID(), id, false)
-	return s
-}
-
-const gcPeriod = 5 * time.Minute
-
-func (p *sessionPool) put(s *session, lockId uint64) {
-	var (
-		lock bool
-		fill bool
-	)
-
-	if lockId != 0 {
-		if atomic.LoadUint64(&s.lockId) != lockId {
-			lock = true
-		} else if !atomic.CompareAndSwapUint64(&s.lockId, lockId, 0) {
-			// because this session is putting in other goroutine
+func (p *sessionPool) Put(s *session) {
+	for {
+	retry:
+		if atomic.LoadUint32(&s.inuse) == 0 {
 			return
 		}
-	}
-
-	// check buffer size
-	l := atomic.LoadUint64(&p.stat.lived)
-	if l >= p.size {
-		p.lock.Lock()
-		lastOpen := p.stat.lastOpen
-		p.lock.Unlock()
-		if time.Since(lastOpen) > gcPeriod {
-			removed := p.evict()
-			if removed > 0 {
-				if !atomic.CompareAndSwapUint64(&p.stat.lived, l, l-removed) {
-					// retry put
-					p.put(s, lockId)
-					return
-				}
+		if !atomic.CompareAndSwapUint32(&s.inuse, 1, 0) {
+			if atomic.LoadUint32(&s.inuse) == 1 {
+				goto retry
 			}
-		}
-	}
 
-	// check buffer size again
-	l = atomic.LoadUint64(&p.stat.lived)
-	if l < p.size {
-		fill = true
-	}
-
-	if lockId != 0 && !lock {
-		// reset session stat
-		err := s.reset()
-		if err != nil {
-			logger.Warnf("wiredtiger: session %d reset: %v", s.id, err)
-		}
-	}
-
-	if !p.closed {
-		overflowed := atomic.LoadInt32(&s.oversize)
-		if overflowed == 1 {
-			if !fill {
-				p.enqueue(s, lock)
-			} else {
-				s.refresh()
-				s.overflow(0)
-				p.list.push(s)
-			}
-		} else {
-			s.refresh()
-			p.list.push(s)
-		}
-
-		if !lock {
-			atomic.AddUint64(&p.stat.lived, 0)
+			runtime.Gosched()
+			continue
 		}
 
 		return
 	}
-
-	// immediately close
-	err := s.close()
-	if err != nil {
-		logger.Warnf("wiredtiger: session %d close on quit: %v", s.id, err)
-	}
 }
 
-func (p *sessionPool) Put(s *session) {
-	// p.put(s, 0)
-	err := s.close()
-	if err != nil {
-		logger.Warnf("wiredtiger: session %d close on quit: %v", s.id, err)
-	}
-}
-
-func (p *sessionPool) PutLock(s *session, lockId uint64) {
-	// p.put(s, lockId)
-	err := s.close()
-	if err != nil {
-		logger.Warnf("wiredtiger: session %d close on quit: %v", s.id, err)
-	}
-}
+// func (p *sessionPool) CloseRead(s *session) {
+// 	err := s.close()
+// 	if err != nil {
+// 		logger.Errorf("close session for read: %v", err)
+// 	}
+// }
 
 func (p *sessionPool) Close() error {
-	var wg sync.WaitGroup
+	p.lock.Lock()
+	defer p.lock.Unlock()
 
 	// set flag to closed
 	p.closed = true
 
-	go func() {
-		wg.Add(1)
-		defer wg.Done()
+	var err error
 
-		p.lock.Lock()
-		if p.append.Len() > 0 {
-			for i := p.append.Front(); i != nil; i = i.Next() {
-				e := i.Value.(*session)
-				if lockId := atomic.LoadUint64(&e.lockId); lockId != 0 {
-					logger.Warnf("wiredtiger: tx session %d closing", lockId)
-				}
-				_ = e.close()
-				p.append.Remove(i)
-			}
+	for _, session := range p.sessions {
+		err = session.checkpoint()
+		if err != nil {
+			logger.Errorf("wiredtiger: create checkpoint: %v", err)
 		}
-		p.lock.Unlock()
-	}()
-
-	go func() {
-		wg.Add(1)
-		defer wg.Done()
-
-		for {
-			i := p.list.pop()
-			if i == nil {
-				break
-			}
-			e := i.(*session)
-			if lockId := atomic.LoadUint64(&e.lockId); lockId != 0 {
-				logger.Warnf("wiredtiger: tx session %d closing", lockId)
-			}
-			_ = e.close()
+		err = session.close()
+		if err != nil {
+			logger.Errorf("close session: %v", err)
 		}
-	}()
-
-	wg.Wait()
+	}
 
 	return nil
 }
 
 type session struct {
-	impl     *C.WT_SESSION
-	lockId   uint64
-	id       uint64
-	oversize int32
-	closing  int32
-	txn      bool // set by newTxn
-	cursors  *cursorCache
-	epoch    time.Time
+	ref     *sessionPool
+	impl    *C.WT_SESSION
+	inuse   uint32
+	closing int32
+	cursors *cursorCache
 }
 
-func newSession(conn *C.WT_CONNECTION, id, locked uint64, overflow bool) (*session, error) {
+func newSession(conn *C.WT_CONNECTION) (*session, error) {
 	var sessionImpl *C.WT_SESSION
 
 	configStr := C.CString("isolation=snapshot")
@@ -460,45 +235,17 @@ func newSession(conn *C.WT_CONNECTION, id, locked uint64, overflow bool) (*sessi
 
 	s := &session{
 		impl:  sessionImpl,
-		id:    id,
-		epoch: time.Now(),
+		inuse: 0,
 	}
 
-	if locked != 0 {
-		atomic.StoreUint64(&s.lockId, locked)
-	}
-
-	if overflow {
-		atomic.StoreInt32(&s.oversize, 1)
-	}
-
-	s.cursors = newCursorCache(100)
+	s.cursors = newCursorCache()
 
 	return s, nil
-}
-
-func newFailSession(id, locked uint64, overflow bool) *session {
-	s := &session{
-		id:      id,
-		epoch:   time.Time{},
-		closing: 1, // mark session closing
-	}
-
-	if locked != 0 {
-		atomic.StoreUint64(&s.lockId, locked)
-	}
-
-	if overflow {
-		atomic.StoreInt32(&s.oversize, 1)
-	}
-
-	return s
 }
 
 func (s *session) strerror(code int) error {
 	err := C.wiredtiger_session_strerror(s.impl, C.int(code))
 	if err != nil {
-		// defer C.free(unsafe.Pointer(err))
 		return errors.New(C.GoString(err))
 	}
 	return nil
@@ -577,6 +324,7 @@ func (s *session) compact(obj dataSource) error {
 
 	// default disable compact timeout
 	configStr := C.CString("timeout=0")
+	defer C.free(unsafe.Pointer(configStr))
 
 	result := int(C.wiredtiger_session_compact(s.impl, objStr, configStr))
 	if checkError(result) {
@@ -604,20 +352,16 @@ func (s *session) openCursor(obj dataSource, opt *cursorOption) (*cursor, error)
 	if opt == nil {
 		opt = &cursorOption{Raw: true}
 	}
-	return s.cursors.newCursor(s, obj.String(), opt)
+	c, err := s.cursors.newCursor(s, obj.String(), opt)
+	if err != nil {
+		return nil, err
+	}
+	return c, nil
 }
 
 func (s *session) closeCursor(c *cursor) error {
 	s.cursors.releaseCursor(c)
 	return nil
-}
-
-func (s *session) refresh() {
-	s.epoch = time.Now()
-}
-
-func (s *session) overflow(m int) {
-	atomic.StoreInt32(&s.oversize, int32(m))
 }
 
 func (s *session) reset() error {
@@ -638,6 +382,7 @@ func (s *session) close() error {
 		// already closing
 		return nil
 	}
+	atomic.StoreUint32(&s.inuse, 0)
 	err := s.cursors.closeAll("")
 	if err != nil {
 		return err
