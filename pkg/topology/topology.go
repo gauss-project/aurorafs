@@ -31,6 +31,7 @@ type Driver interface {
 	Snapshot() *model.KadParams
 	DisconnectForce(addr boson.Address, reason string) error
 	Outbound(peer p2p.Peer)
+	NotifyPeerState(peer p2p.PeerInfo)
 	SnapshotConnected() (connected int, peers map[string]*model.PeerInfo)
 	EachKnownPeerer
 }

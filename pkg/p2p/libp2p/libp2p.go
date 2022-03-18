@@ -378,6 +378,12 @@ func (s *Service) handleIncoming(stream network.Stream) {
 	s.protocolsmu.RUnlock()
 
 	if s.notifier != nil {
+		s.notifier.NotifyPeerState(p2p.PeerInfo{
+			Overlay: peer.Address,
+			Mode:    peer.Mode.Bv.Bytes(),
+			State:   p2p.PeerStateConnectIn,
+		})
+
 		if !i.NodeMode.IsFull() && s.lightNodes != nil {
 			s.lightNodes.Connected(s.ctx, peer)
 			// light node announces explicitly
