@@ -61,6 +61,7 @@ type Notifier interface {
 	Disconnected(peer Peer, reason string)
 	Announce(ctx context.Context, peer boson.Address, fullnode bool) error
 	AnnounceTo(ctx context.Context, addressee, peer boson.Address, fullnode bool) error
+	NotifyPeerState(peer PeerInfo)
 }
 
 // DebugService extends the Service with method used for debugging.

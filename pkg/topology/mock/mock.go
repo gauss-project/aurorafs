@@ -121,6 +121,10 @@ func (d *mock) AnnounceTo(_ context.Context, _, _ boson.Address, _ bool) error {
 	return nil
 }
 
+func (d *mock) NotifyPeerState(peer p2p.PeerInfo) {
+
+}
+
 func (d *mock) Peers() []boson.Address {
 	return d.peers
 }
