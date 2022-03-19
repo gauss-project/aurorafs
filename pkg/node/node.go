@@ -502,7 +502,7 @@ func NewAurora(nodeMode aurora.Model, addr string, bosonAddress boson.Address, p
 		// HTTPModules: []string{"debug", "api"},
 		WSAddr:    o.WSAddr,
 		WSOrigins: o.CORSAllowedOrigins,
-		WSModules: []string{"group", "p2p", "chunkInfo", "traffic"},
+		WSModules: []string{"group", "p2p", "chunkInfo", "traffic", "oracle"},
 	})
 	if err != nil {
 		return nil, err
@@ -512,6 +512,7 @@ func NewAurora(nodeMode aurora.Model, addr string, bosonAddress boson.Address, p
 		kad.API(lightNodes, bootNodes), // p2p
 		chunkInfo.API(),                // chunkInfo
 		apiInterface.API(),
+		oracleChain.API(),
 	})
 	err = stack.Start()
 	if err != nil {
