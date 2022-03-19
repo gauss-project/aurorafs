@@ -2,10 +2,13 @@ package chunkinfo
 
 import (
 	"context"
-	"github.com/gauss-project/aurorafs/pkg/boson"
-	"github.com/gauss-project/aurorafs/pkg/rpc"
 	"sync"
 	"time"
+
+	"github.com/gauss-project/aurorafs/pkg/boson"
+	mts "github.com/gauss-project/aurorafs/pkg/metrics"
+	"github.com/gauss-project/aurorafs/pkg/rpc"
+	"github.com/prometheus/client_golang/prometheus"
 )
 
 func (ci *ChunkInfo) API() rpc.API {
@@ -152,5 +155,19 @@ func (a *apiService) RootCidStatus(ctx context.Context) (*rpc.Subscription, erro
 			}
 		}
 	}()
+	return sub, nil
+}
+
+func (a *apiService) Metrics(ctx context.Context) (*rpc.Subscription, error) {
+	notifier, supported := rpc.NotifierFromContext(ctx)
+	if !supported {
+		return &rpc.Subscription{}, rpc.ErrNotificationsUnsupported
+	}
+	sub := notifier.CreateSubscription()
+
+	mts.AddSubscribe(notifier, sub, []prometheus.Metric{
+		a.ci.metrics.PyramidTotalRetrieved,
+		a.ci.metrics.PyramidTotalTransferred,
+	})
 	return sub, nil
 }
