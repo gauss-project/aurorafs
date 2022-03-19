@@ -5,6 +5,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/gauss-project/aurorafs/pkg/boson"
+	"github.com/gauss-project/aurorafs/pkg/rpc"
 	"math/big"
 )
 
@@ -50,7 +51,8 @@ type Resolver interface {
 	RegisterCidAndNode(ctx context.Context, rootCid boson.Address, address boson.Address) (common.Hash, error)
 	RemoveCidAndNode(ctx context.Context, rootCid boson.Address, address boson.Address) (common.Hash, error)
 	GetRegisterState(ctx context.Context, rootCid boson.Address, address boson.Address) (bool, error)
-	WaitForReceipt(ctx context.Context, txHash common.Hash) (receipt *types.Receipt, err error)
+	WaitForReceipt(ctx context.Context, rootCid boson.Address, txHash common.Hash) (receipt *types.Receipt, err error)
+	API() rpc.API
 }
 
 type Traffic interface {

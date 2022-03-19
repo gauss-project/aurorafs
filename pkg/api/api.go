@@ -368,8 +368,8 @@ func (s *server) newTracingHandler(spanName string) func(h http.Handler) http.Ha
 func (s *server) transactionReceiptUpdate() {
 
 	go func() {
-		tranReceipt := func(txHash common.Hash) (uint64, error) {
-			receipt, err := s.oracleChain.WaitForReceipt(context.Background(), txHash)
+		tranReceipt := func(rootCid boson.Address, txHash common.Hash) (uint64, error) {
+			receipt, err := s.oracleChain.WaitForReceipt(context.Background(), rootCid, txHash)
 			if err != nil {
 				return 0, err
 			}
@@ -385,7 +385,7 @@ func (s *server) transactionReceiptUpdate() {
 		}
 
 		for trans := range s.transactionChan {
-			status, err := tranReceipt(trans.Hash)
+			status, err := tranReceipt(trans.Address, trans.Hash)
 			if err != nil {
 				continue
 			}

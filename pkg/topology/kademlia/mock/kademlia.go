@@ -178,6 +178,10 @@ func (m *Mock) Announce(_ context.Context, _ boson.Address, _ bool) error {
 	return nil
 }
 
+func (m *Mock) NotifyPeerState(peer p2p.PeerInfo) {
+
+}
+
 func (m *Mock) AnnounceTo(_ context.Context, _, _ boson.Address, _ bool) error {
 	return nil
 }

@@ -934,6 +934,11 @@ func (k *Kad) AddPeers(addrs ...boson.Address) {
 }
 
 func (k *Kad) Outbound(peer p2p.Peer) {
+	defer k.NotifyPeerState(p2p.PeerInfo{
+		Overlay: peer.Address,
+		Mode:    peer.Mode.Bv.Bytes(),
+		State:   p2p.PeerStateConnectOut,
+	})
 
 	k.metrics.TotalOutboundConnections.Inc()
 	k.collector.Record(peer.Address, im.PeerLogIn(time.Now(), im.PeerConnectionDirectionOutbound))
@@ -956,11 +961,6 @@ func (k *Kad) Outbound(peer p2p.Peer) {
 
 	k.notifyManageLoop()
 	k.notifyPeerSig()
-	k.notifyPeerState(p2p.PeerInfo{
-		Overlay: peer.Address,
-		Mode:    peer.Mode.Bv.Bytes(),
-		State:   p2p.PeerStateConnectOut,
-	})
 }
 
 func (k *Kad) Pick(peer p2p.Peer) bool {
@@ -1026,11 +1026,6 @@ func (k *Kad) onConnected(ctx context.Context, peer p2p.Peer) error {
 
 	k.notifyManageLoop()
 	k.notifyPeerSig()
-	k.notifyPeerState(p2p.PeerInfo{
-		Overlay: peer.Address,
-		Mode:    peer.Mode.Bv.Bytes(),
-		State:   p2p.PeerStateConnectIn,
-	})
 	return nil
 }
 
@@ -1052,7 +1047,7 @@ func (k *Kad) Disconnected(peer p2p.Peer, reason string) {
 	k.notifyManageLoop()
 	k.notifyPeerSig()
 
-	k.notifyPeerState(p2p.PeerInfo{
+	k.NotifyPeerState(p2p.PeerInfo{
 		Overlay: peer.Address,
 		Mode:    peer.Mode.Bv.Bytes(),
 		State:   p2p.PeerStateDisconnect,
@@ -1325,7 +1320,7 @@ func (k *Kad) SubscribePeerState() (c <-chan p2p.PeerInfo, unsubscribe func()) {
 	return channel, unsubscribe
 }
 
-func (k *Kad) notifyPeerState(peer p2p.PeerInfo) {
+func (k *Kad) NotifyPeerState(peer p2p.PeerInfo) {
 	k.peerStateSigMtx.Lock()
 	defer k.peerStateSigMtx.Unlock()
 	for _, c := range k.peerStateSig {

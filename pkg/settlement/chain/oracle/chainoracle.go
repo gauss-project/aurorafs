@@ -2,6 +2,7 @@ package oracle
 
 import (
 	"context"
+	"fmt"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -11,6 +12,7 @@ import (
 	"github.com/gauss-project/aurorafs/pkg/logging"
 	"github.com/gauss-project/aurorafs/pkg/settlement/chain"
 	"math/big"
+	"sync"
 	"time"
 )
 
@@ -21,6 +23,8 @@ type ChainOracle struct {
 	signer        crypto.Signer
 	senderAddress common.Address
 	chainID       *big.Int
+	pubSubLk      sync.RWMutex
+	pubSub        map[string]chan interface{}
 }
 
 func NewServer(logger logging.Logger, backend *ethclient.Client, address string, signer crypto.Signer) (chain.Resolver, error) {
@@ -47,6 +51,7 @@ func NewServer(logger logging.Logger, backend *ethclient.Client, address string,
 		signer:        signer,
 		senderAddress: senderAddress,
 		chainID:       chainID,
+		pubSub:        make(map[string]chan interface{}),
 	}, nil
 }
 
@@ -104,10 +109,11 @@ func (ora *ChainOracle) RemoveCidAndNode(ctx context.Context, rootCid boson.Addr
 	return tract.Hash(), nil
 }
 
-func (ora *ChainOracle) WaitForReceipt(ctx context.Context, txHash common.Hash) (receipt *types.Receipt, err error) {
+func (ora *ChainOracle) WaitForReceipt(ctx context.Context, rootCid boson.Address, txHash common.Hash) (receipt *types.Receipt, err error) {
 	for {
 		receipt, err := ora.chain.TransactionReceipt(ctx, txHash)
 		if receipt != nil {
+			ora.PublishRegisterStatus(rootCid, receipt.Status)
 			return receipt, nil
 		}
 		if err != nil {
@@ -119,6 +125,7 @@ func (ora *ChainOracle) WaitForReceipt(ctx context.Context, txHash common.Hash) 
 
 		select {
 		case <-ctx.Done():
+			ora.PublishRegisterStatus(rootCid, 0)
 			return nil, ctx.Err()
 		case <-time.After(1 * time.Second):
 		}
@@ -160,4 +167,57 @@ func (ora *ChainOracle) getTransactOpts(ctx context.Context) (*bind.TransactOpts
 		Nonce:    new(big.Int).SetUint64(chainNonce),
 	}
 	return opts, nil
+}
+
+func (ora *ChainOracle) SubscribeRegisterStatus(rootCids []boson.Address) (c <-chan interface{}, unsubscribe func()) {
+	channel := make(chan interface{}, len(rootCids))
+	for _, rootCid := range rootCids {
+		ora.Subscribe(fmt.Sprintf("%s%s", "register", rootCid.String()), channel)
+	}
+	unsubscribe = func() {
+		for _, rootCid := range rootCids {
+			ora.UnSubscribe(fmt.Sprintf("%s%s", "register", rootCid.String()))
+		}
+	}
+	return channel, unsubscribe
+}
+
+type RegisterStatus struct {
+	RootCid boson.Address `json:"rootCid"`
+	Status  bool          `json:"status"`
+}
+
+func (ora *ChainOracle) PublishRegisterStatus(rootCid boson.Address, status uint64) {
+	key := fmt.Sprintf("%s%s", "register", rootCid.String())
+	b := false
+	if status == 1 {
+		b = true
+	}
+
+	ora.Publish(key, RegisterStatus{
+		RootCid: rootCid,
+		Status:  b,
+	})
+}
+
+func (ora *ChainOracle) Subscribe(key string, c chan interface{}) {
+	ora.pubSubLk.Lock()
+	defer ora.pubSubLk.Unlock()
+	if _, ok := ora.pubSub[key]; !ok {
+		ora.pubSub[key] = c
+	}
+}
+
+func (ora *ChainOracle) UnSubscribe(key string) {
+	ora.pubSubLk.Lock()
+	defer ora.pubSubLk.Unlock()
+	delete(ora.pubSub, key)
+}
+
+func (ora *ChainOracle) Publish(key string, data interface{}) {
+	ora.pubSubLk.RLock()
+	defer ora.pubSubLk.RUnlock()
+	if c, ok := ora.pubSub[key]; ok {
+		c <- data
+	}
 }

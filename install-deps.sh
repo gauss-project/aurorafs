@@ -64,14 +64,14 @@ EOF
     cd build
     cmake -DCMAKE_INSTALL_PREFIX="$INSTALL_DIR" -DCMAKE_INSTALL_LIBDIR="$INSTALL_DIR"/lib -DBUILD_SHARED_LIBS=yes -DSNAPPY_BUILD_TESTS=OFF -DSNAPPY_BUILD_BENCHMARKS=OFF ../ || exit
     make || exit
-    sudo make install || exit
+    make install || exit
     make clean
     cd "$SHELL_FOLDER"/lib
 fi
 
 if $IS_DOCKER; then
   cp -rd "$INSTALL_DIR"/lib/* /usr/local/lib
-  sudo ldconfig
+  ldconfig
 fi
 
 if bash -c "compgen -G "$INSTALL_DIR"/lib/libwiredtiger.* > /dev/null"; then
@@ -90,7 +90,7 @@ else
   sh autogen.sh
   ./configure --enable-snappy --prefix="$INSTALL_DIR" CPPFLAGS="-I$INSTALL_DIR/include" LDFLAGS="-L$INSTALL_DIR/include" || exit
   make || exit
-  sudo make install || exit
+  make install || exit
   make clean
 fi
 
@@ -100,5 +100,5 @@ if $IS_DOCKER; then
 fi
 
 if command -v ldconfig > /dev/null; then
-  sudo ldconfig "$INSTALL_DIR"/lib
+  ldconfig "$INSTALL_DIR"/lib
 fi

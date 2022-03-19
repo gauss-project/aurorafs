@@ -1178,6 +1178,10 @@ func (n *notifiee) AnnounceTo(ctx context.Context, a, b boson.Address, full bool
 	return n.announceTo(ctx, a, b, full)
 }
 
+func (n *notifiee) NotifyPeerState(peer p2p.PeerInfo) {
+
+}
+
 func mockNotifier(c cFunc, d dFunc, pick bool) p2p.PickyNotifier {
 	return &notifiee{connected: c, disconnected: d, pick: pick, announce: noopAnnounce, announceTo: noopAnnounceTo}
 }
