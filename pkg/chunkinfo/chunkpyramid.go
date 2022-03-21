@@ -61,17 +61,14 @@ func (ci *ChunkInfo) initChunkPyramid(ctx context.Context, rootCid boson.Address
 }
 
 // updateChunkPyramid
-func (ci *ChunkInfo) updateChunkPyramid(rootCid boson.Address, pyramids [][][]byte, trie map[string][]byte) [][]byte {
-	cids := make([][]byte, 0)
+func (ci *ChunkInfo) updateChunkPyramid(rootCid boson.Address, pyramids [][][]byte, trie map[string][]byte) {
 	py := make(map[string]struct{}, len(pyramids))
 	var hashMax, chunkMax uint
 	for _, p := range pyramids {
 		for _, x := range p {
 			cid := boson.NewAddress(x).String()
 			if _, ok := py[cid]; !ok {
-				if ci.cp.putChunk(boson.NewAddress(x)) {
-					cids = append(cids, x)
-				}
+				ci.cp.putChunk(boson.NewAddress(x))
 			}
 			chunkMax++
 		}
@@ -87,7 +84,6 @@ func (ci *ChunkInfo) updateChunkPyramid(rootCid boson.Address, pyramids [][][]by
 		chunkMax: chunkMax,
 		hashMax:  hashMax,
 	}
-	return cids
 }
 
 func (ci *ChunkInfo) getPyramid(rootCid boson.Address) (*pyramid, error) {
