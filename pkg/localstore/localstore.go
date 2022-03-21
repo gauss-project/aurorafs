@@ -320,9 +320,8 @@ func New(path string, baseKey []byte, o *Options, logger logging.Logger) (db *DB
 	return db, nil
 }
 
-// WithChunkInfo allow injecting chunkinfo module into db.
-func (db *DB) WithChunkInfo(c chunkinfo.Interface) {
-	db.discover = c
+func (db *DB) SetChunkInfo(chunkInfo chunkinfo.Interface) {
+	db.discover = chunkInfo
 }
 
 // Close closes the underlying database.

@@ -8,18 +8,20 @@ import (
 	"context"
 	"errors"
 	"fmt"
-
 	"github.com/gauss-project/aurorafs/pkg/boson"
+	"github.com/gauss-project/aurorafs/pkg/chunkinfo"
 	"github.com/gauss-project/aurorafs/pkg/logging"
 	"github.com/gauss-project/aurorafs/pkg/retrieval"
 	"github.com/gauss-project/aurorafs/pkg/sctx"
 	"github.com/gauss-project/aurorafs/pkg/storage"
 )
 
-type store struct {
+type Store struct {
 	storage.Storer
 	retrieval retrieval.Interface
 	logger    logging.Logger
+	chunkInfo chunkinfo.Interface
+	addr      boson.Address
 	//recoveryCallback recovery.Callback // this is the callback to be executed when a chunk fails to be retrieved
 }
 
@@ -28,13 +30,17 @@ var (
 )
 
 // New returns a new NetStore that wraps a given Storer.
-func New(s storage.Storer, r retrieval.Interface, logger logging.Logger) storage.Storer {
-	return &store{Storer: s, retrieval: r, logger: logger}
+func New(s storage.Storer, r retrieval.Interface, logger logging.Logger, addr boson.Address) *Store {
+	return &Store{Storer: s, retrieval: r, logger: logger, addr: addr}
+}
+
+func (s *Store) SetChunkInfo(chunkInfo chunkinfo.Interface) {
+	s.chunkInfo = chunkInfo
 }
 
 // Get retrieves a given chunk address.
 // It will request a chunk from the network whenever it cannot be found locally.
-func (s *store) Get(ctx context.Context, mode storage.ModeGet, addr boson.Address) (ch boson.Chunk, err error) {
+func (s *Store) Get(ctx context.Context, mode storage.ModeGet, addr boson.Address) (ch boson.Chunk, err error) {
 	ch, err = s.Storer.Get(ctx, mode, addr)
 	if err != nil {
 		if errors.Is(err, storage.ErrNotFound) {
@@ -55,5 +61,12 @@ func (s *store) Get(ctx context.Context, mode storage.ModeGet, addr boson.Addres
 
 		return nil, fmt.Errorf("netstore get: %w", err)
 	}
+	if !sctx.GetLocalGet(ctx) {
+		rootCID := sctx.GetRootCID(ctx)
+		if !rootCID.IsZero() {
+			_ = s.chunkInfo.OnChunkRetrieved(addr, rootCID, s.addr)
+		}
+	}
+
 	return ch, nil
 }

@@ -117,6 +117,14 @@ func (ci *ChunkInfo) UpdateChunkInfoSource(rootCid, sourceOverlay boson.Address,
 	if _, ok := ci.cs.presence[rc]; !ok {
 		return fmt.Errorf("chunk info : source is not exists")
 	}
+
+	v := ci.getCidSort(rootCid, cid)
+	for _, bit := range ci.cs.presence[rc].ChunkSource {
+		if bit.Get(v) {
+			return nil
+		}
+	}
+
 	vb, ok := ci.cs.presence[rc].ChunkSource[over]
 	if !ok {
 		v, err := ci.getChunkSize(context.Background(), rootCid)
@@ -126,7 +134,6 @@ func (ci *ChunkInfo) UpdateChunkInfoSource(rootCid, sourceOverlay boson.Address,
 		vb, _ = bitvector.New(v)
 		ci.cs.presence[rc].ChunkSource[over] = vb
 	}
-	v := ci.getCidSort(rootCid, cid)
 	vb.Set(v)
 	// db
 	return ci.cs.storer.Put(generateKey(chunkSourceKeyPrefix, rootCid, sourceOverlay), &BitVector{B: vb.Bytes(), Len: vb.Len()})

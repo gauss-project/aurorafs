@@ -356,7 +356,7 @@ func NewAurora(nodeMode aurora.Model, addr string, bosonAddress boson.Address, p
 		return nil, fmt.Errorf("retrieval service: %w", err)
 	}
 
-	ns := netstore.New(storer, retrieve, logger)
+	ns := netstore.New(storer, retrieve, logger, bosonAddress)
 
 	traversalService := traversal.New(ns)
 
@@ -369,7 +369,8 @@ func NewAurora(nodeMode aurora.Model, addr string, bosonAddress boson.Address, p
 	if err = p2ps.AddProtocol(chunkInfo.Protocol()); err != nil {
 		return nil, fmt.Errorf("chunkInfo service: %w", err)
 	}
-	storer.WithChunkInfo(chunkInfo)
+	storer.SetChunkInfo(chunkInfo)
+	ns.SetChunkInfo(chunkInfo)
 	retrieve.Config(chunkInfo)
 
 	multiResolver := multiresolver.NewMultiResolver(
