@@ -63,7 +63,7 @@ func (s *Store) Get(ctx context.Context, mode storage.ModeGet, addr boson.Addres
 	}
 	if !sctx.GetLocalGet(ctx) {
 		rootCID := sctx.GetRootCID(ctx)
-		if !rootCID.IsZero() {
+		if !rootCID.IsZero() && !rootCID.Equal(addr) {
 			_ = s.chunkInfo.OnChunkRetrieved(addr, rootCID, s.addr)
 		}
 	}

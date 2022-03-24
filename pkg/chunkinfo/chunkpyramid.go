@@ -68,9 +68,10 @@ func (ci *ChunkInfo) updateChunkPyramid(rootCid boson.Address, pyramids [][][]by
 		for _, x := range p {
 			cid := boson.NewAddress(x).String()
 			if _, ok := py[cid]; !ok {
+				py[cid] = struct{}{}
 				ci.cp.putChunk(boson.NewAddress(x))
+				chunkMax++
 			}
-			chunkMax++
 		}
 	}
 	for k := range trie {
