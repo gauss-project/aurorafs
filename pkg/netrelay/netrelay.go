@@ -10,7 +10,6 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/gauss-project/aurorafs/pkg/aurora"
 	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/jsonhttp"
@@ -27,7 +26,6 @@ type NetRelay interface {
 type Service struct {
 	streamer p2p.Streamer
 	logger   logging.Logger
-	address  common.Address
 	route    routetab.RouteTab
 	groups   []model.ConfigNodeGroup
 }
@@ -79,8 +77,7 @@ func (s *Service) RelayHttpDo(w http.ResponseWriter, r *http.Request, address bo
 		}
 	}
 	w.WriteHeader(int(resp.Status))
-	io.Copy(w, bytes.NewBuffer(resp.Body))
-
+	_, _ = io.Copy(w, bytes.NewBuffer(resp.Body))
 }
 
 func (s *Service) getDomainAddr(goupName, domainName string) (string, bool) {

@@ -379,7 +379,7 @@ func NewAurora(nodeMode aurora.Model, addr string, bosonAddress boson.Address, p
 	)
 	b.resolverCloser = multiResolver
 
-	group := multicast.NewService(bosonAddress, p2ps, p2ps, kad, route, logger, multicast.Option{Dev: o.IsDev})
+	group := multicast.NewService(bosonAddress, nodeMode, p2ps, p2ps, kad, route, logger, multicast.Option{Dev: o.IsDev})
 	group.Start()
 	b.groupCloser = group
 	err = p2ps.AddProtocol(group.Protocol())

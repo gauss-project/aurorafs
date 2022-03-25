@@ -44,7 +44,7 @@ func (s *Service) StartDiscover() {
 func (s *Service) discover(g *Group) {
 	doFunc := func(wg *sync.WaitGroup, v *Group) {
 		if v.connectedPeers.Length() < v.option.KeepConnectedPeers {
-			v.keepPeers.EachBin(func(address boson.Address, u uint8) (stop, jumpToNext bool, err error) {
+			_ = v.keepPeers.EachBin(func(address boson.Address, u uint8) (stop, jumpToNext bool, err error) {
 				_ = s.route.Connect(context.Background(), address)
 				if v.connectedPeers.Length() >= v.option.KeepConnectedPeers {
 					return true, false, err

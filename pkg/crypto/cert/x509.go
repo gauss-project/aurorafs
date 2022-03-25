@@ -32,24 +32,24 @@ func GenerateCert(dir string) (certFile string, keyFile string) {
 		ExtKeyUsage:  []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
 		IPAddresses:  []net.IP{net.ParseIP("127.0.0.1")},
 	}
-	pk, err := rsa.GenerateKey(rand.Reader, 2048)
-	derBytes, err := x509.CreateCertificate(rand.Reader, &rootTemplate, &rootTemplate, &pk.PublicKey, pk)
+	pk, _ := rsa.GenerateKey(rand.Reader, 2048)
+	derBytes, _ := x509.CreateCertificate(rand.Reader, &rootTemplate, &rootTemplate, &pk.PublicKey, pk)
 
-	_, err = os.Stat(dir + "/cert")
+	_, err := os.Stat(dir + "/cert")
 	if err != nil {
 		if os.IsNotExist(err) {
 			_ = os.Mkdir(dir+"/cert", 0744)
 		}
 	}
 	certFile = filepath.Join(dir, "cert", "cert.pem")
-	certOut, err := os.OpenFile(certFile, os.O_WRONLY|os.O_CREATE, 0744)
-	pem.Encode(certOut, &pem.Block{Type: "CERTIFICATE", Bytes: derBytes})
+	certOut, _ := os.OpenFile(certFile, os.O_WRONLY|os.O_CREATE, 0744)
+	_ = pem.Encode(certOut, &pem.Block{Type: "CERTIFICATE", Bytes: derBytes})
 
-	certOut.Close()
+	_ = certOut.Close()
 
 	keyFile = filepath.Join(dir, "cert", "key.pem")
-	keyOut, err := os.OpenFile(keyFile, os.O_WRONLY|os.O_CREATE, 0744)
-	pem.Encode(keyOut, &pem.Block{Type: "RSA PRIVATE KEY", Bytes: x509.MarshalPKCS1PrivateKey(pk)})
-	keyOut.Close()
+	keyOut, _ := os.OpenFile(keyFile, os.O_WRONLY|os.O_CREATE, 0744)
+	_ = pem.Encode(keyOut, &pem.Block{Type: "RSA PRIVATE KEY", Bytes: x509.MarshalPKCS1PrivateKey(pk)})
+	_ = keyOut.Close()
 	return
 }

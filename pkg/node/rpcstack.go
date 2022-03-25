@@ -139,11 +139,11 @@ func (h *httpServer) start() error {
 	}()
 
 	if h.wsAllowed() {
-		url := fmt.Sprintf("%s", listener.Addr())
+		url := listener.Addr().String()
 		if h.wsConfig.prefix != "" {
 			url += h.wsConfig.prefix
 		}
-		h.log.Infof("rpc websocket address: %s", listener.Addr())
+		h.log.Infof("rpc websocket address: %s", url)
 	}
 	// if server is websocket only, return after logging
 	if !h.rpcAllowed() {

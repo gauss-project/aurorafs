@@ -22,9 +22,9 @@ func (s *Service) Handshake(ctx context.Context, addr boson.Address) (err error)
 	}
 	defer func() {
 		if err != nil {
-			stream.Reset()
+			_ = stream.Reset()
 		} else {
-			stream.FullClose()
+			_ = stream.FullClose()
 		}
 	}()
 	w, r := protobuf.NewWriterAndReader(stream)
