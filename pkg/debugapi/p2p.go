@@ -3,8 +3,10 @@ package debugapi
 import (
 	"bytes"
 	"encoding/hex"
-	"github.com/gauss-project/aurorafs/pkg/logging"
 	"net/http"
+	"time"
+
+	"github.com/gauss-project/aurorafs/pkg/logging"
 
 	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/crypto"
@@ -34,7 +36,10 @@ func GetPublicIp(loger logging.Logger) *publicIP {
 		ip4Content = new(bytes.Buffer)
 		ip6Content = new(bytes.Buffer)
 	)
-	ip4Resp, err := http.Get(ip4ServiceUrl)
+	client := http.Client{
+		Timeout: time.Second * 2,
+	}
+	ip4Resp, err := client.Get(ip4ServiceUrl)
 	if err != nil {
 		loger.Debugf("debug api: p2p request public ipv4: %v", err)
 	} else {
@@ -47,7 +52,7 @@ func GetPublicIp(loger logging.Logger) *publicIP {
 			}
 		}
 	}
-	ip6Resp, err := http.Get(ip6ServiceUrl)
+	ip6Resp, err := client.Get(ip6ServiceUrl)
 	if err != nil {
 		loger.Debugf("debug api: p2p request public ipv6: %v", err)
 	} else {
@@ -61,6 +66,11 @@ func GetPublicIp(loger logging.Logger) *publicIP {
 		}
 	}
 	return &publicIP{IPv4: ip4Content.String(), IPv6: ip6Content.String()}
+}
+
+var pubIP = &publicIP{
+	IPv4: "",
+	IPv6: "",
 }
 
 func (s *Service) addressesHandler(w http.ResponseWriter, r *http.Request) {
@@ -90,11 +100,23 @@ func (s *Service) addressesHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	ch := make(chan struct{}, 1)
+	go func(ch chan struct{}) {
+		ip := GetPublicIp(s.logger)
+		pubIP.IPv6 = ip.IPv6
+		pubIP.IPv4 = ip.IPv4
+		<-ch
+	}(ch)
+	select {
+	case <-time.After(time.Millisecond * 200):
+	case <-ch:
+	}
+
 	jsonhttp.OK(w, addressesResponse{
 		Overlay:   s.overlay,
 		Underlay:  underlay,
 		NATRoute:  natAddresses,
-		PublicIP:  *GetPublicIp(s.logger),
+		PublicIP:  *pubIP,
 		NetworkID: s.nodeOptions.NetworkID,
 		PublicKey: hex.EncodeToString(crypto.EncodeSecp256k1PublicKey(&s.publicKey)),
 	})
