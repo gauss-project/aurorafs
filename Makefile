@@ -2,7 +2,7 @@ GO ?= go
 GOBIND ?= gobind
 GOMOBILE ?= gomobile
 GOLANGCI_LINT ?= $$($(GO) env GOPATH)/bin/golangci-lint
-GOLANGCI_LINT_VERSION ?= v1.42.1
+GOLANGCI_LINT_VERSION ?= v1.45.2
 GOGOPROTOBUF ?= protoc-gen-gogofaster
 GOGOPROTOBUF_VERSION ?= v1.3.2
 

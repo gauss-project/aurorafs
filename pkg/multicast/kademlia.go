@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/gauss-project/aurorafs/pkg/aurora"
 	"math/rand"
 	"sync"
 	"sync/atomic"
@@ -49,6 +50,7 @@ const (
 
 type Service struct {
 	o              Option
+	nodeMode       aurora.Model
 	self           boson.Address
 	p2ps           p2p.Service
 	stream         p2p.Streamer
@@ -120,16 +122,17 @@ type Option struct {
 	Dev bool
 }
 
-func NewService(self boson.Address, service p2p.Service, streamer p2p.Streamer, kad topology.Driver, route routetab.RouteTab, logger logging.Logger, o Option) *Service {
+func NewService(self boson.Address, nodeMode aurora.Model, service p2p.Service, streamer p2p.Streamer, kad topology.Driver, route routetab.RouteTab, logger logging.Logger, o Option) *Service {
 	srv := &Service{
-		o:      o,
-		self:   self,
-		p2ps:   service,
-		stream: streamer,
-		logger: logger,
-		kad:    kad,
-		route:  route,
-		close:  make(chan struct{}, 1),
+		o:        o,
+		nodeMode: nodeMode,
+		self:     self,
+		p2ps:     service,
+		stream:   streamer,
+		logger:   logger,
+		kad:      kad,
+		route:    route,
+		close:    make(chan struct{}, 1),
 	}
 	return srv
 }
@@ -299,6 +302,9 @@ func (s *Service) leaveConnectedAll(peers ...boson.Address) {
 
 func (s *Service) getGIDsByte() [][]byte {
 	GIDs := make([][]byte, 0)
+	if s.nodeMode.IsBootNode() || !s.nodeMode.IsFull() {
+		return GIDs
+	}
 	s.groups.Range(func(key, value interface{}) bool {
 		gid := boson.MustParseHexAddress(gconv.String(key))
 		g := value.(*Group)
@@ -605,6 +611,9 @@ func (s *Service) leaveGroup(gid boson.Address) error {
 }
 
 func (s *Service) notify(msg *pb.Notify, groups ...*Group) {
+	if s.nodeMode.IsBootNode() || !s.nodeMode.IsFull() {
+		return
+	}
 	send := func(address boson.Address, u uint8) (stop, jumpToNext bool, err error) {
 		_ = s.sendData(context.Background(), address, streamNotify, msg)
 		return false, false, nil
@@ -843,9 +852,9 @@ func (s *Service) Send(ctx context.Context, data []byte, gid, dest boson.Address
 	}
 	defer func() {
 		if err != nil {
-			stream.Reset()
+			_ = stream.Reset()
 		} else {
-			stream.FullClose()
+			_ = stream.FullClose()
 		}
 	}()
 	req := &pb.GroupMsg{
@@ -865,9 +874,9 @@ func (s *Service) SendReceive(ctx context.Context, data []byte, gid, dest boson.
 	}
 	defer func() {
 		if err != nil {
-			stream.Reset()
+			_ = stream.Reset()
 		} else {
-			stream.FullClose()
+			_ = stream.FullClose()
 		}
 	}()
 	req := &pb.GroupMsg{
@@ -1016,7 +1025,7 @@ func (s *Service) notifyMessage(gid boson.Address, msg GroupMessage, st *WsStrea
 				select {
 				case <-time.After(timeout):
 					s.logger.Debugf("group: sessionID %s timeout %s when wait receive reply from websocket", msg.SessionID, timeout)
-					st.stream.Reset()
+					_ = st.stream.Reset()
 				case <-st.done:
 				}
 			}()
@@ -1047,7 +1056,7 @@ func (s *Service) replyGroupMessage(sessionID string, data []byte) (err error) {
 	st := v.(*WsStream)
 	defer func() {
 		if err != nil {
-			st.stream.Reset()
+			_ = st.stream.Reset()
 		} else {
 			switch st.sendOption {
 			case SendReceive:

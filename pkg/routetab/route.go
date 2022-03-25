@@ -735,11 +735,11 @@ func (s *Service) onRelay(ctx context.Context, p p2p.Peer, stream p2p.Stream) (e
 	readResp := func(ch chan *pb.RouteRelayResp) {
 		for {
 			resp := &pb.RouteRelayResp{}
-			err = forwardReader.ReadMsg(resp)
+			e := forwardReader.ReadMsg(resp)
 			if quit {
 				return
 			}
-			switch err {
+			switch e {
 			case context.Canceled, io.EOF:
 				// when next node FullClose
 				errChan <- nil
@@ -748,7 +748,7 @@ func (s *Service) onRelay(ctx context.Context, p p2p.Peer, stream p2p.Stream) (e
 				ch <- resp
 				s.logger.Tracef("route: onRelay target %s receive: from %s", target, next)
 			default:
-				content := fmt.Sprintf("route: onRelay read resp from next: %s", err.Error())
+				content := fmt.Sprintf("route: onRelay read resp from next: %s", e.Error())
 				s.logger.Debug(content)
 				errChan <- fmt.Errorf(content)
 				return

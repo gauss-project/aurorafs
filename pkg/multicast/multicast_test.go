@@ -4,6 +4,8 @@ import (
 	"io"
 	"testing"
 
+	"github.com/gauss-project/aurorafs/pkg/aurora"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/gauss-project/aurorafs/pkg/boson/test"
 	"github.com/gauss-project/aurorafs/pkg/logging"
@@ -44,7 +46,7 @@ func TestService_ObserveGroup(t *testing.T) {
 	gid := GenerateGID("gid1")
 	route := mockRoute.NewMockRouteTable()
 	kad := mock.NewMockKademlia()
-	s := NewService(test.RandomAddress(), nil, nil, kad, &route, logger, Option{Dev: true})
+	s := NewService(test.RandomAddress(), aurora.NewModel(), nil, nil, kad, &route, logger, Option{Dev: true})
 	err := s.observeGroup(gid, model.ConfigNodeGroup{})
 	if err != nil {
 		t.Fatal(err)

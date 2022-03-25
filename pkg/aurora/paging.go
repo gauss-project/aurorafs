@@ -2,11 +2,12 @@ package aurora
 
 import (
 	"fmt"
-	"github.com/gauss-project/aurorafs/pkg/logging"
 	"reflect"
 	"sort"
 	"strconv"
 	"strings"
+
+	"github.com/gauss-project/aurorafs/pkg/logging"
 )
 
 const (
@@ -43,7 +44,7 @@ type ApiFilter struct {
 type ApiBody struct {
 	Page   int         `json:"page"`
 	Limit  int         `json:"limit"`
-	Sort   string      `json:"sort"` //desc asc
+	Sort   string      `json:"sort"` // desc asc
 	Order  string      `json:"order"`
 	Filter []ApiFilter `json:"filter"`
 }
@@ -299,10 +300,10 @@ func (pg *Paging) filterCalculate(data interface{}, filter ApiFilter) (bool, err
 }
 
 func (pg *Paging) toFloat(filedValue interface{}) (float64, error) {
-	switch filedValue.(type) {
+	switch val := filedValue.(type) {
 
 	case int, int8, int16, int32, int64, uint, uint8, uint16, uint32, uint64:
-		v := fmt.Sprintf("%d", filedValue)
+		v := fmt.Sprintf("%d", val)
 		floatV, err := strconv.ParseFloat(v, 64)
 		if err != nil {
 			pg.logger.Error("API-paging-toFloat: The value [%s] Unable to convert to float. ", filedValue)
@@ -310,13 +311,13 @@ func (pg *Paging) toFloat(filedValue interface{}) (float64, error) {
 		}
 		return floatV, nil
 	case string:
-		f, err := strconv.ParseFloat(filedValue.(string), 64)
+		f, err := strconv.ParseFloat(val, 64)
 		if err != nil {
 			return 0, fmt.Errorf("The value [%s] Can't turn into float ", filedValue)
 		}
 		return f, nil
 	case bool:
-		if filedValue.(bool) {
+		if val {
 			return 1, nil
 		} else {
 			return 0, nil
