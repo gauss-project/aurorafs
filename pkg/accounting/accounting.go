@@ -86,30 +86,15 @@ func (a *Accounting) Reserve(peer boson.Address, traffic uint64) (err error) {
 	if err != nil {
 		return err
 	}
-
-	accountingPeer.lock.Lock()
-	defer accountingPeer.lock.Unlock()
 	retrieve := accountingPeer.unPaidTraffic
-
-	if retrieve.Cmp(big.NewInt(0)) == 0 {
-		retrieve, err = a.settlement.RetrieveTraffic(peer)
-		if err != nil {
-			a.logger.Errorf("retrieve %s", retrieve)
-			return err
-		}
-	}
 	ret := big.NewInt(0).Add(retrieve, new(big.Int).SetUint64(traffic))
 	available, err := a.settlement.AvailableBalance()
 	if err != nil {
 		return err
 	}
-
 	if available.Cmp(ret) < 0 {
 		return ErrLowAvailableExceeded
 	}
-	a.accountingPeersMu.Lock()
-	accountingPeer.unPaidTraffic = big.NewInt(0).Add(retrieve, new(big.Int).SetUint64(traffic))
-	a.accountingPeersMu.Unlock()
 
 	return nil
 }
@@ -123,6 +108,7 @@ func (a *Accounting) Credit(ctx context.Context, peer boson.Address, traffic uin
 	}
 	accountingPeer.lock.Lock()
 	defer accountingPeer.lock.Unlock()
+	accountingPeer.unPaidTraffic = big.NewInt(0).Add(accountingPeer.unPaidTraffic, new(big.Int).SetUint64(traffic))
 	if err := a.settlement.PutRetrieveTraffic(peer, new(big.Int).SetUint64(traffic)); err != nil {
 		a.logger.Errorf("failed to modify retrieve traffic")
 		return err
@@ -152,13 +138,7 @@ func (a *Accounting) settle() {
 // Debit increases the amount of debt we have with the given peer (and decreases
 // existing credit).
 func (a *Accounting) Debit(peer boson.Address, traffic uint64) error {
-	accountingPeer, err := a.getAccountingPeer(peer)
-	if err != nil {
-		return err
-	}
 
-	accountingPeer.lock.Lock()
-	defer accountingPeer.lock.Unlock()
 	tolerance := a.paymentTolerance
 	traff, err := a.settlement.TransferTraffic(peer)
 	if err != nil {
@@ -195,9 +175,13 @@ func (a *Accounting) getAccountingPeer(peer boson.Address) (*accountingPeer, err
 	defer a.accountingPeersMu.Unlock()
 	peerData, ok := a.accountingPeers[peer.String()]
 	if !ok {
+		retrieve, err := a.settlement.RetrieveTraffic(peer)
+		if err != nil {
+			return nil, err
+		}
 		peerData = &accountingPeer{
 			paymentThreshold: a.paymentThreshold,
-			unPaidTraffic:    big.NewInt(0),
+			unPaidTraffic:    retrieve,
 		}
 		a.accountingPeers[peer.String()] = peerData
 	}
@@ -210,8 +194,8 @@ func (a *Accounting) NotifyPayment(peer boson.Address, traffic *big.Int) error {
 		return err
 	}
 
-	a.accountingPeersMu.Lock()
-	defer a.accountingPeersMu.Unlock()
+	accountingPeer.lock.Lock()
+	defer accountingPeer.lock.Unlock()
 	unPay := accountingPeer.unPaidTraffic
 	if unPay.Cmp(big.NewInt(0)) <= 0 {
 		return nil
@@ -221,5 +205,16 @@ func (a *Accounting) NotifyPayment(peer boson.Address, traffic *big.Int) error {
 	} else {
 		accountingPeer.unPaidTraffic = new(big.Int).Sub(unPay, traffic)
 	}
+	return nil
+
+}
+func (a *Accounting) AsyncNotifyPayment(peer boson.Address, traffic *big.Int) error {
+
+	go func() {
+		err := a.NotifyPayment(peer, traffic)
+		if err != nil {
+			a.logger.Errorf("failed to notify accounting of payment: %v", err)
+		}
+	}()
 	return nil
 }

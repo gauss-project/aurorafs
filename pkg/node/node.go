@@ -293,7 +293,7 @@ func NewAurora(nodeMode aurora.Model, addr string, bosonAddress boson.Address, p
 		stateStore,
 		settlement,
 	)
-	settlement.SetNotifyPaymentFunc(acc.NotifyPayment)
+	settlement.SetNotifyPaymentFunc(acc.AsyncNotifyPayment)
 
 	metricsDB, err := shed.NewDBWrap(stateStore.DB())
 	if err != nil {
