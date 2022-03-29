@@ -6,11 +6,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/gauss-project/aurorafs/pkg/aurora"
 	"math/rand"
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/gauss-project/aurorafs/pkg/aurora"
 
 	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/logging"
@@ -1017,6 +1018,7 @@ func (s *Service) notifyMessage(gid boson.Address, msg GroupMessage, st *WsStrea
 		}
 		switch st.sendOption {
 		case SendReceive:
+			s.logger.Debugf("group: sessionID %s from %s", msg.SessionID, msg.From)
 			go func() {
 				st.done = make(chan struct{}, 1)
 				s.sessionStream.Store(msg.SessionID, st)

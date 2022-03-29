@@ -4,12 +4,15 @@
 package debugapi
 
 import (
+	"context"
 	"crypto/ecdsa"
 	"net/http"
 	"sync"
 
 	"github.com/gauss-project/aurorafs/pkg/multicast"
 	"github.com/gauss-project/aurorafs/pkg/settlement/traffic"
+	"github.com/gogf/gf/v2/os/gcache"
+	"github.com/gogf/gf/v2/os/gctx"
 
 	"github.com/gauss-project/aurorafs/pkg/aurora"
 	"github.com/gauss-project/aurorafs/pkg/boson"
@@ -63,6 +66,8 @@ type Service struct {
 	handler     http.Handler
 	handlerMu   sync.RWMutex
 	nodeOptions Options
+	cache       *gcache.Cache
+	cacheCtx    context.Context
 }
 
 type Options struct {
@@ -92,6 +97,8 @@ func New(overlay boson.Address, publicKey ecdsa.PublicKey, logger logging.Logger
 	s.corsAllowedOrigins = corsAllowedOrigins
 	s.metricsRegistry = newMetricsRegistry()
 	s.nodeOptions = o
+	s.cache = gcache.New()
+	s.cacheCtx = gctx.New()
 	s.setRouter(s.newBasicRouter())
 
 	return s

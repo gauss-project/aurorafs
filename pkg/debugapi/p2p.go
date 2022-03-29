@@ -6,11 +6,10 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/gauss-project/aurorafs/pkg/logging"
-
 	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/crypto"
 	"github.com/gauss-project/aurorafs/pkg/jsonhttp"
+	"github.com/gauss-project/aurorafs/pkg/logging"
 	"github.com/multiformats/go-multiaddr"
 )
 
@@ -100,16 +99,21 @@ func (s *Service) addressesHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	ch := make(chan struct{}, 1)
-	go func(ch chan struct{}) {
-		ip := GetPublicIp(s.logger)
-		pubIP.IPv6 = ip.IPv6
-		pubIP.IPv4 = ip.IPv4
-		<-ch
-	}(ch)
-	select {
-	case <-time.After(time.Millisecond * 200):
-	case <-ch:
+	key := "debugapi_addressesHandler"
+	get, _ := s.cache.Get(s.cacheCtx, key)
+	if get == nil {
+		ch := make(chan struct{}, 1)
+		go func(ch chan struct{}) {
+			ip := GetPublicIp(s.logger)
+			pubIP.IPv6 = ip.IPv6
+			pubIP.IPv4 = ip.IPv4
+			_ = s.cache.Set(s.cacheCtx, key, 1, time.Second*5)
+			<-ch
+		}(ch)
+		select {
+		case <-time.After(time.Millisecond * 200):
+		case <-ch:
+		}
 	}
 
 	jsonhttp.OK(w, addressesResponse{
