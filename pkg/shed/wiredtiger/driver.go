@@ -54,8 +54,8 @@ var (
 	defaultFileManager   = FileManger{CloseIdleTime: 600, CloseScanInterval: 10, CloseHandleMinimum: 2000}
 	defaultLog           = Log{Enabled: true, Archive: true, Path: "journal", Compressor: SnappyCompressor}
 	defaultSessionMax    = 33000
-	defaultStatistics    = []StatisticsPolicy{StatisticsFast}
-	defaultStatisticsLog = StatisticsLog{Wait: 0}
+	defaultStatistics    = []StatisticsPolicy{StatisticsAll}
+	defaultStatisticsLog = StatisticsLog{Wait: 30}
 	defaultExtensions    = "[/usr/local/lib/libwiredtiger_snappy.so]"
 	defaultVerbose       = "[recovery_progress,checkpoint_progress,compact_progress]"
 )
