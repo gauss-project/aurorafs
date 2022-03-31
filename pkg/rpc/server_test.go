@@ -129,12 +129,11 @@ func TestServerShortLivedConn(t *testing.T) {
 		// Now try to get the response.
 		buf := make([]byte, 2000)
 		n, err := conn.Read(buf)
+		_ = conn.Close()
 		if err != nil {
-			_ = conn.Close()
 			t.Fatal("read error:", err)
 		}
 		if !bytes.Equal(buf[:n], []byte(wantResp)) {
-			_ = conn.Close()
 			t.Fatalf("wrong response: %s", buf[:n])
 		}
 	}

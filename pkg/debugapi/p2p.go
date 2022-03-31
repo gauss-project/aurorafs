@@ -108,7 +108,7 @@ func (s *Service) addressesHandler(w http.ResponseWriter, r *http.Request) {
 			pubIP.IPv6 = ip.IPv6
 			pubIP.IPv4 = ip.IPv4
 			_ = s.cache.Set(s.cacheCtx, key, 1, time.Second*5)
-			<-ch
+			close(ch)
 		}(ch)
 		select {
 		case <-time.After(time.Millisecond * 200):
