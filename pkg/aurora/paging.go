@@ -50,14 +50,16 @@ type ApiBody struct {
 }
 
 type Paging struct {
+	page   int
 	limit  int
 	sort   string
 	order  string
 	logger logging.Logger
 }
 
-func NewPaging(logger logging.Logger, limit int, sort string, order string) *Paging {
+func NewPaging(logger logging.Logger, page, limit int, sort string, order string) *Paging {
 	return &Paging{
+		page:   page,
 		limit:  limit,
 		sort:   sort,
 		order:  order,
@@ -162,13 +164,17 @@ func (pg *Paging) PageSort(list []map[string]interface{}, sortName, sortType str
 	return list
 }
 
-func (pg *Paging) Page(list []map[string]interface{}, page int) (newList []map[string]interface{}) {
+func (pg *Paging) Page(list []map[string]interface{}) []map[string]interface{} {
 	if len(list) == 0 {
-		return
+		return list
 	}
-	start := pg.limit * (page - 1)
+	start := pg.limit * (pg.page - 1)
 	if len(list)-start >= pg.limit {
 		list = list[start : start+pg.limit]
+		return list
+	}
+	if len(list) < pg.page {
+		return nil
 	} else {
 		list = list[start:]
 	}
