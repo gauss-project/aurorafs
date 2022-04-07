@@ -33,18 +33,22 @@ func (a *apiService) Message(ctx context.Context, name string) (*rpc.Subscriptio
 	if err != nil {
 		gid = GenerateGID(name)
 	}
-	ch, unsub, err := a.s.SubscribeGroupMessage(gid)
+	ch, err := a.s.SubscribeGroupMessage(gid)
 	if err != nil {
 		return nil, err
 	}
-
+	a.s.logger.Debugf("group %s message subscribe success", name)
 	go func() {
 		for {
 			select {
 			case data := <-ch:
 				_ = notifier.Notify(sub.ID, data)
-			case <-sub.Err():
-				unsub()
+			case e := <-sub.Err():
+				if e != nil {
+					a.s.logger.Errorf("group %s message subscribe err %v", name, e)
+				} else {
+					a.s.logger.Infof("group %s message unsubscribe success", name)
+				}
 				return
 			}
 		}

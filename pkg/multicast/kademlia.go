@@ -978,22 +978,18 @@ func (s *Service) onMessage(ctx context.Context, peer p2p.Peer, stream p2p.Strea
 	return nil
 }
 
-func (s *Service) SubscribeGroupMessage(gid boson.Address) (c <-chan GroupMessage, unsubscribe func(), err error) {
-	unsubscribe = func() {}
+func (s *Service) SubscribeGroupMessage(gid boson.Address) (c <-chan GroupMessage, err error) {
 	channel := make(chan GroupMessage, 1)
 	var g *Group
 	value, ok := s.groups.Load(gid.String())
 	if ok {
 		g = value.(*Group)
-		if g.option.GType == model.GTypeJoin && g.groupMessageCh == nil {
+		if g.option.GType == model.GTypeJoin {
 			g.groupMessageCh = channel
-			return channel, func() { g.groupMessageCh = nil }, nil
-		}
-		if g.groupMessageCh != nil {
-			return nil, unsubscribe, errors.New("group message subscription already exists")
+			return channel, nil
 		}
 	}
-	return nil, unsubscribe, errors.New("the group notfound")
+	return nil, errors.New("the joined group notfound")
 }
 
 func (s *Service) notifyMessage(gid boson.Address, msg GroupMessage, st *WsStream) (e error) {
