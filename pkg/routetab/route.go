@@ -282,6 +282,14 @@ func (s *Service) onRouteResp(ctx context.Context, peer p2p.Peer, stream p2p.Str
 
 	s.metrics.FindRouteRespReceivedCount.Inc()
 
+	for _, v := range resp.Paths {
+		items := v.Items // response path maybe loop back
+		if inPath(s.self.Bytes(), items) {
+			// discard
+			s.logger.Tracef("route:%s onRouteReq target=%s discard, received path contains self.", s.self.String(), target.String())
+			return nil
+		}
+	}
 	s.routeTable.SavePaths(resp.Paths)
 	s.saveUnderlay(resp.UList)
 
