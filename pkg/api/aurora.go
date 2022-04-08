@@ -438,6 +438,18 @@ func (s *server) auroraListHandler(w http.ResponseWriter, r *http.Request) {
 			jsonhttp.InternalServerError(w, fmt.Errorf("aurora list: Request parameter conversion failed,%v", err.Error()))
 			return
 		}
+		if reqs.Page == reqs.Limit && reqs.Page == 0 {
+			jsonhttp.InternalServerError(w, fmt.Errorf("aurora list: Page information error"))
+			return
+		}
+	}
+
+	registerStatus := func(rootCid boson.Address) bool {
+		if v, ok := s.auroraChainSate.Load(rootCid.String()); ok {
+			register := v.(bool)
+			return register
+		}
+		return false
 	}
 
 	responseList := make([]auroraListResponse, 0)
@@ -468,22 +480,24 @@ func (s *server) auroraListHandler(w http.ResponseWriter, r *http.Request) {
 				fileListInfo[i]["manifest.sub.mime"] = maniFestNode.MimeType
 			}
 		}
-	}
-
-	if isBody {
-		paging := aurora.NewPaging(s.logger, reqs.Limit, reqs.Sort, reqs.Order)
-		fileListInfo = paging.ResponseFilter(fileListInfo, reqs.Filter)
-		fileListInfo = paging.PageSort(fileListInfo, reqs.Sort, reqs.Order)
-		pageTotal = len(fileListInfo)
-		fileListInfo = paging.Page(fileListInfo, reqs.Page)
-	}
-
-	for _, v := range fileListInfo {
 		pinned, err := s.pinning.HasPin(v["rootCid"].(boson.Address))
 		if err != nil {
 			s.logger.Errorf("aurora list: check hash %s pinning err", v)
 			continue
 		}
+		fileListInfo[i]["pinState"] = pinned
+		fileListInfo[i]["register"] = registerStatus(v["rootCid"].(boson.Address))
+	}
+
+	if isBody {
+		paging := aurora.NewPaging(s.logger, reqs.Page, reqs.Limit, reqs.Sort, reqs.Order)
+		fileListInfo = paging.ResponseFilter(fileListInfo, reqs.Filter)
+		fileListInfo = paging.PageSort(fileListInfo, reqs.Sort, reqs.Order)
+		pageTotal = len(fileListInfo)
+		fileListInfo = paging.Page(fileListInfo)
+	}
+
+	for _, v := range fileListInfo {
 		bitvector := aurora.BitVectorApi{
 			Len: v["bitvector.len"].(int),
 			B:   v["bitvector.b"].([]byte),
@@ -504,9 +518,9 @@ func (s *server) auroraListHandler(w http.ResponseWriter, r *http.Request) {
 			FileHash:  v["rootCid"].(boson.Address),
 			Size:      v["treeSize"].(int),
 			FileSize:  v["fileSize"].(int),
-			PinState:  pinned,
+			PinState:  v["pinState"].(bool),
 			BitVector: bitvector,
-			Register:  false,
+			Register:  v["register"].(bool),
 			Manifest:  &manifestNode,
 		})
 	}
