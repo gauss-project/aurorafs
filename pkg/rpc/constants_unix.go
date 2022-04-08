@@ -30,5 +30,5 @@ int rpc_max_socket_path_size() {
 import "C"
 
 var (
-	max_path_size = C.rpc_max_socket_path_size()
+	maxPathSize = C.rpc_max_socket_path_size()
 )
