@@ -872,11 +872,7 @@ func (s *Service) SendReceive(ctx context.Context, data []byte, gid, dest boson.
 		return
 	}
 	defer func() {
-		if err != nil {
-			_ = stream.Reset()
-		} else {
-			_ = stream.FullClose()
-		}
+		_ = stream.Reset()
 	}()
 	req := &pb.GroupMsg{
 		Gid:  gid.Bytes(),
