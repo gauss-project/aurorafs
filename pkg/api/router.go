@@ -111,13 +111,6 @@ func (s *server) setupRouting() {
 		),
 	})
 
-	handle("/aurora/list", jsonhttp.MethodHandler{
-		"POST": web.ChainHandlers(
-			s.newTracingHandler("aurora-upload"),
-			web.FinalHandlerFunc(s.auroraListHandler),
-		),
-	})
-
 	handle("/aurora/{address}", jsonhttp.MethodHandler{
 		"GET": http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			u := r.URL
