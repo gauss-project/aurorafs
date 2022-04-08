@@ -265,7 +265,7 @@ func (h *httpServer) doStop() {
 
 func (h *httpServer) registerApis(apis []rpc.API, modules []string, srv *rpc.Server, exposeAll bool) error {
 	if bad, available := checkModuleAvailability(modules, apis); len(bad) > 0 {
-		h.log.Error("Unavailable modules in HTTP API list unavailable %v available %v", bad, available)
+		h.log.Errorf("Unavailable modules in HTTP API list unavailable %v available %v", bad, available)
 	}
 	// Generate the allow list based on the allowed modules
 	allowList := make(map[string]bool)

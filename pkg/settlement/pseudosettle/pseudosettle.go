@@ -4,6 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math/big"
+	"strings"
+	"sync"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/logging"
@@ -13,9 +17,6 @@ import (
 	"github.com/gauss-project/aurorafs/pkg/settlement/traffic"
 	chequePkg "github.com/gauss-project/aurorafs/pkg/settlement/traffic/cheque"
 	"github.com/gauss-project/aurorafs/pkg/storage"
-	"math/big"
-	"strings"
-	"sync"
 )
 
 var (
@@ -40,8 +41,7 @@ type Service struct {
 }
 
 func (s *Service) API() rpc.API {
-	//TODO implement me
-	panic("implement me")
+	return rpc.API{}
 }
 
 func New(streamer p2p.Streamer, logger logging.Logger, store storage.StateStorer, address common.Address) *Service {
@@ -205,7 +205,7 @@ func (s *Service) TotalReceived(peer boson.Address) (totalReceived *big.Int, err
 	err = s.store.Get(key, &totalReceived)
 	if err != nil {
 		if errors.Is(err, storage.ErrNotFound) {
-			//return nil, settlement.ErrPeerNoSettlements
+			// return nil, settlement.ErrPeerNoSettlements
 			return big.NewInt(0), nil
 		}
 		return nil, err

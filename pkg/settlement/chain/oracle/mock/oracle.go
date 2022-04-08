@@ -2,15 +2,22 @@ package mock
 
 import (
 	"context"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/gauss-project/aurorafs/pkg/boson"
+	"github.com/gauss-project/aurorafs/pkg/rpc"
 	"github.com/gauss-project/aurorafs/pkg/settlement/chain"
 )
 
 type ChainOracle struct {
-	//logger logging.Logger
-	//oracle *oracle.Oracle
+	// logger logging.Logger
+	// oracle *oracle.Oracle
+}
+
+func (ora *ChainOracle) API() rpc.API {
+	// TODO implement me
+	panic("implement me")
 }
 
 func NewServer() *ChainOracle {
@@ -50,6 +57,6 @@ func (ora *ChainOracle) GetRegisterState(ctx context.Context, rootCid boson.Addr
 	return false, nil
 }
 
-func (ora *ChainOracle) WaitForReceipt(ctx context.Context, txHash common.Hash) (receipt *types.Receipt, err error) {
+func (ora *ChainOracle) WaitForReceipt(ctx context.Context, rootCid boson.Address, txHash common.Hash) (receipt *types.Receipt, err error) {
 	return nil, nil
 }

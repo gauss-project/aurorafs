@@ -2,12 +2,14 @@ package mock
 
 import (
 	"context"
+	"math/big"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/gauss-project/aurorafs/pkg/boson"
+	"github.com/gauss-project/aurorafs/pkg/rpc"
 	"github.com/gauss-project/aurorafs/pkg/settlement"
 	"github.com/gauss-project/aurorafs/pkg/settlement/traffic"
 	chequePkg "github.com/gauss-project/aurorafs/pkg/settlement/traffic/cheque"
-	"math/big"
 )
 
 type TraafficMock struct {
@@ -43,6 +45,10 @@ type TraafficMock struct {
 	getPeerBalance func(peer boson.Address) (*big.Int, error)
 
 	getUnPaidBalance func(peer boson.Address) (*big.Int, error)
+}
+
+func (s *TraafficMock) API() rpc.API {
+	return rpc.API{}
 }
 
 func (s *TraafficMock) TrafficInit() error {
@@ -143,7 +149,7 @@ func NewSettlement(opts ...Option) settlement.Interface {
 	return mock
 }
 
-// NewChequeStore creates the mock chequeStore implementation
+// NewTraffic creates the mock chequeStore implementation
 func NewTraffic(opts ...Option) traffic.ApiInterface {
 	mock := new(TraafficMock)
 	for _, o := range opts {

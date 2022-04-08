@@ -5,6 +5,10 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"io"
+	"testing"
+	"time"
+
 	"github.com/gauss-project/aurorafs/pkg/bitvector"
 	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/boson/test"
@@ -24,9 +28,6 @@ import (
 	"github.com/gauss-project/aurorafs/pkg/storage/mock"
 	"github.com/gauss-project/aurorafs/pkg/traversal"
 	"golang.org/x/sync/errgroup"
-	"io"
-	"testing"
-	"time"
 )
 
 const fileContentType = "text/plain; charset=utf-8"
@@ -185,7 +186,7 @@ func TestHandlerChunkInfoResp(t *testing.T) {
 
 	ctx := context.Background()
 
-	//resp  b ->a
+	// resp  b ->a
 	tree, _ := bOverlay.getChunkPyramid(ctx, rootCid)
 	pram, _, _ := bOverlay.traversal.GetChunkHashes(ctx, rootCid, tree)
 	if err := bOverlay.OnChunkTransferred(boson.NewAddress(pram[0][0]), rootCid, bAddress, boson.ZeroAddress); err != nil {
@@ -199,7 +200,7 @@ func TestHandlerChunkInfoResp(t *testing.T) {
 
 	time.Sleep(time.Millisecond * 500)
 
-	var vb bitVector
+	var vb BitVector
 	if err := aOverlay.storer.Get(generateKey(discoverKeyPrefix, rootCid, bAddress), &vb); err != nil {
 		t.Fatal(err)
 	}
@@ -338,12 +339,6 @@ func TestHandlerPyramid(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Log(messages)
-
-	cids := server.cp.getChunkCid(rootCid)
-	t.Log(cids)
-	if len(cids) == 0 {
-		t.Fatalf("chunk pyramid is nil")
-	}
 }
 
 func TestQueueProcess(t *testing.T) {
