@@ -18,6 +18,7 @@ import (
 	"github.com/gauss-project/aurorafs/pkg/p2p/protobuf"
 	"github.com/gauss-project/aurorafs/pkg/routetab/pb"
 	"github.com/gauss-project/aurorafs/pkg/storage"
+	"github.com/gauss-project/aurorafs/pkg/topology"
 	"github.com/gauss-project/aurorafs/pkg/topology/kademlia"
 	"github.com/gauss-project/aurorafs/pkg/topology/lightnode"
 	"resenje.org/singleflight"
@@ -198,9 +199,6 @@ func (s *Service) onRouteReq(ctx context.Context, p p2p.Peer, stream p2p.Stream)
 	s.logger.Tracef("route:%s onRouteReq received: target=%s", s.self.String(), target.String())
 
 	s.metrics.FindRouteReqReceivedCount.Inc()
-	// passive route save
-	s.routeTable.SavePaths(req.Paths)
-	s.saveUnderlay(req.UList)
 
 	for _, v := range req.Paths {
 		items := v.Items // request path only one
@@ -215,6 +213,9 @@ func (s *Service) onRouteReq(ctx context.Context, p p2p.Peer, stream p2p.Stream)
 			return nil
 		}
 	}
+	// passive route save
+	s.routeTable.SavePaths(req.Paths)
+	s.saveUnderlay(req.UList)
 
 	if s.self.Equal(target) {
 		// resp
@@ -410,7 +411,7 @@ func (s *Service) IsNeighbor(dest boson.Address) (has bool) {
 			return
 		}
 		return false, false, nil
-	})
+	}, topology.Filter{Reachable: false})
 	if err != nil {
 		s.logger.Warningf("route: isNeighbor %s", err.Error())
 	}
@@ -557,7 +558,7 @@ func (s *Service) isConnected(_ context.Context, target boson.Address) bool {
 		}
 		return false, false, nil
 	}
-	_ = s.kad.EachPeer(findFun)
+	_ = s.kad.EachPeer(findFun, topology.Filter{Reachable: false})
 	if isConnected {
 		s.logger.Debugf("route: connect target in neighbor")
 		return true

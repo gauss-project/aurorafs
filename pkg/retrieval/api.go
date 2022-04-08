@@ -3,8 +3,8 @@ package retrieval
 import (
 	"context"
 
-	mts "github.com/gauss-project/aurorafs/pkg/metrics"
 	"github.com/gauss-project/aurorafs/pkg/rpc"
+	"github.com/gauss-project/aurorafs/pkg/subscribe"
 	"github.com/prometheus/client_golang/prometheus"
 )
 
@@ -28,7 +28,7 @@ func (a *apiService) Metrics(ctx context.Context) (*rpc.Subscription, error) {
 	}
 	sub := notifier.CreateSubscription()
 
-	mts.AddSubscribe(notifier, sub, []prometheus.Metric{
+	subscribe.AddMetrics(notifier, sub, []prometheus.Metric{
 		a.s.metrics.TotalRetrieved,
 		a.s.metrics.TotalTransferred,
 	})

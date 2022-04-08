@@ -60,7 +60,7 @@ func (s *server) chunkUploadHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if strings.ToLower(r.Header.Get(AuroraPinHeader)) == "true" {
+	if strings.ToLower(r.Header.Get(AuroraPinHeader)) == StringTrue {
 		if err := s.pinning.CreatePin(ctx, chunk.Address(), false); err != nil {
 			s.logger.Debugf("chunk upload: creation of pin for %q failed: %v", chunk.Address(), err)
 			s.logger.Error("chunk upload: creation of pin failed")

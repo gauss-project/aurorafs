@@ -11,26 +11,26 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/gauss-project/aurorafs/pkg/aurora"
-	"github.com/gauss-project/aurorafs/pkg/topology/bootnode"
-	"github.com/gauss-project/aurorafs/pkg/topology/model"
-	"golang.org/x/sync/errgroup"
-
 	"github.com/gauss-project/aurorafs/pkg/addressbook"
+	"github.com/gauss-project/aurorafs/pkg/aurora"
+	"github.com/gauss-project/aurorafs/pkg/blocker"
 	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/discovery"
 	"github.com/gauss-project/aurorafs/pkg/logging"
 	"github.com/gauss-project/aurorafs/pkg/p2p"
+	"github.com/gauss-project/aurorafs/pkg/pingpong"
 	"github.com/gauss-project/aurorafs/pkg/shed"
 	"github.com/gauss-project/aurorafs/pkg/topology"
+	"github.com/gauss-project/aurorafs/pkg/topology/bootnode"
 	im "github.com/gauss-project/aurorafs/pkg/topology/kademlia/internal/metrics"
 	"github.com/gauss-project/aurorafs/pkg/topology/kademlia/internal/waitnext"
+	"github.com/gauss-project/aurorafs/pkg/topology/model"
 	"github.com/gauss-project/aurorafs/pkg/topology/pslice"
 	ma "github.com/multiformats/go-multiaddr"
+	"golang.org/x/sync/errgroup"
 )
 
 const (
-	nnLowWatermark         = 2 // the number of peers in consecutive deepest bins that constitute as nearest neighbours
 	maxConnAttempts        = 1 // when there is maxConnAttempts failed connect calls for a given peer it is considered non-connectable
 	maxBootNodeAttempts    = 3 // how many attempts to dial to boot-nodes before giving up
 	defaultBitSuffixLength = 3 // the number of bits used to create pseudo addresses for balancing
@@ -39,9 +39,13 @@ const (
 
 	peerConnectionAttemptTimeout = 5 * time.Second // Timeout for establishing a new connection with peer.
 
+	flagTimeout       = 5 * time.Minute  // how long before blocking a flagged peer
+	blockDuration     = time.Hour        // how long to blocklist an unresponsive peer for
+	blockWorkerWakeup = time.Second * 15 // wake up interval for the blocker worker
 )
 
 var (
+	nnLowWatermark              = 3  // the number of peers in consecutive deepest bins that constitute as nearest neighbours
 	quickSaturationPeers        = 4  // cale depth
 	saturationPeers             = 8  // active connected neighbor max
 	overSaturationPeers         = 20 // every k bucket max connes
@@ -49,6 +53,7 @@ var (
 	shortRetry                  = 30 * time.Second
 	timeToRetry                 = 2 * shortRetry
 	broadcastBinSize            = 4
+	peerPingPollTime            = blockWorkerWakeup // how often to ping a peer
 )
 
 var (
@@ -59,21 +64,25 @@ var (
 )
 
 type (
-	binSaturationFunc  func(bin uint8, peers, connected *pslice.PSlice) (saturated bool, oversaturated bool)
+	binSaturationFunc  func(bin uint8, peers, connected *pslice.PSlice, filter peerFilterFunc) (saturated bool, oversaturated bool)
 	sanctionedPeerFunc func(peer boson.Address) bool
 	pruneFunc          func(depth uint8)
+	staticPeerFunc     func(peer boson.Address) bool
+	peerFilterFunc     func(peer boson.Address) bool
 )
 
 var noopSanctionedPeerFn = func(_ boson.Address) bool { return false }
 
 // Options for injecting services to Kademlia.
 type Options struct {
-	SaturationFunc  binSaturationFunc
-	Bootnodes       []ma.Multiaddr
-	NodeMode        aurora.Model
-	BitSuffixLength int
-	PruneFunc       pruneFunc
-	BinMaxPeers     int // every k bucket max connes
+	SaturationFunc   binSaturationFunc
+	Bootnodes        []ma.Multiaddr
+	NodeMode         aurora.Model
+	BitSuffixLength  int
+	PruneFunc        pruneFunc
+	StaticNodes      []boson.Address
+	BinMaxPeers      int // every k bucket max connes
+	ReachabilityFunc peerFilterFunc
 }
 
 // Kad is the Aurora forwarding kademlia implementation.
@@ -107,8 +116,13 @@ type Kad struct {
 	waitNext          *waitnext.WaitNext
 	metrics           metrics
 	pruneFunc         pruneFunc // pluggable prune function
+	pinger            pingpong.Interface
+	staticPeer        staticPeerFunc
 	bgBroadcastCtx    context.Context
 	bgBroadcastCancel context.CancelFunc
+	blocker           *blocker.Blocker
+	reachability      p2p.ReachabilityStatus
+	peerFilter        peerFilterFunc
 }
 
 // New returns a new Kademlia.
@@ -117,6 +131,7 @@ func New(
 	addressbook addressbook.Interface,
 	discovery discovery.Driver,
 	p2ps p2p.Service,
+	pinger pingpong.Interface,
 	bootNodes *bootnode.Container,
 	metricsDB *shed.DB,
 	logger logging.Logger,
@@ -140,7 +155,7 @@ func New(
 		if o.NodeMode.IsBootNode() {
 			os = bootNodeOverSaturationPeers
 		}
-		o.SaturationFunc = binSaturated(os)
+		o.SaturationFunc = binSaturated(os, isStaticPeer(o.StaticNodes))
 	}
 	if o.BitSuffixLength == 0 {
 		o.BitSuffixLength = defaultBitSuffixLength
@@ -176,10 +191,24 @@ func New(
 		metrics:           newMetrics(),
 		pruneFunc:         o.PruneFunc,
 		radius:            boson.MaxPO,
+		pinger:            pinger,
+		staticPeer:        isStaticPeer(o.StaticNodes),
+		peerFilter:        o.ReachabilityFunc,
 	}
+
+	blocklistCallback := func(a boson.Address) {
+		k.logger.Debugf("kademlia: disconnecting peer %s for ping failure", a.String())
+		k.metrics.Blocklist.Inc()
+	}
+
+	k.blocker = blocker.New(p2ps, flagTimeout, blockDuration, blockWorkerWakeup, blocklistCallback, logger)
 
 	if k.pruneFunc == nil {
 		k.pruneFunc = k.pruneOversaturatedBins
+	}
+
+	if k.peerFilter == nil {
+		k.peerFilter = k.peerUnreachable
 	}
 
 	if k.bitSuffixLength > 0 {
@@ -188,6 +217,7 @@ func New(
 
 	k.bgBroadcastCtx, k.bgBroadcastCancel = context.WithCancel(context.Background())
 
+	k.metrics.ReachabilityStatus.WithLabelValues(p2p.ReachabilityStatusUnknown.String()).Set(0)
 	return k, nil
 }
 
@@ -426,9 +456,13 @@ func (k *Kad) manage() {
 	defer close(k.done)
 	defer k.logger.Debugf("kademlia manage loop exited")
 
+	timer := time.NewTimer(0)
 	ctx, cancel := context.WithCancel(context.Background())
 	go func() {
 		<-k.quit
+		if !timer.Stop() {
+			<-timer.C
+		}
 		cancel()
 	}()
 
@@ -458,6 +492,26 @@ func (k *Kad) manage() {
 					k.metrics.InternalMetricsFlushTime.Observe(time.Since(start).Seconds())
 					k.logger.Tracef("kademlia: took %s to flush", time.Since(start))
 				}
+			}
+		}
+	}()
+
+	k.wg.Add(1)
+	go func() {
+		defer k.wg.Done()
+		for {
+			select {
+			case <-k.halt:
+				return
+			case <-k.quit:
+				return
+			case <-timer.C:
+				k.wg.Add(1)
+				go func() {
+					defer k.wg.Done()
+					k.recordPeerLatencies(ctx)
+				}()
+				_ = timer.Reset(peerPingPollTime)
 			}
 		}
 	}()
@@ -526,9 +580,54 @@ func (k *Kad) manage() {
 
 				k.logger.Debug("kademlia: no connected peers, trying bootnodes")
 				k.connectBootNodes(ctx)
+			} else {
+				rs := make(map[string]float64)
+				ss := k.collector.Snapshot(time.Now())
+
+				if err := k.connectedPeers.EachBin(func(addr boson.Address, _ uint8) (bool, bool, error) {
+					if ss, ok := ss[addr.ByteString()]; ok {
+						rs[ss.Reachability.String()]++
+					}
+					return false, false, nil
+				}); err != nil {
+					k.logger.Errorf("kademlia: unable to set peers reachability status: %v", err)
+				}
+
+				for status, count := range rs {
+					k.metrics.PeersReachabilityStatus.WithLabelValues(status).Set(count)
+				}
 			}
 		}
 	}
+}
+
+// recordPeerLatencies tries to record the average
+// peer latencies from the p2p layer.
+func (k *Kad) recordPeerLatencies(ctx context.Context) {
+	ctx, cancel := context.WithTimeout(ctx, peerPingPollTime)
+	defer cancel()
+	var wg sync.WaitGroup
+
+	_ = k.connectedPeers.EachBin(func(addr boson.Address, _ uint8) (bool, bool, error) {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			l, err := k.pinger.Ping(ctx, addr, "ping")
+			if err != nil {
+				k.logger.Tracef("kademlia: cannot get latency for peer %s: %v", addr.String(), err)
+				k.blocker.Flag(addr)
+				k.metrics.Flag.Inc()
+				return
+			}
+			k.blocker.Unflag(addr)
+			k.metrics.Unflag.Inc()
+			k.collector.Record(addr, im.PeerLatency(l))
+			v := k.collector.Inspect(addr).LatencyEWMA
+			k.metrics.PeerLatencyEWMA.Observe(v.Seconds())
+		}()
+		return false, false, nil
+	})
+	wg.Wait()
 }
 
 // PruneOversaturatedBins disconnects out of depth peers from oversaturated bins
@@ -707,9 +806,9 @@ func (k *Kad) connectBootNodes(ctx context.Context) {
 // binSaturated indicates whether a certain bin is saturated or not.
 // when a bin is not saturated it means we would like to proactively
 // initiate connections to other peers in the bin.
-func binSaturated(oversaturationAmount int) binSaturationFunc {
-	return func(bin uint8, peers, connected *pslice.PSlice) (bool, bool) {
-		potentialDepth := recalcDepth(peers, boson.MaxPO)
+func binSaturated(oversaturationAmount int, staticNode staticPeerFunc) binSaturationFunc {
+	return func(bin uint8, peers, connected *pslice.PSlice, filter peerFilterFunc) (bool, bool) {
+		potentialDepth := recalcDepth(peers, boson.MaxPO, filter)
 
 		// short circuit for bins which are >= depth
 		if bin >= potentialDepth {
@@ -724,8 +823,8 @@ func binSaturated(oversaturationAmount int) binSaturationFunc {
 		// gaps measurement)
 
 		size := 0
-		_ = connected.EachBin(func(_ boson.Address, po uint8) (bool, bool, error) {
-			if po == bin {
+		_ = connected.EachBin(func(addr boson.Address, po uint8) (bool, bool, error) {
+			if !filter(addr) && po == bin && !staticNode(addr) {
 				size++
 			}
 			return false, false, nil
@@ -736,7 +835,7 @@ func binSaturated(oversaturationAmount int) binSaturationFunc {
 }
 
 // recalcDepth calculates and returns the kademlia depth.
-func recalcDepth(peers *pslice.PSlice, radius uint8) uint8 {
+func recalcDepth(peers *pslice.PSlice, radius uint8, filter peerFilterFunc) uint8 {
 	// handle edge case separately
 	if peers.Length() <= nnLowWatermark {
 		return 0
@@ -749,7 +848,10 @@ func recalcDepth(peers *pslice.PSlice, radius uint8) uint8 {
 
 	shallowestUnsaturated := uint8(0)
 	binCount := 0
-	_ = peers.EachBinRev(func(_ boson.Address, bin uint8) (bool, bool, error) {
+	_ = peers.EachBinRev(func(addr boson.Address, bin uint8) (bool, bool, error) {
+		if filter(addr) {
+			return false, false, nil
+		}
 		if bin == shallowestUnsaturated {
 			binCount++
 			return false, false, nil
@@ -772,9 +874,12 @@ func recalcDepth(peers *pslice.PSlice, radius uint8) uint8 {
 		shallowestUnsaturated = shallowestEmpty
 	}
 
-	_ = peers.EachBin(func(_ boson.Address, po uint8) (bool, bool, error) {
+	_ = peers.EachBin(func(addr boson.Address, po uint8) (bool, bool, error) {
+		if filter(addr) {
+			return false, false, nil
+		}
 		peersCtr++
-		if peersCtr >= nnLowWatermark {
+		if peersCtr >= uint(nnLowWatermark) {
 			candidate = po
 			return true, false, nil
 		}
@@ -865,7 +970,7 @@ func (k *Kad) Announce(ctx context.Context, peer boson.Address, fullnode bool) e
 
 	for bin := uint8(0); bin < boson.MaxBins; bin++ {
 
-		connectedPeers, err := randomSubset(k.connectedPeers.BinPeers(bin), broadcastBinSize)
+		connectedPeers, err := randomSubset(k.binReachablePeers(bin), broadcastBinSize)
 		if err != nil {
 			return err
 		}
@@ -956,7 +1061,7 @@ func (k *Kad) Outbound(peer p2p.Peer) {
 	k.connectedPeers.Add(peer.Address)
 
 	k.depthMu.Lock()
-	k.depth = recalcDepth(k.connectedPeers, k.radius)
+	k.depth = recalcDepth(k.connectedPeers, k.radius, k.peerFilter)
 	k.depthMu.Unlock()
 
 	k.notifyManageLoop()
@@ -971,7 +1076,7 @@ func (k *Kad) Pick(peer p2p.Peer) bool {
 		return true
 	}
 	po := boson.Proximity(k.base.Bytes(), peer.Address.Bytes())
-	_, oversaturated := k.saturationFunc(po, k.knownPeers, k.connectedPeers)
+	_, oversaturated := k.saturationFunc(po, k.knownPeers, k.connectedPeers, k.peerFilter)
 	// pick the peer if we are not oversaturated
 	if !oversaturated {
 		return true
@@ -986,7 +1091,7 @@ func (k *Kad) Connected(ctx context.Context, peer p2p.Peer, forceConnection bool
 	address := peer.Address
 	po := boson.Proximity(k.base.Bytes(), address.Bytes())
 
-	if _, overSaturated := k.saturationFunc(po, k.knownPeers, k.connectedPeers); overSaturated {
+	if _, overSaturated := k.saturationFunc(po, k.knownPeers, k.connectedPeers, k.peerFilter); overSaturated {
 		if k.nodeMode.IsBootNode() {
 			randPeer, err := k.randomPeer(po)
 			if err != nil {
@@ -1018,7 +1123,7 @@ func (k *Kad) onConnected(ctx context.Context, peer p2p.Peer) error {
 	k.waitNext.Remove(addr)
 
 	k.depthMu.Lock()
-	k.depth = recalcDepth(k.connectedPeers, k.radius)
+	k.depth = recalcDepth(k.connectedPeers, k.radius, k.peerFilter)
 	k.depthMu.Unlock()
 
 	po := boson.Proximity(k.base.Bytes(), addr.Bytes())
@@ -1041,7 +1146,7 @@ func (k *Kad) Disconnected(peer p2p.Peer, reason string) {
 	k.collector.Record(peer.Address, im.PeerLogOut(time.Now()))
 
 	k.depthMu.Lock()
-	k.depth = recalcDepth(k.connectedPeers, k.radius)
+	k.depth = recalcDepth(k.connectedPeers, k.radius, k.peerFilter)
 	k.depthMu.Unlock()
 
 	k.notifyManageLoop()
@@ -1074,7 +1179,7 @@ func (k *Kad) DisconnectForce(addr boson.Address, reason string) error {
 	k.collector.Record(addr, im.PeerLogOut(time.Now()))
 
 	k.depthMu.Lock()
-	k.depth = recalcDepth(k.connectedPeers, k.radius)
+	k.depth = recalcDepth(k.connectedPeers, k.radius, k.peerFilter)
 	k.depthMu.Unlock()
 	return nil
 }
@@ -1146,18 +1251,18 @@ func closestPeerFunc(closest *boson.Address, addr boson.Address, spf sanctionedP
 }
 
 // ClosestPeer returns the closest peer to a given address.
-func (k *Kad) ClosestPeer(addr boson.Address, includeSelf bool, skipPeers ...boson.Address) (boson.Address, error) {
+func (k *Kad) ClosestPeer(addr boson.Address, includeSelf bool, filter topology.Filter, skipPeers ...boson.Address) (boson.Address, error) {
 	if k.connectedPeers.Length() == 0 {
 		return boson.Address{}, topology.ErrNotFound
 	}
 
 	closest := boson.ZeroAddress
 
-	if includeSelf {
+	if includeSelf && k.reachability == p2p.ReachabilityStatusPublic {
 		closest = k.base
 	}
 
-	err := k.connectedPeers.EachBinRev(func(peer boson.Address, po uint8) (bool, bool, error) {
+	err := k.EachPeerRev(func(peer boson.Address, po uint8) (bool, bool, error) {
 
 		for _, a := range skipPeers {
 			if a.Equal(peer) {
@@ -1174,7 +1279,7 @@ func (k *Kad) ClosestPeer(addr boson.Address, includeSelf bool, skipPeers ...bos
 			closest = peer
 		}
 		return false, false, nil
-	})
+	}, filter)
 	if err != nil {
 		return boson.Address{}, err
 	}
@@ -1191,10 +1296,10 @@ func (k *Kad) ClosestPeer(addr boson.Address, includeSelf bool, skipPeers ...bos
 	return closest, nil
 }
 
-func (k *Kad) ClosestPeers(addr boson.Address, limit int, skipPeers ...boson.Address) ([]boson.Address, error) {
+func (k *Kad) ClosestPeers(addr boson.Address, limit int, filter topology.Filter, skipPeers ...boson.Address) ([]boson.Address, error) {
 	out := make([]boson.Address, 0)
 	for i := 0; i < limit; i++ {
-		peer, err := k.ClosestPeer(addr, false, skipPeers...)
+		peer, err := k.ClosestPeer(addr, false, filter, skipPeers...)
 		if err != nil {
 			if errors.Is(err, topology.ErrNotFound) {
 				break
@@ -1237,13 +1342,47 @@ func (k *Kad) EachNeighborRev(f model.EachPeerFunc) error {
 }
 
 // EachPeer iterates from closest bin to farthest.
-func (k *Kad) EachPeer(f model.EachPeerFunc) error {
-	return k.connectedPeers.EachBin(f)
+func (k *Kad) EachPeer(f model.EachPeerFunc, filter topology.Filter) error {
+	return k.connectedPeers.EachBin(func(addr boson.Address, po uint8) (bool, bool, error) {
+		if filter.Reachable && k.peerFilter(addr) {
+			return false, false, nil
+		}
+		return f(addr, po)
+	})
 }
 
 // EachPeerRev iterates from farthest bin to closest.
-func (k *Kad) EachPeerRev(f model.EachPeerFunc) error {
-	return k.connectedPeers.EachBinRev(f)
+func (k *Kad) EachPeerRev(f model.EachPeerFunc, filter topology.Filter) error {
+	return k.connectedPeers.EachBinRev(func(addr boson.Address, po uint8) (bool, bool, error) {
+		if filter.Reachable && k.peerFilter(addr) {
+			return false, false, nil
+		}
+		return f(addr, po)
+	})
+}
+
+// Reachable sets the peer reachability status.
+func (k *Kad) Reachable(addr boson.Address, status p2p.ReachabilityStatus) {
+	k.collector.Record(addr, im.PeerReachability(status))
+	k.logger.Tracef("kademlia: reachability of peer %s is %s", addr.String(), status.String())
+	if status == p2p.ReachabilityStatusPublic {
+		k.depthMu.Lock()
+		k.depth = recalcDepth(k.connectedPeers, k.radius, k.peerFilter)
+		k.depthMu.Unlock()
+		k.notifyManageLoop()
+	}
+}
+
+// UpdateReachability updates node reachability status.
+// The status will be updated only once. Updates to status
+// p2p.ReachabilityStatusUnknown are ignored.
+func (k *Kad) UpdateReachability(status p2p.ReachabilityStatus) {
+	if status == p2p.ReachabilityStatusUnknown {
+		return
+	}
+	k.logger.Infof("kademlia: updated reachability to %s", status.String())
+	k.reachability = status
+	k.metrics.ReachabilityStatus.WithLabelValues(status.String()).Set(0)
 }
 
 // EachKnownPeer iterates from closest bin to farthest.
@@ -1377,7 +1516,7 @@ func (k *Kad) SetRadius(r uint8) {
 	}
 	k.radius = r
 	oldD := k.depth
-	k.depth = recalcDepth(k.connectedPeers, k.radius)
+	k.depth = recalcDepth(k.connectedPeers, k.radius, k.peerFilter)
 	if k.depth != oldD {
 		k.notifyManageLoop()
 	}
@@ -1431,6 +1570,7 @@ func (k *Kad) Snapshot() *model.KadParams {
 		Timestamp:      time.Now(),
 		NNLowWatermark: nnLowWatermark,
 		Depth:          k.NeighborhoodDepth(),
+		Reachability:   k.reachability.String(),
 		Bins: model.KadBins{
 			Bin0:  infos[0],
 			Bin1:  infos[1],
@@ -1481,6 +1621,14 @@ func (k *Kad) SnapshotConnected() (connected int, peers map[string]*model.PeerIn
 	return k.connectedPeers.Length(), peers
 }
 
+func (k *Kad) SnapshotAddr(addr boson.Address) *model.Snapshot {
+	return k.collector.Inspect(addr)
+}
+
+func (k *Kad) RecordPeerLatency(add boson.Address, t time.Duration) {
+	k.collector.Record(add, im.PeerLatency(t))
+}
+
 // String returns a string represenstation of Kademlia.
 func (k *Kad) String() string {
 	j := k.Snapshot()
@@ -1503,6 +1651,7 @@ func (k *Kad) Halt() {
 func (k *Kad) Close() error {
 	k.logger.Info("kademlia shutting down")
 	close(k.quit)
+	_ = k.blocker.Close()
 	cc := make(chan struct{})
 
 	k.bgBroadcastCancel()
@@ -1548,6 +1697,63 @@ func (k *Kad) Close() error {
 	return err
 }
 
+func (k *Kad) randomPeer(bin uint8) (boson.Address, error) {
+	peers := k.connectedPeers.BinPeers(bin)
+
+	for idx := 0; idx < len(peers); {
+		// do not consider protected peers
+		if k.staticPeer(peers[idx]) {
+			peers = append(peers[:idx], peers[idx+1:]...)
+			continue
+		}
+		idx++
+	}
+
+	if len(peers) == 0 {
+		return boson.ZeroAddress, errEmptyBin
+	}
+
+	rndIndx, err := random.Int(random.Reader, big.NewInt(int64(len(peers))))
+	if err != nil {
+		return boson.ZeroAddress, err
+	}
+
+	return peers[rndIndx.Int64()], nil
+}
+
+func (k *Kad) binReachablePeers(bin uint8) (peers []boson.Address) {
+
+	_ = k.EachPeerRev(func(p boson.Address, po uint8) (bool, bool, error) {
+
+		if po == bin {
+			peers = append(peers, p)
+			return false, false, nil
+		}
+
+		if po > bin {
+			return true, false, nil
+		}
+
+		return false, true, nil
+
+	}, topology.Filter{Reachable: true})
+
+	return
+}
+
+// peerUnreachable returns true if the addr is not reachable.
+func (k *Kad) peerUnreachable(addr boson.Address) bool {
+	ss := k.collector.Inspect(addr)
+	// if there is no entry yet, consider the peer as not reachable
+	if ss == nil {
+		return true
+	}
+	if ss.Reachability != p2p.ReachabilityStatusPublic {
+		return true
+	}
+	return false
+}
+
 func randomSubset(addrs []boson.Address, count int) ([]boson.Address, error) {
 	if count >= len(addrs) {
 		return addrs, nil
@@ -1565,25 +1771,10 @@ func randomSubset(addrs []boson.Address, count int) ([]boson.Address, error) {
 	return addrs[:count], nil
 }
 
-func (k *Kad) randomPeer(bin uint8) (boson.Address, error) {
-	peers := k.connectedPeers.BinPeers(bin)
-
-	if len(peers) == 0 {
-		return boson.ZeroAddress, errEmptyBin
-	}
-
-	rndIndx, err := random.Int(random.Reader, big.NewInt(int64(len(peers))))
-	if err != nil {
-		return boson.ZeroAddress, err
-	}
-
-	return peers[rndIndx.Int64()], nil
-}
-
 // createMetricsSnapshotView creates new topology.MetricSnapshotView from the
-// given metrics.Snapshot and rounds all the timestamps and durations to its
+// given model.Snapshot and rounds all the timestamps and durations to its
 // nearest second.
-func createMetricsSnapshotView(ss *im.Snapshot) *model.MetricSnapshotView {
+func createMetricsSnapshotView(ss *model.Snapshot) *model.MetricSnapshotView {
 	if ss == nil {
 		return nil
 	}
@@ -1593,6 +1784,8 @@ func createMetricsSnapshotView(ss *im.Snapshot) *model.MetricSnapshotView {
 		ConnectionTotalDuration:    ss.ConnectionTotalDuration.Truncate(time.Second).Seconds(),
 		SessionConnectionDuration:  ss.SessionConnectionDuration.Truncate(time.Second).Seconds(),
 		SessionConnectionDirection: string(ss.SessionConnectionDirection),
+		LatencyEWMA:                ss.LatencyEWMA.Milliseconds(),
+		Reachability:               ss.Reachability.String(),
 	}
 }
 
@@ -1617,4 +1810,15 @@ func isNetworkError(err error) bool {
 		return true
 	}
 	return false
+}
+
+func isStaticPeer(staticNodes []boson.Address) func(overlay boson.Address) bool {
+	return func(overlay boson.Address) bool {
+		for _, addr := range staticNodes {
+			if addr.Equal(overlay) {
+				return true
+			}
+		}
+		return false
+	}
 }

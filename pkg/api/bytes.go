@@ -31,7 +31,7 @@ func (s *server) bytesUploadHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if strings.ToLower(r.Header.Get(AuroraPinHeader)) == "true" {
+	if strings.ToLower(r.Header.Get(AuroraPinHeader)) == StringTrue {
 		if err := s.pinning.CreatePin(ctx, address, false); err != nil {
 			logger.Debugf("bytes upload: creation of pin for %q failed: %v", address, err)
 			logger.Error("bytes upload: creation of pin failed")

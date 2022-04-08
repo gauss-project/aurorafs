@@ -3,8 +3,10 @@ package mock
 import (
 	"context"
 	"sync"
+	"time"
 
 	"github.com/gauss-project/aurorafs/pkg/aurora"
+	"github.com/gauss-project/aurorafs/pkg/topology"
 	"github.com/gauss-project/aurorafs/pkg/topology/model"
 
 	"github.com/gauss-project/aurorafs/pkg/boson"
@@ -63,7 +65,7 @@ func (m *Mock) AddPeers(addr ...boson.Address) {
 	panic("not implemented") // TODO: Implement
 }
 
-func (m *Mock) ClosestPeer(addr boson.Address, _ bool, skipPeers ...boson.Address) (peerAddr boson.Address, err error) {
+func (m *Mock) ClosestPeer(addr boson.Address, _ bool, _ topology.Filter, skipPeers ...boson.Address) (peerAddr boson.Address, err error) {
 	panic("not implemented") // TODO: Implement
 }
 
@@ -79,7 +81,7 @@ func (m *Mock) EachNeighborRev(model.EachPeerFunc) error {
 	panic("not implemented") // TODO: Implement
 }
 
-func (m *Mock) ClosestPeers(addr boson.Address, limit int, skipPeers ...boson.Address) ([]boson.Address, error) {
+func (m *Mock) ClosestPeers(addr boson.Address, limit int, _ topology.Filter, skipPeers ...boson.Address) ([]boson.Address, error) {
 	panic("implement me")
 }
 
@@ -107,8 +109,17 @@ func (m *Mock) SnapshotConnected() (connected int, peers map[string]*model.PeerI
 	return
 }
 
+func (m *Mock) SnapshotAddr(addr boson.Address) *model.Snapshot {
+	// TODO implement me
+	panic("implement me")
+}
+
+func (m *Mock) RecordPeerLatency(add boson.Address, t time.Duration) {
+
+}
+
 // EachPeer iterates from closest bin to farthest
-func (m *Mock) EachPeer(f model.EachPeerFunc) error {
+func (m *Mock) EachPeer(f model.EachPeerFunc, _ topology.Filter) error {
 	m.mtx.Lock()
 	defer m.mtx.Unlock()
 
@@ -125,7 +136,7 @@ func (m *Mock) EachPeer(f model.EachPeerFunc) error {
 }
 
 // EachPeerRev iterates from farthest bin to closest
-func (m *Mock) EachPeerRev(f model.EachPeerFunc) error {
+func (m *Mock) EachPeerRev(f model.EachPeerFunc, _ topology.Filter) error {
 	m.mtx.Lock()
 	defer m.mtx.Unlock()
 	for _, v := range m.eachPeerRev {

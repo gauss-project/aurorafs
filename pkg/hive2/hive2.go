@@ -16,6 +16,7 @@ import (
 	"github.com/gauss-project/aurorafs/pkg/logging"
 	"github.com/gauss-project/aurorafs/pkg/p2p"
 	"github.com/gauss-project/aurorafs/pkg/p2p/protobuf"
+	"github.com/gauss-project/aurorafs/pkg/topology"
 	"github.com/gauss-project/aurorafs/pkg/topology/kademlia"
 	ma "github.com/multiformats/go-multiaddr"
 	manet "github.com/multiformats/go-multiaddr/net"
@@ -177,7 +178,7 @@ func (s *Service) onFindNode(ctx context.Context, peer p2p.Peer, stream p2p.Stre
 		return false, false, nil
 	}
 
-	_ = s.config.Kad.EachPeer(addrFunc)
+	_ = s.config.Kad.EachPeer(addrFunc, topology.Filter{Reachable: false})
 	connResult := randPeersLimit(resp.Peers, limitConn)
 	for _, v := range connResult {
 		skip = append(skip, boson.NewAddress(v.Overlay))

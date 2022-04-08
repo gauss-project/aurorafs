@@ -10,16 +10,17 @@ import (
 	"time"
 
 	"github.com/gauss-project/aurorafs/pkg/boson"
+	"github.com/gauss-project/aurorafs/pkg/p2p"
 	"github.com/gauss-project/aurorafs/pkg/shed"
 	"github.com/gauss-project/aurorafs/pkg/shed/driver"
+	"github.com/gauss-project/aurorafs/pkg/topology/model"
 )
 
-// PeerConnectionDirection represents peer connection direction.
-type PeerConnectionDirection string
+const ewmaSmoothing = 0.1
 
 const (
-	PeerConnectionDirectionInbound  PeerConnectionDirection = "inbound"
-	PeerConnectionDirectionOutbound PeerConnectionDirection = "outbound"
+	PeerConnectionDirectionInbound  model.PeerConnectionDirection = "inbound"
+	PeerConnectionDirectionOutbound model.PeerConnectionDirection = "outbound"
 )
 
 // RecordOp is a definition of a peer metrics Record
@@ -31,7 +32,7 @@ type RecordOp func(*Counters)
 // value. The force flag will force the peer re-login if he's already logged in.
 // The time is set as Unix timestamp ignoring the timezone. The operation will
 // panic if the given time is before the Unix epoch.
-func PeerLogIn(t time.Time, dir PeerConnectionDirection) RecordOp {
+func PeerLogIn(t time.Time, dir model.PeerConnectionDirection) RecordOp {
 	return func(cs *Counters) {
 		cs.Lock()
 		defer cs.Unlock()
@@ -88,20 +89,29 @@ func IncSessionConnectionRetry() RecordOp {
 	}
 }
 
-// Snapshot represents a snapshot of peers' metrics counters.
-type Snapshot struct {
-	LastSeenTimestamp          int64
-	SessionConnectionRetry     uint64
-	ConnectionTotalDuration    time.Duration
-	SessionConnectionDuration  time.Duration
-	SessionConnectionDirection PeerConnectionDirection
+// PeerLatency records the average peer latency.
+func PeerLatency(t time.Duration) RecordOp {
+	return func(cs *Counters) {
+		cs.Lock()
+		defer cs.Unlock()
+		// short circuit the first measurement
+		if cs.latencyEWMA == 0 {
+			cs.latencyEWMA = t
+			return
+		}
+		v := (ewmaSmoothing * float64(t)) + (1-ewmaSmoothing)*float64(cs.latencyEWMA)
+		cs.latencyEWMA = time.Duration(v)
+	}
 }
 
-// HasAtMaxOneConnectionAttempt returns true if the snapshot represents a new
-// peer which has at maximum one session connection attempt but it still isn't
-// logged in.
-func (ss *Snapshot) HasAtMaxOneConnectionAttempt() bool {
-	return ss.LastSeenTimestamp == 0 && ss.SessionConnectionRetry <= 1
+// PeerReachability updates the last reachability status.
+func PeerReachability(s p2p.ReachabilityStatus) RecordOp {
+	return func(cs *Counters) {
+		cs.Lock()
+		defer cs.Unlock()
+
+		cs.ReachabilityStatus = s
+	}
 }
 
 // persistentCounters is a helper struct used for persisting selected counters.
@@ -125,7 +135,9 @@ type Counters struct {
 	connTotalDuration    time.Duration
 	sessionConnRetry     uint64
 	sessionConnDuration  time.Duration
-	sessionConnDirection PeerConnectionDirection
+	sessionConnDirection model.PeerConnectionDirection
+	latencyEWMA          time.Duration
+	ReachabilityStatus   p2p.ReachabilityStatus
 }
 
 // UnmarshalJSON unmarshal just the persistent counters.
@@ -155,7 +167,7 @@ func (cs *Counters) MarshalJSON() ([]byte, error) {
 }
 
 // snapshot returns current snapshot of counters referenced to the given t.
-func (cs *Counters) snapshot(t time.Time) *Snapshot {
+func (cs *Counters) snapshot(t time.Time) *model.Snapshot {
 	cs.Lock()
 	defer cs.Unlock()
 
@@ -166,12 +178,14 @@ func (cs *Counters) snapshot(t time.Time) *Snapshot {
 		connTotalDuration += sessionConnDuration
 	}
 
-	return &Snapshot{
+	return &model.Snapshot{
 		LastSeenTimestamp:          cs.lastSeenTimestamp,
 		SessionConnectionRetry:     cs.sessionConnRetry,
 		ConnectionTotalDuration:    connTotalDuration,
 		SessionConnectionDuration:  sessionConnDuration,
 		SessionConnectionDirection: cs.sessionConnDirection,
+		LatencyEWMA:                cs.latencyEWMA,
+		Reachability:               cs.ReachabilityStatus,
 	}
 }
 
@@ -226,8 +240,8 @@ func (c *Collector) Record(addr boson.Address, rop ...RecordOp) {
 // be evaluated against the last seen time, which equals to the login time. If
 // the peer is logged out, then the session counters will reflect its last
 // session.
-func (c *Collector) Snapshot(t time.Time, addresses ...boson.Address) map[string]*Snapshot {
-	snapshot := make(map[string]*Snapshot)
+func (c *Collector) Snapshot(t time.Time, addresses ...boson.Address) map[string]*model.Snapshot {
+	snapshot := make(map[string]*model.Snapshot)
 
 	for _, addr := range addresses {
 		val, ok := c.counters.Load(addr.ByteString())
@@ -251,7 +265,7 @@ func (c *Collector) Snapshot(t time.Time, addresses ...boson.Address) map[string
 
 // Inspect allows inspecting current snapshot for the given
 // peer address by executing the inspection function.
-func (c *Collector) Inspect(addr boson.Address) *Snapshot {
+func (c *Collector) Inspect(addr boson.Address) *model.Snapshot {
 	snapshots := c.Snapshot(time.Now(), addr)
 	return snapshots[addr.ByteString()]
 }

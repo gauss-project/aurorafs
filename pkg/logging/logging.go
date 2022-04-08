@@ -30,12 +30,15 @@ type logger struct {
 	metrics metrics
 }
 
+const timeFormat = "2006-01-02T15:04:05.000000Z07:00"
+
 func New(w io.Writer, level logrus.Level) Logger {
 	l := logrus.New()
 	l.SetOutput(w)
 	l.SetLevel(level)
 	l.Formatter = &logrus.TextFormatter{
-		FullTimestamp: true,
+		FullTimestamp:   true,
+		TimestampFormat: timeFormat,
 	}
 	metrics := newMetrics()
 	l.AddHook(metrics)

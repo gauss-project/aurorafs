@@ -6,13 +6,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"math/rand"
 	"sync"
 	"sync/atomic"
 	"time"
 
 	"github.com/gauss-project/aurorafs/pkg/aurora"
-
 	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/logging"
 	"github.com/gauss-project/aurorafs/pkg/multicast/model"
@@ -25,6 +23,7 @@ import (
 	topModel "github.com/gauss-project/aurorafs/pkg/topology/model"
 	"github.com/gauss-project/aurorafs/pkg/topology/pslice"
 	"github.com/gogf/gf/v2/util/gconv"
+	"github.com/gogo/protobuf/sortkeys"
 )
 
 const (
@@ -192,25 +191,32 @@ func (s *Service) Start() {
 					s.leaveConnectedAll(peer.Overlay)
 				}
 			case <-ticker.C:
+				wg := &sync.WaitGroup{}
 				s.groups.Range(func(_, value interface{}) bool {
 					v := value.(*Group)
 					_ = v.keepPeers.EachBin(func(address boson.Address, u uint8) (stop, jumpToNext bool, err error) {
-						err = s.Handshake(context.Background(), address)
-						if err != nil {
-							s.logger.Tracef("keep ping %s %s", address, err)
-							v.keepPeers.Remove(address)
+						wg.Add(1)
+						go func() {
+							defer wg.Done()
+							err = s.Handshake(context.Background(), address)
+							if err != nil {
+								s.logger.Tracef("keep ping %s %s", address, err)
+								v.keepPeers.Remove(address)
 
-							if v.knownPeers.Length() >= maxKnownPeers {
-								p := RandomPeer(v.knownPeers.BinPeers(0))
-								v.knownPeers.Remove(p)
+								if v.knownPeers.Length() >= maxKnownPeers {
+									p := RandomPeer(v.knownPeers.BinPeers(0))
+									v.knownPeers.Remove(p)
+								}
+
+								v.knownPeers.Add(address)
 							}
-
-							v.knownPeers.Add(address)
-						}
+						}()
 						return false, false, nil
 					})
 					return true
 				})
+				wg.Wait()
+				ticker.Reset(keepPingInterval)
 			}
 		}
 	}()
@@ -619,7 +625,7 @@ func (s *Service) notify(msg *pb.Notify, groups ...*Group) {
 		_ = s.sendData(context.Background(), address, streamNotify, msg)
 		return false, false, nil
 	}
-	_ = s.kad.EachPeerRev(send)
+	_ = s.kad.EachPeerRev(send, topology.Filter{Reachable: false})
 
 	if len(groups) == 0 {
 		s.groups.Range(func(_, value interface{}) bool {
@@ -721,8 +727,8 @@ func (s *Service) getModelGroupInfo() (out []*model.GroupInfo) {
 		out = append(out, &model.GroupInfo{
 			GroupID:   v.gid,
 			Option:    v.option,
-			KeepPeers: peersFunc(v.keepPeers),
-			KnowPeers: peersFunc(v.knownPeers),
+			KeepPeers: s.getOptimumPeers(peersFunc(v.keepPeers)),
+			KnowPeers: s.getOptimumPeers(peersFunc(v.knownPeers)),
 		})
 		return true
 	})
@@ -790,6 +796,7 @@ func (s *Service) notifyLogContent(data LogContent) {
 	}
 }
 
+// GetGroupPeers the peers order by EWMA optimal
 func (s *Service) GetGroupPeers(groupName string) (out *GroupPeers, err error) {
 	gid, err := boson.ParseHexAddress(groupName)
 	if err != nil {
@@ -803,32 +810,23 @@ func (s *Service) GetGroupPeers(groupName string) (out *GroupPeers, err error) {
 	group := v.(*Group)
 
 	out = &GroupPeers{
-		Connected: group.connectedPeers.BinPeers(0),
-		Keep:      group.keepPeers.BinPeers(0),
+		Connected: s.getOptimumPeers(group.connectedPeers.BinPeers(0)),
+		Keep:      s.getOptimumPeers(group.keepPeers.BinPeers(0)),
 	}
 	return
 }
 
-func (s *Service) GetMulticastNode(groupName string) (peer boson.Address, err error) {
+func (s *Service) GetOptimumPeer(groupName string) (peer boson.Address, err error) {
 	v, err := s.GetGroupPeers(groupName)
 	if err != nil {
 		return boson.ZeroAddress, err
 	}
 
-	rd := rand.New(rand.NewSource(time.Now().UnixNano()))
-	nodeCount := len(v.Connected)
-
-	if nodeCount > 0 {
-		randKey := rd.Intn(nodeCount)
-		peer = v.Connected[randKey]
-		return
+	if len(v.Connected) > 0 {
+		return v.Connected[0], nil
 	}
-
-	nodeCount = len(v.Keep)
-	if nodeCount > 0 {
-		randKey := rd.Intn(nodeCount)
-		peer = v.Keep[randKey]
-		return
+	if len(v.Keep) > 0 {
+		return v.Keep[0], nil
 	}
 	return boson.ZeroAddress, nil
 }
@@ -978,22 +976,18 @@ func (s *Service) onMessage(ctx context.Context, peer p2p.Peer, stream p2p.Strea
 	return nil
 }
 
-func (s *Service) SubscribeGroupMessage(gid boson.Address) (c <-chan GroupMessage, unsubscribe func(), err error) {
-	unsubscribe = func() {}
+func (s *Service) SubscribeGroupMessage(gid boson.Address) (c <-chan GroupMessage, err error) {
 	channel := make(chan GroupMessage, 1)
 	var g *Group
 	value, ok := s.groups.Load(gid.String())
 	if ok {
 		g = value.(*Group)
-		if g.option.GType == model.GTypeJoin && g.groupMessageCh == nil {
+		if g.option.GType == model.GTypeJoin {
 			g.groupMessageCh = channel
-			return channel, func() { g.groupMessageCh = nil }, nil
-		}
-		if g.groupMessageCh != nil {
-			return nil, unsubscribe, errors.New("group message subscription already exists")
+			return channel, nil
 		}
 	}
-	return nil, unsubscribe, errors.New("the group notfound")
+	return nil, errors.New("the joined group notfound")
 }
 
 func (s *Service) notifyMessage(gid boson.Address, msg GroupMessage, st *WsStream) (e error) {
@@ -1155,4 +1149,23 @@ func (s *Service) subscribeGroupPeers(gid boson.Address, client *PeersSubClient)
 		return nil
 	}
 	return errors.New("the group notfound")
+}
+
+func (s *Service) getOptimumPeers(list []boson.Address) (now []boson.Address) {
+	l := len(list)
+	sortIndex := make([]int64, 0)
+	m := make(map[int64]int, l)
+	for i, v := range list {
+		ss := s.kad.SnapshotAddr(v)
+		if ss != nil {
+			t := ss.LatencyEWMA.Nanoseconds()
+			sortIndex = append(sortIndex, t)
+			m[t] = i
+		}
+	}
+	sortkeys.Int64s(sortIndex)
+	for _, t := range sortIndex {
+		now = append(now, list[m[t]])
+	}
+	return now
 }

@@ -23,6 +23,7 @@ require (
 	github.com/hashicorp/golang-lru v0.5.5-0.20210104140557-80c98217689d
 	github.com/kardianos/service v1.2.0
 	github.com/kilic/bls12-381 v0.1.0
+	github.com/libp2p/go-eventbus v0.2.1
 	github.com/libp2p/go-libp2p v0.17.0
 	github.com/libp2p/go-libp2p-autonat v0.7.0
 	github.com/libp2p/go-libp2p-core v0.13.0
@@ -49,6 +50,7 @@ require (
 	github.com/uber/jaeger-client-go v2.24.0+incompatible
 	github.com/wealdtech/go-ens/v3 v3.5.1
 	gitlab.com/nolash/go-mockbytes v0.0.7
+	go.uber.org/atomic v1.9.0
 	golang.org/x/crypto v0.0.0-20210813211128-0a44fdfbc16e
 	golang.org/x/net v0.0.0-20211112202133-69e39bad7dc2
 	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c
@@ -100,7 +102,6 @@ require (
 	github.com/libp2p/go-buffer-pool v0.0.2 // indirect
 	github.com/libp2p/go-cidranger v1.1.0 // indirect
 	github.com/libp2p/go-conn-security-multistream v0.3.0 // indirect
-	github.com/libp2p/go-eventbus v0.2.1 // indirect
 	github.com/libp2p/go-flow-metrics v0.0.3 // indirect
 	github.com/libp2p/go-libp2p-asn-util v0.1.0 // indirect
 	github.com/libp2p/go-libp2p-blankhost v0.3.0 // indirect
@@ -165,7 +166,6 @@ require (
 	go.opentelemetry.io/otel v1.0.0 // indirect
 	go.opentelemetry.io/otel/sdk v1.0.0 // indirect
 	go.opentelemetry.io/otel/trace v1.0.0 // indirect
-	go.uber.org/atomic v1.9.0 // indirect
 	go.uber.org/multierr v1.7.0 // indirect
 	go.uber.org/zap v1.19.0 // indirect
 	golang.org/x/mod v0.4.2 // indirect

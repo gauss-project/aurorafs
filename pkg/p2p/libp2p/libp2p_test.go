@@ -4,11 +4,12 @@ import (
 	"bytes"
 	"context"
 	"crypto/ecdsa"
-	"github.com/gauss-project/aurorafs/pkg/topology/bootnode"
 	"io"
 	"sort"
 	"testing"
 	"time"
+
+	"github.com/gauss-project/aurorafs/pkg/topology/bootnode"
 
 	"github.com/gauss-project/aurorafs/pkg/addressbook"
 	"github.com/gauss-project/aurorafs/pkg/boson"
@@ -29,6 +30,7 @@ type libp2pServiceOpts struct {
 	libp2pOpts  libp2p.Options
 	lightNodes  *lightnode.Container
 	bootNodes   *bootnode.Container
+	notifier    p2p.PickyNotifier
 }
 
 // newService constructs a new libp2p service.
@@ -79,6 +81,11 @@ func newService(t *testing.T, networkID uint64, o libp2pServiceOpts) (s *libp2p.
 	if err != nil {
 		t.Fatal(err)
 	}
+
+	if o.notifier != nil {
+		s.SetPickyNotifier(o.notifier)
+	}
+
 	s.Ready()
 
 	t.Cleanup(func() {

@@ -2,7 +2,6 @@ package netrelay
 
 import (
 	"bytes"
-	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -59,7 +58,7 @@ func (s *Service) RelayHttpDo(w http.ResponseWriter, r *http.Request, address bo
 	msg.Method = []byte(method)
 	msg.Body = body
 	msg.Header = header
-	resp, err := s.SendHttp(context.Background(), address, msg)
+	resp, err := s.SendHttp(r.Context(), address, msg)
 	if err != nil {
 		jsonhttp.InternalServerError(w, err)
 		return
@@ -80,9 +79,9 @@ func (s *Service) RelayHttpDo(w http.ResponseWriter, r *http.Request, address bo
 	_, _ = io.Copy(w, bytes.NewBuffer(resp.Body))
 }
 
-func (s *Service) getDomainAddr(goupName, domainName string) (string, bool) {
+func (s *Service) getDomainAddr(groupName, domainName string) (string, bool) {
 	for _, v := range s.groups {
-		if v.Name == goupName {
+		if v.Name == groupName {
 			for _, domain := range v.AgentHttp {
 				if domain.Domain == domainName {
 					return domain.Addr, true

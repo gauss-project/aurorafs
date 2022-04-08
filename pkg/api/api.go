@@ -66,6 +66,7 @@ const (
 	contentTypeHeader = "Content-Type"
 	multiPartFormData = "multipart/form-data"
 	contentTypeTar    = "application/x-tar"
+	StringTrue        = "true"
 )
 
 var (
@@ -218,7 +219,7 @@ func (s *server) resolveNameOrAddress(str string) (boson.Address, error) {
 
 // requestModePut returns the desired storage.ModePut for this request based on the request headers.
 func requestModePut(r *http.Request) storage.ModePut {
-	if h := strings.ToLower(r.Header.Get(AuroraPinHeader)); h == "true" {
+	if h := strings.ToLower(r.Header.Get(AuroraPinHeader)); h == StringTrue {
 		return storage.ModePutUploadPin
 	}
 
@@ -226,7 +227,7 @@ func requestModePut(r *http.Request) storage.ModePut {
 }
 
 func requestEncrypt(r *http.Request) bool {
-	return strings.ToLower(r.Header.Get(AuroraEncryptHeader)) == "true"
+	return strings.ToLower(r.Header.Get(AuroraEncryptHeader)) == StringTrue
 }
 
 type securityTokenRsp struct {

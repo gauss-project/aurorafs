@@ -13,7 +13,14 @@ import (
 
 	"github.com/gauss-project/aurorafs/pkg/aurora"
 	"github.com/gauss-project/aurorafs/pkg/logging"
+	"github.com/libp2p/go-eventbus"
+	libp2pm "github.com/libp2p/go-libp2p"
+	"github.com/libp2p/go-libp2p-core/event"
+	"github.com/libp2p/go-libp2p-core/host"
+	"github.com/libp2p/go-libp2p-core/network"
+	swarmt "github.com/libp2p/go-libp2p-swarm/testing"
 	goyamux "github.com/libp2p/go-libp2p-yamux"
+	bhost "github.com/libp2p/go-libp2p/p2p/host/basic"
 
 	"github.com/gauss-project/aurorafs/pkg/addressbook"
 	"github.com/gauss-project/aurorafs/pkg/boson"
@@ -99,22 +106,21 @@ func TestLightPeerLimit(t *testing.T) {
 	var (
 		limit     = 3
 		container = lightnode.NewContainer(test.RandomAddress())
+		notifier  = mockNotifier(noopCf, noopDf, true)
 		sf, _     = newService(t, 1, libp2pServiceOpts{
 			lightNodes: container,
 			libp2pOpts: libp2p.Options{
 				LightNodeLimit: limit,
 				NodeMode:       aurora.NewModel().SetMode(aurora.FullNode),
 			},
+			notifier: notifier,
 		})
-
-		notifier = mockNotifier(noopCf, noopDf, true)
 	)
-	sf.SetPickyNotifier(notifier)
-
 	addr := serviceUnderlayAddress(t, sf)
 
 	for i := 0; i < 5; i++ {
 		sl, _ := newService(t, 1, libp2pServiceOpts{
+			notifier: notifier,
 			libp2pOpts: libp2p.Options{
 				NodeMode: aurora.NewModel(),
 			},
@@ -400,16 +406,22 @@ func TestDoubleConnectOnAllAddresses(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	s1, overlay1 := newService(t, 1, libp2pServiceOpts{libp2pOpts: libp2p.Options{
-		NodeMode: aurora.NewModel().SetMode(aurora.FullNode),
-	}})
+	s1, overlay1 := newService(t, 1, libp2pServiceOpts{
+		notifier: mockNotifier(noopCf, noopDf, true),
+		libp2pOpts: libp2p.Options{
+			NodeMode: aurora.NewModel().SetMode(aurora.FullNode),
+		},
+	})
 	addrs, err := s1.Addresses()
 	if err != nil {
 		t.Fatal(err)
 	}
 	for _, addr := range addrs {
 		// creating new remote host for each address
-		s2, overlay2 := newService(t, 1, libp2pServiceOpts{libp2pOpts: libp2p.Options{NodeMode: aurora.NewModel()}})
+		s2, overlay2 := newService(t, 1, libp2pServiceOpts{
+			notifier:   mockNotifier(noopCf, noopDf, true),
+			libp2pOpts: libp2p.Options{NodeMode: aurora.NewModel()},
+		})
 
 		if _, err := s2.Connect(ctx, addr); err != nil {
 			t.Fatal(err)
@@ -1020,6 +1032,55 @@ func TestUserAgentLogging(t *testing.T) {
 	testUserAgentLogLine(t, s2Logs, "(outbound)")
 }
 
+func TestReachabilityUpdate(t *testing.T) {
+	s1, _ := newService(t, 1, libp2pServiceOpts{
+		libp2pOpts: libp2p.WithHostFactory(
+			func(_ ...libp2pm.Option) (host.Host, error) {
+				return bhost.NewHost(swarmt.GenSwarm(t), &bhost.HostOpts{})
+			},
+		),
+	})
+	defer s1.Close()
+
+	emitReachabilityChanged, _ := s1.Host().EventBus().Emitter(new(event.EvtLocalReachabilityChanged), eventbus.Stateful)
+
+	firstUpdate := make(chan struct{})
+	s1.SetPickyNotifier(mockReachabilityNotifier(func(status p2p.ReachabilityStatus) {
+		if status == p2p.ReachabilityStatusPublic {
+			close(firstUpdate)
+		}
+	}))
+
+	err := emitReachabilityChanged.Emit(event.EvtLocalReachabilityChanged{Reachability: network.ReachabilityPublic})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	select {
+	case <-firstUpdate:
+	case <-time.After(time.Second):
+		t.Fatalf("test timed out")
+	}
+
+	secondUpdate := make(chan struct{})
+	s1.SetPickyNotifier(mockReachabilityNotifier(func(status p2p.ReachabilityStatus) {
+		if status == p2p.ReachabilityStatusPrivate {
+			close(secondUpdate)
+		}
+	}))
+
+	err = emitReachabilityChanged.Emit(event.EvtLocalReachabilityChanged{Reachability: network.ReachabilityPrivate})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	select {
+	case <-secondUpdate:
+	case <-time.After(time.Second):
+		t.Fatalf("test timed out")
+	}
+}
+
 func testUserAgentLogLine(t *testing.T, logs *buffer, substring string) {
 	t.Helper()
 
@@ -1151,11 +1212,13 @@ func checkAddressbook(t *testing.T, ab addressbook.Getter, overlay boson.Address
 }
 
 type notifiee struct {
-	connected    cFunc
-	disconnected dFunc
-	pick         bool
-	announce     announceFunc
-	announceTo   announceToFunc
+	connected          cFunc
+	disconnected       dFunc
+	pick               bool
+	announce           announceFunc
+	announceTo         announceToFunc
+	updateReachability reachabilityFunc
+	reachable          reachableFunc
 }
 
 func (n *notifiee) Connected(c context.Context, p p2p.Peer, f bool) error {
@@ -1182,22 +1245,62 @@ func (n *notifiee) NotifyPeerState(peer p2p.PeerInfo) {
 
 }
 
+func (n *notifiee) UpdateReachability(status p2p.ReachabilityStatus) {
+	n.updateReachability(status)
+}
+
+func (n *notifiee) Reachable(addr boson.Address, status p2p.ReachabilityStatus) {
+	n.reachable(addr, status)
+}
+
 func mockNotifier(c cFunc, d dFunc, pick bool) p2p.PickyNotifier {
-	return &notifiee{connected: c, disconnected: d, pick: pick, announce: noopAnnounce, announceTo: noopAnnounceTo}
+	return &notifiee{
+		connected:          c,
+		disconnected:       d,
+		pick:               pick,
+		announce:           noopAnnounce,
+		announceTo:         noopAnnounceTo,
+		updateReachability: noopReachability,
+		reachable:          noopReachable,
+	}
 }
 
 func mockAnnouncingNotifier(a announceFunc, at announceToFunc) p2p.PickyNotifier {
-	return &notifiee{connected: noopCf, disconnected: noopDf, pick: true, announce: a, announceTo: at}
+	return &notifiee{
+		connected:          noopCf,
+		disconnected:       noopDf,
+		pick:               true,
+		announce:           a,
+		announceTo:         at,
+		updateReachability: noopReachability,
+		reachable:          noopReachable,
+	}
+}
+
+func mockReachabilityNotifier(r reachabilityFunc) p2p.PickyNotifier {
+	return &notifiee{
+		connected:          noopCf,
+		disconnected:       noopDf,
+		pick:               true,
+		announce:           noopAnnounce,
+		announceTo:         noopAnnounceTo,
+		updateReachability: r,
+		reachable:          noopReachable,
+	}
 }
 
 type (
-	cFunc          func(context.Context, p2p.Peer, bool) error
-	dFunc          func(p2p.Peer)
-	announceFunc   func(context.Context, boson.Address, bool) error
-	announceToFunc func(context.Context, boson.Address, boson.Address, bool) error
+	cFunc            func(context.Context, p2p.Peer, bool) error
+	dFunc            func(p2p.Peer)
+	announceFunc     func(context.Context, boson.Address, bool) error
+	announceToFunc   func(context.Context, boson.Address, boson.Address, bool) error
+	reachabilityFunc func(p2p.ReachabilityStatus)
+	reachableFunc    func(boson.Address, p2p.ReachabilityStatus)
 )
 
 var noopCf = func(context.Context, p2p.Peer, bool) error { return nil }
 var noopDf = func(p2p.Peer) {}
 var noopAnnounce = func(context.Context, boson.Address, bool) error { return nil }
 var noopAnnounceTo = func(context.Context, boson.Address, boson.Address, bool) error { return nil }
+var noopReachability = func(p2p.ReachabilityStatus) {}
+var noopReachable = func(boson.Address, p2p.ReachabilityStatus) {}
