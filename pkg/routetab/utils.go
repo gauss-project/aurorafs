@@ -3,6 +3,7 @@ package routetab
 import (
 	"bytes"
 	"crypto/sha256"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/routetab/pb"
@@ -12,6 +13,17 @@ func inPath(b []byte, path [][]byte) bool {
 	for _, v := range path {
 		if bytes.Equal(v, b) {
 			return true
+		}
+	}
+	return false
+}
+
+func inPaths(b [][]byte, path []boson.Address) bool {
+	for _, v := range path {
+		for _, v1 := range b {
+			if bytes.Equal(v.Bytes(), v1) {
+				return true
+			}
 		}
 	}
 	return false

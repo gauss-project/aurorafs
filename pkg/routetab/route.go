@@ -200,14 +200,15 @@ func (s *Service) onRouteReq(ctx context.Context, p p2p.Peer, stream p2p.Stream)
 
 	s.metrics.FindRouteReqReceivedCount.Inc()
 
+	var reqPath [][]byte
 	for _, v := range req.Paths {
-		items := v.Items // request path only one
-		if len(items) > int(atomic.LoadInt32(&MaxTTL)) {
+		reqPath = v.Items // request path only one
+		if len(reqPath) > int(atomic.LoadInt32(&MaxTTL)) {
 			// discard
-			s.logger.Tracef("route:%s onRouteReq target=%s discard, ttl=%d", s.self.String(), target.String(), len(items))
+			s.logger.Tracef("route:%s onRouteReq target=%s discard, ttl=%d", s.self.String(), target.String(), len(reqPath))
 			return nil
 		}
-		if inPath(s.self.Bytes(), items) {
+		if inPath(s.self.Bytes(), reqPath) {
 			// discard
 			s.logger.Tracef("route:%s onRouteReq target=%s discard, received path contains self.", s.self.String(), target.String())
 			return nil
@@ -231,19 +232,27 @@ func (s *Service) onRouteReq(ctx context.Context, p p2p.Peer, stream p2p.Stream)
 
 	paths, err := s.GetRoute(ctx, target)
 	if err == nil && len(paths) > 0 {
-		// have route resp
-		switch req.UType {
-		case uTypeTarget:
-			addr, _ := s.addressbook.Get(target)
-			if addr != nil {
+		nowPaths := make([]*Path, 0)
+		for _, v := range paths {
+			if !inPaths(reqPath, v.Items) {
+				nowPaths = append(nowPaths, v)
+			}
+		}
+		if len(nowPaths) > 0 {
+			// have route resp
+			switch req.UType {
+			case uTypeTarget:
+				addr, _ := s.addressbook.Get(target)
+				if addr != nil {
+					s.logger.Tracef("route:%s onRouteReq target=%s in route table,uType=%d", s.self, target, req.UType)
+					s.doRouteResp(ctx, p.Address, target, target, nil, nowPaths, req.UType)
+					return nil
+				}
+			case uTypeZero:
 				s.logger.Tracef("route:%s onRouteReq target=%s in route table,uType=%d", s.self, target, req.UType)
-				s.doRouteResp(ctx, p.Address, target, target, nil, paths, req.UType)
+				s.doRouteResp(ctx, p.Address, target, boson.ZeroAddress, nil, nowPaths, req.UType)
 				return nil
 			}
-		case uTypeZero:
-			s.logger.Tracef("route:%s onRouteReq target=%s in route table,uType=%d", s.self, target, req.UType)
-			s.doRouteResp(ctx, p.Address, target, boson.ZeroAddress, nil, paths, req.UType)
-			return nil
 		}
 	}
 
@@ -286,7 +295,7 @@ func (s *Service) onRouteResp(ctx context.Context, peer p2p.Peer, stream p2p.Str
 		items := v.Items // response path maybe loop back
 		if inPath(s.self.Bytes(), items) {
 			// discard
-			s.logger.Tracef("route:%s onRouteReq target=%s discard, received path contains self.", s.self.String(), target.String())
+			s.logger.Tracef("route:%s onRouteResp target=%s discard, received path contains self.", s.self.String(), target.String())
 			return nil
 		}
 	}
