@@ -60,6 +60,19 @@ const (
 	SendStream
 )
 
+func (s SendOption) String() string {
+	switch s {
+	case SendOnly:
+		return "SendOnly"
+	case SendReceive:
+		return "SendReceive"
+	case SendStream:
+		return "SendStream"
+	default:
+		return ""
+	}
+}
+
 type SendStreamCh struct {
 	Read     chan []byte
 	ReadErr  chan error

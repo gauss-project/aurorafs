@@ -242,6 +242,7 @@ func (s *Service) retrieveChunk(ctx context.Context, route aco.Route, rootAddr, 
 	defer func() {
 		if err != nil && (ctx.Err() == nil || !errors.Is(ctx.Err(), context.Canceled)) {
 			go func() {
+				s.logger.Tracef("retrieveChunk trigger find route")
 				_, _ = s.routeTab.FindRoute(context.Background(), route.TargetNode)
 			}()
 		}

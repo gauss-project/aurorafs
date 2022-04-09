@@ -850,19 +850,29 @@ func (s *Service) Send(ctx context.Context, data []byte, gid, dest boson.Address
 		return
 	}
 	defer func() {
-		if err != nil {
-			_ = stream.Reset()
-		} else {
-			_ = stream.FullClose()
-		}
+		_ = stream.Reset()
 	}()
 	req := &pb.GroupMsg{
 		Gid:  gid.Bytes(),
 		Data: data,
 		Type: int32(SendOnly),
 	}
-	w := protobuf.NewWriter(stream)
-	return w.WriteMsgWithContext(ctx, req)
+	w, r := protobuf.NewWriterAndReader(stream)
+	err = w.WriteMsgWithContext(ctx, req)
+	if err != nil {
+		return err
+	}
+
+	res := &pb.GroupMsg{}
+	err = r.ReadMsgWithContext(ctx, res)
+	if err != nil {
+		return
+	}
+	if res.Err != "" {
+		err = fmt.Errorf(res.Err)
+		return
+	}
+	return nil
 }
 
 func (s *Service) SendReceive(ctx context.Context, data []byte, gid, dest boson.Address) (result []byte, err error) {
@@ -889,7 +899,12 @@ func (s *Service) SendReceive(ctx context.Context, data []byte, gid, dest boson.
 	if err != nil {
 		return
 	}
+	if res.Err != "" {
+		err = fmt.Errorf(res.Err)
+		return
+	}
 	result = res.Data
+	_ = w.WriteMsgWithContext(ctx, nil)
 	return
 }
 
@@ -952,23 +967,30 @@ func (s *Service) onMessage(ctx context.Context, peer p2p.Peer, stream p2p.Strea
 	st := &WsStream{
 		sendOption: SendOption(info.Type),
 		stream:     stream,
-	}
-	switch st.sendOption {
-	case SendOnly:
-	case SendReceive, SendStream:
-		msg.SessionID = rpc.NewID()
-		st.w = protobuf.NewWriter(stream)
-		st.r = r
+		w:          protobuf.NewWriter(stream),
+		r:          r,
 	}
 
+	var haveNotify bool
 	s.groups.Range(func(_, value interface{}) bool {
 		g := value.(*Group)
 		if g.gid.Equal(msg.GID) && g.option.GType == model.GTypeJoin {
 			_ = s.notifyMessage(msg.GID, msg, st)
+			haveNotify = true
 			return false
 		}
 		return true
 	})
+	if !haveNotify {
+		err = protobuf.NewWriter(stream).WriteMsgWithContext(ctx, &pb.GroupMsg{
+			Gid:  info.Gid,
+			Type: info.Type,
+			Err:  "target not in the group",
+		})
+		if err != nil {
+			_ = stream.Reset()
+		}
+	}
 	return nil
 }
 
@@ -1002,13 +1024,25 @@ func (s *Service) notifyMessage(gid boson.Address, msg GroupMessage, st *WsStrea
 			}
 		}()
 
+		if st.sendOption != SendOnly {
+			msg.SessionID = rpc.NewID()
+		}
+
 		select {
 		case v.groupMessageCh <- msg:
 		default:
 		}
+		s.logger.Debugf("group: sessionID %s %s from %s", msg.SessionID, st.sendOption, msg.From)
 		switch st.sendOption {
+		case SendOnly:
+			err := st.w.WriteMsg(&pb.GroupMsg{})
+			if err != nil {
+				s.logger.Tracef("group: sessionID %s reply err %v", msg.SessionID, err)
+				_ = st.stream.Reset()
+			} else {
+				s.logger.Tracef("group: sessionID %s reply success", msg.SessionID)
+			}
 		case SendReceive:
-			s.logger.Debugf("group: sessionID %s from %s", msg.SessionID, msg.From)
 			go func() {
 				st.done = make(chan struct{}, 1)
 				s.sessionStream.Store(msg.SessionID, st)
@@ -1022,16 +1056,12 @@ func (s *Service) notifyMessage(gid boson.Address, msg GroupMessage, st *WsStrea
 				}
 			}()
 			go func() {
+				defer st.doneOnce.Do(func() { close(st.done) })
 				for {
 					var nothing protobuf.Message
 					err := st.r.ReadMsg(nothing)
-					if err != nil {
-						s.logger.Tracef("group: sessionID %s close from the sender", msg.SessionID)
-						st.doneOnce.Do(func() {
-							close(st.done)
-						})
-						return
-					}
+					s.logger.Tracef("group: sessionID %s close from the sender %v", msg.SessionID, err)
+					return
 				}
 			}()
 		case SendStream:
@@ -1043,6 +1073,7 @@ func (s *Service) notifyMessage(gid boson.Address, msg GroupMessage, st *WsStrea
 func (s *Service) replyGroupMessage(sessionID string, data []byte) (err error) {
 	v, ok := s.sessionStream.Load(rpc.ID(sessionID))
 	if !ok {
+		s.logger.Tracef("group: sessionID %s reply err invalid or has expired", sessionID)
 		return fmt.Errorf("sessionID %s is invalid or has expired", sessionID)
 	}
 	st := v.(*WsStream)
@@ -1056,7 +1087,6 @@ func (s *Service) replyGroupMessage(sessionID string, data []byte) (err error) {
 				st.doneOnce.Do(func() {
 					close(st.done)
 				})
-				st.stream.FullClose()
 			}
 		}
 	}()
