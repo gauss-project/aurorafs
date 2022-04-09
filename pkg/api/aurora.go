@@ -416,10 +416,12 @@ func (s *server) auroraListHandler(w http.ResponseWriter, r *http.Request) {
 	pathVar := ""
 	depth := 1
 	isBody := true
+	isPage := false
 	pageTotal := 0
 	if r.URL.Query().Get("recursive") != "" {
 		depth = -1
 	}
+
 	req, err := ioutil.ReadAll(r.Body)
 	if err != nil {
 		s.logger.Error("aurora list: Request parameter acquisition failed,%v", err.Error())
@@ -431,14 +433,53 @@ func (s *server) auroraListHandler(w http.ResponseWriter, r *http.Request) {
 		isBody = false
 	}
 
+	page := r.URL.Query().Get("page")
+	if page != "" {
+		isPage = true
+		var apiPage aurora.ApiPage
+		err := json.Unmarshal([]byte(page), &apiPage)
+		if err != nil {
+			s.logger.Error("aurora list: Request parameter conversion failed,%v", err.Error())
+			jsonhttp.InternalServerError(w, fmt.Errorf("aurora list: Request parameter conversion failed,%v", err.Error()))
+			return
+		}
+		reqs.Page = apiPage
+	}
+	filter := r.URL.Query().Get("filter")
+	if filter != "" {
+		isPage = true
+		apiFilters := make([]aurora.ApiFilter, 0, 7)
+		err := json.Unmarshal([]byte(filter), &apiFilters)
+		if err != nil {
+			s.logger.Error("aurora list: Request parameter conversion failed,%v", err.Error())
+			jsonhttp.InternalServerError(w, fmt.Errorf("aurora list: Request parameter conversion failed,%v", err.Error()))
+			return
+		}
+		reqs.Filter = apiFilters
+	}
+	asort := r.URL.Query().Get("sort")
+	if asort != "" {
+		isPage = true
+		var apiSort aurora.ApiSort
+		err := json.Unmarshal([]byte(asort), &apiSort)
+		if err != nil {
+			s.logger.Error("aurora list: Request parameter conversion failed,%v", err.Error())
+			jsonhttp.InternalServerError(w, fmt.Errorf("aurora list: Request parameter conversion failed,%v", err.Error()))
+			return
+		}
+		reqs.Sort = apiSort
+	}
 	if isBody {
+		isPage = true
 		err = json.Unmarshal(req, &reqs)
 		if err != nil {
 			s.logger.Error("aurora list: Request parameter conversion failed,%v", err.Error())
 			jsonhttp.InternalServerError(w, fmt.Errorf("aurora list: Request parameter conversion failed,%v", err.Error()))
 			return
 		}
-		if reqs.Page == reqs.Limit && reqs.Page == 0 {
+	}
+	if isPage {
+		if reqs.Page.PageSize == reqs.Page.PageNum && reqs.Page.PageSize == 0 {
 			jsonhttp.InternalServerError(w, fmt.Errorf("aurora list: Page information error"))
 			return
 		}
@@ -489,10 +530,10 @@ func (s *server) auroraListHandler(w http.ResponseWriter, r *http.Request) {
 		fileListInfo[i]["register"] = registerStatus(v["rootCid"].(boson.Address))
 	}
 
-	if isBody {
-		paging := aurora.NewPaging(s.logger, reqs.Page, reqs.Limit, reqs.Sort, reqs.Order)
+	if isPage {
+		paging := aurora.NewPaging(s.logger, reqs.Page.PageNum, reqs.Page.PageSize, reqs.Sort.Key, reqs.Sort.Order)
 		fileListInfo = paging.ResponseFilter(fileListInfo, reqs.Filter)
-		fileListInfo = paging.PageSort(fileListInfo, reqs.Sort, reqs.Order)
+		fileListInfo = paging.PageSort(fileListInfo, reqs.Sort.Key, reqs.Sort.Order)
 		pageTotal = len(fileListInfo)
 		fileListInfo = paging.Page(fileListInfo)
 	}
@@ -568,7 +609,7 @@ func (s *server) auroraListHandler(w http.ResponseWriter, r *http.Request) {
 
 	close(ch)
 	wg.Wait()
-	if !isBody {
+	if !isPage {
 		zeroAddress := boson.NewAddress([]byte{31: 0})
 		sort.Slice(responseList, func(i, j int) bool {
 			closer, _ := responseList[i].FileHash.Closer(zeroAddress, responseList[j].FileHash)
