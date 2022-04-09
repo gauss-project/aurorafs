@@ -41,11 +41,19 @@ type ApiFilter struct {
 	Value string `json:"value"`
 }
 
+type ApiSort struct {
+	Key   string `json:"key"`
+	Order string `json:"order"`
+}
+
+type ApiPage struct {
+	PageSize int `json:"pageSize"`
+	PageNum  int `json:"pageNum"`
+}
+
 type ApiBody struct {
-	Page   int         `json:"page"`
-	Limit  int         `json:"limit"`
-	Sort   string      `json:"sort"` // desc asc
-	Order  string      `json:"order"`
+	Page   ApiPage     `json:"page"`
+	Sort   ApiSort     `json:"sort"`
 	Filter []ApiFilter `json:"filter"`
 }
 
