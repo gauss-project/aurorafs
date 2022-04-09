@@ -26,6 +26,11 @@ import (
 	"github.com/gauss-project/aurorafs/pkg/traversal"
 )
 
+const (
+	image    = "image/jpeg; charset=utf-8"
+	fileName = "my-pictures.jpeg"
+)
+
 func TestAuroraFiles(t *testing.T) {
 	var (
 		fileUploadResource   = "/aurora"
@@ -168,14 +173,13 @@ func TestAuroraFiles(t *testing.T) {
 	})
 
 	t.Run("encrypt-decrypt", func(t *testing.T) {
-		fileName := "my-pictures.jpeg"
 
 		var resp api.AuroraUploadResponse
 		jsonhttptest.Request(t, client, http.MethodPost,
 			fileUploadResource+"?name="+fileName, http.StatusCreated,
 			jsonhttptest.WithRequestBody(bytes.NewReader(simpleData)),
 			jsonhttptest.WithRequestHeader(api.AuroraEncryptHeader, "True"),
-			jsonhttptest.WithRequestHeader("Content-Type", "image/jpeg; charset=utf-8"),
+			jsonhttptest.WithRequestHeader("Content-Type", image),
 			jsonhttptest.WithUnmarshalJSONResponse(&resp),
 		)
 
@@ -192,13 +196,12 @@ func TestAuroraFiles(t *testing.T) {
 		if params["filename"] != fileName {
 			t.Fatal("Invalid file name detected")
 		}
-		if rcvdHeader.Get("Content-Type") != "image/jpeg; charset=utf-8" {
+		if rcvdHeader.Get("Content-Type") != image {
 			t.Fatal("Invalid content type detected")
 		}
 	})
 
 	t.Run("filter out filename path", func(t *testing.T) {
-		fileName := "my-pictures.jpeg"
 		fileNameWithPath := "../../" + fileName
 
 		var resp api.AuroraUploadResponse
@@ -206,7 +209,7 @@ func TestAuroraFiles(t *testing.T) {
 		_ = jsonhttptest.Request(t, client, http.MethodPost,
 			fileUploadResource+"?name="+fileNameWithPath, http.StatusCreated,
 			jsonhttptest.WithRequestBody(bytes.NewReader(simpleData)),
-			jsonhttptest.WithRequestHeader("Content-Type", "image/jpeg; charset=utf-8"),
+			jsonhttptest.WithRequestHeader("Content-Type", image),
 			jsonhttptest.WithUnmarshalJSONResponse(&resp),
 		)
 
@@ -223,14 +226,12 @@ func TestAuroraFiles(t *testing.T) {
 		if params["filename"] != fileName {
 			t.Fatalf("want filename %s, got %s", fileName, params["filename"])
 		}
-		if rcvdHeader.Get("Content-Type") != "image/jpeg; charset=utf-8" {
+		if rcvdHeader.Get("Content-Type") != image {
 			t.Fatal("Invalid content type detected")
 		}
 	})
 
-
 	t.Run("check-content-type-detection", func(t *testing.T) {
-		fileName := "my-pictures.jpeg"
 		rootHash := "745e0f786f961a33825c4b05087f970ea9fd0fc15f76a08d11d0d9fa06c6932a"
 
 		jsonhttptest.Request(t, client, http.MethodPost,
@@ -239,7 +240,7 @@ func TestAuroraFiles(t *testing.T) {
 			jsonhttptest.WithExpectedJSONResponse(api.AuroraUploadResponse{
 				Reference: boson.MustParseHexAddress(rootHash),
 			}),
-			jsonhttptest.WithRequestHeader("Content-Type", "image/jpeg; charset=utf-8"),
+			jsonhttptest.WithRequestHeader("Content-Type", image),
 		)
 
 		rcvdHeader := jsonhttptest.Request(t, client, http.MethodGet,
@@ -254,7 +255,7 @@ func TestAuroraFiles(t *testing.T) {
 		if params["filename"] != fileName {
 			t.Fatal("Invalid file name detected")
 		}
-		if rcvdHeader.Get("Content-Type") != "image/jpeg; charset=utf-8" {
+		if rcvdHeader.Get("Content-Type") != image {
 			t.Fatal("Invalid content type detected")
 		}
 	})

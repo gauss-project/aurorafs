@@ -18,6 +18,7 @@ import (
 	"github.com/gauss-project/aurorafs/pkg/p2p"
 	p2pmock "github.com/gauss-project/aurorafs/pkg/p2p/mock"
 	"github.com/gauss-project/aurorafs/pkg/p2p/streamtest"
+	pingpongmock "github.com/gauss-project/aurorafs/pkg/pingpong/mock"
 	"github.com/gauss-project/aurorafs/pkg/shed"
 	mockstate "github.com/gauss-project/aurorafs/pkg/statestore/mock"
 	"github.com/gauss-project/aurorafs/pkg/topology/kademlia"
@@ -115,8 +116,11 @@ func newTestNode(t *testing.T, peer boson.Address, po int, underlay string, allo
 
 	stream := streamtest.New(streamtest.WithBaseAddr(base.Overlay))
 	Hive2 := hive2.New(stream, ab, networkId, noopLogger)
+	ppm := pingpongmock.New(func(_ context.Context, _ boson.Address, _ ...string) (time.Duration, error) {
+		return 0, nil
+	})
 
-	kad, err := kademlia.New(base.Overlay, ab, Hive2, p2ps, nil, metricsDB, noopLogger, kademlia.Options{BinMaxPeers: 5, NodeMode: aurora.NewModel().SetMode(aurora.FullNode)}) // kademlia instance
+	kad, err := kademlia.New(base.Overlay, ab, Hive2, p2ps, ppm, nil, metricsDB, noopLogger, kademlia.Options{BinMaxPeers: 5, NodeMode: aurora.NewModel().SetMode(aurora.FullNode)}) // kademlia instance
 	if err != nil {
 		t.Fatal(err)
 	}

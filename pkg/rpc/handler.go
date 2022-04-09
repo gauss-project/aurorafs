@@ -25,7 +25,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ethereum/go-ethereum/log"
+	"github.com/gauss-project/aurorafs/pkg/logging"
+	"github.com/sirupsen/logrus"
 )
 
 // handler handles JSON-RPC messages. There is one handler per connection. Note that
@@ -59,7 +60,7 @@ type handler struct {
 	rootCtx        context.Context                // canceled by close()
 	cancelRoot     func()                         // cancel function for rootCtx
 	conn           jsonWriter                     // where responses will be sent
-	log            log.Logger
+	log            *logrus.Entry
 	allowSubscribe bool
 
 	subLock    sync.Mutex
@@ -83,10 +84,10 @@ func newHandler(connCtx context.Context, conn jsonWriter, idgen func() ID, reg *
 		cancelRoot:     cancelRoot,
 		allowSubscribe: true,
 		serverSubs:     make(map[ID]*Subscription),
-		log:            log.Root(),
+		log:            logging.Root().NewEntry(),
 	}
 	if conn.remoteAddr() != "" {
-		h.log = h.log.New("conn", conn.remoteAddr())
+		h.log = h.log.WithField("conn", conn.remoteAddr())
 	}
 	h.unsubscribeCb = newCallback(reflect.Value{}, reflect.ValueOf(h.unsubscribe))
 	return h
@@ -240,7 +241,7 @@ func (h *handler) handleImmediate(msg *jsonrpcMessage) bool {
 		return false
 	case msg.isResponse():
 		h.handleResponse(msg)
-		h.log.Trace("Handled RPC response", "reqid", idForLog{msg.ID}, "duration", time.Since(start))
+		h.log.Tracef("Handled RPC response reqid %s duration %s", idForLog{msg.ID}, time.Since(start))
 		return true
 	default:
 		return false
@@ -263,7 +264,7 @@ func (h *handler) handleSubscriptionResult(msg *jsonrpcMessage) {
 func (h *handler) handleResponse(msg *jsonrpcMessage) {
 	op := h.respWait[string(msg.ID)]
 	if op == nil {
-		h.log.Debug("Unsolicited RPC response", "reqid", idForLog{msg.ID})
+		h.log.Debugf("Unsolicited RPC response reqid %s", idForLog{msg.ID})
 		return
 	}
 	delete(h.respWait, string(msg.ID))
@@ -296,16 +297,17 @@ func (h *handler) handleCallMsg(ctx *callProc, msg *jsonrpcMessage) *jsonrpcMess
 		return nil
 	case msg.isCall():
 		resp := h.handleCall(ctx, msg)
-		var ctx []interface{}
-		ctx = append(ctx, "reqid", idForLog{msg.ID}, "duration", time.Since(start))
+		filed := make(logrus.Fields, 2)
+		filed["reqid"] = idForLog{msg.ID}
+		filed["duration"] = time.Since(start)
 		if resp.Error != nil {
-			ctx = append(ctx, "err", resp.Error.Message)
+			filed["err"] = resp.Error.Message
 			if resp.Error.Data != nil {
-				ctx = append(ctx, "errdata", resp.Error.Data)
+				filed["errdata"] = resp.Error.Data
 			}
-			h.log.Warn("Served "+msg.Method, ctx...)
+			h.log.WithFields(filed).Warnf("Served %s", msg.Method)
 		} else {
-			h.log.Debug("Served "+msg.Method, ctx...)
+			h.log.WithFields(filed).Debugf("Served %s", msg.Method)
 		}
 		return resp
 	case msg.hasValidID():
@@ -341,7 +343,7 @@ func (h *handler) handleCall(cp *callProc, msg *jsonrpcMessage) *jsonrpcMessage 
 	if callb != h.unsubscribeCb {
 		rpcRequestGauge.Inc(1)
 		if answer.Error != nil {
-			failedReqeustGauge.Inc(1)
+			failedRequestGauge.Inc(1)
 		} else {
 			successfulRequestGauge.Inc(1)
 		}

@@ -67,6 +67,7 @@ func (a *apiService) KadInfo(ctx context.Context) (*rpc.Subscription, error) {
 			_ = notifier.Notify(sub.ID, result)
 			lastTime = time.Now()
 		}
+		resFunc()
 		for {
 			select {
 			case <-ch:

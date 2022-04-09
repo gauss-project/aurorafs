@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/ethereum/go-ethereum/common"
 	"io"
 	"io/ioutil"
 	"mime"
@@ -19,6 +18,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethersphere/langos"
 	"github.com/gauss-project/aurorafs/pkg/aurora"
 	"github.com/gauss-project/aurorafs/pkg/boson"
@@ -49,7 +49,7 @@ func (s *server) auroraUploadHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	isDir := r.Header.Get(AuroraCollectionHeader)
-	if strings.ToLower(isDir) == "true" || mediaType == multiPartFormData {
+	if strings.ToLower(isDir) == StringTrue || mediaType == multiPartFormData {
 		s.dirUploadHandler(w, r)
 		return
 	}
@@ -188,7 +188,7 @@ func (s *server) fileUploadHandler(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
-	if strings.ToLower(r.Header.Get(AuroraPinHeader)) == "true" {
+	if strings.ToLower(r.Header.Get(AuroraPinHeader)) == StringTrue {
 		if err := s.pinning.CreatePin(ctx, manifestReference, false); err != nil {
 			logger.Debugf("aurora upload file: creation of pin for %q failed: %v", manifestReference, err)
 			logger.Error("aurora upload file: creation of pin failed")

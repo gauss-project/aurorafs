@@ -5,6 +5,7 @@ package topology
 import (
 	"errors"
 	"io"
+	"time"
 
 	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/p2p"
@@ -29,10 +30,12 @@ type Driver interface {
 	io.Closer
 	Halter
 	Snapshot() *model.KadParams
+	SnapshotConnected() (connected int, peers map[string]*model.PeerInfo)
+	SnapshotAddr(addr boson.Address) *model.Snapshot
+	RecordPeerLatency(add boson.Address, t time.Duration)
 	DisconnectForce(addr boson.Address, reason string) error
 	Outbound(peer p2p.Peer)
 	NotifyPeerState(peer p2p.PeerInfo)
-	SnapshotConnected() (connected int, peers map[string]*model.PeerInfo)
 	EachKnownPeerer
 }
 
@@ -46,15 +49,20 @@ type ClosestPeerer interface {
 	// given chunk address.
 	// This function will ignore peers with addresses provided in skipPeers.
 	// Returns topology.ErrWantSelf in case base is the closest to the address.
-	ClosestPeer(addr boson.Address, includeSelf bool, skipPeers ...boson.Address) (peerAddr boson.Address, err error)
-	ClosestPeers(addr boson.Address, limit int, skipPeers ...boson.Address) ([]boson.Address, error)
+	ClosestPeer(addr boson.Address, includeSelf bool, f Filter, skipPeers ...boson.Address) (peerAddr boson.Address, err error)
+	ClosestPeers(addr boson.Address, limit int, f Filter, skipPeers ...boson.Address) ([]boson.Address, error)
 }
 
 type EachPeerer interface {
 	// EachPeer iterates from closest bin to farthest
-	EachPeer(model.EachPeerFunc) error
+	EachPeer(model.EachPeerFunc, Filter) error
 	// EachPeerRev iterates from farthest bin to closest
-	EachPeerRev(model.EachPeerFunc) error
+	EachPeerRev(model.EachPeerFunc, Filter) error
+}
+
+// Filter defines the different filters that can be used with the Peer iterators
+type Filter struct {
+	Reachable bool
 }
 
 type EachKnownPeerer interface {

@@ -1,14 +1,37 @@
 package model
 
 import (
-	"github.com/gauss-project/aurorafs/pkg/boson"
 	"time"
+
+	"github.com/gauss-project/aurorafs/pkg/boson"
+	"github.com/gauss-project/aurorafs/pkg/p2p"
 )
 
 // PeerInfo is a view of peer information exposed to a user.
 type PeerInfo struct {
 	Address boson.Address       `json:"address"`
 	Metrics *MetricSnapshotView `json:"metrics,omitempty"`
+}
+
+// PeerConnectionDirection represents peer connection direction.
+type PeerConnectionDirection string
+
+// Snapshot represents a snapshot of peers' metrics counters.
+type Snapshot struct {
+	LastSeenTimestamp          int64                   `json:"lastSeenTimestamp"`
+	SessionConnectionRetry     uint64                  `json:"sessionConnectionRetry"`
+	ConnectionTotalDuration    time.Duration           `json:"connectionTotalDuration"`
+	SessionConnectionDuration  time.Duration           `json:"sessionConnectionDuration"`
+	SessionConnectionDirection PeerConnectionDirection `json:"sessionConnectionDirection"`
+	LatencyEWMA                time.Duration           `json:"latencyEWMA"`
+	Reachability               p2p.ReachabilityStatus  `json:"reachability"`
+}
+
+// HasAtMaxOneConnectionAttempt returns true if the snapshot represents a new
+// peer which has at maximum one session connection attempt but it still isn't
+// logged in.
+func (ss *Snapshot) HasAtMaxOneConnectionAttempt() bool {
+	return ss.LastSeenTimestamp == 0 && ss.SessionConnectionRetry <= 1
 }
 
 // MetricSnapshotView represents snapshot of metrics counters in more human readable form.
@@ -18,6 +41,8 @@ type MetricSnapshotView struct {
 	ConnectionTotalDuration    float64 `json:"connectionTotalDuration"`
 	SessionConnectionDuration  float64 `json:"sessionConnectionDuration"`
 	SessionConnectionDirection string  `json:"sessionConnectionDirection"`
+	LatencyEWMA                int64   `json:"latencyEWMA"`
+	Reachability               string  `json:"reachability"`
 }
 
 type BinInfo struct {
@@ -69,6 +94,7 @@ type KadParams struct {
 	Timestamp      time.Time `json:"timestamp"`      // now
 	NNLowWatermark int       `json:"nnLowWatermark"` // low watermark for depth calculation
 	Depth          uint8     `json:"depth"`          // current depth
+	Reachability   string    `json:"reachability"`   // current reachability status
 	Bins           KadBins   `json:"bins"`           // individual bin info
 	LightNodes     BinInfo   `json:"lightNodes"`     // light nodes bin info
 	BootNodes      BinInfo   `json:"bootNodes"`      // boot nodes bin info

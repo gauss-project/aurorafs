@@ -8,12 +8,15 @@ import (
 	"fmt"
 	"net"
 	"runtime"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/gauss-project/aurorafs/pkg/p2p/libp2p/internal/reacher"
 	"github.com/gauss-project/aurorafs/pkg/routetab"
 	"github.com/gauss-project/aurorafs/pkg/routetab/pb"
+	"github.com/libp2p/go-libp2p-core/event"
 
 	au "github.com/gauss-project/aurorafs"
 	"github.com/gauss-project/aurorafs/pkg/addressbook"
@@ -30,7 +33,6 @@ import (
 	"github.com/gauss-project/aurorafs/pkg/topology/lightnode"
 	"github.com/gauss-project/aurorafs/pkg/tracing"
 	"github.com/libp2p/go-libp2p"
-	autonat "github.com/libp2p/go-libp2p-autonat"
 	"github.com/libp2p/go-libp2p-core/crypto"
 	"github.com/libp2p/go-libp2p-core/host"
 	"github.com/libp2p/go-libp2p-core/network"
@@ -41,6 +43,7 @@ import (
 	"github.com/libp2p/go-libp2p-peerstore/pstoremem"
 	libp2pquic "github.com/libp2p/go-libp2p-quic-transport"
 	goyamux "github.com/libp2p/go-libp2p-yamux"
+	"github.com/libp2p/go-libp2p/p2p/host/autonat"
 	basichost "github.com/libp2p/go-libp2p/p2p/host/basic"
 	libp2pping "github.com/libp2p/go-libp2p/p2p/protocol/ping"
 	"github.com/libp2p/go-tcp-transport"
@@ -52,6 +55,10 @@ import (
 var (
 	_ p2p.Service      = (*Service)(nil)
 	_ p2p.DebugService = (*Service)(nil)
+
+	// reachabilityOverridePublic overrides autonat to simply report
+	// public reachability status, it is set in the makefile.
+	reachabilityOverridePublic = "false"
 )
 
 const (
@@ -91,6 +98,7 @@ type Service struct {
 	route             routetab.RelayStream
 	self              boson.Address
 	nodeMode          aurora.Model
+	reacher           p2p.Reacher
 }
 
 type Options struct {
@@ -207,10 +215,20 @@ func New(ctx context.Context, signer beecrypto.Signer, networkID uint64, overlay
 		return nil, err
 	}
 
+	options := []autonat.Option{autonat.EnableService(dialer.Network())}
+
+	val, err := strconv.ParseBool(reachabilityOverridePublic)
+	if err != nil {
+		return nil, err
+	}
+	if val {
+		options = append(options, autonat.WithReachability(network.ReachabilityPublic))
+	}
+
 	// If you want to help other peers to figure out if they are behind
 	// NATs, you can launch the server-side of AutoNAT too (AutoRelay
 	// already runs the client)
-	if _, err = autonat.New(h, autonat.EnableService(dialer.Network())); err != nil {
+	if _, err = autonat.New(h, options...); err != nil {
 		return nil, fmt.Errorf("autonat: %w", err)
 	}
 
@@ -445,14 +463,47 @@ func (s *Service) handleIncoming(stream network.Stream) {
 		return
 	}
 
+	if s.reacher != nil {
+		s.reacher.Connected(overlay, i.Address.Underlay)
+	}
+
 	peerUserAgent := appendSpace(s.peerUserAgent(s.ctx, peerID))
 
 	s.logger.Debugf("stream handler: successfully connected to peer %s%s%s (inbound)", i.Address.ShortString(), i.LightString(), peerUserAgent)
 	s.logger.Infof("stream handler: successfully connected to peer %s%s%s (inbound)", i.Address.Overlay, i.LightString(), peerUserAgent)
 }
 
+func (s *Service) reachabilityWorker() error {
+	sub, err := s.host.EventBus().Subscribe([]interface{}{new(event.EvtLocalReachabilityChanged)})
+	if err != nil {
+		return fmt.Errorf("failed subscribing to reachability event %w", err)
+	}
+
+	go func() {
+		defer sub.Close()
+		for {
+			select {
+			case <-s.ctx.Done():
+				return
+			case e := <-sub.Out():
+				if r, ok := e.(event.EvtLocalReachabilityChanged); ok {
+					select {
+					case <-s.ready:
+					case <-s.halt:
+						return
+					}
+					s.logger.Debugf("reachability changed to %s", r.Reachability.String())
+					s.notifier.UpdateReachability(p2p.ReachabilityStatus(r.Reachability))
+				}
+			}
+		}
+	}()
+	return nil
+}
+
 func (s *Service) SetPickyNotifier(n p2p.PickyNotifier) {
 	s.handshakeService.SetPicker(n)
+	s.reacher = reacher.New(s, n, nil)
 	s.notifier = n
 }
 
@@ -759,6 +810,10 @@ func (s *Service) Connect(ctx context.Context, addr ma.Multiaddr) (peer *p2p.Pee
 
 	s.metrics.CreatedConnectionCount.Inc()
 
+	if s.reacher != nil {
+		s.reacher.Connected(overlay, i.Address.Underlay)
+	}
+
 	peerUserAgent := appendSpace(s.peerUserAgent(ctx, info.ID))
 
 	s.logger.Debugf("successfully connected to peer %s%s%s (outbound)", i.Address.ShortString(), i.LightString(), peerUserAgent)
@@ -803,6 +858,9 @@ func (s *Service) Disconnect(overlay boson.Address, reason string) error {
 	if s.bootNodes != nil {
 		s.bootNodes.Disconnected(peer)
 	}
+	if s.reacher != nil {
+		s.reacher.Disconnected(overlay)
+	}
 
 	return nil
 }
@@ -827,6 +885,9 @@ func (s *Service) disconnected(peer p2p.Peer) {
 	}
 	if s.bootNodes != nil {
 		s.bootNodes.Disconnected(peer)
+	}
+	if s.reacher != nil {
+		s.reacher.Disconnected(peer.Address)
 	}
 }
 
@@ -1042,8 +1103,13 @@ func (s *Service) GetWelcomeMessage() string {
 	return s.handshakeService.GetWelcomeMessage()
 }
 
-func (s *Service) Ready() {
+func (s *Service) Ready() error {
+	if err := s.reachabilityWorker(); err != nil {
+		return fmt.Errorf("reachability worker: %w", err)
+	}
+
 	close(s.ready)
+	return nil
 }
 
 func (s *Service) Halt() {

@@ -5,12 +5,14 @@ import (
 	"time"
 
 	"github.com/gauss-project/aurorafs/pkg/boson"
+	"github.com/gauss-project/aurorafs/pkg/p2p"
 	"github.com/gauss-project/aurorafs/pkg/shed"
 	"github.com/gauss-project/aurorafs/pkg/topology/kademlia/internal/metrics"
+	"github.com/gauss-project/aurorafs/pkg/topology/model"
 	"github.com/google/go-cmp/cmp"
 )
 
-func snapshot(t *testing.T, mc *metrics.Collector, sst time.Time, addr boson.Address) *metrics.Snapshot {
+func snapshot(t *testing.T, mc *metrics.Collector, sst time.Time, addr boson.Address) *model.Snapshot {
 	t.Helper()
 
 	ss := mc.Snapshot(sst, addr)
@@ -46,6 +48,8 @@ func TestPeerMetricsCollector(t *testing.T) {
 		t1 = time.Now()               // Login time.
 		t2 = t1.Add(10 * time.Second) // Snapshot time.
 		t3 = t2.Add(55 * time.Second) // Logout time.
+		t4 = 10 * time.Millisecond    // Latency duration.
+		t5 = 100 * time.Millisecond   // Next latency duration sample.
 	)
 
 	// Inc session conn retry.
@@ -110,6 +114,29 @@ func TestPeerMetricsCollector(t *testing.T) {
 		t.Fatalf("Snapshot(%q, ...): session connection duration counter mismatch: have %q; want %q", addr, have, want)
 	}
 
+	// Latency.
+	mc.Record(addr, metrics.PeerLatency(t4))
+	ss = snapshot(t, mc, t2, addr)
+	if have, want := ss.LatencyEWMA, t4; have != want {
+		t.Fatalf("Snapshot(%q, ...): latency mismatch: have %d; want %d", addr, have, want)
+	}
+	mc.Record(addr, metrics.PeerLatency(t5))
+	ss = snapshot(t, mc, t2, addr)
+	if have, want := ss.LatencyEWMA, 19*time.Millisecond; have != want {
+		t.Fatalf("Snapshot(%q, ...): latency mismatch: have %d; want %d", addr, have, want)
+	}
+
+	// Reachability.
+	ss = snapshot(t, mc, t2, addr)
+	if have, want := ss.Reachability, p2p.ReachabilityStatusUnknown; have != want {
+		t.Fatalf("Snapshot(%q, ...): has reachability status mismatch: have %q; want %q", addr, have, want)
+	}
+	mc.Record(addr, metrics.PeerReachability(p2p.ReachabilityStatusPublic))
+	ss = snapshot(t, mc, t2, addr)
+	if have, want := ss.Reachability, p2p.ReachabilityStatusPublic; have != want {
+		t.Fatalf("Snapshot(%q, ...): has reachability status mismatch: have %q; want %q", addr, have, want)
+	}
+
 	// Inspect.
 	have := mc.Inspect(addr)
 	want := ss
@@ -140,7 +167,7 @@ func TestPeerMetricsCollector(t *testing.T) {
 		t.Fatalf("NewCollector(...): counters length mismatch: have %d; want %d", have, want)
 	}
 	have = mc.Inspect(addr)
-	want = &metrics.Snapshot{
+	want = &model.Snapshot{
 		LastSeenTimestamp:       ss.LastSeenTimestamp,
 		ConnectionTotalDuration: 2 * ss.ConnectionTotalDuration, // 2x because we've already logout with t3 and login with t1 again.
 	}

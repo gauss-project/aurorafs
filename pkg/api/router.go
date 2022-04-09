@@ -113,7 +113,7 @@ func (s *server) setupRouting() {
 
 	handle("/aurora/list", jsonhttp.MethodHandler{
 		"POST": web.ChainHandlers(
-			s.newTracingHandler("aurora-upload"),
+			s.newTracingHandler("aurora-list-page"),
 			web.FinalHandlerFunc(s.auroraListHandler),
 		),
 	})

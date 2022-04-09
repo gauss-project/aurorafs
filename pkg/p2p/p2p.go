@@ -8,11 +8,25 @@ import (
 	"net"
 	"time"
 
-	"github.com/gauss-project/aurorafs/pkg/routetab/pb"
-
 	"github.com/gauss-project/aurorafs/pkg/aurora"
 	"github.com/gauss-project/aurorafs/pkg/boson"
+	"github.com/gauss-project/aurorafs/pkg/routetab/pb"
+	"github.com/libp2p/go-libp2p-core/network"
 	ma "github.com/multiformats/go-multiaddr"
+)
+
+// ReachabilityStatus represents the node reachability status.
+type ReachabilityStatus network.Reachability
+
+// String implements the fmt.Stringer interface.
+func (rs ReachabilityStatus) String() string {
+	return network.Reachability(rs).String()
+}
+
+const (
+	ReachabilityStatusUnknown = ReachabilityStatus(network.ReachabilityUnknown)
+	ReachabilityStatusPublic  = ReachabilityStatus(network.ReachabilityPublic)
+	ReachabilityStatusPrivate = ReachabilityStatus(network.ReachabilityPrivate)
 )
 
 // Service provides methods to handle p2p Peers and Protocols.
@@ -36,8 +50,12 @@ type Connect interface {
 
 type Disconnecter interface {
 	Disconnect(overlay boson.Address, reason string) error
+	Blocklister
+}
+
+type Blocklister interface {
 	// Blocklist will disconnect a peer and put it on a blocklist (blocking in & out connections) for provided duration
-	// duration 0 is treated as an infinite duration
+	// Duration 0 is treated as an infinite duration.
 	Blocklist(overlay boson.Address, duration time.Duration, reason string) error
 }
 
@@ -50,10 +68,25 @@ type Halter interface {
 type PickyNotifier interface {
 	Picker
 	Notifier
+	ReachabilityUpdater
+	ReachableNotifier
 }
 
 type Picker interface {
 	Pick(Peer) bool
+}
+
+type ReachableNotifier interface {
+	Reachable(boson.Address, ReachabilityStatus)
+}
+
+type Reacher interface {
+	Connected(boson.Address, ma.Multiaddr)
+	Disconnected(boson.Address)
+}
+
+type ReachabilityUpdater interface {
+	UpdateReachability(ReachabilityStatus)
 }
 
 type Notifier interface {

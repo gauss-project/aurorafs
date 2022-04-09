@@ -305,7 +305,7 @@ func NewAurora(nodeMode aurora.Model, addr string, bosonAddress boson.Address, p
 		return nil, fmt.Errorf("hive service: %w", err)
 	}
 
-	kad, err := kademlia.New(bosonAddress, addressBook, hiveObj, p2ps, bootNodes, metricsDB, logger, kademlia.Options{
+	kad, err := kademlia.New(bosonAddress, addressBook, hiveObj, p2ps, pingPong, bootNodes, metricsDB, logger, kademlia.Options{
 		Bootnodes:   bootnodes,
 		NodeMode:    nodeMode,
 		BinMaxPeers: o.KadBinMaxPeers,
@@ -483,7 +483,7 @@ func NewAurora(nodeMode aurora.Model, addr string, bosonAddress boson.Address, p
 		}
 	}
 
-	if err := kad.Start(p2pCtx); err != nil {
+	if err = kad.Start(p2pCtx); err != nil {
 		return nil, err
 	}
 	if !o.IsDev {
@@ -516,12 +516,13 @@ func NewAurora(nodeMode aurora.Model, addr string, bosonAddress boson.Address, p
 		retrieve.API(),                 // retrieval
 		oracleChain.API(),              // oracle
 	})
-	err = stack.Start()
-	if err != nil {
+	if err = stack.Start(); err != nil {
 		return nil, err
 	}
 
-	p2ps.Ready()
+	if err = p2ps.Ready(); err != nil {
+		return nil, err
+	}
 
 	return b, nil
 }

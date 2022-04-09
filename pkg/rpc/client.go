@@ -27,7 +27,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/ethereum/go-ethereum/log"
+	"github.com/gauss-project/aurorafs/pkg/logging"
 )
 
 var (
@@ -510,7 +510,7 @@ func (c *Client) reconnect(ctx context.Context) error {
 	}
 	newconn, err := c.reconnectFunc(ctx)
 	if err != nil {
-		log.Trace("RPC client reconnect failed", "err", err)
+		logging.Tracef("RPC client reconnect failed err %s", err)
 		return err
 	}
 	select {
@@ -559,13 +559,13 @@ func (c *Client) dispatch(codec ServerCodec) {
 			}
 
 		case err := <-c.readErr:
-			conn.handler.log.Debug("RPC connection read error", "err", err)
+			conn.handler.log.Debugf("RPC connection read err %v", err)
 			conn.close(err, lastOp)
 			reading = false
 
 		// Reconnect:
 		case newcodec := <-c.reconnected:
-			log.Debug("RPC client reconnected", "reading", reading, "conn", newcodec.remoteAddr())
+			logging.Tracef("RPC client reconnected reading %v conn %s", reading, newcodec.remoteAddr())
 			if reading {
 				// Wait for the previous read loop to exit. This is a rare case which
 				// happens if this loop isn't notified in time after the connection breaks.

@@ -21,19 +21,17 @@ package rpc
 
 import (
 	"context"
-	"fmt"
 	"net"
 	"os"
 	"path/filepath"
 
-	"github.com/ethereum/go-ethereum/log"
+	"github.com/gauss-project/aurorafs/pkg/logging"
 )
 
 // ipcListen will create a Unix socket on the given endpoint.
 func ipcListen(endpoint string) (net.Listener, error) {
 	if len(endpoint) > int(max_path_size) {
-		log.Warn(fmt.Sprintf("The ipc endpoint is longer than %d characters. ", max_path_size),
-			"endpoint", endpoint)
+		logging.Warningf("The ipc endpoint is longer than %d characters. endpoint %s", max_path_size, endpoint)
 	}
 
 	// Ensure the IPC path exists and remove any previous leftover

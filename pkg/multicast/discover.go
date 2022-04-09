@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/gauss-project/aurorafs/pkg/topology"
 	"github.com/gauss-project/aurorafs/pkg/topology/pslice"
 	"github.com/gogf/gf/v2/util/gconv"
 
@@ -175,6 +176,7 @@ func (s *Service) doFindGroup(wg *sync.WaitGroup, group *Group) {
 		fallthrough
 	case group.knownPeers.Length() > 0:
 		s.logger.Tracef("doFindGroup knownPeers %s got %d nodes", group.gid, group.knownPeers.Length())
+		var knowWg sync.WaitGroup
 		_ = group.knownPeers.EachBinRev(func(address boson.Address, u uint8) (stop, jumpToNext bool, err error) {
 			lim := limit()
 			if lim <= 0 {
@@ -185,10 +187,14 @@ func (s *Service) doFindGroup(wg *sync.WaitGroup, group *Group) {
 				return false, false, nil
 			}
 			skip[address.String()] = 1
-
-			_ = s.Handshake(context.Background(), address)
+			knowWg.Add(1)
+			go func() {
+				defer knowWg.Done()
+				_ = s.Handshake(context.Background(), address)
+			}()
 			return false, false, nil
 		})
+		knowWg.Wait()
 		if limit() <= 0 {
 			return
 		}
@@ -345,7 +351,7 @@ func (s *Service) getForwardNodesDefault(gid boson.Address, skip ...boson.Addres
 				nodes = append(nodes, address)
 			}
 			return false, false, nil
-		})
+		}, topology.Filter{Reachable: false})
 	} else {
 		_ = s.kad.EachNeighbor(func(address boson.Address, u uint8) (stop, jumpToNext bool, err error) {
 			if !address.MemberOf(skip) {

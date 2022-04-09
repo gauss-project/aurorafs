@@ -3,6 +3,7 @@ package mock
 import (
 	"context"
 	"sync"
+	"time"
 
 	"github.com/gauss-project/aurorafs/pkg/topology/model"
 
@@ -137,7 +138,7 @@ func (d *mock) EachKnownPeerRev(f model.EachPeerFunc) error {
 	return nil
 }
 
-func (d *mock) ClosestPeer(addr boson.Address, wantSelf bool, skipPeers ...boson.Address) (peerAddr boson.Address, err error) {
+func (d *mock) ClosestPeer(addr boson.Address, wantSelf bool, _ topology.Filter, skipPeers ...boson.Address) (peerAddr boson.Address, err error) {
 	if len(skipPeers) == 0 {
 		if d.closestPeerErr != nil {
 			return d.closestPeer, d.closestPeerErr
@@ -187,7 +188,7 @@ func (d *mock) ClosestPeer(addr boson.Address, wantSelf bool, skipPeers ...boson
 	return peerAddr, nil
 }
 
-func (d *mock) ClosestPeers(addr boson.Address, limit int, skipPeers ...boson.Address) ([]boson.Address, error) {
+func (d *mock) ClosestPeers(addr boson.Address, limit int, _ topology.Filter, skipPeers ...boson.Address) ([]boson.Address, error) {
 	return nil, nil
 }
 
@@ -211,7 +212,7 @@ func (d *mock) IsWithinDepth(addr boson.Address) bool {
 }
 
 func (d *mock) EachNeighbor(f model.EachPeerFunc) error {
-	return d.EachPeer(f)
+	return d.EachPeer(f, topology.Filter{})
 }
 
 func (*mock) EachNeighborRev(model.EachPeerFunc) error {
@@ -219,7 +220,7 @@ func (*mock) EachNeighborRev(model.EachPeerFunc) error {
 }
 
 // EachPeer iterates from closest bin to farthest
-func (d *mock) EachPeer(f model.EachPeerFunc) (err error) {
+func (d *mock) EachPeer(f model.EachPeerFunc, _ topology.Filter) (err error) {
 	d.mtx.Lock()
 	defer d.mtx.Unlock()
 
@@ -238,7 +239,7 @@ func (d *mock) EachPeer(f model.EachPeerFunc) (err error) {
 }
 
 // EachPeerRev iterates from farthest bin to closest
-func (d *mock) EachPeerRev(f model.EachPeerFunc) (err error) {
+func (d *mock) EachPeerRev(f model.EachPeerFunc, _ topology.Filter) (err error) {
 	d.mtx.Lock()
 	defer d.mtx.Unlock()
 
@@ -258,6 +259,15 @@ func (d *mock) Snapshot() *model.KadParams {
 
 func (d *mock) SnapshotConnected() (connected int, peers map[string]*model.PeerInfo) {
 	return
+}
+
+func (d *mock) SnapshotAddr(addr boson.Address) *model.Snapshot {
+	// TODO implement me
+	panic("implement me")
+}
+
+func (d *mock) RecordPeerLatency(add boson.Address, t time.Duration) {
+
 }
 
 func (d *mock) Halt()        {}

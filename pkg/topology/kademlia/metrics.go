@@ -23,6 +23,12 @@ type metrics struct {
 	TotalOutboundConnectionFailedAttempts prometheus.Counter
 	TotalBootNodesConnectionAttempts      prometheus.Counter
 	StartAddAddressBookOverlaysTime       prometheus.Histogram
+	PeerLatencyEWMA                       prometheus.Histogram
+	Flag                                  prometheus.Counter
+	Unflag                                prometheus.Counter
+	Blocklist                             prometheus.Counter
+	ReachabilityStatus                    *prometheus.GaugeVec
+	PeersReachabilityStatus               *prometheus.GaugeVec
 }
 
 // newMetrics is a convenient constructor for creating new metrics.
@@ -126,6 +132,48 @@ func newMetrics() metrics {
 			Name:      "start_add_addressbook_overlays_time",
 			Help:      "The time spent adding overlays peers from addressbook on kademlia start.",
 		}),
+		PeerLatencyEWMA: prometheus.NewHistogram(prometheus.HistogramOpts{
+			Namespace: m.Namespace,
+			Subsystem: subsystem,
+			Name:      "peer_latency_ewma",
+			Help:      "Peer latency EWMA value distribution.",
+		}),
+		Flag: prometheus.NewCounter(prometheus.CounterOpts{
+			Namespace: m.Namespace,
+			Subsystem: subsystem,
+			Name:      "flag",
+			Help:      "The nubmer of times peers have been flagged.",
+		}),
+		Unflag: prometheus.NewCounter(prometheus.CounterOpts{
+			Namespace: m.Namespace,
+			Subsystem: subsystem,
+			Name:      "unflag",
+			Help:      "The nubmer of times peers have been unflagged.",
+		}),
+		Blocklist: prometheus.NewCounter(prometheus.CounterOpts{
+			Namespace: m.Namespace,
+			Subsystem: subsystem,
+			Name:      "blocklist",
+			Help:      "The nubmer of times peers have been blocklisted.",
+		}),
+		ReachabilityStatus: prometheus.NewGaugeVec(
+			prometheus.GaugeOpts{
+				Namespace: m.Namespace,
+				Subsystem: subsystem,
+				Name:      "reachability_status",
+				Help:      "The reachability status of the node.",
+			},
+			[]string{"reachability_status"},
+		),
+		PeersReachabilityStatus: prometheus.NewGaugeVec(
+			prometheus.GaugeOpts{
+				Namespace: m.Namespace,
+				Subsystem: subsystem,
+				Name:      "peers_reachability_status",
+				Help:      "The reachability status of peers.",
+			},
+			[]string{"peers_reachability_status"},
+		),
 	}
 }
 

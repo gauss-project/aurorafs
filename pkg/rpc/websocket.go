@@ -19,7 +19,6 @@ package rpc
 import (
 	"context"
 	"encoding/base64"
-	"fmt"
 	"net/http"
 	"net/url"
 	"os"
@@ -28,7 +27,7 @@ import (
 	"time"
 
 	mapset "github.com/deckarep/golang-set"
-	"github.com/ethereum/go-ethereum/log"
+	"github.com/gauss-project/aurorafs/pkg/logging"
 	"github.com/gorilla/websocket"
 )
 
@@ -57,7 +56,7 @@ func (s *Server) WebsocketHandler(allowedOrigins []string) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		conn, err := upgrader.Upgrade(w, r, nil)
 		if err != nil {
-			log.Debug("WebSocket upgrade failed ", "err", err)
+			logging.Debugf("WebSocket upgrade failed err %s", err)
 			return
 		}
 		codec := newWebsocketCodec(conn, r.Host, r.Header)
@@ -87,7 +86,7 @@ func wsHandshakeValidator(allowedOrigins []string) func(*http.Request) bool {
 			origins.Add("http://" + hostname)
 		}
 	}
-	log.Debug(fmt.Sprintf("Allowed origin(s) for WS RPC interface %v", origins.ToSlice()))
+	logging.Debugf("Allowed origin(s) for WS RPC interface %v", origins.ToSlice())
 
 	f := func(req *http.Request) bool {
 		// Skip origin verification if no Origin header is present. The origin check
@@ -102,7 +101,7 @@ func wsHandshakeValidator(allowedOrigins []string) func(*http.Request) bool {
 		if allowAllOrigins || originIsAllowed(origins, origin) {
 			return true
 		}
-		log.Warn("Rejected WebSocket connection ", "origin", origin)
+		logging.Warningf("Rejected WebSocket connection origin %s", origin)
 		return false
 	}
 
@@ -140,12 +139,12 @@ func ruleAllowsOrigin(allowedOrigin string, browserOrigin string) bool {
 	)
 	allowedScheme, allowedHostname, allowedPort, err = parseOriginURL(allowedOrigin)
 	if err != nil {
-		log.Warn("Error parsing allowed origin specification", "spec", allowedOrigin, "error", err)
+		logging.Warningf("Error parsing allowed origin specification spec %s error %s", allowedOrigin, err)
 		return false
 	}
 	browserScheme, browserHostname, browserPort, err = parseOriginURL(browserOrigin)
 	if err != nil {
-		log.Warn("Error parsing browser 'Origin' field", "Origin", browserOrigin, "error", err)
+		logging.Warningf("Error parsing browser 'Origin' field Origin %s error %s", browserOrigin, err)
 		return false
 	}
 	if allowedScheme != "" && allowedScheme != browserScheme {

@@ -100,7 +100,7 @@ func (s *server) dirUploadHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	if strings.ToLower(r.Header.Get(AuroraPinHeader)) == "true" {
+	if strings.ToLower(r.Header.Get(AuroraPinHeader)) == StringTrue {
 		if err := s.pinning.CreatePin(r.Context(), reference, false); err != nil {
 			logger.Debugf("aurora upload dir: creation of pin for %q failed: %v", reference, err)
 			logger.Error("aurora upload dir: creation of pin failed")

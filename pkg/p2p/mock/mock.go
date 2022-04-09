@@ -6,6 +6,7 @@ import (
 	"net"
 	"time"
 
+	"github.com/gauss-project/aurorafs/pkg/aurora"
 	"github.com/gauss-project/aurorafs/pkg/routetab/pb"
 
 	"github.com/gauss-project/aurorafs/pkg/boson"
@@ -124,7 +125,7 @@ func (s *Service) Disconnect(overlay boson.Address, reason string) error {
 	}
 
 	if s.notifierFunc != nil {
-		s.notifierFunc.Disconnected(p2p.Peer{Address: overlay}, "")
+		s.notifierFunc.Disconnected(p2p.Peer{Address: overlay, Mode: aurora.NewModel()}, reason)
 	}
 
 	return s.disconnectFunc(overlay, reason)

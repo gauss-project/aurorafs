@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"io"
+	"time"
 
 	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/multicast/pb"
@@ -14,6 +15,8 @@ import (
 func (s *Service) Handshake(ctx context.Context, addr boson.Address) (err error) {
 	ctx, cancel := context.WithTimeout(ctx, handshakeTimeout)
 	defer cancel()
+
+	start := time.Now()
 	var stream p2p.Stream
 	stream, err = s.getStream(ctx, addr, streamHandshake)
 	if err != nil {
@@ -49,6 +52,8 @@ func (s *Service) Handshake(ctx context.Context, addr boson.Address) (err error)
 		}
 		return err
 	}
+
+	s.kad.RecordPeerLatency(addr, time.Since(start))
 
 	for _, v := range resp.Gid {
 		gid := boson.NewAddress(v)

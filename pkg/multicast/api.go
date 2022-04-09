@@ -44,11 +44,7 @@ func (a *apiService) Message(ctx context.Context, name string) (*rpc.Subscriptio
 			case data := <-ch:
 				_ = notifier.Notify(sub.ID, data)
 			case e := <-sub.Err():
-				if e != nil {
-					a.s.logger.Errorf("group %s message subscribe err %v", name, e)
-				} else {
-					a.s.logger.Infof("group %s message unsubscribe success", name)
-				}
+				a.s.logger.Errorf("group %s message subscribe quit err=%v", name, e)
 				return
 			}
 		}

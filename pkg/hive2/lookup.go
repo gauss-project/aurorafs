@@ -2,9 +2,11 @@ package hive2
 
 import (
 	"context"
+	"time"
+
 	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/boson/test"
-	"time"
+	"github.com/gauss-project/aurorafs/pkg/topology"
 )
 
 const (
@@ -93,7 +95,7 @@ func (l *lookup) findNode(forward ...boson.Address) {
 		peers = forward
 	} else {
 		var err error
-		peers, err = l.h2.config.Kad.ClosestPeers(l.target, lookupNeighborPeerLimit)
+		peers, err = l.h2.config.Kad.ClosestPeers(l.target, lookupNeighborPeerLimit, topology.Filter{Reachable: false})
 		if err != nil {
 			l.h2.logger.Warningf("ClosestPeers %s", err)
 			return

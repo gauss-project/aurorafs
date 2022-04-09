@@ -251,7 +251,11 @@ func (n *Node) RegisterAPIs(apis []rpc.API) {
 	if n.state != initializingState {
 		panic("can't register APIs on running/stopped node")
 	}
-	n.rpcAPIs = append(n.rpcAPIs, apis...)
+	for _, v := range apis {
+		if v.Service != nil && v.Namespace != "" {
+			n.rpcAPIs = append(n.rpcAPIs, v)
+		}
+	}
 }
 
 // RegisterHandler mounts a handler on the given path on the canonical HTTP server.

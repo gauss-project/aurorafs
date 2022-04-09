@@ -53,20 +53,23 @@ func newRouteTable(self boson.Address, store storage.StateStorer) *Table {
 	}
 }
 
-func (t *Table) convertPathsToPbPaths(path []*Path) []*pb.Path {
-	body := gconv.Bytes(time.Now().Unix())
-	out := make([]*pb.Path, 0)
+func (t *Table) convertPathsToPbPaths(path []*Path) (out []*pb.Path) {
+	if len(path) == 0 {
+		return
+	}
 	var minTTL, key int
 	for k, v := range path {
+		l := len(v.Items)
 		if k == 0 {
-			minTTL = len(v.Items)
-		} else {
-			if len(v.Items) < minTTL {
-				minTTL = len(v.Items)
-				key = k
-			}
+			minTTL = l
+			continue
+		}
+		if l < minTTL {
+			minTTL = l
+			key = k
 		}
 	}
+	body := gconv.Bytes(time.Now().Unix())
 	out = append(out, &pb.Path{
 		Sign:  bls.Sign(body, path[key].Sign),
 		Bodys: append(path[key].Bodys, body),
@@ -127,12 +130,12 @@ func (t *Table) SavePath(p *pb.Path) {
 		t.mu.Lock()
 		defer t.mu.Unlock()
 		routes, ok := t.routes[targetKey]
-		if ok {
+		if ok && len(routes) > 0 {
 			old := routes
 			if existRoute(route, old) {
 				return
 			}
-			routes = append(old, route)
+			routes = []TargetRoute{route, old[0]}
 
 		} else {
 			routes = []TargetRoute{route}

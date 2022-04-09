@@ -20,7 +20,7 @@ import (
 	"net"
 	"strings"
 
-	"github.com/ethereum/go-ethereum/log"
+	"github.com/gauss-project/aurorafs/pkg/logging"
 )
 
 // StartIPCEndpoint starts an IPC endpoint.
@@ -33,7 +33,7 @@ func StartIPCEndpoint(ipcEndpoint string, apis []API) (net.Listener, *Server, er
 	)
 	for _, api := range apis {
 		if err := handler.RegisterName(api.Namespace, api.Service); err != nil {
-			log.Info("IPC registration failed", "namespace", api.Namespace, "error", err)
+			logging.Infof("IPC registration failed namespace %s error %s", api.Namespace, err)
 			return nil, nil, err
 		}
 		if _, ok := regMap[api.Namespace]; !ok {
@@ -41,7 +41,7 @@ func StartIPCEndpoint(ipcEndpoint string, apis []API) (net.Listener, *Server, er
 			regMap[api.Namespace] = struct{}{}
 		}
 	}
-	log.Debug("IPCs registered", "namespaces", strings.Join(registered, ","))
+	logging.Debugf("IPCs registered namespaces %s", strings.Join(registered, ","))
 	// All APIs registered, start the IPC listener.
 	listener, err := ipcListen(ipcEndpoint)
 	if err != nil {

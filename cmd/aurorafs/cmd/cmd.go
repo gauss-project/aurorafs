@@ -199,8 +199,8 @@ func (c *command) setHomeDir() (err error) {
 func (c *command) setAllFlags(cmd *cobra.Command) {
 	cmd.Flags().String(optionNameDataDir, filepath.Join(c.homeDir, ".aurorafs"), "data directory")
 	cmd.Flags().Uint64(optionNameCacheCapacity, 80000, fmt.Sprintf("cache capacity in chunks, multiply by %d to get approximate capacity in bytes", boson.ChunkSize))
-	cmd.Flags().String(optionDatabaseDriver, driver, fmt.Sprintf("database storage driver, only support leveldb/wiredtiger"))
-	cmd.Flags().String(optionDatabasePath, "", fmt.Sprintf("if the path not empty, all chunks will be stored at this directory"))
+	cmd.Flags().String(optionDatabaseDriver, driver, "database storage driver, only support leveldb/wiredtiger")
+	cmd.Flags().String(optionDatabasePath, "", "if the path not empty, all chunks will be stored at this directory")
 	cmd.Flags().String(optionNamePassword, "", "password for decrypting keys")
 	cmd.Flags().String(optionNamePasswordFile, "", "path to a file that contains password for decrypting keys")
 	cmd.Flags().String(optionNameHTTPAddr, ":1636", "HTTP json-rpc listen address")

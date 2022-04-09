@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"time"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/logging"
@@ -11,7 +13,6 @@ import (
 	"github.com/gauss-project/aurorafs/pkg/p2p/protobuf"
 	"github.com/gauss-project/aurorafs/pkg/settlement/traffic/cheque"
 	"github.com/gauss-project/aurorafs/pkg/settlement/traffic/trafficprotocol/pb"
-	"time"
 )
 
 const (
@@ -66,6 +67,7 @@ func (s *Service) Protocol() p2p.ProtocolSpec {
 			},
 		},
 		ConnectOut: s.init,
+		ConnectIn:  s.init,
 	}
 }
 

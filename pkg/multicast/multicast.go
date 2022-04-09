@@ -18,7 +18,7 @@ type GroupInterface interface {
 	SubscribeLogContent() (c <-chan LogContent, unsubscribe func())
 	SubscribeMulticastMsg(gid boson.Address) (c <-chan Message, unsubscribe func(), err error)
 	GetGroupPeers(groupName string) (out *GroupPeers, err error)
-	GetMulticastNode(groupName string) (peer boson.Address, err error)
+	GetOptimumPeer(groupName string) (peer boson.Address, err error)
 	GetSendStream(ctx context.Context, gid, dest boson.Address) (out SendStreamCh, err error)
 	SendReceive(ctx context.Context, data []byte, gid, dest boson.Address) (result []byte, err error)
 	Send(ctx context.Context, data []byte, gid, dest boson.Address) (err error)
@@ -59,6 +59,19 @@ const (
 	SendReceive
 	SendStream
 )
+
+func (s SendOption) String() string {
+	switch s {
+	case SendOnly:
+		return "SendOnly"
+	case SendReceive:
+		return "SendReceive"
+	case SendStream:
+		return "SendStream"
+	default:
+		return ""
+	}
+}
 
 type SendStreamCh struct {
 	Read     chan []byte
