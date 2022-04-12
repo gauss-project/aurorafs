@@ -573,9 +573,12 @@ func (s *server) auroraListHandler(w http.ResponseWriter, r *http.Request) {
 		hash boson.Address
 	}
 	var l sync.Mutex
-	ch := make(chan ordHash, 30)
-	getChainState := func(ctx context.Context, i int, rootCid boson.Address) {
+	ch := make(chan ordHash, len(responseList))
+	getChainState := func(ctx context.Context, i int, rootCid boson.Address, workLoad chan struct{}) {
 		defer wg.Done()
+		defer func() {
+			<-workLoad
+		}()
 		if v, ok := s.auroraChainSate.Load(rootCid.String()); ok {
 			l.Lock()
 			responseList[i].Register = v.(bool)
@@ -598,9 +601,11 @@ func (s *server) auroraListHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	workLoad := make(chan struct{}, 30)
 	go func() {
 		for v := range ch {
-			go getChainState(r.Context(), v.ord, v.hash)
+			workLoad <- struct{}{}
+			go getChainState(r.Context(), v.ord, v.hash, workLoad)
 		}
 	}()
 
