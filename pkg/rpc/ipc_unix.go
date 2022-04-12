@@ -30,7 +30,7 @@ import (
 
 // ipcListen will create a Unix socket on the given endpoint.
 func ipcListen(endpoint string) (net.Listener, error) {
-	if len(endpoint) > int(max_path_size) {
+	if len(endpoint) > int(max_path_size) { //nolint:unconvert
 		logging.Warningf("The ipc endpoint is longer than %d characters. endpoint %s", max_path_size, endpoint)
 	}
 

@@ -176,19 +176,18 @@ func (s *Service) Protocol() p2p.ProtocolSpec {
 	}
 }
 
-func (s *Service) onRouteReq(ctx context.Context, p p2p.Peer, stream p2p.Stream) error {
-	r := protobuf.NewReader(stream)
+func (s *Service) onRouteReq(ctx context.Context, p p2p.Peer, stream p2p.Stream) (err error) {
 	defer func() {
-		go func() {
-			err := stream.FullClose()
-			if err != nil {
-				s.logger.Warningf("route: onRouteReq stream.FullClose, %s", err.Error())
-			}
-		}()
+		if err != nil {
+			_ = stream.Reset()
+		} else {
+			go stream.FullClose()
+		}
 	}()
 
+	r := protobuf.NewReader(stream)
 	var req pb.RouteReq
-	if err := r.ReadMsgWithContext(ctx, &req); err != nil {
+	if err = r.ReadMsgWithContext(ctx, &req); err != nil {
 		content := fmt.Sprintf("route: onRouteReq read msg: %s", err.Error())
 		s.metrics.TotalErrors.Inc()
 		s.logger.Errorf(content)
@@ -269,19 +268,18 @@ func (s *Service) onRouteReq(ctx context.Context, p p2p.Peer, stream p2p.Stream)
 	return nil
 }
 
-func (s *Service) onRouteResp(ctx context.Context, peer p2p.Peer, stream p2p.Stream) error {
-	r := protobuf.NewReader(stream)
+func (s *Service) onRouteResp(ctx context.Context, peer p2p.Peer, stream p2p.Stream) (err error) {
 	defer func() {
-		go func() {
-			err := stream.FullClose()
-			if err != nil {
-				s.logger.Warningf("route: onRouteResp stream.FullClose, %s", err.Error())
-			}
-		}()
+		if err != nil {
+			_ = stream.Reset()
+		} else {
+			go stream.FullClose()
+		}
 	}()
 
+	r := protobuf.NewReader(stream)
 	resp := pb.RouteResp{}
-	if err := r.ReadMsgWithContext(ctx, &resp); err != nil {
+	if err = r.ReadMsgWithContext(ctx, &resp); err != nil {
 		content := fmt.Sprintf("route: handlerFindRouteResp read msg: %s", err.Error())
 		s.logger.Errorf(content)
 		return fmt.Errorf(content)
@@ -382,20 +380,15 @@ func (s *Service) sendDataToNode(ctx context.Context, peer boson.Address, stream
 		s.logger.Errorf("route: sendDataToNode NewStream, err1=%s", err1)
 		return
 	}
-	defer func() {
-		go func() {
-			err := stream.FullClose()
-			if err != nil {
-				s.logger.Warningf("route: sendDataToNode stream.FullClose, %s", err.Error())
-			}
-		}()
-	}()
 	w := protobuf.NewWriter(stream)
 	err := w.WriteMsgWithContext(ctx, msg)
 	if err != nil {
 		s.metrics.TotalErrors.Inc()
 		s.logger.Errorf("route: sendDataToNode write msg, err=%s", err)
+		_ = stream.Reset()
+		return
 	}
+	go stream.FullClose()
 }
 
 func (s *Service) getNeighbor(target boson.Address, alpha int32, skip ...boson.Address) (forward []boson.Address) {
