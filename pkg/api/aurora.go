@@ -397,6 +397,7 @@ func (s *server) downloadHandler(w http.ResponseWriter, r *http.Request, referen
 
 type auroraListResponse struct {
 	FileHash  boson.Address       `json:"fileHash"`
+	RootCid   boson.Address       `json:"rootCid"`
 	Size      int                 `json:"size"`
 	FileSize  int                 `json:"fileSize"`
 	PinState  bool                `json:"pinState"`
@@ -556,6 +557,7 @@ func (s *server) auroraListHandler(w http.ResponseWriter, r *http.Request) {
 		}
 
 		responseList = append(responseList, auroraListResponse{
+			RootCid:   v["rootCid"].(boson.Address),
 			FileHash:  v["rootCid"].(boson.Address),
 			Size:      v["treeSize"].(int),
 			FileSize:  v["fileSize"].(int),
