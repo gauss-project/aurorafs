@@ -24,10 +24,10 @@ const (
 )
 
 const (
-	CN = "contains"
-	NC = "NoContains"
-	HP = "HasPrefix"
-	HS = "HasSuffix"
+	CN = "cn"
+	NC = "nc"
+	HP = "hp"
+	HS = "hs"
 )
 
 const (
