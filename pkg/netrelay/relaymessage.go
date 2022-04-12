@@ -131,15 +131,22 @@ func (s *Service) SendHttp(ctx context.Context, address boson.Address, req pb.Re
 	var stream p2p.Stream
 	if s.route.IsNeighbor(address) {
 		stream, err = s.streamer.NewStream(ctx, address, nil, protocolName, protocolVersion, streamRelayHttpReq)
+		if err != nil {
+			err = fmt.Errorf("new stream err: %s", err)
+		}
 	} else {
 		stream, err = s.streamer.NewRelayStream(ctx, address, nil, protocolName, protocolVersion, streamRelayHttpReq, false)
+		if err != nil {
+			err = fmt.Errorf("new realay stream err: %s", err)
+		}
 	}
 	if err != nil {
-		s.logger.Errorf("[relayMessage] new stream: %w", err)
+		s.logger.Errorf("SendHttp to %s %s", address, err)
 		return Response, err
 	}
 	defer func() {
 		if err != nil {
+			s.logger.Errorf("SendHttp to %s %s", address, err)
 			_ = stream.Reset()
 		} else {
 			go stream.FullClose()
@@ -149,14 +156,14 @@ func (s *Service) SendHttp(ctx context.Context, address boson.Address, req pb.Re
 	w, r := protobuf.NewWriterAndReader(stream)
 
 	if err = w.WriteMsgWithContext(ctx, &req); err != nil {
-		return Response, fmt.Errorf("send http write message: %w", err)
+		return Response, fmt.Errorf("write message: %w", err)
 	}
 
 	if err = r.ReadMsgWithContext(ctx, &Response); err != nil {
 		if errors.Is(err, io.EOF) {
 			err = fmt.Errorf("stream is closed")
 		}
-		return Response, fmt.Errorf("send http read message: %w", err)
+		return Response, fmt.Errorf("read message: %w", err)
 	}
 	return Response, nil
 

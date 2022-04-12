@@ -399,7 +399,7 @@ func NewAurora(nodeMode aurora.Model, addr string, bosonAddress boson.Address, p
 		}
 	}
 
-	relay := netrelay.New(p2ps, logger, configGroups, route)
+	relay := netrelay.New(p2ps, logger, configGroups, route, group)
 	err = p2ps.AddProtocol(relay.Protocol())
 	if err != nil {
 		return nil, err

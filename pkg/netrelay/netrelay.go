@@ -13,6 +13,7 @@ import (
 	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/jsonhttp"
 	"github.com/gauss-project/aurorafs/pkg/logging"
+	"github.com/gauss-project/aurorafs/pkg/multicast"
 	"github.com/gauss-project/aurorafs/pkg/multicast/model"
 	"github.com/gauss-project/aurorafs/pkg/netrelay/pb"
 	"github.com/gauss-project/aurorafs/pkg/p2p"
@@ -23,26 +24,26 @@ type NetRelay interface {
 	RelayHttpDo(w http.ResponseWriter, r *http.Request, address boson.Address)
 }
 type Service struct {
-	streamer p2p.Streamer
-	logger   logging.Logger
-	route    routetab.RouteTab
-	groups   []model.ConfigNodeGroup
+	streamer  p2p.Streamer
+	logger    logging.Logger
+	route     routetab.RouteTab
+	groups    []model.ConfigNodeGroup
+	multicast multicast.GroupInterface
 }
 
-func New(streamer p2p.Streamer, logging logging.Logger, groups []model.ConfigNodeGroup, route routetab.RouteTab) *Service {
-	return &Service{streamer: streamer, logger: logging, groups: groups, route: route}
+func New(streamer p2p.Streamer, logging logging.Logger, groups []model.ConfigNodeGroup, route routetab.RouteTab, multicast multicast.GroupInterface) *Service {
+	return &Service{streamer: streamer, logger: logging, groups: groups, route: route, multicast: multicast}
 }
 
 func (s *Service) RelayHttpDo(w http.ResponseWriter, r *http.Request, address boson.Address) {
-	mpHeader := make(map[string]string)
-	url := r.URL.String()
-	url = strings.ReplaceAll(url, aurora.RelayPrefixHttp, "")
+	url := strings.ReplaceAll(r.URL.String(), aurora.RelayPrefixHttp, "")
 	body, err := ioutil.ReadAll(r.Body)
 	if err != nil {
 		jsonhttp.InternalServerError(w, fmt.Errorf("error in getting body:%v", err.Error()))
 		return
 	}
 
+	mpHeader := make(map[string]string)
 	method := r.Method
 	for k, v := range r.Header {
 		mpHeader[k] = v[0]
@@ -53,14 +54,38 @@ func (s *Service) RelayHttpDo(w http.ResponseWriter, r *http.Request, address bo
 		return
 	}
 
+	var resp pb.RelayHttpResp
 	var msg pb.RelayHttpReq
 	msg.Url = url
 	msg.Method = []byte(method)
 	msg.Body = body
 	msg.Header = header
-	resp, err := s.SendHttp(r.Context(), address, msg)
+
+	if boson.ZeroAddress.Equal(address) {
+		urls := strings.Split(url, "/")
+		group := urls[1]
+		nodes, err1 := s.multicast.GetGroupPeers(group)
+		if err1 != nil {
+			jsonhttp.InternalServerError(w, err1)
+			return
+		}
+
+		if len(nodes.Connected) == 0 && len(nodes.Keep) == 0 {
+			jsonhttp.InternalServerError(w, fmt.Sprintf("No corresponding node found of group:%s", group))
+			return
+		}
+		nodes.Connected = append(nodes.Connected, nodes.Keep...)
+		for _, v := range nodes.Connected {
+			resp, err = s.SendHttp(r.Context(), v, msg)
+			if err == nil {
+				break
+			}
+		}
+	} else {
+		resp, err = s.SendHttp(r.Context(), address, msg)
+	}
 	if err != nil {
-		jsonhttp.InternalServerError(w, err)
+		jsonhttp.InternalServerError(w, fmt.Errorf("send http %s", err))
 		return
 	}
 
