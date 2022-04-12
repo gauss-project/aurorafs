@@ -89,6 +89,6 @@ func (s *Service) getDomainAddr(groupName, domainName string) (string, bool) {
 			}
 		}
 	}
-	s.logger.Errorf("netrelay: domain %v address not found ", domainName)
+	s.logger.Errorf("domain %v not found in group %s", domainName, groupName)
 	return "", false
 }

@@ -45,25 +45,25 @@ func (s *Service) relayHttpReq(ctx context.Context, p p2p.Peer, stream p2p.Strea
 		if err != nil {
 			_ = stream.Reset()
 		} else {
-			stream.FullClose()
+			go stream.FullClose()
 		}
 	}()
 
 	reqWriter := func(resp pb.RelayHttpResp) error {
 		if err = w.WriteMsgWithContext(ctx, &resp); err != nil {
-			s.logger.Errorf("[relayMessage-relayHttpReq] write hash message: %w", err)
-			return fmt.Errorf("[relayMessage-relayHttpReq] write hash message: %w", err)
+			s.logger.Errorf("relayHttpReq: write resp to %s err %w", p.Address, err)
+			return fmt.Errorf("write resp: %w", err)
 		}
 		return nil
 	}
 
 	var httpReq pb.RelayHttpReq
 	if err = r.ReadMsgWithContext(ctx, &httpReq); err != nil {
-		s.logger.Errorf("[relayMessage-relayHttpReq] read http req message: %w", err)
-		return fmt.Errorf("[relayMessage-relayHttpReq] read http req message: %w", err)
+		s.logger.Errorf("relayHttpReq: read req from %s err %w", p.Address, err)
+		return fmt.Errorf("read req: %w", err)
 	}
 
-	s.logger.Tracef("[relayMessage-relayHttpReq] got http info req: %s", httpReq.Url)
+	s.logger.Tracef("relayHttpReq: from %s got req: %s", p.Address, httpReq.Url)
 
 	urls := strings.Split(httpReq.Url, "/")
 
@@ -80,7 +80,7 @@ func (s *Service) relayHttpReq(ctx context.Context, p p2p.Peer, stream p2p.Strea
 	req, err := http.NewRequest(string(httpReq.Method), url, bytes.NewReader(httpReq.Body))
 	if err != nil {
 		httpResp.Status = http.StatusInternalServerError
-		httpResp.Body = []byte(fmt.Sprintf("[relayMessage-relayHttpReq] Header reading failed:%v", err.Error()))
+		httpResp.Body = []byte(fmt.Sprintf("on req convert to http.request err: %v", err.Error()))
 		return reqWriter(httpResp)
 	}
 
@@ -89,7 +89,7 @@ func (s *Service) relayHttpReq(ctx context.Context, p p2p.Peer, stream p2p.Strea
 	err = json.Unmarshal(httpReq.Header, &reqHeaderMp)
 	if err != nil {
 		httpResp.Status = http.StatusInternalServerError
-		httpResp.Body = []byte(fmt.Sprintf("[relayMessage-relayHttpReq] Header reading failed:%v", err.Error()))
+		httpResp.Body = []byte(fmt.Sprintf("on req parase header err: %v", err.Error()))
 		return reqWriter(httpResp)
 	}
 
@@ -100,14 +100,14 @@ func (s *Service) relayHttpReq(ctx context.Context, p p2p.Peer, stream p2p.Strea
 	res, err := cli.Do(req)
 	if err != nil {
 		httpResp.Status = http.StatusInternalServerError
-		httpResp.Body = []byte(fmt.Sprintf("[relayMessage-relayHttpReq] Http request failed:%v", err.Error()))
+		httpResp.Body = []byte(fmt.Sprintf("on req do real request err: %v", err.Error()))
 		return nil
 	}
 	defer res.Body.Close()
 	body, err := ioutil.ReadAll(res.Body)
 	if err != nil {
 		httpResp.Status = http.StatusInternalServerError
-		httpResp.Body = []byte(fmt.Sprintf("[relayMessage-relayHttpReq] Error in returning http body extraction:%v", err.Error()))
+		httpResp.Body = []byte(fmt.Sprintf("on req read real resp.Body err: %v", err.Error()))
 		return reqWriter(httpResp)
 	}
 
@@ -117,7 +117,7 @@ func (s *Service) relayHttpReq(ctx context.Context, p p2p.Peer, stream p2p.Strea
 	headerByte, err := json.Marshal(respHeaderMp)
 	if err != nil {
 		httpResp.Status = http.StatusInternalServerError
-		httpResp.Body = []byte(fmt.Sprintf("[relayMessage-relayHttpReq] Return Header parsing failed:%v", err.Error()))
+		httpResp.Body = []byte(fmt.Sprintf("on req parase real resp header err: %v", err.Error()))
 		return reqWriter(httpResp)
 	}
 	httpResp.Header = headerByte
@@ -149,14 +149,14 @@ func (s *Service) SendHttp(ctx context.Context, address boson.Address, req pb.Re
 	w, r := protobuf.NewWriterAndReader(stream)
 
 	if err = w.WriteMsgWithContext(ctx, &req); err != nil {
-		return Response, fmt.Errorf("[pyramid info] write message: %w", err)
+		return Response, fmt.Errorf("send http write message: %w", err)
 	}
 
 	if err = r.ReadMsgWithContext(ctx, &Response); err != nil {
 		if errors.Is(err, io.EOF) {
 			err = fmt.Errorf("stream is closed")
 		}
-		return Response, fmt.Errorf("[relaymessage] read message: %w", err)
+		return Response, fmt.Errorf("send http read message: %w", err)
 	}
 	return Response, nil
 

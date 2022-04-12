@@ -69,13 +69,20 @@ func (s *Service) Handshake(ctx context.Context, addr boson.Address) (err error)
 	return nil
 }
 
-func (s *Service) HandshakeIncoming(ctx context.Context, peer p2p.Peer, stream p2p.Stream) error {
+func (s *Service) HandshakeIncoming(ctx context.Context, peer p2p.Peer, stream p2p.Stream) (err error) {
+	defer func() {
+		if err != nil {
+			_ = stream.Reset()
+		} else {
+			go stream.FullClose()
+		}
+	}()
 	w, r := protobuf.NewWriterAndReader(stream)
 	resp := &pb.GIDs{}
 
 	s.logger.Tracef("group: receive handshake syn")
 
-	err := r.ReadMsgWithContext(ctx, resp)
+	err = r.ReadMsgWithContext(ctx, resp)
 	if err != nil {
 		s.logger.Errorf("multicast HandshakeIncoming read %s", err)
 		return err

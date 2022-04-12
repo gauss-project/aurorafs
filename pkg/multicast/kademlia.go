@@ -68,7 +68,6 @@ type Service struct {
 }
 
 type WsStream struct {
-	doneOnce   sync.Once
 	done       chan struct{} // after w write successful
 	sendOption SendOption
 	stream     p2p.Stream
@@ -385,10 +384,17 @@ func (s *Service) Multicast(info *pb.MulticastMsg, skip ...boson.Address) error 
 	return nil
 }
 
-func (s *Service) onMulticast(ctx context.Context, peer p2p.Peer, stream p2p.Stream) error {
+func (s *Service) onMulticast(ctx context.Context, peer p2p.Peer, stream p2p.Stream) (err error) {
+	defer func() {
+		if err != nil {
+			_ = stream.Reset()
+		} else {
+			go stream.FullClose()
+		}
+	}()
 	r := protobuf.NewReader(stream)
 	info := &pb.MulticastMsg{}
-	err := r.ReadMsgWithContext(ctx, info)
+	err = r.ReadMsgWithContext(ctx, info)
 	if err != nil {
 		return err
 	}
@@ -693,6 +699,14 @@ func (s *Service) sendData(ctx context.Context, address boson.Address, streamNam
 		s.logger.Error(err)
 		return err
 	}
+	defer func() {
+		if err != nil {
+			_ = stream.Reset()
+		} else {
+			go stream.FullClose()
+		}
+	}()
+
 	w := protobuf.NewWriter(stream)
 	err = w.WriteMsgWithContext(ctx, msg)
 	if err != nil {
@@ -850,7 +864,11 @@ func (s *Service) Send(ctx context.Context, data []byte, gid, dest boson.Address
 		return
 	}
 	defer func() {
-		_ = stream.Reset()
+		if err != nil {
+			_ = stream.Reset()
+		} else {
+			go stream.FullClose()
+		}
 	}()
 	req := &pb.GroupMsg{
 		Gid:  gid.Bytes(),
@@ -882,7 +900,11 @@ func (s *Service) SendReceive(ctx context.Context, data []byte, gid, dest boson.
 		return
 	}
 	defer func() {
-		_ = stream.Reset()
+		if err != nil {
+			_ = stream.Reset()
+		} else {
+			go stream.FullClose()
+		}
 	}()
 	req := &pb.GroupMsg{
 		Gid:  gid.Bytes(),
@@ -955,6 +977,7 @@ func (s *Service) onMessage(ctx context.Context, peer p2p.Peer, stream p2p.Strea
 	info := &pb.GroupMsg{}
 	err := r.ReadMsgWithContext(ctx, info)
 	if err != nil {
+		_ = stream.Reset()
 		return err
 	}
 
@@ -965,30 +988,43 @@ func (s *Service) onMessage(ctx context.Context, peer p2p.Peer, stream p2p.Strea
 	}
 
 	st := &WsStream{
+		done:       make(chan struct{}, 1),
 		sendOption: SendOption(info.Type),
 		stream:     stream,
 		w:          protobuf.NewWriter(stream),
 		r:          r,
 	}
 
-	var haveNotify bool
+	var (
+		notifyErr  error
+		haveNotify bool
+	)
 	s.groups.Range(func(_, value interface{}) bool {
 		g := value.(*Group)
 		if g.gid.Equal(msg.GID) && g.option.GType == model.GTypeJoin {
-			_ = s.notifyMessage(msg.GID, msg, st)
 			haveNotify = true
+			if g.groupMessageCh == nil {
+				notifyErr = fmt.Errorf("target not subscribe the group message")
+				return false
+			}
+			_ = s.notifyMessage(g, msg, st)
 			return false
 		}
 		return true
 	})
 	if !haveNotify {
+		notifyErr = fmt.Errorf("target not in the group")
+	}
+	if notifyErr != nil {
 		err = protobuf.NewWriter(stream).WriteMsgWithContext(ctx, &pb.GroupMsg{
 			Gid:  info.Gid,
 			Type: info.Type,
-			Err:  "target not in the group",
+			Err:  notifyErr.Error(),
 		})
 		if err != nil {
 			_ = stream.Reset()
+		} else {
+			go stream.FullClose()
 		}
 	}
 	return nil
@@ -1008,64 +1044,62 @@ func (s *Service) SubscribeGroupMessage(gid boson.Address) (c <-chan GroupMessag
 	return nil, errors.New("the joined group notfound")
 }
 
-func (s *Service) notifyMessage(gid boson.Address, msg GroupMessage, st *WsStream) (e error) {
-	g, ok := s.groups.Load(gid.String())
-	if ok {
-		v := g.(*Group)
-		if v.groupMessageCh == nil {
-			return nil
+func (s *Service) notifyMessage(g *Group, msg GroupMessage, st *WsStream) (e error) {
+	if g.groupMessageCh == nil {
+		return nil
+	}
+	defer func() {
+		err := recover()
+		if err != nil {
+			e = fmt.Errorf("group %s , notify msg %s", g.gid, err)
+			s.logger.Error(e)
+			g.groupMessageCh = nil
 		}
-		defer func() {
-			err := recover()
-			if err != nil {
-				e = fmt.Errorf("group %s , notify msg %s", gid, err)
-				s.logger.Error(e)
-				v.groupMessageCh = nil
+	}()
+
+	if st.sendOption != SendOnly {
+		msg.SessionID = rpc.NewID()
+	}
+
+	select {
+	case g.groupMessageCh <- msg:
+	default:
+	}
+
+	s.logger.Debugf("group: sessionID %s %s from %s", msg.SessionID, st.sendOption, msg.From)
+	switch st.sendOption {
+	case SendOnly:
+		err := st.w.WriteMsg(&pb.GroupMsg{})
+		if err != nil {
+			s.logger.Tracef("group: sessionID %s reply err %v", msg.SessionID, err)
+			_ = st.stream.Reset()
+		} else {
+			s.logger.Tracef("group: sessionID %s reply success", msg.SessionID)
+			go st.stream.FullClose()
+		}
+	case SendReceive:
+		go func() {
+			s.sessionStream.Store(msg.SessionID, st)
+			defer s.sessionStream.Delete(msg.SessionID)
+			timeout := time.Second * 30
+			select {
+			case <-time.After(timeout):
+				s.logger.Debugf("group: sessionID %s timeout %s when wait receive reply from websocket", msg.SessionID, timeout)
+				_ = st.stream.Reset()
+			case <-st.done:
+				_ = st.stream.FullClose()
 			}
 		}()
-
-		if st.sendOption != SendOnly {
-			msg.SessionID = rpc.NewID()
-		}
-
-		select {
-		case v.groupMessageCh <- msg:
-		default:
-		}
-		s.logger.Debugf("group: sessionID %s %s from %s", msg.SessionID, st.sendOption, msg.From)
-		switch st.sendOption {
-		case SendOnly:
-			err := st.w.WriteMsg(&pb.GroupMsg{})
-			if err != nil {
-				s.logger.Tracef("group: sessionID %s reply err %v", msg.SessionID, err)
-				_ = st.stream.Reset()
-			} else {
-				s.logger.Tracef("group: sessionID %s reply success", msg.SessionID)
+		go func() {
+			defer close(st.done)
+			for {
+				var nothing protobuf.Message
+				err := st.r.ReadMsg(nothing)
+				s.logger.Tracef("group: sessionID %s close from the sender %v", msg.SessionID, err)
+				return
 			}
-		case SendReceive:
-			go func() {
-				st.done = make(chan struct{}, 1)
-				s.sessionStream.Store(msg.SessionID, st)
-				defer s.sessionStream.Delete(msg.SessionID)
-				timeout := time.Second * 30
-				select {
-				case <-time.After(timeout):
-					s.logger.Debugf("group: sessionID %s timeout %s when wait receive reply from websocket", msg.SessionID, timeout)
-					_ = st.stream.Reset()
-				case <-st.done:
-				}
-			}()
-			go func() {
-				defer st.doneOnce.Do(func() { close(st.done) })
-				for {
-					var nothing protobuf.Message
-					err := st.r.ReadMsg(nothing)
-					s.logger.Tracef("group: sessionID %s close from the sender %v", msg.SessionID, err)
-					return
-				}
-			}()
-		case SendStream:
-		}
+		}()
+	case SendStream:
 	}
 	return nil
 }
@@ -1079,14 +1113,12 @@ func (s *Service) replyGroupMessage(sessionID string, data []byte) (err error) {
 	st := v.(*WsStream)
 	defer func() {
 		if err != nil {
+			s.logger.Errorf("group: sessionID %s reply err %v", sessionID, err)
 			_ = st.stream.Reset()
 		} else {
 			switch st.sendOption {
 			case SendReceive:
 				s.logger.Tracef("group: sessionID %s reply success", sessionID)
-				st.doneOnce.Do(func() {
-					close(st.done)
-				})
 			}
 		}
 	}()
