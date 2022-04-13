@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/logging"
 )
 
@@ -114,6 +115,12 @@ func (pg *Paging) PageSort(list []map[string]interface{}, sortName, sortType str
 		switch frontValue.(type) {
 		case string:
 			return frontValue.(string) > backValue.(string)
+		case boson.Address:
+			if sortType == ASC {
+				return frontValue.(boson.Address).String() < backValue.(boson.Address).String()
+			} else {
+				return frontValue.(boson.Address).String() > backValue.(boson.Address).String()
+			}
 		case int, int8, int16, int32, int64,
 			uint, uint8, uint16, uint32, uint64:
 			frontStr := fmt.Sprintf("%d", frontValue)
