@@ -88,7 +88,7 @@ else
 
   cd "$SHELL_FOLDER"/lib/wiredtiger
   sh autogen.sh
-  ./configure --enable-snappy --prefix="$INSTALL_DIR" CPPFLAGS="-I$INSTALL_DIR/include" LDFLAGS="-L$INSTALL_DIR/include" || exit
+  ./configure --enable-snappy --enable-tcmalloc --prefix="$INSTALL_DIR" CPPFLAGS="-I$INSTALL_DIR/include" LDFLAGS="-L$INSTALL_DIR/include" || exit
   make || exit
   make install || exit
   make clean
