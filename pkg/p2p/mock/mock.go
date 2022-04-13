@@ -177,6 +177,10 @@ func (s *Service) Blocklist(overlay boson.Address, duration time.Duration, reaso
 	return s.blocklistFunc(overlay, duration, reason)
 }
 
+func (s *Service) BlocklistRemove(overlay boson.Address) error {
+	return nil
+}
+
 func (s *Service) SetPickyNotifier(f p2p.PickyNotifier) {
 	s.notifierFunc = f
 }

@@ -99,7 +99,8 @@ func (s *Service) newRouter() *mux.Router {
 		"GET": http.HandlerFunc(s.blocklistedPeersHandler),
 	})
 	handle("/blocklist/{address}", jsonhttp.MethodHandler{
-		"POST": http.HandlerFunc(s.peerBlockingHandler),
+		"POST":   http.HandlerFunc(s.peerBlockingHandler),
+		"DELETE": http.HandlerFunc(s.peerRemoveBlockingHandler),
 	})
 	handle("/chunks/{address}", jsonhttp.MethodHandler{
 		"GET":    http.HandlerFunc(s.hasChunkHandler),
