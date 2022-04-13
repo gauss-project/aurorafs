@@ -38,6 +38,7 @@ func init() {
 					select {
 					case <-v.sub.Err():
 						manage.Remove(item)
+						_, _ = cache.Remove(ctx, v.sub.ID)
 						continue
 					default:
 					}

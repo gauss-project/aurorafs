@@ -47,6 +47,11 @@ func (b *Blocklist) Exists(overlay boson.Address) (bool, error) {
 	return true, nil
 }
 
+func (b *Blocklist) Remove(overlay boson.Address) error {
+	key := generateKey(overlay)
+	return b.store.Delete(key)
+}
+
 func (b *Blocklist) Add(overlay boson.Address, duration time.Duration) (err error) {
 	key := generateKey(overlay)
 	_, d, err := b.get(key)

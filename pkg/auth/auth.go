@@ -254,7 +254,7 @@ func applyPolicies(e *casbin.Enforcer) error {
 		{"maintainer", "/peers", "GET"},
 		{"maintainer", "/peers/*", "DELETE"},
 		{"maintainer", "/blocklist", "GET"},
-		{"maintainer", "/blocklist/*", "POST"},
+		{"maintainer", "/blocklist/*", "(DELETE)|(POST)"},
 		{"maintainer", "/chunks/*", "(GET)|(DELETE)"},
 		{"maintainer", "/topology", "GET"},
 		{"maintainer", "/route/*", "(GET)|(DELETE)|(POST)"},

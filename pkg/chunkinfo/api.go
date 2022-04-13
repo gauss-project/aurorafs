@@ -44,7 +44,7 @@ func (a *apiService) DownloadProgress(ctx context.Context, rootCids []string) (*
 	c, unsub, _ := a.ci.SubscribeDownloadProgress(rcids)
 
 	go func() {
-		ticker := time.NewTicker(time.Second * 1)
+		ticker := time.NewTicker(time.Second * 2)
 		defer ticker.Stop()
 		for {
 			select {
@@ -89,7 +89,7 @@ func (a *apiService) RetrievalProgress(ctx context.Context, rootCid string) (*rp
 	var mutex sync.Mutex
 	bitMap := make(map[string]BitVectorInfo)
 	go func() {
-		ticker := time.NewTicker(time.Second * 1)
+		ticker := time.NewTicker(time.Second * 2)
 		defer ticker.Stop()
 		for {
 			select {
@@ -129,7 +129,7 @@ func (a *apiService) RootCidStatus(ctx context.Context) (*rpc.Subscription, erro
 	var mutex sync.Mutex
 	rootCidMap := make(map[string]RootCidStatusEven)
 	go func() {
-		ticker := time.NewTicker(time.Second * 1)
+		ticker := time.NewTicker(time.Second * 2)
 		defer ticker.Stop()
 		for {
 			select {

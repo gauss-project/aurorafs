@@ -395,6 +395,12 @@ func (s *Service) handleIncoming(stream network.Stream) {
 	}
 	s.protocolsmu.RUnlock()
 
+	if !s.peers.Exists(overlay) {
+		s.logger.Warningf("stream handler: inbound peer %s does not exist, disconnecting", overlay)
+		_ = s.Disconnect(overlay, "unknown inbound peer")
+		return
+	}
+
 	if s.notifier != nil {
 		s.notifier.NotifyPeerState(p2p.PeerInfo{
 			Overlay: peer.Address,
@@ -457,11 +463,6 @@ func (s *Service) handleIncoming(stream network.Stream) {
 	}
 
 	s.metrics.HandledStreamCount.Inc()
-	if !s.peers.Exists(overlay) {
-		s.logger.Warningf("stream handler: inbound peer %s does not exist, disconnecting", overlay)
-		_ = s.Disconnect(overlay, "unknown inbound peer")
-		return
-	}
 
 	if s.reacher != nil {
 		s.reacher.Connected(overlay, i.Address.Underlay)
@@ -670,6 +671,10 @@ func (s *Service) NATManager() basichost.NATManager {
 	return s.natManager
 }
 
+func (s *Service) BlocklistedPeers() ([]p2p.Peer, error) {
+	return s.blocklist.Peers()
+}
+
 func (s *Service) Blocklist(overlay boson.Address, duration time.Duration, reason string) error {
 	s.logger.Tracef("libp2p blocklist: peer %s for %v reason: %s", overlay.String(), duration, reason)
 	if err := s.blocklist.Add(overlay, duration); err != nil {
@@ -681,6 +686,10 @@ func (s *Service) Blocklist(overlay boson.Address, duration time.Duration, reaso
 
 	_ = s.Disconnect(overlay, "blocklisting peer")
 	return nil
+}
+
+func (s *Service) BlocklistRemove(overlay boson.Address) error {
+	return s.blocklist.Remove(overlay)
 }
 
 func buildHostAddress(peerID libp2ppeer.ID) (ma.Multiaddr, error) {
@@ -893,10 +902,6 @@ func (s *Service) disconnected(peer p2p.Peer) {
 
 func (s *Service) Peers() []p2p.Peer {
 	return s.peers.peers()
-}
-
-func (s *Service) BlocklistedPeers() ([]p2p.Peer, error) {
-	return s.blocklist.Peers()
 }
 
 func (s *Service) CallHandler(ctx context.Context, last p2p.Peer, stream p2p.Stream) (relayData *pb.RouteRelayReq, w p2p.WriterChan, r p2p.ReaderChan, forward bool, err error) {

@@ -81,7 +81,7 @@ func (s *Service) peerBlockingHandler(w http.ResponseWriter, r *http.Request) {
 	reason := r.URL.Query().Get("reason")
 	timeout := r.URL.Query().Get("timeout")
 
-	swarmAddr, err := boson.ParseHexAddress(addr)
+	bosonAddr, err := boson.ParseHexAddress(addr)
 	if err != nil {
 		s.logger.Debugf("debug api: parse peer address %s: %v", addr, err)
 		jsonhttp.BadRequest(w, "invalid peer address")
@@ -99,7 +99,7 @@ func (s *Service) peerBlockingHandler(w http.ResponseWriter, r *http.Request) {
 		reason = "unknown reason"
 	}
 
-	if err := s.p2p.Blocklist(swarmAddr, duration, reason); err != nil {
+	if err := s.p2p.Blocklist(bosonAddr, duration, reason); err != nil {
 		s.logger.Debugf("debug api: peer blocking %s: %v", addr, err)
 		if errors.Is(err, p2p.ErrPeerNotFound) {
 			jsonhttp.BadRequest(w, "peer not found")
@@ -155,4 +155,23 @@ func convPeer(peers []p2p.Peer) []PeerItem {
 		})
 	}
 	return list
+}
+
+func (s *Service) peerRemoveBlockingHandler(w http.ResponseWriter, r *http.Request) {
+	addr := mux.Vars(r)["address"]
+
+	bosonAddr, err := boson.ParseHexAddress(addr)
+	if err != nil {
+		s.logger.Debugf("debug api: parse peer address %s: %v", addr, err)
+		jsonhttp.BadRequest(w, "invalid peer address")
+		return
+	}
+
+	err = s.p2p.BlocklistRemove(bosonAddr)
+	if err != nil {
+		s.logger.Debugf("debug api: blocklisted remove peers: %v", err)
+		jsonhttp.InternalServerError(w, nil)
+		return
+	}
+	jsonhttp.OK(w, nil)
 }

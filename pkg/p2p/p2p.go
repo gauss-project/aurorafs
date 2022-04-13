@@ -37,6 +37,7 @@ type Service interface {
 	Disconnecter
 	Peers() []Peer
 	BlocklistedPeers() ([]Peer, error)
+	BlocklistRemove(overlay boson.Address) error
 	Addresses() ([]ma.Multiaddr, error)
 	NATAddresses() ([]net.Addr, error)
 	SetPickyNotifier(PickyNotifier)
