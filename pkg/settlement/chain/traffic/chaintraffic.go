@@ -10,6 +10,7 @@ import (
 	"github.com/gauss-project/aurorafs/pkg/logging"
 	"github.com/gauss-project/aurorafs/pkg/settlement/chain"
 	"math/big"
+	"time"
 )
 
 type ChainTraffic struct {
@@ -39,32 +40,50 @@ func NewServer(logger logging.Logger, chainID *big.Int, backend *ethclient.Clien
 }
 
 func (chainTraffic *ChainTraffic) TransferredAddress(address common.Address) ([]common.Address, error) {
-	out0, err := chainTraffic.traffic.GetTransferredAddress(nil, address)
+	ctx, cancel := context.WithTimeout(context.TODO(), 30*time.Second)
+	defer cancel()
+	opts := &bind.CallOpts{Context: ctx}
+	out0, err := chainTraffic.traffic.GetTransferredAddress(opts, address)
 	return out0, err
 }
 
 func (chainTraffic *ChainTraffic) RetrievedAddress(address common.Address) ([]common.Address, error) {
-	out0, err := chainTraffic.traffic.GetRetrievedAddress(nil, address)
+	ctx, cancel := context.WithTimeout(context.TODO(), 30*time.Second)
+	defer cancel()
+	opts := &bind.CallOpts{Context: ctx}
+	out0, err := chainTraffic.traffic.GetRetrievedAddress(opts, address)
 	return out0, err
 }
 
 func (chainTraffic *ChainTraffic) BalanceOf(account common.Address) (*big.Int, error) {
-	out0, err := chainTraffic.traffic.BalanceOf(nil, account)
+	ctx, cancel := context.WithTimeout(context.TODO(), 5*time.Second)
+	defer cancel()
+	opts := &bind.CallOpts{Context: ctx}
+	out0, err := chainTraffic.traffic.BalanceOf(opts, account)
 	return out0, err
 }
 
 func (chainTraffic *ChainTraffic) RetrievedTotal(arg0 common.Address) (*big.Int, error) {
-	out0, err := chainTraffic.traffic.RetrievedTotal(nil, arg0)
+	ctx, cancel := context.WithTimeout(context.TODO(), 5*time.Second)
+	defer cancel()
+	opts := &bind.CallOpts{Context: ctx}
+	out0, err := chainTraffic.traffic.RetrievedTotal(opts, arg0)
 	return out0, err
 }
 
 func (chainTraffic *ChainTraffic) TransferredTotal(arg0 common.Address) (*big.Int, error) {
-	out0, err := chainTraffic.traffic.TransferredTotal(nil, arg0)
+	ctx, cancel := context.WithTimeout(context.TODO(), 5*time.Second)
+	defer cancel()
+	opts := &bind.CallOpts{Context: ctx}
+	out0, err := chainTraffic.traffic.TransferredTotal(opts, arg0)
 	return out0, err
 }
 
 func (chainTraffic *ChainTraffic) TransAmount(beneficiary, recipient common.Address) (*big.Int, error) {
-	return chainTraffic.traffic.TransTraffic(nil, beneficiary, recipient)
+	ctx, cancel := context.WithTimeout(context.TODO(), 5*time.Second)
+	defer cancel()
+	opts := &bind.CallOpts{Context: ctx}
+	return chainTraffic.traffic.TransTraffic(opts, beneficiary, recipient)
 }
 
 func (chainTraffic *ChainTraffic) CashChequeBeneficiary(ctx context.Context, beneficiary, recipient common.Address, cumulativePayout *big.Int, signature []byte) (*types.Transaction, error) {
