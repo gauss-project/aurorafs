@@ -118,13 +118,14 @@ type peersResponse struct {
 }
 
 type PeerItem struct {
-	Address  boson.Address `json:"address"`
-	FullNode bool          `json:"fullNode"`
+	Address   boson.Address `json:"address"`
+	FullNode  bool          `json:"fullNode"`
+	Direction string        `json:"direction"`
 }
 
 func (s *Service) peersHandler(w http.ResponseWriter, r *http.Request) {
 	jsonhttp.OK(w, peersResponse{
-		Peers: convPeer(s.p2p.Peers()),
+		Peers: s.convPeer(s.p2p.Peers()),
 	})
 }
 
@@ -137,14 +138,14 @@ func (s *Service) blocklistedPeersHandler(w http.ResponseWriter, r *http.Request
 	}
 
 	jsonhttp.OK(w, peersResponse{
-		Peers: convPeer(peers),
+		Peers: s.convPeer(peers),
 	})
 }
 
-func convPeer(peers []p2p.Peer) []PeerItem {
+func (s *Service) convPeer(peers []p2p.Peer) []PeerItem {
 	list := make([]PeerItem, 0)
 	for _, v := range peers {
-		list = append(list, PeerItem{
+		tmp := PeerItem{
 			Address: v.Address,
 			FullNode: func() bool {
 				if v.Mode.Bv != nil {
@@ -152,7 +153,12 @@ func convPeer(peers []p2p.Peer) []PeerItem {
 				}
 				return false
 			}(),
-		})
+		}
+		m := s.topologyDriver.SnapshotAddr(v.Address)
+		if m != nil {
+			tmp.Direction = string(m.SessionConnectionDirection)
+		}
+		list = append(list, tmp)
 	}
 	return list
 }
