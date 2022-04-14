@@ -396,7 +396,6 @@ func (s *server) downloadHandler(w http.ResponseWriter, r *http.Request, referen
 }
 
 type auroraListResponse struct {
-	FileHash  boson.Address       `json:"fileHash"`
 	RootCid   boson.Address       `json:"rootCid"`
 	Size      int                 `json:"size"`
 	FileSize  int                 `json:"fileSize"`
@@ -558,7 +557,6 @@ func (s *server) auroraListHandler(w http.ResponseWriter, r *http.Request) {
 
 		responseList = append(responseList, auroraListResponse{
 			RootCid:   v["rootCid"].(boson.Address),
-			FileHash:  v["rootCid"].(boson.Address),
 			Size:      v["treeSize"].(int),
 			FileSize:  v["fileSize"].(int),
 			PinState:  v["pinState"].(bool),
@@ -610,7 +608,7 @@ func (s *server) auroraListHandler(w http.ResponseWriter, r *http.Request) {
 	}()
 
 	for i, v := range responseList {
-		hashChain := ordHash{ord: i, hash: v.FileHash}
+		hashChain := ordHash{ord: i, hash: v.RootCid}
 		ch <- hashChain
 	}
 
@@ -619,7 +617,7 @@ func (s *server) auroraListHandler(w http.ResponseWriter, r *http.Request) {
 	if !isPage {
 		zeroAddress := boson.NewAddress([]byte{31: 0})
 		sort.Slice(responseList, func(i, j int) bool {
-			closer, _ := responseList[i].FileHash.Closer(zeroAddress, responseList[j].FileHash)
+			closer, _ := responseList[i].RootCid.Closer(zeroAddress, responseList[j].RootCid)
 			return closer
 		})
 		jsonhttp.OK(w, responseList)
