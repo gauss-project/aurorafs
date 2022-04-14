@@ -271,25 +271,26 @@ paths:
           schema:
             type: string
           required: false
-          example: [ { "key": "FieldName","term": "eq","value": "false" } ]
+          example: '[ { "key": "FieldName","term": "eq","value": "false" } ]'
         - in: query
           name: page
           schema:
             type: string
           required: true
-          example: { "pageNum": 1, "pageSize": 10 }
+          example: '{ "pageNum": 1, "pageSize": 10 }'
         - in: query
           name: sort
           schema:
             type: string
           required: false
-          example: { "key": "FieldName", "order": "desc" }
+          example: '{ "key": "FieldName", "order": "desc" }'
       responses:
-        '200':
+        "200":
           description: "A list of file"
           content:
-            application/problem+json:
-              $ref: "AuroraCommon.yaml#components/schemas/AuroraPageResponse"
+            application/json:
+              schema:
+                $ref: "AuroraCommon.yaml#/components/schemas/AuroraPageResponse"
         "400":
           $ref: "AuroraCommon.yaml#/components/responses/400"
         "404":
@@ -298,7 +299,6 @@ paths:
           $ref: "AuroraCommon.yaml#/components/responses/500"
         default:
           description: Default response
-
 
   "/aurora/{reference}":
     get:

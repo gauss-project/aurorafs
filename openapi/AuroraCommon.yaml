@@ -373,13 +373,16 @@ components:
           type: boolean
         manifest:
           $ref: "#/components/schemas/ManifestViewResponse"
+
     AuroraPageResponse:
       type: object
       properties:
         total:
           type: integer
         list:
-          $ref: "#components/schemas/AuroraResponse"
+          type: array
+          items:
+            $ref: "#/components/schemas/AuroraResponse"
 
     Response:
       type: object
@@ -513,7 +516,6 @@ components:
         - $ref: "#/components/schemas/BosonAddress"
         - $ref: "#/components/schemas/BosonEncryptedReference"
         - $ref: "#/components/schemas/DomainName"
-
 
     ChunkSourceReference:
       type: object
