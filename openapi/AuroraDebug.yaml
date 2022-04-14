@@ -232,6 +232,12 @@ paths:
             $ref: "AuroraCommon.yaml#/components/schemas/BosonAddress"
           required: true
           description: Boson address of peer
+        - in: query
+          name: timeout
+          schema:
+            type: string
+          required: true
+          description: "A duration string is a possibly signed sequence of decimal numbers, each with optional fraction and a unit suffix,such as '300ms', '2h45m'. Valid time units are 'ns', 'us' (or 'µs'), 'ms', 's', 'm', 'h'."
       responses:
         "200":
           description: add peer to block list
