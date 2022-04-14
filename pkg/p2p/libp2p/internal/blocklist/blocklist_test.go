@@ -102,7 +102,7 @@ func TestPeers(t *testing.T) {
 	}
 }
 
-func isIn(p boson.Address, peers []p2p.Peer) bool {
+func isIn(p boson.Address, peers []p2p.BlockPeers) bool {
 	for _, v := range peers {
 		if v.Address.Equal(p) {
 			return true

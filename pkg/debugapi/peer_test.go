@@ -187,8 +187,8 @@ func TestPeer(t *testing.T) {
 func TestBlocklistedPeers(t *testing.T) {
 	overlay := boson.MustParseHexAddress("ca1e9f3938cc1425c6061b96ad9eb93e134dfe8734ad490164ef20af9d1cf59c")
 	testServer := newTestServer(t, testServerOptions{
-		P2P: mock.New(mock.WithBlocklistedPeersFunc(func() ([]p2p.Peer, error) {
-			return []p2p.Peer{{Address: overlay}}, nil
+		P2P: mock.New(mock.WithBlocklistedPeersFunc(func() ([]p2p.BlockPeers, error) {
+			return []p2p.BlockPeers{{Address: overlay}}, nil
 		})),
 	})
 
@@ -202,8 +202,8 @@ func TestBlocklistedPeers(t *testing.T) {
 func TestBlocklistedPeersErr(t *testing.T) {
 	overlay := boson.MustParseHexAddress("ca1e9f3938cc1425c6061b96ad9eb93e134dfe8734ad490164ef20af9d1cf59c")
 	testServer := newTestServer(t, testServerOptions{
-		P2P: mock.New(mock.WithBlocklistedPeersFunc(func() ([]p2p.Peer, error) {
-			return []p2p.Peer{{Address: overlay}}, errors.New("some error")
+		P2P: mock.New(mock.WithBlocklistedPeersFunc(func() ([]p2p.BlockPeers, error) {
+			return []p2p.BlockPeers{{Address: overlay}}, errors.New("some error")
 		})),
 	})
 

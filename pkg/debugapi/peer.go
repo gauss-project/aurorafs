@@ -129,19 +129,6 @@ func (s *Service) peersHandler(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func (s *Service) blocklistedPeersHandler(w http.ResponseWriter, r *http.Request) {
-	peers, err := s.p2p.BlocklistedPeers()
-	if err != nil {
-		s.logger.Debugf("debug api: blocklisted peers: %v", err)
-		jsonhttp.InternalServerError(w, nil)
-		return
-	}
-
-	jsonhttp.OK(w, peersResponse{
-		Peers: s.convPeer(peers),
-	})
-}
-
 func (s *Service) convPeer(peers []p2p.Peer) []PeerItem {
 	list := make([]PeerItem, 0)
 	for _, v := range peers {
@@ -158,9 +145,29 @@ func (s *Service) convPeer(peers []p2p.Peer) []PeerItem {
 		if m != nil {
 			tmp.Direction = string(m.SessionConnectionDirection)
 		}
+		if !tmp.FullNode {
+			tmp.Direction = "inbound"
+		}
 		list = append(list, tmp)
 	}
 	return list
+}
+
+type blockPeersResponse struct {
+	Peers []p2p.BlockPeers `json:"peers"`
+}
+
+func (s *Service) blocklistedPeersHandler(w http.ResponseWriter, r *http.Request) {
+	peers, err := s.p2p.BlocklistedPeers()
+	if err != nil {
+		s.logger.Debugf("debug api: blocklisted peers: %v", err)
+		jsonhttp.InternalServerError(w, nil)
+		return
+	}
+
+	jsonhttp.OK(w, blockPeersResponse{
+		Peers: peers,
+	})
 }
 
 func (s *Service) peerRemoveBlockingHandler(w http.ResponseWriter, r *http.Request) {
