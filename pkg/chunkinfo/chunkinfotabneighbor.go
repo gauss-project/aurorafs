@@ -59,6 +59,7 @@ func (ci *ChunkInfo) initChunkInfoTabNeighbor() error {
 		if err := ci.initChunkPyramid(context.Background(), rootCid); err != nil {
 			return true, err
 		}
+		ci.logger.Infof("init chunkInfo server : %s", rootCid.String())
 		return false, nil
 	}); err != nil {
 		return err

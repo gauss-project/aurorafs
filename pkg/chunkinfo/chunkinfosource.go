@@ -84,6 +84,7 @@ func (cs *chunkInfoSource) initChunkInfoSource() error {
 			return false, err
 		}
 		cs.putChunkInfoChunkInfoSource(rootCid, overlay, *bit)
+		cs.logger.Infof("init chunkInfo source: %s", rootCid.String())
 		return false, nil
 	}); err != nil {
 		return err
