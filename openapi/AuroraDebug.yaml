@@ -1,6 +1,6 @@
 openapi: 3.0.3
 info:
-  version: 1.3.1
+  version: 1.3.2
   title: Aurora Debug API
   description: "A list of the currently provided debug interfaces to interact with the aurorafs node"
 
@@ -205,6 +205,70 @@ paths:
         default:
           description: Default response
 
+  "/blocklist":
+    get:
+      summary: Get a list of block peers
+      tags:
+        - Connectivity
+      responses:
+        "200":
+          description: Returns overlay addresses of blocked peers
+          content:
+            application/json:
+              schema:
+                $ref: "AuroraCommon.yaml#/components/schemas/Peers"
+        default:
+          description: Default response
+
+  "/blocklist/{address}":
+    post:
+      summary: add peer to block list
+      tags:
+        - Connectivity
+      parameters:
+        - in: path
+          name: address
+          schema:
+            $ref: "AuroraCommon.yaml#/components/schemas/BosonAddress"
+          required: true
+          description: Boson address of peer
+      responses:
+        "200":
+          description: add peer to block list
+          content:
+            application/json:
+              schema:
+                $ref: "AuroraCommon.yaml#/components/schemas/Response"
+        "400":
+          $ref: "AuroraCommon.yaml#/components/responses/400"
+        "500":
+          $ref: "AuroraCommon.yaml#/components/responses/500"
+        default:
+          description: Default response
+    delete:
+      summary: Remove peer from block list
+      tags:
+        - Connectivity
+      parameters:
+        - in: path
+          name: address
+          schema:
+            $ref: "AuroraCommon.yaml#/components/schemas/BosonAddress"
+          required: true
+          description: Boson address of peer
+      responses:
+        "200":
+          description: Remove peer from block list
+          content:
+            application/json:
+              schema:
+                $ref: "AuroraCommon.yaml#/components/schemas/Response"
+        "400":
+          $ref: "AuroraCommon.yaml#/components/responses/400"
+        "500":
+          $ref: "AuroraCommon.yaml#/components/responses/500"
+        default:
+          description: Default response
 
   "/peers":
     get:
