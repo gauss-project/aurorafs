@@ -671,7 +671,7 @@ func (s *Service) NATManager() basichost.NATManager {
 	return s.natManager
 }
 
-func (s *Service) BlocklistedPeers() ([]p2p.Peer, error) {
+func (s *Service) BlocklistedPeers() ([]p2p.BlockPeers, error) {
 	return s.blocklist.Peers()
 }
 

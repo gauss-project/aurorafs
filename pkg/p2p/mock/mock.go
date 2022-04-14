@@ -20,7 +20,7 @@ type Service struct {
 	connectFunc           func(ctx context.Context, addr ma.Multiaddr) (peer *p2p.Peer, err error)
 	disconnectFunc        func(overlay boson.Address, reason string) error
 	peersFunc             func() []p2p.Peer
-	blocklistedPeersFunc  func() ([]p2p.Peer, error)
+	blocklistedPeersFunc  func() ([]p2p.BlockPeers, error)
 	addressesFunc         func() ([]ma.Multiaddr, error)
 	notifierFunc          p2p.PickyNotifier
 	setWelcomeMessageFunc func(string) error
@@ -58,7 +58,7 @@ func WithPeersFunc(f func() []p2p.Peer) Option {
 }
 
 // WithBlocklistedPeersFunc sets the mock implementation of the BlocklistedPeers function
-func WithBlocklistedPeersFunc(f func() ([]p2p.Peer, error)) Option {
+func WithBlocklistedPeersFunc(f func() ([]p2p.BlockPeers, error)) Option {
 	return optionFunc(func(s *Service) {
 		s.blocklistedPeersFunc = f
 	})
@@ -145,7 +145,7 @@ func (s *Service) Peers() []p2p.Peer {
 	return s.peersFunc()
 }
 
-func (s *Service) BlocklistedPeers() ([]p2p.Peer, error) {
+func (s *Service) BlocklistedPeers() ([]p2p.BlockPeers, error) {
 	if s.blocklistedPeersFunc == nil {
 		return nil, nil
 	}

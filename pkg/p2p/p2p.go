@@ -36,7 +36,7 @@ type Service interface {
 	Connect
 	Disconnecter
 	Peers() []Peer
-	BlocklistedPeers() ([]Peer, error)
+	BlocklistedPeers() ([]BlockPeers, error)
 	BlocklistRemove(overlay boson.Address) error
 	Addresses() ([]ma.Multiaddr, error)
 	NATAddresses() ([]net.Addr, error)
@@ -154,6 +154,12 @@ type StreamSpec struct {
 	Name    string
 	Handler HandlerFunc
 	Headler HeadlerFunc
+}
+
+type BlockPeers struct {
+	Address   boson.Address `json:"address"`
+	Timestamp string        `json:"timestamp"`
+	Duration  float64       `json:"duration"`
 }
 
 // Peer holds information about a Peer.
