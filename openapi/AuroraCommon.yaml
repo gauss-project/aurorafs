@@ -356,6 +356,31 @@ components:
         sub:
           $ref: "#/components/schemas/ManifestViewResponse"
 
+    AuroraResponse:
+      type: object
+      properties:
+        rootCid:
+          type: string
+        size:
+          type: integer
+        fileSize:
+          type: integer
+        pinState:
+          type: boolean
+        bitVector:
+          $ref: "#/components/schemas/BitVector"
+        register:
+          type: boolean
+        manifest:
+          $ref: "#/components/schemas/ManifestViewResponse"
+    AuroraPageResponse:
+      type: object
+      properties:
+        total:
+          type: integer
+        list:
+          $ref: "#components/schemas/AuroraResponse"
+
     Response:
       type: object
       properties:
