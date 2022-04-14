@@ -1,6 +1,6 @@
 openapi: 3.0.3
 info:
-  version: 1.3.1
+  version: 1.3.2
   title: Common Data Types
   description: |
 
@@ -272,7 +272,40 @@ components:
         peers:
           type: array
           items:
-            $ref: "#/components/schemas/Address"
+            $ref: "#/components/schemas/P2PAddress"
+
+    BlockPeers:
+      type: object
+      properties:
+        peers:
+          type: array
+          items:
+            $ref: "#/components/schemas/BlockAddress"
+
+    P2PAddress:
+      type: object
+      properties:
+        address:
+          $ref: "#/components/schemas/BosonAddress"
+        fullNode:
+          type: boolean
+        direction:
+          type: string
+          example: "inbound"
+
+    BlockAddress:
+      type: object
+      properties:
+        address:
+          $ref: "#/components/schemas/BosonAddress"
+        timestamp:
+          type: string
+          format: date-time
+          example: "2020-06-11T11:26:42+02:00"
+        direction:
+          type: number
+          description: "time of seconds"
+          example: 3600
 
     PinningState:
       type: object

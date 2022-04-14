@@ -216,7 +216,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "AuroraCommon.yaml#/components/schemas/Peers"
+                $ref: "AuroraCommon.yaml#/components/schemas/BlockPeers"
         default:
           description: Default response
 

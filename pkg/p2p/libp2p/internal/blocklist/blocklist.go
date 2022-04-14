@@ -74,7 +74,7 @@ func (b *Blocklist) Add(overlay boson.Address, duration time.Duration) (err erro
 
 // Peers returns all currently blocklisted peers.
 func (b *Blocklist) Peers() ([]p2p.BlockPeers, error) {
-	var peers []p2p.BlockPeers
+	peers := make([]p2p.BlockPeers, 0)
 	if err := b.store.Iterate(keyPrefix, func(k, v []byte) (bool, error) {
 		if !strings.HasPrefix(string(k), keyPrefix) {
 			return true, nil
