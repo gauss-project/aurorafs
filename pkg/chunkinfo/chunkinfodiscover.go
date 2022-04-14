@@ -52,6 +52,7 @@ func (ci *ChunkInfo) initChunkInfoDiscover() error {
 		if err := ci.chunkPutChanUpdate(context.Background(), ci.cp, ci.initChunkPyramid, context.Background(), rootCid).err; err != nil {
 			return true, err
 		}
+		ci.logger.Infof("init chunkInfo discover: %s", rootCid.String())
 		return false, nil
 	}); err != nil {
 		return err
