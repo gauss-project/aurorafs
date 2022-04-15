@@ -28,7 +28,7 @@ func (a *apiService) Metrics(ctx context.Context) (*rpc.Subscription, error) {
 	}
 	sub := notifier.CreateSubscription()
 
-	subscribe.AddMetrics(notifier, sub, []prometheus.Metric{
+	go subscribe.AddMetrics(notifier, sub, []prometheus.Metric{
 		a.s.metrics.TotalRetrieved,
 		a.s.metrics.TotalTransferred,
 	})

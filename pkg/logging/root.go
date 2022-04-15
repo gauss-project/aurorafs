@@ -15,7 +15,7 @@ func Root() Logger {
 }
 
 func Tracef(format string, args ...interface{}) {
-	root.Tracef(format, args)
+	root.Tracef(format, args...)
 }
 
 func Trace(args ...interface{}) {
@@ -23,33 +23,33 @@ func Trace(args ...interface{}) {
 }
 
 func Debugf(format string, args ...interface{}) {
-	root.Tracef(format, args)
+	root.Debugf(format, args...)
 }
 
 func Debug(args ...interface{}) {
-	root.Trace(args)
+	root.Debug(args)
 }
 
 func Infof(format string, args ...interface{}) {
-	root.Tracef(format, args)
+	root.Infof(format, args...)
 }
 
 func Info(args ...interface{}) {
-	root.Trace(args)
+	root.Info(args)
 }
 
 func Warningf(format string, args ...interface{}) {
-	root.Tracef(format, args)
+	root.Warningf(format, args...)
 }
 
 func Warning(args ...interface{}) {
-	root.Trace(args)
+	root.Warning(args)
 }
 
 func Errorf(format string, args ...interface{}) {
-	root.Tracef(format, args)
+	root.Errorf(format, args...)
 }
 
 func Error(args ...interface{}) {
-	root.Trace(args)
+	root.Error(args)
 }
