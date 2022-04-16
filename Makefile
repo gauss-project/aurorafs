@@ -27,9 +27,11 @@ CGO_ENABLED ?= $(shell go env CGO_ENABLED)
 ifeq ($(GOOS), windows)
 WORK_DIR := $(shell pwd | sed -E 's/^\/([a-zA-Z])\//\1\:\//' | sed -E 's/\//\\\\/g' | tr '[:upper:]' '[:lower:]')
 PATH_SEP := ;
+BINARY_NAME ?= aurora.exe
 else
 WORK_DIR := $(shell pwd | tr '[:upper:]' '[:lower:]')
 PATH_SEP := :
+BINARY_NAME ?= aurora
 endif
 
 .PHONY: all
@@ -46,18 +48,13 @@ binary-ldb: binary
 .PHONY: binary
 binary: dist FORCE
 	$(GO) version
-ifeq ($(GOOS), windows)
-	$(GO) env -w CGO_ENABLED=0
-	$(GO) build -tags leveldb -trimpath -ldflags "$(LDFLAGS)" -o dist/aurora.exe ./cmd/aurorafs
-else
 ifeq ($(DATABASE), wiredtiger)
 	sh -c "./install-deps.sh $(LIB_INSTALL_DIR) $(IS_DOCKER)"
 	$(GO) env -w CGO_ENABLED=1
 else
 	$(GO) env -w CGO_ENABLED=0
 endif
-	$(GO) build -tags $(DATABASE) -trimpath -ldflags "$(LDFLAGS)" -o dist/aurora ./cmd/aurorafs
-endif
+	$(GO) build -tags $(DATABASE) -trimpath -ldflags "$(LDFLAGS)" -o dist/$(BINARY_NAME) ./cmd/aurorafs
 	$(GO) env -w CGO_ENABLED=$(CGO_ENABLED)
 
 dist:
