@@ -1,8 +1,8 @@
 package wiredtiger
 
 /*
-#cgo CFLAGS: -I/usr/local/include
-#cgo LDFLAGS: -L/usr/local/lib -lwiredtiger
+#cgo CFLAGS: -Ic:/wiredtiger/include
+#cgo LDFLAGS: -Lc:/wiredtiger -lwiredtiger
 
 #include <string.h>
 #include <stdlib.h>
@@ -56,8 +56,8 @@ var (
 	defaultSessionMax    = 33000
 	defaultStatistics    = []StatisticsPolicy{StatisticsFast}
 	defaultStatisticsLog = StatisticsLog{Wait: 0}
-	defaultExtensions    = "[/usr/local/lib/libwiredtiger_snappy.so]"
-	defaultVerbose       = "[recovery_progress,checkpoint_progress,compact_progress]"
+	// defaultExtensions    = "[/usr/local/lib/libwiredtiger_snappy.so]"
+	defaultVerbose = "[recovery_progress,checkpoint_progress,compact_progress]"
 )
 
 func checkDirectory(path string) error {
@@ -100,7 +100,7 @@ func (d Driver) Open(path, options string) (driver.DB, error) {
 		config.SetSessionMax(defaultSessionMax),
 		config.SetStatistics(defaultStatistics),
 		config.SetStatisticsLog(defaultStatisticsLog),
-		config.SetExtensions(defaultExtensions),
+		// config.SetExtensions(defaultExtensions),
 		config.SetVerbose(defaultVerbose),
 	)
 

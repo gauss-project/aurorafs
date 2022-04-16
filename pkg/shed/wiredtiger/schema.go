@@ -70,7 +70,7 @@ func (db *DB) InitSchema() error {
 		LeafValueMax:      67108864, // 64MB
 		Checksum:          "on",
 		PrefixCompression: true,
-		BlockCompressor:   NoneCompressor,
+		BlockCompressor:   SnappyCompressor,
 		AccessPatternHint: "random",
 		AllocationSize:    4 * 1024,
 		KeyFormat:         "u",
@@ -188,7 +188,7 @@ func (db *DB) CreateIndex(spec driver.IndexSpec) ([]byte, error) {
 			LeafValueMax:      67108864, // 64MB
 			Checksum:          "on",
 			PrefixCompression: true,
-			BlockCompressor:   SnappyCompressor,
+			BlockCompressor:   NoneCompressor,
 			AccessPatternHint: "random",
 			AllocationSize:    4 * 1024,
 			KeyFormat:         "u",
