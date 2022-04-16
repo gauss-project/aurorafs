@@ -67,7 +67,6 @@ func (s *Service) Protocol() p2p.ProtocolSpec {
 			},
 		},
 		ConnectOut: s.init,
-		ConnectIn:  s.init,
 	}
 }
 

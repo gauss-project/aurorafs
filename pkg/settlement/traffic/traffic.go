@@ -575,8 +575,6 @@ func (s *Service) TransferTraffic(peer boson.Address) (*big.Int, error) {
 }
 
 func (s *Service) RetrieveTraffic(peer boson.Address) (traffic *big.Int, err error) {
-	s.peersLock.Lock()
-	defer s.peersLock.Unlock()
 	chainAddress, known := s.addressBook.Beneficiary(peer)
 
 	if !known {
@@ -699,13 +697,13 @@ func (s *Service) UpdatePeerBalance(peer boson.Address) error {
 		return chequePkg.ErrNoCheque
 	}
 
-	traffic := s.getTraffic(chainAddress)
-	traffic.Lock()
-	defer traffic.Unlock()
 	balance, err := s.trafficChainService.BalanceOf(chainAddress)
 	if err != nil {
 		return err
 	}
+	traffic := s.getTraffic(chainAddress)
+	traffic.Lock()
+	defer traffic.Unlock()
 	traffic.trafficPeerBalance = balance
 	return nil
 }
