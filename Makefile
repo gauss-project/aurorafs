@@ -49,7 +49,9 @@ binary-ldb: binary
 binary: dist FORCE
 	$(GO) version
 ifeq ($(DATABASE), wiredtiger)
+ifneq ($(GOOS), windows)
 	sh -c "./install-deps.sh $(LIB_INSTALL_DIR) $(IS_DOCKER)"
+endif
 	$(GO) env -w CGO_ENABLED=1
 else
 	$(GO) env -w CGO_ENABLED=0
