@@ -20,6 +20,13 @@ type metrics struct {
 	UnexpectedProtocolReqCount prometheus.Counter
 	KickedOutPeersCount        prometheus.Counter
 	HeadersExchangeDuration    prometheus.Histogram
+	// libp2p view system
+	NumStreamsInbound  prometheus.Gauge
+	NumStreamsOutbound prometheus.Gauge
+	NumConnsInbound    prometheus.Gauge
+	NumConnsOutbound   prometheus.Gauge
+	NumFD              prometheus.Gauge
+	Memory             prometheus.Gauge
 }
 
 func newMetrics() metrics {
@@ -91,6 +98,42 @@ func newMetrics() metrics {
 			Subsystem: subsystem,
 			Name:      "headers_exchange_duration",
 			Help:      "The duration spent exchanging the headers.",
+		}),
+		NumStreamsInbound: prometheus.NewGauge(prometheus.GaugeOpts{
+			Namespace: m.Namespace,
+			Subsystem: subsystem,
+			Name:      "num_streams_inbound",
+			Help:      "Number of streams inbound with system",
+		}),
+		NumStreamsOutbound: prometheus.NewGauge(prometheus.GaugeOpts{
+			Namespace: m.Namespace,
+			Subsystem: subsystem,
+			Name:      "num_streams_outbound",
+			Help:      "Number of streams outbound with system",
+		}),
+		NumConnsInbound: prometheus.NewGauge(prometheus.GaugeOpts{
+			Namespace: m.Namespace,
+			Subsystem: subsystem,
+			Name:      "num_conns_inbound",
+			Help:      "Number of connect inbound with system",
+		}),
+		NumConnsOutbound: prometheus.NewGauge(prometheus.GaugeOpts{
+			Namespace: m.Namespace,
+			Subsystem: subsystem,
+			Name:      "num_conns_outbound",
+			Help:      "Number of connect outbound with system",
+		}),
+		NumFD: prometheus.NewGauge(prometheus.GaugeOpts{
+			Namespace: m.Namespace,
+			Subsystem: subsystem,
+			Name:      "num_fd",
+			Help:      "Number of fd with system",
+		}),
+		Memory: prometheus.NewGauge(prometheus.GaugeOpts{
+			Namespace: m.Namespace,
+			Subsystem: subsystem,
+			Name:      "memory",
+			Help:      "Number of memory with system",
 		}),
 	}
 }

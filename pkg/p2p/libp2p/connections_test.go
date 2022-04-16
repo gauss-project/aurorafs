@@ -5,7 +5,6 @@ import (
 	"context"
 	"errors"
 	"io"
-	"math/rand"
 	"strings"
 	"sync"
 	"testing"
@@ -19,7 +18,6 @@ import (
 	"github.com/libp2p/go-libp2p-core/host"
 	"github.com/libp2p/go-libp2p-core/network"
 	swarmt "github.com/libp2p/go-libp2p-swarm/testing"
-	goyamux "github.com/libp2p/go-libp2p-yamux"
 	bhost "github.com/libp2p/go-libp2p/p2p/host/basic"
 
 	"github.com/gauss-project/aurorafs/pkg/addressbook"
@@ -142,129 +140,6 @@ func TestLightPeerLimit(t *testing.T) {
 	}
 
 	t.Fatal("timed out waiting for correct number of lightnodes")
-}
-
-// TestStreamsMaxIncomingLimit validates that a session between peers can
-// sustain up to the maximal configured concurrent streams, that all further
-// streams will result with ErrReset error, and that when the number of
-// concurrent streams is bellow the limit, new streams are created without
-// errors.
-func TestStreamsMaxIncomingLimit(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	s1, overlay1 := newService(t, 1, libp2pServiceOpts{libp2pOpts: libp2p.Options{
-		NodeMode: aurora.NewModel().SetMode(aurora.FullNode),
-	}})
-	s2, overlay2 := newService(t, 1, libp2pServiceOpts{libp2pOpts: libp2p.Options{
-		NodeMode: aurora.NewModel(),
-	}})
-
-	testProtocolSpec := p2p.ProtocolSpec{
-		Name:    testProtocolName,
-		Version: testProtocolVersion,
-		StreamSpecs: []p2p.StreamSpec{
-			{
-				Name: testStreamName,
-				Handler: func(ctx context.Context, p p2p.Peer, s p2p.Stream) error {
-					return nil
-				},
-			},
-		},
-	}
-
-	streams := make([]p2p.Stream, 0)
-	t.Cleanup(func() {
-		for _, s := range streams {
-			if err := s.Reset(); err != nil {
-				t.Error(err)
-			}
-		}
-	})
-
-	testProtocolClient := func() error {
-		s, err := s2.NewStream(ctx, overlay1, nil, testProtocolName, testProtocolVersion, testStreamName)
-		if err != nil {
-			return err
-		}
-		streams = append(streams, s)
-		// do not close or rest the stream in defer in order to keep the stream active
-		return nil
-	}
-
-	if err := s1.AddProtocol(testProtocolSpec); err != nil {
-		t.Fatal(err)
-	}
-
-	if _, err := s2.Connect(ctx, serviceUnderlayAddress(t, s1)); err != nil {
-		t.Fatal(err)
-	}
-
-	expectPeers(t, s2, overlay1)
-	expectPeersEventually(t, s1, overlay2)
-
-	maxIncomingStreams := goyamux.DefaultTransport.MaxIncomingStreams
-
-	overflowStreamCount := maxIncomingStreams / 4
-
-	// create streams over the limit
-
-	for i := uint32(0); i < maxIncomingStreams+overflowStreamCount; i++ {
-		err := testProtocolClient()
-		if i < maxIncomingStreams {
-			if err != nil {
-				t.Errorf("test protocol client %v: %v", i, err)
-			}
-		} else {
-			if !errors.Is(err, mux.ErrReset) {
-				t.Errorf("test protocol client %v error %v, want %v", i, err, mux.ErrReset)
-			}
-		}
-	}
-
-	if uint32(len(streams)) != maxIncomingStreams {
-		t.Errorf("got %v streams, want %v", uint32(len(streams)), maxIncomingStreams)
-	}
-
-	closeStreamCount := uint32(len(streams) / 2)
-
-	// close random streams to validate new streams creation
-
-	random := rand.New(rand.NewSource(time.Now().UnixNano()))
-	for i := 0; i < int(closeStreamCount); i++ {
-		n := random.Intn(len(streams))
-		if err := streams[n].Reset(); err != nil {
-			t.Error(err)
-			continue
-		}
-		streams = append(streams[:n], streams[n+1:]...)
-	}
-
-	if maxIncomingStreams-uint32(len(streams)) != closeStreamCount {
-		t.Errorf("got %v closed streams, want %v", maxIncomingStreams-uint32(len(streams)), closeStreamCount)
-	}
-
-	// create new streams
-
-	for i := uint32(0); i < closeStreamCount+overflowStreamCount; i++ {
-		err := testProtocolClient()
-		if i < closeStreamCount {
-			if err != nil {
-				t.Errorf("test protocol client %v: %v", i, err)
-			}
-		} else {
-			if !errors.Is(err, mux.ErrReset) {
-				t.Errorf("test protocol client %v error %v, want %v", i, err, mux.ErrReset)
-			}
-		}
-	}
-
-	if uint32(len(streams)) != maxIncomingStreams {
-		t.Errorf("got %v streams, want %v", uint32(len(streams)), maxIncomingStreams)
-	}
-
-	expectPeers(t, s2, overlay1)
-	expectPeersEventually(t, s1, overlay2)
 }
 
 func TestDoubleConnect(t *testing.T) {

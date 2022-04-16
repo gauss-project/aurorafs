@@ -13,11 +13,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/gauss-project/aurorafs/pkg/p2p/libp2p/internal/reacher"
-	"github.com/gauss-project/aurorafs/pkg/routetab"
-	"github.com/gauss-project/aurorafs/pkg/routetab/pb"
-	"github.com/libp2p/go-libp2p-core/event"
-
 	au "github.com/gauss-project/aurorafs"
 	"github.com/gauss-project/aurorafs/pkg/addressbook"
 	"github.com/gauss-project/aurorafs/pkg/aurora"
@@ -28,12 +23,17 @@ import (
 	"github.com/gauss-project/aurorafs/pkg/p2p/libp2p/internal/blocklist"
 	"github.com/gauss-project/aurorafs/pkg/p2p/libp2p/internal/breaker"
 	"github.com/gauss-project/aurorafs/pkg/p2p/libp2p/internal/handshake"
+	"github.com/gauss-project/aurorafs/pkg/p2p/libp2p/internal/reacher"
+	"github.com/gauss-project/aurorafs/pkg/routetab"
+	"github.com/gauss-project/aurorafs/pkg/routetab/pb"
 	"github.com/gauss-project/aurorafs/pkg/storage"
 	"github.com/gauss-project/aurorafs/pkg/topology/bootnode"
 	"github.com/gauss-project/aurorafs/pkg/topology/lightnode"
 	"github.com/gauss-project/aurorafs/pkg/tracing"
+	"github.com/gogf/gf/v2/os/gtimer"
 	"github.com/libp2p/go-libp2p"
 	"github.com/libp2p/go-libp2p-core/crypto"
+	"github.com/libp2p/go-libp2p-core/event"
 	"github.com/libp2p/go-libp2p-core/host"
 	"github.com/libp2p/go-libp2p-core/network"
 	libp2ppeer "github.com/libp2p/go-libp2p-core/peer"
@@ -42,7 +42,7 @@ import (
 	nat "github.com/libp2p/go-libp2p-nat"
 	"github.com/libp2p/go-libp2p-peerstore/pstoremem"
 	libp2pquic "github.com/libp2p/go-libp2p-quic-transport"
-	goyamux "github.com/libp2p/go-libp2p-yamux"
+	rcmgr "github.com/libp2p/go-libp2p-resource-manager"
 	"github.com/libp2p/go-libp2p/p2p/host/autonat"
 	basichost "github.com/libp2p/go-libp2p/p2p/host/basic"
 	libp2pping "github.com/libp2p/go-libp2p/p2p/protocol/ping"
@@ -64,11 +64,6 @@ var (
 const (
 	peerUserAgentTimeout = time.Second
 )
-
-func init() {
-	goyamux.DefaultTransport.AcceptBacklog = 1024
-	goyamux.DefaultTransport.MaxIncomingStreams = 5000
-}
 
 type Service struct {
 	ctx               context.Context
@@ -108,6 +103,7 @@ type Options struct {
 	EnableQUIC     bool
 	NodeMode       aurora.Model
 	LightNodeLimit int
+	KadBinMaxPeers int
 	WelcomeMessage string
 	Transaction    []byte
 	hostFactory    func(...libp2p.Option) (host.Host, error)
@@ -184,8 +180,14 @@ func New(ctx context.Context, signer beecrypto.Signer, networkID uint64, overlay
 		)
 	}
 
+	manager, err := rcmgr.NewResourceManager(newLimier(o))
+	if err != nil {
+		return nil, err
+	}
+
 	transports := []libp2p.Option{
 		libp2p.Transport(tcp.NewTCPTransport, tcp.DisableReuseport()),
+		libp2p.ResourceManager(manager),
 	}
 
 	if o.EnableWS {
@@ -291,6 +293,19 @@ func New(ctx context.Context, signer beecrypto.Signer, networkID uint64, overlay
 	}
 
 	peerRegistry.setDisconnecter(s)
+
+	_ = h.Network().ResourceManager().ViewSystem(func(scope network.ResourceScope) error {
+		gtimer.AddSingleton(ctx, time.Second, func(ctx context.Context) {
+			s.metrics.NumConnsOutbound.Set(float64(scope.Stat().NumConnsOutbound))
+			s.metrics.NumConnsInbound.Set(float64(scope.Stat().NumConnsInbound))
+			s.metrics.NumStreamsInbound.Set(float64(scope.Stat().NumStreamsInbound))
+			s.metrics.NumStreamsOutbound.Set(float64(scope.Stat().NumStreamsOutbound))
+			s.metrics.NumFD.Set(float64(scope.Stat().NumFD))
+			s.metrics.Memory.Set(float64(scope.Stat().Memory))
+			s.logger.Tracef("libp2p view system %v", scope.Stat())
+		})
+		return nil
+	})
 
 	// Construct protocols.
 	id := protocol.ID(p2p.NewAuroraStreamName(handshake.ProtocolName, handshake.ProtocolVersion, handshake.StreamName))
