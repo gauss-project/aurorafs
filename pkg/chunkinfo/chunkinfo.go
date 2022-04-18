@@ -505,6 +505,9 @@ func (ci *ChunkInfo) Subscribe(key string, c chan interface{}) {
 func (ci *ChunkInfo) UnSubscribe(key string, ch chan interface{}) {
 	ci.pubSubLk.Lock()
 	defer ci.pubSubLk.Unlock()
+	defer func() {
+		recover()
+	}()
 	if len(ci.pubSub[key]) == 1 {
 		delete(ci.pubSub, key)
 		close(ch)
