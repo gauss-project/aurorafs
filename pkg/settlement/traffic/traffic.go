@@ -867,6 +867,9 @@ func (s *Service) Subscribe(key string, c chan interface{}) {
 func (s *Service) UnSubscribe(key string, ch chan interface{}) {
 	s.pubSubLk.Lock()
 	defer s.pubSubLk.Unlock()
+	defer func() {
+		recover()
+	}()
 	if len(s.pubSub[key]) == 1 {
 		delete(s.pubSub, key)
 		close(ch)
