@@ -820,7 +820,6 @@ func (s *Service) SubscribeHeader() (c <-chan interface{}, unsub func()) {
 	s.Subscribe("header", channel)
 	unsub = func() {
 		s.UnSubscribe("header", channel)
-		close(channel)
 	}
 	return channel, unsub
 }
@@ -835,7 +834,6 @@ func (s *Service) SubscribeTrafficCheque(addresses []common.Address) (c <-chan i
 		for _, address := range addresses {
 			s.UnSubscribe(fmt.Sprintf("TrafficCheque:%s", address.String()), channel)
 		}
-		close(channel)
 	}
 	return channel, unsub
 }
@@ -850,7 +848,6 @@ func (s *Service) SubscribeCashOut(peers []boson.Address) (c <-chan interface{},
 		for _, overlay := range peers {
 			s.UnSubscribe(fmt.Sprintf("CashOut:%s", overlay.String()), channel)
 		}
-		close(channel)
 	}
 	return channel, unsub
 }
