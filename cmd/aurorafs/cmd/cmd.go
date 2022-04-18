@@ -32,6 +32,7 @@ const (
 	optionNameDebugAPIEnable        = "debug-api-enable"
 	optionNameDebugAPIAddr          = "debug-api-addr"
 	optionNameBootnodes             = "bootnode"
+	optionNameChainEndpoint         = "chain-endpoint"
 	optionNameOracleEndpoint        = "oracle-endpoint"
 	optionNameOracleContractAddr    = "oracle-contract-addr"
 	optionNameNetworkID             = "network-id"

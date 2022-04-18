@@ -128,10 +128,6 @@ func (o Options) OracleContractAddress(c *node.Options) {
 	c.OracleContractAddress = o.OracleContract
 }
 
-func (o Options) OracleEndpoint(c *node.Options) {
-	c.OracleEndpoint = o.ChainEndpoint
-}
-
 func (o Options) TrafficEnable(c *node.Options) {
 	c.TrafficEnable = o.EnableFlowStat
 }

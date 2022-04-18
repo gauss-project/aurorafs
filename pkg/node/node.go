@@ -85,7 +85,7 @@ type Options struct {
 	EnableQUIC            bool
 	WelcomeMessage        string
 	Bootnodes             []string
-	OracleEndpoint        string
+	ChainEndpoint         string
 	OracleContractAddress string
 	CORSAllowedOrigins    []string
 	Logger                logging.Logger
@@ -232,7 +232,7 @@ func NewAurora(nodeMode aurora.Model, addr string, bosonAddress boson.Address, p
 	oracleChain, settlement, apiInterface, commonChain, err := InitChain(
 		p2pCtx,
 		logger,
-		o.OracleEndpoint,
+		o.ChainEndpoint,
 		o.OracleContractAddress,
 		stateStore,
 		signer,
