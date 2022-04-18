@@ -290,17 +290,30 @@ func (s *Service) trafficInit() error {
 func (s *Service) replaceTraffic(addressList map[common.Address]Traffic, lastCheques map[common.Address]*chequePkg.Cheque, lastTransCheques map[common.Address]*chequePkg.SignedCheque) error {
 
 	s.trafficPeers.totalPaidOut = new(big.Int).SetInt64(0)
-	for k := range addressList {
-		traffic := s.getTraffic(k)
-		err := s.trafficPeerChainUpdate(traffic, k, s.chainAddress)
-		if err != nil {
-			continue
-		}
-		err = s.trafficPeerChequeUpdate(k, lastCheques, lastTransCheques)
-		if err != nil {
-			s.logger.Errorf("traffic: replaceTraffic %v", err.Error())
-		}
+	workload := make(chan struct{}, 10) // limit goroutine number
+	waitGroup := new(sync.WaitGroup)
+	for key := range addressList {
+		workload <- struct{}{}
+		waitGroup.Add(1)
+		go func(address common.Address, workload chan struct{}, waitGroup *sync.WaitGroup) {
+			defer func() {
+				<-workload
+				waitGroup.Done()
+			}()
+			traffic := s.getTraffic(address)
+			err := s.trafficPeerChainUpdate(traffic, address, s.chainAddress)
+			if err != nil {
+				s.logger.Errorf("traffic: getChainTraffic %v", err.Error())
+				return
+			}
+			err = s.trafficPeerChequeUpdate(address, lastCheques, lastTransCheques)
+			if err != nil {
+				s.logger.Errorf("traffic: replaceTraffic %v", err.Error())
+				return
+			}
+		}(key, workload, waitGroup)
 	}
+	waitGroup.Wait()
 	return nil
 }
 
@@ -309,11 +322,11 @@ func (s *Service) trafficPeerChainUpdate(traffic *Traffic, peerAddress, chainAdd
 	defer traffic.Unlock()
 	transferTotal, err := s.trafficChainService.TransAmount(peerAddress, chainAddress)
 	if err != nil {
-		return nil
+		return err
 	}
 	retrievedTotal, err := s.trafficChainService.TransAmount(chainAddress, peerAddress)
 	if err != nil {
-		return nil
+		return err
 	}
 
 	traffic.retrieveChainTraffic = retrievedTotal
