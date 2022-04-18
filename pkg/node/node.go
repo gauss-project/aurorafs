@@ -374,6 +374,7 @@ func NewAurora(nodeMode aurora.Model, addr string, bosonAddress boson.Address, p
 	retrieve.Config(chunkInfo)
 
 	multiResolver := multiresolver.NewMultiResolver(
+		multiresolver.WithDefaultEndpoint(o.ChainEndpoint),
 		multiresolver.WithConnectionConfigs(o.ResolverConnectionCfgs),
 		multiresolver.WithLogger(o.Logger),
 	)
