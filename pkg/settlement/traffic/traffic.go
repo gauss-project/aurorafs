@@ -290,7 +290,7 @@ func (s *Service) trafficInit() error {
 func (s *Service) replaceTraffic(addressList map[common.Address]Traffic, lastCheques map[common.Address]*chequePkg.Cheque, lastTransCheques map[common.Address]*chequePkg.SignedCheque) error {
 
 	s.trafficPeers.totalPaidOut = new(big.Int).SetInt64(0)
-	workload := make(chan struct{}, 10) // limit goroutine number
+	workload := make(chan struct{}, 50) // limit goroutine number
 	waitGroup := new(sync.WaitGroup)
 	for key := range addressList {
 		workload <- struct{}{}
