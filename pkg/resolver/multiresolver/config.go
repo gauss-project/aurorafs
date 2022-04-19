@@ -33,27 +33,29 @@ func parseConnectionString(cs string) (ConnectionConfig, error) {
 		return true
 	}
 
-	endpoint := cs
 	var tld string
 	var addr string
+	var endpoint string
 
 	// Split TLD and Endpoint strings.
-	if i := strings.Index(endpoint, ":"); i > 0 {
+	if i := strings.Index(cs, ":"); i > 0 {
 		// Make sure not to grab the protocol, as it contains "://"!
 		// Eg. in http://... the "http" is NOT a tld.
-		if isAllUnicodeLetters(endpoint[:i]) && len(endpoint) > i+2 && endpoint[i+1:i+3] != "//" {
-			tld = endpoint[:i]
+		if isAllUnicodeLetters(cs[:i]) && len(cs) > i+2 && cs[i+1:i+3] != "//" {
+			tld = cs[:i]
 			if len(tld) > maxTLDLength {
 				return ConnectionConfig{}, fmt.Errorf("tld %s: %w", tld, ErrTLDTooLong)
 
 			}
-			endpoint = endpoint[i+1:]
+			cs = cs[i+1:]
 		}
 	}
 	// Split the address string.
-	if i := strings.Index(endpoint, "@"); i > 0 {
-		addr = common.HexToAddress(endpoint[:i]).String()
-		endpoint = endpoint[i+1:]
+	if i := strings.Index(cs, "@"); i > 0 {
+		addr = common.HexToAddress(cs[:i]).String()
+		endpoint = cs[i+1:]
+	} else {
+		addr = cs
 	}
 
 	return ConnectionConfig{
