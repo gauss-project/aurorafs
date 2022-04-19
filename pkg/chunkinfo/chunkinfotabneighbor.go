@@ -59,7 +59,6 @@ func (ci *ChunkInfo) initChunkInfoTabNeighbor() error {
 		if err := ci.initChunkPyramid(context.Background(), rootCid); err != nil {
 			return true, err
 		}
-		ci.logger.Infof("init chunkInfo server : %s", rootCid.String())
 		return false, nil
 	}); err != nil {
 		return err
@@ -94,12 +93,12 @@ func (ci *ChunkInfo) updateNeighborChunkInfo(rootCid, cid boson.Address, overlay
 	bv.Set(v)
 	bit := BitVector{B: bv.Bytes(), Len: bv.Len()}
 	if overlay.Equal(ci.addr) {
-		ci.Publish(fmt.Sprintf("%s%s", "down", rootCid.String()), BitVectorInfo{
+		go ci.Publish(fmt.Sprintf("%s%s", "down", rootCid.String()), BitVectorInfo{
 			RootCid:   rootCid,
 			Bitvector: bit,
 		})
 	} else {
-		ci.Publish(fmt.Sprintf("%s%s", "retrieval", rootCid.String()), BitVectorInfo{
+		go ci.Publish(fmt.Sprintf("%s%s", "retrieval", rootCid.String()), BitVectorInfo{
 			RootCid:   rootCid,
 			Overlay:   overlay,
 			Bitvector: bit,
@@ -121,7 +120,7 @@ func (ci *ChunkInfo) putChunkInfoNeighbor(rootCid, overlay boson.Address) error 
 
 	if !ok {
 		if overlay.Equal(ci.addr) {
-			ci.Publish("status", RootCidStatusEven{
+			go ci.Publish("status", RootCidStatusEven{
 				RootCid: rootCid,
 				Status:  RootCid_ADD,
 			})
@@ -230,7 +229,7 @@ func (ci *ChunkInfo) delPresence(rootCid boson.Address) bool {
 
 	delete(ci.ct.presence, rootCid.String())
 	delete(ci.ct.overlays, rootCid.String())
-	ci.Publish("status", RootCidStatusEven{
+	go ci.Publish("status", RootCidStatusEven{
 		RootCid: rootCid,
 		Status:  RootCid_DEL,
 	})
