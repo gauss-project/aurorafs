@@ -90,7 +90,7 @@ type ChunkInfo struct {
 	oracleChain  chain.Resolver
 	cs           *chunkInfoSource
 	pubSubLk     sync.RWMutex
-	pubSub       map[string]chan interface{}
+	pubSub       map[string][]chan interface{}
 }
 
 func New(addr boson.Address, streamer p2p.Streamer, logger logging.Logger, traversal traversal.Traverser, storer storage.StateStorer, route routetab.RouteTab, oracleChain chain.Resolver) *ChunkInfo {
@@ -109,7 +109,7 @@ func New(addr boson.Address, streamer p2p.Streamer, logger logging.Logger, trave
 		traversal:   traversal,
 		oracleChain: oracleChain,
 		cs:          newChunkSource(storer, logger),
-		pubSub:      make(map[string]chan interface{}),
+		pubSub:      make(map[string][]chan interface{}),
 	}
 	chunkinfo.triggerTimeOut()
 	chunkinfo.cleanDiscoverTrigger()
@@ -146,7 +146,7 @@ type BitVectorInfo struct {
 
 func (ci *ChunkInfo) InitChunkInfo() error {
 	ctx := context.Background()
-
+	ci.logger.Infof("start init chunkInfo")
 	if err := ci.chunkPutChanUpdate(ctx, ci.ct, ci.initChunkInfoTabNeighbor).err; err != nil {
 		return err
 	}
@@ -157,6 +157,7 @@ func (ci *ChunkInfo) InitChunkInfo() error {
 	if err := ci.chunkPutChanUpdate(ctx, ci.cs, ci.cs.initChunkInfoSource).err; err != nil {
 		return err
 	}
+	ci.logger.Info("end of init chunkInfo")
 	return nil
 }
 
@@ -466,7 +467,7 @@ func (ci *ChunkInfo) SubscribeDownloadProgress(rootCids []boson.Address) (c <-ch
 	}
 	unsubscribe = func() {
 		for _, rootCid := range rootCids {
-			ci.UnSubscribe(fmt.Sprintf("%s%s", "down", rootCid.String()))
+			ci.UnSubscribe(fmt.Sprintf("%s%s", "down", rootCid.String()), channel)
 		}
 	}
 	return channel, unsubscribe, nil
@@ -476,7 +477,7 @@ func (ci *ChunkInfo) SubscribeRetrievalProgress(rootCid boson.Address) (c <-chan
 	channel := make(chan interface{}, 1)
 	ci.Subscribe(fmt.Sprintf("%s%s", "retrieval", rootCid.String()), channel)
 	unsubscribe = func() {
-		ci.UnSubscribe(fmt.Sprintf("%s%s", "retrieval", rootCid.String()))
+		ci.UnSubscribe(fmt.Sprintf("%s%s", "retrieval", rootCid.String()), channel)
 	}
 	return channel, unsubscribe, nil
 }
@@ -485,7 +486,7 @@ func (ci *ChunkInfo) SubscribeRootCidStatus() (c <-chan interface{}, unsubscribe
 	channel := make(chan interface{}, 1)
 	ci.Subscribe("status", channel)
 	unsubscribe = func() {
-		ci.UnSubscribe("status")
+		ci.UnSubscribe("status", channel)
 	}
 	return channel, unsubscribe
 }
@@ -494,21 +495,42 @@ func (ci *ChunkInfo) Subscribe(key string, c chan interface{}) {
 	ci.pubSubLk.Lock()
 	defer ci.pubSubLk.Unlock()
 	if _, ok := ci.pubSub[key]; !ok {
-		ci.pubSub[key] = c
+		ch := []chan interface{}{c}
+		ci.pubSub[key] = ch
+	} else {
+		ci.pubSub[key] = append(ci.pubSub[key], c)
 	}
 }
 
-func (ci *ChunkInfo) UnSubscribe(key string) {
+func (ci *ChunkInfo) UnSubscribe(key string, ch chan interface{}) {
 	ci.pubSubLk.Lock()
 	defer ci.pubSubLk.Unlock()
-	delete(ci.pubSub, key)
+	defer func() {
+		recover()
+	}()
+	if len(ci.pubSub[key]) == 1 {
+		delete(ci.pubSub, key)
+		close(ch)
+	} else {
+		for i, c := range ci.pubSub[key] {
+			if c == ch {
+				ci.pubSub[key] = append(ci.pubSub[key][:i], ci.pubSub[key][i+1:]...)
+				close(ch)
+			}
+		}
+	}
 }
 
 func (ci *ChunkInfo) Publish(key string, data interface{}) {
 	ci.pubSubLk.RLock()
 	defer ci.pubSubLk.RUnlock()
+	defer func() {
+		recover()
+	}()
 	if c, ok := ci.pubSub[key]; ok {
-		c <- data
+		for _, i := range c {
+			i <- data
+		}
 	}
 }
 

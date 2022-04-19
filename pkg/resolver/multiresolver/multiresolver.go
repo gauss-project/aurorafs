@@ -37,6 +37,8 @@ type MultiResolver struct {
 	resolvers resolverMap
 	logger    logging.Logger
 	cfgs      []ConnectionConfig
+	// DefaultEndpoint will be setup while resolver has empty option.
+	DefaultEndpoint string
 	// ForceDefault will force all names to be resolved by the default
 	// resolution chain, regadless of their TLD.
 	ForceDefault bool
@@ -69,13 +71,22 @@ func NewMultiResolver(opts ...Option) *MultiResolver {
 
 	// Attempt to conect to each resolver using the connection string.
 	for _, c := range mr.cfgs {
-
+		if c.Endpoint == "" {
+			c.Endpoint = mr.DefaultEndpoint
+		}
 		// NOTE: if we want to create a specific client based on the TLD
 		// we can do it here.
 		mr.connectENSClient(c.TLD, c.Address, c.Endpoint)
 	}
 
 	return mr
+}
+
+// WithDefaultEndpoint will set the default chain endpoint.
+func WithDefaultEndpoint(endpoint string) Option {
+	return func(mr *MultiResolver) {
+		mr.DefaultEndpoint = endpoint
+	}
 }
 
 // WithConnectionConfigs will set the initial connection configuration.

@@ -56,7 +56,7 @@ func (chainTraffic *ChainTraffic) RetrievedAddress(address common.Address) ([]co
 }
 
 func (chainTraffic *ChainTraffic) BalanceOf(account common.Address) (*big.Int, error) {
-	ctx, cancel := context.WithTimeout(context.TODO(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.TODO(), 2*time.Second)
 	defer cancel()
 	opts := &bind.CallOpts{Context: ctx}
 	out0, err := chainTraffic.traffic.BalanceOf(opts, account)
@@ -64,7 +64,7 @@ func (chainTraffic *ChainTraffic) BalanceOf(account common.Address) (*big.Int, e
 }
 
 func (chainTraffic *ChainTraffic) RetrievedTotal(arg0 common.Address) (*big.Int, error) {
-	ctx, cancel := context.WithTimeout(context.TODO(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.TODO(), 2*time.Second)
 	defer cancel()
 	opts := &bind.CallOpts{Context: ctx}
 	out0, err := chainTraffic.traffic.RetrievedTotal(opts, arg0)
@@ -72,7 +72,7 @@ func (chainTraffic *ChainTraffic) RetrievedTotal(arg0 common.Address) (*big.Int,
 }
 
 func (chainTraffic *ChainTraffic) TransferredTotal(arg0 common.Address) (*big.Int, error) {
-	ctx, cancel := context.WithTimeout(context.TODO(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.TODO(), 2*time.Second)
 	defer cancel()
 	opts := &bind.CallOpts{Context: ctx}
 	out0, err := chainTraffic.traffic.TransferredTotal(opts, arg0)
@@ -80,7 +80,7 @@ func (chainTraffic *ChainTraffic) TransferredTotal(arg0 common.Address) (*big.In
 }
 
 func (chainTraffic *ChainTraffic) TransAmount(beneficiary, recipient common.Address) (*big.Int, error) {
-	ctx, cancel := context.WithTimeout(context.TODO(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.TODO(), 2*time.Second)
 	defer cancel()
 	opts := &bind.CallOpts{Context: ctx}
 	return chainTraffic.traffic.TransTraffic(opts, beneficiary, recipient)

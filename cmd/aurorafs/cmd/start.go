@@ -106,6 +106,14 @@ func (c *command) initStartCmd() (err error) {
 				logger.Info("Start node mode light.")
 			}
 
+			chainEndpoint := func() string {
+				p := c.config.GetString(optionNameChainEndpoint)
+				if p != "" {
+					return p
+				}
+				return c.config.GetString(optionNameOracleEndpoint)
+			}()
+
 			b, err := node.NewAurora(mode, c.config.GetString(optionNameP2PAddr), signerConfig.address, *signerConfig.publicKey, signerConfig.signer, c.config.GetUint64(optionNameNetworkID), logger, signerConfig.libp2pPrivateKey, node.Options{
 				DataDir:               c.config.GetString(optionNameDataDir),
 				CacheCapacity:         c.config.GetUint64(optionNameCacheCapacity),
@@ -121,7 +129,7 @@ func (c *command) initStartCmd() (err error) {
 				EnableQUIC:            c.config.GetBool(optionNameP2PQUICEnable),
 				WelcomeMessage:        c.config.GetString(optionWelcomeMessage),
 				Bootnodes:             c.config.GetStringSlice(optionNameBootnodes),
-				OracleEndpoint:        c.config.GetString(optionNameOracleEndpoint),
+				ChainEndpoint:         chainEndpoint,
 				OracleContractAddress: c.config.GetString(optionNameOracleContractAddr),
 				CORSAllowedOrigins:    c.config.GetStringSlice(optionCORSAllowedOrigins),
 				Standalone:            c.config.GetBool(optionNameStandalone),

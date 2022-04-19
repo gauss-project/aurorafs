@@ -26,24 +26,24 @@ func TestParseConnectionStrings(t *testing.T) {
 		{
 			desc: "single endpoint default tld",
 			conStrings: []string{
-				"https://example.com",
+				"0xaaaa",
 			},
 			wantCfg: []multiresolver.ConnectionConfig{
 				{
-					TLD:      "",
-					Endpoint: "https://example.com",
+					TLD:     "",
+					Address: "0xaaaa",
 				},
 			},
 		},
 		{
 			desc: "single endpoint explicit tld",
 			conStrings: []string{
-				"tld:https://example.com",
+				"tld:0xaaa",
 			},
 			wantCfg: []multiresolver.ConnectionConfig{
 				{
-					TLD:      "tld",
-					Endpoint: "https://example.com",
+					TLD:     "tld",
+					Address: "0xaaa",
 				},
 			},
 		},
@@ -76,19 +76,19 @@ func TestParseConnectionStrings(t *testing.T) {
 		{
 			desc: "mixed",
 			conStrings: []string{
-				"tld:https://example.com",
+				"tld:0xaaaa",
 				"testdomain:wowzers.map",
 				"yesyesyes:0x314159265dD8dbb310642f98f50C066173C1259b@2.2.2.2",
 				"cloudflare-ethereum.org",
 			},
 			wantCfg: []multiresolver.ConnectionConfig{
 				{
-					TLD:      "tld",
-					Endpoint: "https://example.com",
+					TLD:     "tld",
+					Address: "0xaaaa",
 				},
 				{
-					TLD:      "testdomain",
-					Endpoint: "wowzers.map",
+					TLD:     "testdomain",
+					Address: "wowzers.map",
 				},
 				{
 					TLD:      "yesyesyes",
@@ -96,8 +96,8 @@ func TestParseConnectionStrings(t *testing.T) {
 					Endpoint: "2.2.2.2",
 				},
 				{
-					TLD:      "",
-					Endpoint: "cloudflare-ethereum.org",
+					TLD:     "",
+					Address: "cloudflare-ethereum.org",
 				},
 			},
 		},
