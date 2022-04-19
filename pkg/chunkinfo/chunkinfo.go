@@ -524,6 +524,9 @@ func (ci *ChunkInfo) UnSubscribe(key string, ch chan interface{}) {
 func (ci *ChunkInfo) Publish(key string, data interface{}) {
 	ci.pubSubLk.RLock()
 	defer ci.pubSubLk.RUnlock()
+	defer func() {
+		recover()
+	}()
 	if c, ok := ci.pubSub[key]; ok {
 		for _, i := range c {
 			i <- data

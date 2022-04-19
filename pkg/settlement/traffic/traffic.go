@@ -899,6 +899,9 @@ func (s *Service) UnSubscribe(key string, ch chan interface{}) {
 func (s *Service) Publish(key string, data interface{}) {
 	s.pubSubLk.RLock()
 	defer s.pubSubLk.RUnlock()
+	defer func() {
+		recover()
+	}()
 	if c, ok := s.pubSub[key]; ok {
 		for _, i := range c {
 			i <- data
