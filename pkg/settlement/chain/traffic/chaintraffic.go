@@ -91,12 +91,15 @@ func (chainTraffic *ChainTraffic) CashChequeBeneficiary(ctx context.Context, ben
 	if err != nil {
 		return nil, err
 	}
-
-	gasPrice, err := chainTraffic.backend.SuggestGasPrice(ctx)
+	ctx1, cancel1 := context.WithTimeout(ctx, 2*time.Second)
+	defer cancel1()
+	gasPrice, err := chainTraffic.backend.SuggestGasPrice(ctx1)
 	if err != nil {
 		return nil, err
 	}
 
+	ctx2, cancel2 := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel2()
 	opts := &bind.TransactOpts{
 		From: beneficiary,
 		Signer: func(address common.Address, tx *types.Transaction) (*types.Transaction, error) {
@@ -107,7 +110,7 @@ func (chainTraffic *ChainTraffic) CashChequeBeneficiary(ctx context.Context, ben
 		},
 		GasLimit: 1000000,
 		GasPrice: gasPrice,
-		Context:  ctx,
+		Context:  ctx2,
 		Nonce:    new(big.Int).SetUint64(nonce),
 	}
 	return chainTraffic.traffic.CashChequeBeneficiary(opts, beneficiary, recipient, cumulativePayout, signature)
