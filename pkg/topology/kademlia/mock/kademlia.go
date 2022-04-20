@@ -50,6 +50,11 @@ type Mock struct {
 	trigMtx      sync.Mutex
 }
 
+func (m *Mock) RefreshProtectPeer(peer []boson.Address) {
+	// TODO implement me
+	panic("implement me")
+}
+
 func NewMockKademlia(o ...Option) *Mock {
 	m := &Mock{}
 	for _, v := range o {

@@ -24,6 +24,11 @@ type mock struct {
 	mtx             sync.Mutex
 }
 
+func (d *mock) RefreshProtectPeer(peer []boson.Address) {
+	// TODO implement me
+	panic("implement me")
+}
+
 func WithPeers(peers ...boson.Address) Option {
 	return optionFunc(func(d *mock) {
 		d.peers = peers

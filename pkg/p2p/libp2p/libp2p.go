@@ -13,11 +13,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/gauss-project/aurorafs/pkg/p2p/libp2p/internal/reacher"
-	"github.com/gauss-project/aurorafs/pkg/routetab"
-	"github.com/gauss-project/aurorafs/pkg/routetab/pb"
-	"github.com/libp2p/go-libp2p-core/event"
-
 	au "github.com/gauss-project/aurorafs"
 	"github.com/gauss-project/aurorafs/pkg/addressbook"
 	"github.com/gauss-project/aurorafs/pkg/aurora"
@@ -28,12 +23,17 @@ import (
 	"github.com/gauss-project/aurorafs/pkg/p2p/libp2p/internal/blocklist"
 	"github.com/gauss-project/aurorafs/pkg/p2p/libp2p/internal/breaker"
 	"github.com/gauss-project/aurorafs/pkg/p2p/libp2p/internal/handshake"
+	"github.com/gauss-project/aurorafs/pkg/p2p/libp2p/internal/reacher"
+	"github.com/gauss-project/aurorafs/pkg/routetab"
+	"github.com/gauss-project/aurorafs/pkg/routetab/pb"
 	"github.com/gauss-project/aurorafs/pkg/storage"
 	"github.com/gauss-project/aurorafs/pkg/topology/bootnode"
 	"github.com/gauss-project/aurorafs/pkg/topology/lightnode"
 	"github.com/gauss-project/aurorafs/pkg/tracing"
+	"github.com/gogf/gf/v2/os/gtimer"
 	"github.com/libp2p/go-libp2p"
 	"github.com/libp2p/go-libp2p-core/crypto"
+	"github.com/libp2p/go-libp2p-core/event"
 	"github.com/libp2p/go-libp2p-core/host"
 	"github.com/libp2p/go-libp2p-core/network"
 	libp2ppeer "github.com/libp2p/go-libp2p-core/peer"
@@ -42,7 +42,7 @@ import (
 	nat "github.com/libp2p/go-libp2p-nat"
 	"github.com/libp2p/go-libp2p-peerstore/pstoremem"
 	libp2pquic "github.com/libp2p/go-libp2p-quic-transport"
-	goyamux "github.com/libp2p/go-libp2p-yamux"
+	rcmgr "github.com/libp2p/go-libp2p-resource-manager"
 	"github.com/libp2p/go-libp2p/p2p/host/autonat"
 	basichost "github.com/libp2p/go-libp2p/p2p/host/basic"
 	libp2pping "github.com/libp2p/go-libp2p/p2p/protocol/ping"
@@ -64,11 +64,6 @@ var (
 const (
 	peerUserAgentTimeout = time.Second
 )
-
-func init() {
-	goyamux.DefaultTransport.AcceptBacklog = 1024
-	goyamux.DefaultTransport.MaxIncomingStreams = 5000
-}
 
 type Service struct {
 	ctx               context.Context
@@ -108,6 +103,7 @@ type Options struct {
 	EnableQUIC     bool
 	NodeMode       aurora.Model
 	LightNodeLimit int
+	KadBinMaxPeers int
 	WelcomeMessage string
 	Transaction    []byte
 	hostFactory    func(...libp2p.Option) (host.Host, error)
@@ -184,8 +180,14 @@ func New(ctx context.Context, signer beecrypto.Signer, networkID uint64, overlay
 		)
 	}
 
+	manager, err := rcmgr.NewResourceManager(newLimier(o))
+	if err != nil {
+		return nil, err
+	}
+
 	transports := []libp2p.Option{
 		libp2p.Transport(tcp.NewTCPTransport, tcp.DisableReuseport()),
+		libp2p.ResourceManager(manager),
 	}
 
 	if o.EnableWS {
@@ -291,6 +293,19 @@ func New(ctx context.Context, signer beecrypto.Signer, networkID uint64, overlay
 	}
 
 	peerRegistry.setDisconnecter(s)
+
+	_ = h.Network().ResourceManager().ViewSystem(func(scope network.ResourceScope) error {
+		gtimer.AddSingleton(ctx, time.Second, func(ctx context.Context) {
+			s.metrics.NumConnsOutbound.Set(float64(scope.Stat().NumConnsOutbound))
+			s.metrics.NumConnsInbound.Set(float64(scope.Stat().NumConnsInbound))
+			s.metrics.NumStreamsInbound.Set(float64(scope.Stat().NumStreamsInbound))
+			s.metrics.NumStreamsOutbound.Set(float64(scope.Stat().NumStreamsOutbound))
+			s.metrics.NumFD.Set(float64(scope.Stat().NumFD))
+			s.metrics.Memory.Set(float64(scope.Stat().Memory))
+			s.logger.Tracef("libp2p view system %v", scope.Stat())
+		})
+		return nil
+	})
 
 	// Construct protocols.
 	id := protocol.ID(p2p.NewAuroraStreamName(handshake.ProtocolName, handshake.ProtocolVersion, handshake.StreamName))
@@ -402,12 +417,6 @@ func (s *Service) handleIncoming(stream network.Stream) {
 	}
 
 	if s.notifier != nil {
-		s.notifier.NotifyPeerState(p2p.PeerInfo{
-			Overlay: peer.Address,
-			Mode:    peer.Mode.Bv.Bytes(),
-			State:   p2p.PeerStateConnectIn,
-		})
-
 		if !i.NodeMode.IsFull() && s.lightNodes != nil {
 			s.lightNodes.Connected(s.ctx, peer)
 			// light node announces explicitly
@@ -433,7 +442,7 @@ func (s *Service) handleIncoming(stream network.Stream) {
 			if i.NodeMode.IsBootNode() && s.bootNodes != nil {
 				s.bootNodes.Connected(s.ctx, peer)
 			} else {
-				if err := s.notifier.Connected(s.ctx, peer, false); err != nil {
+				if err = s.notifier.Connected(s.ctx, peer, false); err != nil {
 					s.logger.Debugf("stream handler: notifier.Connected: peer disconnected: %s: %v", i.Address.Overlay, err)
 					// note: this cannot be unit tested since the node
 					// waiting on handshakeStream.FullClose() on the other side
@@ -444,7 +453,7 @@ func (s *Service) handleIncoming(stream network.Stream) {
 					// interface, in addition to the possibility of deciding whether
 					// a peer connection is wanted prior to adding the peer to the
 					// peer registry and starting the protocols.
-					_ = s.Disconnect(overlay, "unable to signal connection notifier")
+					_ = s.Disconnect(overlay, fmt.Sprintf("unable to signal connection notifier %s", err))
 					return
 				}
 				// when a full node connects, we gossip about it to the
@@ -460,6 +469,11 @@ func (s *Service) handleIncoming(stream network.Stream) {
 				})
 			}
 		}
+		s.notifier.NotifyPeerState(p2p.PeerInfo{
+			Overlay: peer.Address,
+			Mode:    peer.Mode.Bv.Bytes(),
+			State:   p2p.PeerStateConnectIn,
+		})
 	}
 
 	s.metrics.HandledStreamCount.Inc()
@@ -800,7 +814,7 @@ func (s *Service) Connect(ctx context.Context, addr ma.Multiaddr) (peer *p2p.Pee
 		if tn.ConnectOut != nil {
 			if err := tn.ConnectOut(ctx, p2p.Peer{Address: overlay, Mode: i.NodeMode}); err != nil {
 				s.logger.Debugf("connectOut: protocol: %s, version:%s, peer: %s: %v", tn.Name, tn.Version, overlay, err)
-				_ = s.Disconnect(overlay, "failed to process outbound connection notifier")
+				_ = s.Disconnect(overlay, fmt.Sprintf("failed to process outbound connection notifier %s", err))
 				s.protocolsmu.RUnlock()
 				return nil, fmt.Errorf("connectOut: protocol: %s, version:%s: %w", tn.Name, tn.Version, err)
 			}
@@ -902,6 +916,14 @@ func (s *Service) disconnected(peer p2p.Peer) {
 
 func (s *Service) Peers() []p2p.Peer {
 	return s.peers.peers()
+}
+
+func (s *Service) PeerID(overlay boson.Address) (id libp2ppeer.ID, found bool) {
+	return s.peers.peerID(overlay)
+}
+
+func (s *Service) ResourceManager() network.ResourceManager {
+	return s.host.Network().ResourceManager()
 }
 
 func (s *Service) CallHandler(ctx context.Context, last p2p.Peer, stream p2p.Stream) (relayData *pb.RouteRelayReq, w p2p.WriterChan, r p2p.ReaderChan, forward bool, err error) {

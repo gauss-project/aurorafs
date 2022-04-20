@@ -8,6 +8,8 @@ import (
 
 	"github.com/gauss-project/aurorafs/pkg/aurora"
 	"github.com/gauss-project/aurorafs/pkg/routetab/pb"
+	"github.com/libp2p/go-libp2p-core/network"
+	libp2ppeer "github.com/libp2p/go-libp2p-core/peer"
 
 	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/p2p"
@@ -143,6 +145,15 @@ func (s *Service) Peers() []p2p.Peer {
 		return nil
 	}
 	return s.peersFunc()
+}
+
+func (s *Service) PeerID(overlay boson.Address) (id libp2ppeer.ID, found bool) {
+	return
+}
+
+func (s *Service) ResourceManager() network.ResourceManager {
+	// TODO implement me
+	panic("implement me")
 }
 
 func (s *Service) BlocklistedPeers() ([]p2p.BlockPeers, error) {

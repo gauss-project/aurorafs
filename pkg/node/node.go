@@ -223,6 +223,7 @@ func NewAurora(nodeMode aurora.Model, addr string, bosonAddress boson.Address, p
 		WelcomeMessage: o.WelcomeMessage,
 		NodeMode:       nodeMode,
 		LightNodeLimit: o.LightNodeMaxPeers,
+		KadBinMaxPeers: o.KadBinMaxPeers,
 	})
 
 	if err != nil {

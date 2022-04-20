@@ -26,6 +26,7 @@ import (
 	"github.com/gauss-project/aurorafs/pkg/topology/kademlia/internal/waitnext"
 	"github.com/gauss-project/aurorafs/pkg/topology/model"
 	"github.com/gauss-project/aurorafs/pkg/topology/pslice"
+	"github.com/libp2p/go-libp2p-core/network"
 	ma "github.com/multiformats/go-multiaddr"
 	"golang.org/x/sync/errgroup"
 )
@@ -123,6 +124,8 @@ type Kad struct {
 	blocker           *blocker.Blocker
 	reachability      p2p.ReachabilityStatus
 	peerFilter        peerFilterFunc
+	protectPeers      []boson.Address
+	protectMix        sync.RWMutex
 }
 
 // New returns a new Kademlia.
@@ -137,24 +140,24 @@ func New(
 	logger logging.Logger,
 	o Options,
 ) (*Kad, error) {
-	if o.SaturationFunc == nil {
-		if o.BinMaxPeers > 0 {
-			if o.BinMaxPeers < 5 {
-				o.BinMaxPeers = 5
-			}
-			if o.BinMaxPeers%5 == 0 {
-				overSaturationPeers = o.BinMaxPeers
-			} else {
-				overSaturationPeers = o.BinMaxPeers - o.BinMaxPeers%5 + 5
-			}
-			saturationPeers = overSaturationPeers / 5 * 2
-			quickSaturationPeers = overSaturationPeers / 5
+	if o.BinMaxPeers > 0 {
+		if o.BinMaxPeers < 5 {
+			o.BinMaxPeers = 5
 		}
+		if o.BinMaxPeers%5 == 0 {
+			overSaturationPeers = o.BinMaxPeers
+		} else {
+			overSaturationPeers = o.BinMaxPeers - o.BinMaxPeers%5 + 5
+		}
+		saturationPeers = overSaturationPeers / 5 * 2
+		quickSaturationPeers = overSaturationPeers / 5
+	}
+	os := overSaturationPeers
+	if o.NodeMode.IsBootNode() && os < bootNodeOverSaturationPeers {
+		os = bootNodeOverSaturationPeers
+	}
 
-		os := overSaturationPeers
-		if o.NodeMode.IsBootNode() {
-			os = bootNodeOverSaturationPeers
-		}
+	if o.SaturationFunc == nil {
 		o.SaturationFunc = binSaturated(os, isStaticPeer(o.StaticNodes))
 	}
 	if o.BitSuffixLength == 0 {
@@ -640,14 +643,16 @@ func (k *Kad) pruneOversaturatedBins(depth uint8) {
 			return
 		}
 
+		over := overSaturationPeers + quickSaturationPeers // overSaturation +20%
+
 		binPeersCount := k.connectedPeers.BinSize(uint8(i))
-		if binPeersCount < overSaturationPeers {
+		if binPeersCount <= over {
 			continue
 		}
 
 		binPeers := k.connectedPeers.BinPeers(uint8(i))
 
-		peersToRemove := binPeersCount - overSaturationPeers
+		peersToRemove := binPeersCount - over
 
 		for j := 0; peersToRemove > 0 && j < len(k.commonBinPrefixes[i]); j++ {
 
@@ -658,24 +663,38 @@ func (k *Kad) pruneOversaturatedBins(depth uint8) {
 				continue
 			}
 
-			var smallestDuration time.Duration
-			var newestPeer boson.Address
 			for _, peer := range peers {
+				if k.IsProtectPeer(peer) {
+					continue
+				}
 				ss := k.collector.Inspect(peer)
 				if ss == nil {
 					continue
 				}
-				duration := ss.SessionConnectionDuration
-				if smallestDuration == 0 || duration < smallestDuration {
-					smallestDuration = duration
-					newestPeer = peer
+				if ss.SessionConnectionDirection == model.PeerConnectionDirectionOutbound {
+					continue
+				}
+
+				peerID, found := k.p2p.PeerID(peer)
+				if found {
+					var delOK bool
+					_ = k.p2p.ResourceManager().ViewPeer(peerID, func(scope network.PeerScope) error {
+						if scope.Stat().NumStreamsInbound+scope.Stat().NumStreamsOutbound <= 0 {
+							err := k.p2p.Disconnect(peer, "pruned from oversaturated bin")
+							if err != nil {
+								k.logger.Debugf("prune disconnect fail %v", err)
+							} else {
+								delOK = true
+							}
+						}
+						return nil
+					})
+					if delOK {
+						peersToRemove--
+						break
+					}
 				}
 			}
-			err := k.p2p.Disconnect(newestPeer, "pruned from oversaturated bin")
-			if err != nil {
-				k.logger.Debugf("prune disconnect fail %v", err)
-			}
-			peersToRemove--
 		}
 	}
 }
@@ -768,8 +787,7 @@ func (k *Kad) connectBootNodes(ctx context.Context) {
 		if attempts >= totalAttempts || connected >= 3 {
 			return
 		}
-
-		if _, err := p2p.Discover(ctx, addr, func(addr ma.Multiaddr) (stop bool, err error) {
+		_, err := p2p.Discover(ctx, addr, func(addr ma.Multiaddr) (stop bool, err error) {
 			k.logger.Tracef("connecting to bootnode %s", addr)
 			if attempts >= maxBootNodeAttempts {
 				return true, nil
@@ -796,9 +814,12 @@ func (k *Kad) connectBootNodes(ctx context.Context) {
 
 			// connect to max 3 bootnodes
 			return connected >= 3, nil
-		}); err != nil && !errors.Is(err, context.Canceled) {
-			k.logger.Warningf("discover to bootnode fail %s: %v", addr, err)
+		})
+		if errors.Is(err, context.Canceled) {
 			return
+		}
+		if err != nil {
+			k.logger.Warningf("discover to bootnode fail %s: %v", addr, err)
 		}
 	}
 }
@@ -1046,7 +1067,7 @@ func (k *Kad) Outbound(peer p2p.Peer) {
 	})
 
 	k.metrics.TotalOutboundConnections.Inc()
-	k.collector.Record(peer.Address, im.PeerLogIn(time.Now(), im.PeerConnectionDirectionOutbound))
+	k.collector.Record(peer.Address, im.PeerLogIn(time.Now(), model.PeerConnectionDirectionOutbound))
 
 	k.waitNext.Remove(peer.Address)
 
@@ -1075,6 +1096,11 @@ func (k *Kad) Pick(peer p2p.Peer) bool {
 		// at least until we find a better solution.
 		return true
 	}
+
+	if k.IsProtectPeer(peer.Address) {
+		return true
+	}
+
 	po := boson.Proximity(k.base.Bytes(), peer.Address.Bytes())
 	_, oversaturated := k.saturationFunc(po, k.knownPeers, k.connectedPeers, k.peerFilter)
 	// pick the peer if we are not oversaturated
@@ -1092,16 +1118,18 @@ func (k *Kad) Connected(ctx context.Context, peer p2p.Peer, forceConnection bool
 	po := boson.Proximity(k.base.Bytes(), address.Bytes())
 
 	if _, overSaturated := k.saturationFunc(po, k.knownPeers, k.connectedPeers, k.peerFilter); overSaturated {
-		if k.nodeMode.IsBootNode() {
-			randPeer, err := k.randomPeer(po)
-			if err != nil {
-				return err
+		if !k.IsProtectPeer(peer.Address) {
+			if k.nodeMode.IsBootNode() {
+				randPeer, err := k.randomPeer(po)
+				if err != nil {
+					return err
+				}
+				_ = k.p2p.Disconnect(randPeer, "kicking out random peer to accommodate node")
+				return k.onConnected(ctx, peer)
 			}
-			_ = k.p2p.Disconnect(randPeer, "kicking out random peer to accommodate node")
-			return k.onConnected(ctx, peer)
-		}
-		if !forceConnection {
-			return topology.ErrOversaturated
+			if !forceConnection {
+				return topology.ErrOversaturated
+			}
 		}
 	}
 
@@ -1118,7 +1146,7 @@ func (k *Kad) onConnected(ctx context.Context, peer p2p.Peer) error {
 	k.connectedPeers.Add(addr)
 
 	k.metrics.TotalInboundConnections.Inc()
-	k.collector.Record(addr, im.PeerLogIn(time.Now(), im.PeerConnectionDirectionInbound))
+	k.collector.Record(addr, im.PeerLogIn(time.Now(), model.PeerConnectionDirectionInbound))
 
 	k.waitNext.Remove(addr)
 
@@ -1476,6 +1504,24 @@ func (k *Kad) NeighborhoodDepth() uint8 {
 	defer k.depthMu.RUnlock()
 
 	return k.depth
+}
+
+func (k *Kad) RefreshProtectPeer(peer []boson.Address) {
+	k.protectMix.Lock()
+	defer k.protectMix.Unlock()
+	k.protectPeers = peer
+}
+
+func (k *Kad) IsProtectPeer(peer boson.Address) bool {
+	k.protectMix.RLock()
+	list := k.protectPeers
+	k.protectMix.RUnlock()
+	for _, v := range list {
+		if v.Equal(peer) {
+			return true
+		}
+	}
+	return false
 }
 
 // IsBalanced returns if Kademlia is balanced to bin.

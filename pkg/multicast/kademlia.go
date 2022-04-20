@@ -215,6 +215,7 @@ func (s *Service) Start() {
 					return true
 				})
 				wg.Wait()
+				s.refreshProtectPeers()
 				ticker.Reset(keepPingInterval)
 			}
 		}
@@ -229,6 +230,17 @@ func (s *Service) Start() {
 func (s *Service) Close() error {
 	close(s.close)
 	return nil
+}
+
+func (s *Service) refreshProtectPeers() {
+	var list []boson.Address
+	s.groups.Range(func(key, value interface{}) bool {
+		g := value.(*Group)
+		list = append(list, g.connectedPeers.BinPeers(0)...)
+		list = append(list, g.keepPeers.BinPeers(0)...)
+		return true
+	})
+	s.kad.RefreshProtectPeer(list)
 }
 
 func (s *Service) connectedAddToGroup(gid boson.Address, peers ...boson.Address) {
@@ -559,6 +571,7 @@ func (s *Service) SubscribeMulticastMsg(gid boson.Address) (c <-chan Message, un
 }
 
 func (s *Service) AddGroup(groups []model.ConfigNodeGroup) error {
+	defer s.refreshProtectPeers()
 	for _, optionGroup := range groups {
 		if optionGroup.Name == "" {
 			continue
@@ -585,6 +598,7 @@ func (s *Service) AddGroup(groups []model.ConfigNodeGroup) error {
 }
 
 func (s *Service) RemoveGroup(gid boson.Address, gType model.GType) error {
+	defer s.refreshProtectPeers()
 	switch gType {
 	case model.GTypeObserve:
 		return s.observeGroupCancel(gid)

@@ -37,6 +37,11 @@ type Driver interface {
 	Outbound(peer p2p.Peer)
 	NotifyPeerState(peer p2p.PeerInfo)
 	EachKnownPeerer
+	ProtectPeer
+}
+
+type ProtectPeer interface {
+	RefreshProtectPeer(peer []boson.Address)
 }
 
 type PeerAdder interface {

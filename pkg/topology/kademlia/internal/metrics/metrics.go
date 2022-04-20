@@ -18,11 +18,6 @@ import (
 
 const ewmaSmoothing = 0.1
 
-const (
-	PeerConnectionDirectionInbound  model.PeerConnectionDirection = "inbound"
-	PeerConnectionDirectionOutbound model.PeerConnectionDirection = "outbound"
-)
-
 // RecordOp is a definition of a peer metrics Record
 // operation whose execution modifies a specific metrics.
 type RecordOp func(*Counters)

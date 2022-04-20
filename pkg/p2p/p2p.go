@@ -12,6 +12,7 @@ import (
 	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/routetab/pb"
 	"github.com/libp2p/go-libp2p-core/network"
+	libp2ppeer "github.com/libp2p/go-libp2p-core/peer"
 	ma "github.com/multiformats/go-multiaddr"
 )
 
@@ -36,6 +37,8 @@ type Service interface {
 	Connect
 	Disconnecter
 	Peers() []Peer
+	PeerID(overlay boson.Address) (id libp2ppeer.ID, found bool)
+	ResourceManager() network.ResourceManager
 	BlocklistedPeers() ([]BlockPeers, error)
 	BlocklistRemove(overlay boson.Address) error
 	Addresses() ([]ma.Multiaddr, error)
