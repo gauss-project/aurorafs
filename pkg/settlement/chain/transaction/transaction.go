@@ -174,6 +174,8 @@ func (t *transactionService) nonceKey() string {
 }
 
 func (t *transactionService) NextNonce(ctx context.Context) (uint64, error) {
+	ctx, cance := context.WithTimeout(ctx, 2*time.Second)
+	defer cance()
 	onchainNonce, err := t.backend.PendingNonceAt(ctx, t.sender)
 	if err != nil {
 		return 0, err
