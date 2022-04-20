@@ -76,7 +76,7 @@ func (s *server) trafficCheques(w http.ResponseWriter, r *http.Request) {
 	}
 
 	sort.Slice(chequeList, func(i, j int) bool {
-		return chequeList[i].Total.Cmp(chequeList[j].Total) > 0
+		return chequeList[i].UnCashed.Cmp(chequeList[j].UnCashed) > 0
 	})
 	jsonhttp.OK(w, chequeList)
 }
