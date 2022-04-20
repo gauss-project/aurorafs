@@ -730,12 +730,12 @@ func TestBootnodeMaxConnections(t *testing.T) {
 	defer func(p int) {
 		*kademlia.BootnodeOverSaturationPeers = p
 	}(*kademlia.BootnodeOverSaturationPeers)
-	*kademlia.BootnodeOverSaturationPeers = 4
+	*kademlia.BootnodeOverSaturationPeers = 21
 
 	defer func(p int) {
 		*kademlia.SaturationPeers = p
 	}(*kademlia.SaturationPeers)
-	*kademlia.SaturationPeers = 4
+	*kademlia.SaturationPeers = 21
 
 	var (
 		conns                    int32 // how many connect calls were made to the p2p mock
@@ -1366,6 +1366,7 @@ func TestStart(t *testing.T) {
 }
 
 func TestOutofDepthPrune(t *testing.T) {
+	t.Skip("need redesign saturation prune")
 
 	defer func(p int) {
 		*kademlia.SaturationPeers = p
@@ -1528,7 +1529,7 @@ func TestBootnodeProtectedNodes(t *testing.T) {
 		*kademlia.LowWaterMark = c
 		*kademlia.QuickSaturationPeers = d
 	}(*kademlia.BootnodeOverSaturationPeers, *kademlia.SaturationPeers, *kademlia.LowWaterMark, *kademlia.QuickSaturationPeers)
-	*kademlia.BootnodeOverSaturationPeers = 1
+	*kademlia.BootnodeOverSaturationPeers = 20
 	*kademlia.SaturationPeers = 1
 	*kademlia.LowWaterMark = 0
 	*kademlia.QuickSaturationPeers = 1
@@ -1582,7 +1583,7 @@ func TestBootnodeProtectedNodes(t *testing.T) {
 	}
 	for k := 0; k < 5; k++ {
 		// further connections should succeed outside of depth
-		for l := 0; l < 3; l++ {
+		for l := 0; l < 30; l++ {
 			addr := test.RandomAddressAt(base, k)
 			// if error is not as specified, connectOne goes fatal
 			connectOne(t, signer, kad, ab, addr, nil)
@@ -1594,7 +1595,7 @@ func TestBootnodeProtectedNodes(t *testing.T) {
 	// nodes are still present
 	sizes = binSizes(kad)
 	for k := 0; k < 5; k++ {
-		if sizes[k] != 2 {
+		if sizes[k] != 21 {
 			t.Fatalf("invalid bin size expected 2 found %d", sizes[k])
 		}
 	}

@@ -417,12 +417,6 @@ func (s *Service) handleIncoming(stream network.Stream) {
 	}
 
 	if s.notifier != nil {
-		s.notifier.NotifyPeerState(p2p.PeerInfo{
-			Overlay: peer.Address,
-			Mode:    peer.Mode.Bv.Bytes(),
-			State:   p2p.PeerStateConnectIn,
-		})
-
 		if !i.NodeMode.IsFull() && s.lightNodes != nil {
 			s.lightNodes.Connected(s.ctx, peer)
 			// light node announces explicitly
@@ -448,7 +442,7 @@ func (s *Service) handleIncoming(stream network.Stream) {
 			if i.NodeMode.IsBootNode() && s.bootNodes != nil {
 				s.bootNodes.Connected(s.ctx, peer)
 			} else {
-				if err := s.notifier.Connected(s.ctx, peer, false); err != nil {
+				if err = s.notifier.Connected(s.ctx, peer, false); err != nil {
 					s.logger.Debugf("stream handler: notifier.Connected: peer disconnected: %s: %v", i.Address.Overlay, err)
 					// note: this cannot be unit tested since the node
 					// waiting on handshakeStream.FullClose() on the other side
@@ -459,7 +453,7 @@ func (s *Service) handleIncoming(stream network.Stream) {
 					// interface, in addition to the possibility of deciding whether
 					// a peer connection is wanted prior to adding the peer to the
 					// peer registry and starting the protocols.
-					_ = s.Disconnect(overlay, "unable to signal connection notifier")
+					_ = s.Disconnect(overlay, fmt.Sprintf("unable to signal connection notifier %s", err))
 					return
 				}
 				// when a full node connects, we gossip about it to the
@@ -475,6 +469,11 @@ func (s *Service) handleIncoming(stream network.Stream) {
 				})
 			}
 		}
+		s.notifier.NotifyPeerState(p2p.PeerInfo{
+			Overlay: peer.Address,
+			Mode:    peer.Mode.Bv.Bytes(),
+			State:   p2p.PeerStateConnectIn,
+		})
 	}
 
 	s.metrics.HandledStreamCount.Inc()
@@ -815,7 +814,7 @@ func (s *Service) Connect(ctx context.Context, addr ma.Multiaddr) (peer *p2p.Pee
 		if tn.ConnectOut != nil {
 			if err := tn.ConnectOut(ctx, p2p.Peer{Address: overlay, Mode: i.NodeMode}); err != nil {
 				s.logger.Debugf("connectOut: protocol: %s, version:%s, peer: %s: %v", tn.Name, tn.Version, overlay, err)
-				_ = s.Disconnect(overlay, "failed to process outbound connection notifier")
+				_ = s.Disconnect(overlay, fmt.Sprintf("failed to process outbound connection notifier %s", err))
 				s.protocolsmu.RUnlock()
 				return nil, fmt.Errorf("connectOut: protocol: %s, version:%s: %w", tn.Name, tn.Version, err)
 			}
@@ -917,6 +916,14 @@ func (s *Service) disconnected(peer p2p.Peer) {
 
 func (s *Service) Peers() []p2p.Peer {
 	return s.peers.peers()
+}
+
+func (s *Service) PeerID(overlay boson.Address) (id libp2ppeer.ID, found bool) {
+	return s.peers.peerID(overlay)
+}
+
+func (s *Service) ResourceManager() network.ResourceManager {
+	return s.host.Network().ResourceManager()
 }
 
 func (s *Service) CallHandler(ctx context.Context, last p2p.Peer, stream p2p.Stream) (relayData *pb.RouteRelayReq, w p2p.WriterChan, r p2p.ReaderChan, forward bool, err error) {

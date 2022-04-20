@@ -60,12 +60,12 @@ func TestPeerMetricsCollector(t *testing.T) {
 	}
 
 	// Login.
-	mc.Record(addr, metrics.PeerLogIn(t1, metrics.PeerConnectionDirectionInbound))
+	mc.Record(addr, metrics.PeerLogIn(t1, model.PeerConnectionDirectionInbound))
 	ss = snapshot(t, mc, t2, addr)
 	if have, want := ss.LastSeenTimestamp, t1.UnixNano(); have != want {
 		t.Fatalf("Snapshot(%q, ...): last seen counter mismatch: have %d; want %d", addr, have, want)
 	}
-	if have, want := ss.SessionConnectionDirection, metrics.PeerConnectionDirectionInbound; have != want {
+	if have, want := ss.SessionConnectionDirection, model.PeerConnectionDirectionInbound; have != want {
 		t.Fatalf("Snapshot(%q, ...): session connection direction counter mismatch: have %q; want %q", addr, have, want)
 	}
 	if have, want := ss.SessionConnectionDuration, t2.Sub(t1); have != want {
@@ -76,12 +76,12 @@ func TestPeerMetricsCollector(t *testing.T) {
 	}
 
 	// Login when already logged in.
-	mc.Record(addr, metrics.PeerLogIn(t1.Add(1*time.Second), metrics.PeerConnectionDirectionOutbound))
+	mc.Record(addr, metrics.PeerLogIn(t1.Add(1*time.Second), model.PeerConnectionDirectionOutbound))
 	ss = snapshot(t, mc, t2, addr)
 	if have, want := ss.LastSeenTimestamp, t1.UnixNano(); have != want {
 		t.Fatalf("Snapshot(%q, ...): last seen counter mismatch: have %d; want %d", addr, have, want)
 	}
-	if have, want := ss.SessionConnectionDirection, metrics.PeerConnectionDirectionInbound; have != want {
+	if have, want := ss.SessionConnectionDirection, model.PeerConnectionDirectionInbound; have != want {
 		t.Fatalf("Snapshot(%q, ...): session connection direction counter mismatch: have %q; want %q", addr, have, want)
 	}
 	if have, want := ss.SessionConnectionDuration, t2.Sub(t1); have != want {
@@ -150,7 +150,7 @@ func TestPeerMetricsCollector(t *testing.T) {
 	}
 
 	// Finalize.
-	mc.Record(addr, metrics.PeerLogIn(t1, metrics.PeerConnectionDirectionInbound))
+	mc.Record(addr, metrics.PeerLogIn(t1, model.PeerConnectionDirectionInbound))
 	if err := mc.Finalize(t3, true); err != nil {
 		t.Fatalf("Finalize(%s): unexpected error: %v", t3, err)
 	}

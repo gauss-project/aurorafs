@@ -8,6 +8,7 @@ import (
 	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/jsonhttp"
 	"github.com/gauss-project/aurorafs/pkg/p2p"
+	"github.com/gauss-project/aurorafs/pkg/topology/model"
 	"github.com/gorilla/mux"
 	"github.com/multiformats/go-multiaddr"
 )
@@ -146,7 +147,7 @@ func (s *Service) convPeer(peers []p2p.Peer) []PeerItem {
 			tmp.Direction = string(m.SessionConnectionDirection)
 		}
 		if !tmp.FullNode {
-			tmp.Direction = "inbound"
+			tmp.Direction = string(model.PeerConnectionDirectionInbound)
 		}
 		list = append(list, tmp)
 	}

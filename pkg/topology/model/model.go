@@ -13,6 +13,11 @@ type PeerInfo struct {
 	Metrics *MetricSnapshotView `json:"metrics,omitempty"`
 }
 
+const (
+	PeerConnectionDirectionInbound  PeerConnectionDirection = "inbound"
+	PeerConnectionDirectionOutbound PeerConnectionDirection = "outbound"
+)
+
 // PeerConnectionDirection represents peer connection direction.
 type PeerConnectionDirection string
 
