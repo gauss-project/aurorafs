@@ -118,8 +118,10 @@ func (t *transactionService) WaitForReceipt(ctx context.Context, txHash common.H
 	defer func() {
 		t.commonService.UpdateStatus(false)
 	}()
+	ctx1, cancel := context.WithTimeout(ctx, 1*time.Minute)
+	defer cancel()
 	for {
-		receipt, err := t.backend.TransactionReceipt(ctx, txHash)
+		receipt, err := t.backend.TransactionReceipt(ctx1, txHash)
 		if receipt != nil {
 			return receipt, nil
 		}
