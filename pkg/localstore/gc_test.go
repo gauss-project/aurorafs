@@ -404,7 +404,7 @@ func TestDB_gcSize(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	db.WithChunkInfo(ci)
+	db.SetChunkInfo(ci)
 	count := 100
 
 	for i := 0; i < count; i++ {
@@ -424,7 +424,7 @@ func TestDB_gcSize(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	db.WithChunkInfo(ci)
+	db.SetChunkInfo(ci)
 	defer db.Close()
 
 	t.Run("gc index size", newIndexGCSizeTest(db))

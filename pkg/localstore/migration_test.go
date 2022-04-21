@@ -65,7 +65,7 @@ func TestOneMigration(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	db.WithChunkInfo(ci)
+	db.SetChunkInfo(ci)
 
 	err = db.Close()
 	if err != nil {
@@ -79,7 +79,7 @@ func TestOneMigration(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	db.WithChunkInfo(ci)
+	db.SetChunkInfo(ci)
 
 	schemaName, err := db.schemaName.Get()
 	if err != nil {
@@ -154,7 +154,7 @@ func TestManyMigrations(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	db.WithChunkInfo(ci)
+	db.SetChunkInfo(ci)
 
 	err = db.Close()
 	if err != nil {
@@ -168,7 +168,7 @@ func TestManyMigrations(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	db.WithChunkInfo(ci)
+	db.SetChunkInfo(ci)
 
 	schemaName, err := db.schemaName.Get()
 	if err != nil {
@@ -236,7 +236,7 @@ func TestMigrationErrorFrom(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	db.WithChunkInfo(ci)
+	db.SetChunkInfo(ci)
 
 	err = db.Close()
 	if err != nil {
@@ -298,7 +298,7 @@ func TestMigrationErrorTo(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	db.WithChunkInfo(ci)
+	db.SetChunkInfo(ci)
 
 	err = db.Close()
 	if err != nil {

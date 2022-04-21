@@ -177,7 +177,7 @@ func newTestDB(t testing.TB, o *Options) *DB {
 	if err != nil {
 		t.Fatal(err)
 	}
-	db.WithChunkInfo(ci)
+	db.SetChunkInfo(ci)
 	t.Cleanup(func() {
 		err := db.Close()
 		if err != nil {
