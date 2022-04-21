@@ -10,10 +10,12 @@ import (
 	"github.com/gauss-project/aurorafs/pkg/logging"
 	"github.com/gauss-project/aurorafs/pkg/settlement/chain"
 	"math/big"
+	"sync"
 	"time"
 )
 
 type ChainTraffic struct {
+	sync.Mutex
 	logger             logging.Logger
 	signer             crypto.Signer
 	chainID            *big.Int
@@ -87,6 +89,8 @@ func (chainTraffic *ChainTraffic) TransAmount(beneficiary, recipient common.Addr
 }
 
 func (chainTraffic *ChainTraffic) CashChequeBeneficiary(ctx context.Context, beneficiary, recipient common.Address, cumulativePayout *big.Int, signature []byte) (*types.Transaction, error) {
+	chainTraffic.Lock()
+	defer chainTraffic.Unlock()
 	nonce, err := chainTraffic.transactionService.NextNonce(ctx)
 	if err != nil {
 		return nil, err
@@ -109,6 +113,10 @@ func (chainTraffic *ChainTraffic) CashChequeBeneficiary(ctx context.Context, ben
 		GasPrice: gasPrice,
 		Context:  ctx,
 		Nonce:    new(big.Int).SetUint64(nonce),
+	}
+	err = chainTraffic.transactionService.PutNonce(nonce + 1)
+	if err != nil {
+		return nil, err
 	}
 	return chainTraffic.traffic.CashChequeBeneficiary(opts, beneficiary, recipient, cumulativePayout, signature)
 }

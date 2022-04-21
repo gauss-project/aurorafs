@@ -148,7 +148,7 @@ func New(logger logging.Logger, chainAddress common.Address, store storage.State
 			totalPaidOut: big.NewInt(0),
 		},
 		pubSub:         make(map[string][]chan interface{}),
-		cashChequeChan: make(chan cashCheque, 5),
+		cashChequeChan: make(chan cashCheque, 100),
 	}
 	service.triggerRefreshInit()
 	service.cashChequeReceiptUpdate()

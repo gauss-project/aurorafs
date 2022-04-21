@@ -84,7 +84,7 @@ func (t *transactionService) Send(ctx context.Context, request *chain.TxRequest)
 		return common.Hash{}, err
 	}
 
-	err = t.putNonce(nonce + 1)
+	err = t.PutNonce(nonce + 1)
 	if err != nil {
 		return common.Hash{}, err
 	}
@@ -197,6 +197,6 @@ func (t *transactionService) NextNonce(ctx context.Context) (uint64, error) {
 	return nonce, nil
 }
 
-func (t *transactionService) putNonce(nonce uint64) error {
+func (t *transactionService) PutNonce(nonce uint64) error {
 	return t.store.Put(t.nonceKey(), nonce)
 }

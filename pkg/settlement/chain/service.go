@@ -83,6 +83,8 @@ type Transaction interface {
 	// WaitForReceipt waits until either the transaction with the given hash has been mined or the context is cancelled.
 	WaitForReceipt(ctx context.Context, txHash common.Hash) (receipt *types.Receipt, err error)
 
+	PutNonce(nonce uint64) error
+
 	NextNonce(ctx context.Context) (uint64, error)
 }
 
