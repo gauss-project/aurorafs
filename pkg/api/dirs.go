@@ -339,7 +339,7 @@ func (s *server) auroraDeleteHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	r = r.WithContext(sctx.SetRootCID(r.Context(), hash))
+	r = r.WithContext(sctx.SetRootHash(r.Context(), hash))
 
 	del := func() {
 		pyramid := s.chunkInfo.GetChunkPyramid(hash)

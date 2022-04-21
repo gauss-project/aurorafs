@@ -323,7 +323,7 @@ func (s *Service) retrieveChunk(ctx context.Context, route aco.Route, rootAddr, 
 	if err != nil {
 		return nil, fmt.Errorf("retrieval: report chunk source: %v", err)
 	}
-	exists, err := s.storer.Put(sctx.SetRootCID(ctx, rootAddr), storage.ModePutRequest, chunk)
+	exists, err := s.storer.Put(sctx.SetRootHash(ctx, rootAddr), storage.ModePutRequest, chunk)
 	if err != nil {
 		return nil, fmt.Errorf("retrieval: storage put cache:%v", err)
 	}

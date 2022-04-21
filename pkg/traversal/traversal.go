@@ -202,9 +202,9 @@ func (s *service) GetChunkHashes(ctx context.Context, addr boson.Address, pyrami
 				return
 			}
 			// here we can put those data into localstore.
-			rctx := sctx.SetRootCID(ctx, addr)
+			rCtx := sctx.SetRootHash(ctx, addr)
 			// first we put root chunk
-			_, err = s.store.Put(rctx, storage.ModePutRequest, boson.NewChunk(addr, pyramid[addr.String()]))
+			_, err = s.store.Put(rCtx, storage.ModePutRequest, boson.NewChunk(addr, pyramid[addr.String()]))
 			if err != nil {
 				return
 			}
@@ -214,7 +214,7 @@ func (s *service) GetChunkHashes(ctx context.Context, addr boson.Address, pyrami
 				if err != nil {
 					return
 				}
-				_, err = s.store.Put(rctx, storage.ModePutRequest, boson.NewChunk(addr, pyramid[k]))
+				_, err = s.store.Put(rCtx, storage.ModePutRequest, boson.NewChunk(addr, pyramid[k]))
 				if err != nil {
 					return
 				}

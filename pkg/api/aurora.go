@@ -228,7 +228,7 @@ func (s *server) auroraDownloadHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	r = r.WithContext(sctx.SetRootCID(r.Context(), address))
+	r = r.WithContext(sctx.SetRootHash(r.Context(), address))
 	if !s.chunkInfo.Init(r.Context(), nil, address) {
 		logger.Debugf("aurora download: chunkInfo init %s: %v", nameOrHex, err)
 		jsonhttp.NotFound(w, nil)
