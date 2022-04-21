@@ -360,7 +360,7 @@ func (s *server) downloadHandler(w http.ResponseWriter, r *http.Request, referen
 		r = r.WithContext(sctx.SetTargets(r.Context(), targets))
 	}
 
-	reader, l, err := joiner.New(r.Context(), s.storer, reference)
+	reader, l, err := joiner.New(r.Context(), s.storer, storage.ModeGetRequest, reference)
 	if err != nil {
 		if errors.Is(err, storage.ErrNotFound) {
 			logger.Debugf("api download: not found %s: %v", reference, err)

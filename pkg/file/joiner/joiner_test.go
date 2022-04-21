@@ -27,7 +27,7 @@ import (
 
 func TestJoiner_ErrReferenceLength(t *testing.T) {
 	store := mock.NewStorer()
-	_, _, err := joiner.New(context.Background(), store, boson.ZeroAddress)
+	_, _, err := joiner.New(context.Background(), store, storage.ModeGetLookup, boson.ZeroAddress)
 
 	if !errors.Is(err, storage.ErrReferenceLength) {
 		t.Fatalf("expected ErrReferenceLength %x but got %v", boson.ZeroAddress, err)
@@ -55,7 +55,7 @@ func TestJoinerSingleChunk(t *testing.T) {
 	}
 
 	// read back data and compare
-	joinReader, l, err := joiner.New(ctx, store, mockAddr)
+	joinReader, l, err := joiner.New(ctx, store, storage.ModeGetLookup, mockAddr)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -93,7 +93,7 @@ func TestJoinerDecryptingStore_NormalChunk(t *testing.T) {
 	}
 
 	// read back data and compare
-	joinReader, l, err := joiner.New(ctx, store, mockAddr)
+	joinReader, l, err := joiner.New(ctx, store, storage.ModeGetLookup, mockAddr)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -139,7 +139,7 @@ func TestJoinerWithReference(t *testing.T) {
 	}
 
 	// read back data and compare
-	joinReader, l, err := joiner.New(ctx, store, rootChunk.Address())
+	joinReader, l, err := joiner.New(ctx, store, storage.ModeGetLookup, rootChunk.Address())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -193,7 +193,7 @@ func TestJoinerMalformed(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	joinReader, _, err := joiner.New(ctx, store, rootChunk.Address())
+	joinReader, _, err := joiner.New(ctx, store, storage.ModeGetLookup, rootChunk.Address())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -234,7 +234,7 @@ func TestEncryptDecrypt(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			reader, l, err := joiner.New(context.Background(), store, resultAddress)
+			reader, l, err := joiner.New(context.Background(), store, storage.ModeGetLookup, resultAddress)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -322,7 +322,7 @@ func TestSeek(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			j, _, err := joiner.New(ctx, store, addr)
+			j, _, err := joiner.New(ctx, store, storage.ModeGetLookup, addr)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -600,7 +600,7 @@ func TestPrefetch(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			j, _, err := joiner.New(ctx, store, addr)
+			j, _, err := joiner.New(ctx, store, storage.ModeGetLookup, addr)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -647,7 +647,7 @@ func TestJoinerReadAt(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	j, _, err := joiner.New(ctx, store, rootChunk.Address())
+	j, _, err := joiner.New(ctx, store, storage.ModeGetLookup, rootChunk.Address())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -692,7 +692,7 @@ func TestJoinerOneLevel(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	j, _, err := joiner.New(ctx, store, rootChunk.Address())
+	j, _, err := joiner.New(ctx, store, storage.ModeGetLookup, rootChunk.Address())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -784,7 +784,7 @@ func TestJoinerTwoLevelsAcrossChunk(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	j, _, err := joiner.New(ctx, store, rootChunk.Address())
+	j, _, err := joiner.New(ctx, store, storage.ModeGetLookup, rootChunk.Address())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -838,7 +838,7 @@ func TestJoinerIterateChunkAddresses(t *testing.T) {
 
 	createdAddresses := []boson.Address{rootChunk.Address(), firstAddress, secondAddress}
 
-	j, _, err := joiner.New(ctx, store, rootChunk.Address())
+	j, _, err := joiner.New(ctx, store, storage.ModeGetLookup, rootChunk.Address())
 	if err != nil {
 		t.Fatal(err)
 	}

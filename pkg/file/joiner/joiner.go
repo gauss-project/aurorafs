@@ -29,15 +29,16 @@ type joiner struct {
 	edgeChunks    map[string][]byte
 	allowSaveEdge bool
 
-	ctx    context.Context
-	getter storage.Getter
+	ctx     context.Context
+	getter  storage.Getter
+	getMode storage.ModeGet
 }
 
 // New creates a new Joiner. A Joiner provides Read, Seek and Size functionalities.
-func New(ctx context.Context, getter storage.Getter, address boson.Address) (file.Joiner, int64, error) {
+func New(ctx context.Context, getter storage.Getter, getMode storage.ModeGet, address boson.Address) (file.Joiner, int64, error) {
 	getter = store.New(getter)
 	// retrieve the root chunk to read the total data length the be retrieved
-	rootChunk, err := getter.Get(ctx, storage.ModeGetRequest, address)
+	rootChunk, err := getter.Get(ctx, getMode, address)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -51,6 +52,7 @@ func New(ctx context.Context, getter storage.Getter, address boson.Address) (fil
 		refLength: len(address.Bytes()),
 		ctx:       ctx,
 		getter:    getter,
+		getMode:   getMode,
 		span:      span,
 		rootData:  chunkData[boson.SpanSize:],
 	}
@@ -158,7 +160,7 @@ func (j *joiner) readAtOffset(b, data []byte, cur, subTrieSize, off, bufferOffse
 
 		func(address boson.Address, b []byte, cur, subTrieSize, off, bufferOffset, bytesToRead, subtrieSpanLimit int64) {
 			eg.Go(func() error {
-				ch, err := j.getter.Get(j.ctx, storage.ModeGetRequest, address)
+				ch, err := j.getter.Get(j.ctx, j.getMode, address)
 				if err != nil {
 					return err
 				}
@@ -292,7 +294,7 @@ func (j *joiner) processChunkAddresses(ctx context.Context, fn boson.AddressIter
 			eg.Go(func() error {
 				defer wg.Done()
 
-				ch, err := j.getter.Get(ectx, storage.ModeGetRequest, address)
+				ch, err := j.getter.Get(ectx, j.getMode, address)
 				if err != nil {
 					return err
 				}
