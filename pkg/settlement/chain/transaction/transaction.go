@@ -34,28 +34,30 @@ var (
 type transactionService struct {
 	lock sync.Mutex
 
-	logger  logging.Logger
-	backend Backend
-	signer  crypto.Signer
-	sender  common.Address
-	store   storage.StateStorer
-	chainID *big.Int
+	logger        logging.Logger
+	backend       Backend
+	signer        crypto.Signer
+	sender        common.Address
+	store         storage.StateStorer
+	chainID       *big.Int
+	commonService chain.Common
 }
 
 // NewService creates a new transaction service.
-func NewService(logger logging.Logger, backend Backend, signer crypto.Signer, store storage.StateStorer, chainID *big.Int) (chain.Transaction, error) {
+func NewService(logger logging.Logger, backend Backend, signer crypto.Signer, store storage.StateStorer, commonService chain.Common, chainID *big.Int) (chain.Transaction, error) {
 	senderAddress, err := signer.EthereumAddress()
 	if err != nil {
 		return nil, err
 	}
 
 	return &transactionService{
-		logger:  logger,
-		backend: backend,
-		signer:  signer,
-		sender:  senderAddress,
-		store:   store,
-		chainID: chainID,
+		logger:        logger,
+		backend:       backend,
+		signer:        signer,
+		sender:        senderAddress,
+		store:         store,
+		chainID:       chainID,
+		commonService: commonService,
 	}, nil
 }
 
@@ -113,6 +115,9 @@ func (t *transactionService) Call(ctx context.Context, request *chain.TxRequest)
 // WaitForReceipt waits until either the transaction with the given hash has
 // been mined or the context is cancelled.
 func (t *transactionService) WaitForReceipt(ctx context.Context, txHash common.Hash) (receipt *types.Receipt, err error) {
+	defer func() {
+		t.commonService.UpdateStatus(false)
+	}()
 	for {
 		receipt, err := t.backend.TransactionReceipt(ctx, txHash)
 		if receipt != nil {
@@ -128,7 +133,7 @@ func (t *transactionService) WaitForReceipt(ctx context.Context, txHash common.H
 		select {
 		case <-ctx.Done():
 			return nil, ctx.Err()
-		case <-time.After(1 * time.Second):
+		case <-time.After(3 * time.Second):
 		}
 	}
 }
@@ -180,23 +185,7 @@ func (t *transactionService) NextNonce(ctx context.Context) (uint64, error) {
 	if err != nil {
 		return 0, err
 	}
-
-	var nonce uint64
-	err = t.store.Get(t.nonceKey(), &nonce)
-	if err != nil {
-		// If no nonce was found locally used whatever we get from the backend.
-		if errors.Is(err, storage.ErrNotFound) {
-			return onchainNonce, nil
-		}
-		return 0, err
-	}
-
-	// If the nonce onchain is larger than what we have there were external
-	// transactions and we need to update our nonce.
-	if onchainNonce > nonce {
-		return onchainNonce, nil
-	}
-	return nonce, nil
+	return onchainNonce, nil
 }
 
 func (t *transactionService) putNonce(nonce uint64) error {

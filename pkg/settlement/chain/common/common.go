@@ -13,9 +13,12 @@ import (
 	"github.com/gauss-project/aurorafs/pkg/settlement/chain"
 	"math/big"
 	"strings"
+	"sync"
 )
 
 type Common struct {
+	sync.Mutex
+	tx      chain.TxInfo
 	logger  logging.Logger
 	signer  crypto.Signer
 	address *common.Address
@@ -42,7 +45,7 @@ func New(logger logging.Logger, signer crypto.Signer, chainId *big.Int, chainEnd
 	if err != nil {
 		return nil, err
 	}
-	return &Common{logger: logger, signer: signer, address: &address, chainID: chainId, client: client}, nil
+	return &Common{logger: logger, signer: signer, address: &address, chainID: chainId, client: client, tx: chain.TxInfo{}}, nil
 }
 
 func (c *Common) All(ctx context.Context, req *chain.AllRequest) (*chain.AllResponse, error) {
@@ -123,4 +126,35 @@ func (c *Common) prepareTransaction(request *interface{}) (*types.Transaction, e
 		GasPrice: gasPricer,
 		Data:     common.FromHex(txRequest.Data),
 	}), nil
+}
+
+var txStatus = false
+
+func (c *Common) SyncTransaction(t chain.TransactionType, value, txHash string) {
+	c.Lock()
+	defer c.Unlock()
+	txStatus = true
+	c.tx.Type = t
+	c.tx.Value = value
+	c.tx.TxHash = txHash
+}
+
+func (c *Common) IsTransaction() bool {
+	c.Lock()
+	defer c.Unlock()
+	return txStatus
+}
+
+func (c *Common) UpdateStatus(status bool) {
+	c.Lock()
+	defer c.Unlock()
+	if !status {
+		c.tx = chain.TxInfo{}
+	}
+	txStatus = status
+}
+
+func (c *Common) GetTransaction() *chain.TxInfo {
+	tx := &chain.TxInfo{Type: c.tx.Type, Value: c.tx.Value, TxHash: c.tx.TxHash}
+	return tx
 }

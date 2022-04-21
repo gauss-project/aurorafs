@@ -2,6 +2,7 @@ package oracle
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
@@ -17,17 +18,19 @@ import (
 )
 
 type ChainOracle struct {
+	sync.Mutex
 	logger        logging.Logger
 	oracle        *Oracle
 	chain         *ethclient.Client
 	signer        crypto.Signer
 	senderAddress common.Address
 	chainID       *big.Int
+	commonService chain.Common
 	pubSubLk      sync.RWMutex
 	pubSub        map[string]chan interface{}
 }
 
-func NewServer(logger logging.Logger, backend *ethclient.Client, address string, signer crypto.Signer) (chain.Resolver, error) {
+func NewServer(logger logging.Logger, backend *ethclient.Client, address string, signer crypto.Signer, commonService chain.Common) (chain.Resolver, error) {
 	senderAddress, err := signer.EthereumAddress()
 	if err != nil {
 		return nil, err
@@ -51,6 +54,7 @@ func NewServer(logger logging.Logger, backend *ethclient.Client, address string,
 		signer:        signer,
 		senderAddress: senderAddress,
 		chainID:       chainID,
+		commonService: commonService,
 		pubSub:        make(map[string]chan interface{}),
 	}, nil
 }
@@ -85,7 +89,19 @@ func (ora *ChainOracle) DataStoreFinished(cid boson.Address, dataLen uint64, sal
 
 }
 
-func (ora *ChainOracle) RegisterCidAndNode(ctx context.Context, rootCid boson.Address, address boson.Address) (common.Hash, error) {
+func (ora *ChainOracle) RegisterCidAndNode(ctx context.Context, rootCid boson.Address, address boson.Address) (hash common.Hash, err error) {
+	ora.Lock()
+	defer ora.Unlock()
+	defer func() {
+		if err == nil {
+			ora.commonService.SyncTransaction(chain.ORACLE, rootCid.String(), hash.String())
+		}
+	}()
+
+	if ora.commonService.IsTransaction() {
+		return common.Hash{}, errors.New("existing chain transaction")
+	}
+
 	opts, err := ora.getTransactOpts(ctx)
 	if err != nil {
 		return common.Hash{}, err
@@ -96,7 +112,17 @@ func (ora *ChainOracle) RegisterCidAndNode(ctx context.Context, rootCid boson.Ad
 	}
 	return tract.Hash(), nil
 }
-func (ora *ChainOracle) RemoveCidAndNode(ctx context.Context, rootCid boson.Address, address boson.Address) (common.Hash, error) {
+func (ora *ChainOracle) RemoveCidAndNode(ctx context.Context, rootCid boson.Address, address boson.Address) (hash common.Hash, err error) {
+	ora.Lock()
+	defer ora.Unlock()
+	defer func() {
+		if err == nil {
+			ora.commonService.SyncTransaction(chain.ORACLE, rootCid.String(), hash.String())
+		}
+	}()
+	if ora.commonService.IsTransaction() {
+		return common.Hash{}, errors.New("existing chain transaction")
+	}
 	opts, err := ora.getTransactOpts(ctx)
 	if err != nil {
 		return common.Hash{}, err
@@ -110,6 +136,9 @@ func (ora *ChainOracle) RemoveCidAndNode(ctx context.Context, rootCid boson.Addr
 }
 
 func (ora *ChainOracle) WaitForReceipt(ctx context.Context, rootCid boson.Address, txHash common.Hash) (receipt *types.Receipt, err error) {
+	defer func() {
+		ora.commonService.UpdateStatus(false)
+	}()
 	for {
 		receipt, err := ora.chain.TransactionReceipt(ctx, txHash)
 		if receipt != nil {
@@ -127,7 +156,7 @@ func (ora *ChainOracle) WaitForReceipt(ctx context.Context, rootCid boson.Addres
 		case <-ctx.Done():
 			ora.PublishRegisterStatus(rootCid, 0)
 			return nil, ctx.Err()
-		case <-time.After(1 * time.Second):
+		case <-time.After(3 * time.Second):
 		}
 	}
 }
