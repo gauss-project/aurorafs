@@ -34,12 +34,12 @@ import (
 // Put is required to implement storage.Store
 // interface.
 func (db *DB) Put(ctx context.Context, mode storage.ModePut, chs ...boson.Chunk) (exist []bool, err error) {
-	rootAddr := sctx.GetRootCID(ctx)
+	rootHash := sctx.GetRootHash(ctx)
 
 	db.metrics.ModePut.Inc()
 	defer totalTimeMetric(db.metrics.TotalTimePut, time.Now())
 
-	exist, err = db.put(mode, rootAddr, chs...)
+	exist, err = db.put(mode, rootHash, chs...)
 	if err != nil {
 		db.metrics.ModePutFailure.Inc()
 	}

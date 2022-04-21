@@ -43,7 +43,7 @@ func (db *DB) Get(ctx context.Context, mode storage.ModeGet, addr boson.Address)
 		}
 	}()
 
-	out, err := db.get(mode, addr, sctx.GetRootCID(ctx))
+	out, err := db.get(mode, addr, sctx.GetRootHash(ctx))
 	if err != nil {
 		if errors.Is(err, driver.ErrNotFound) {
 			return nil, storage.ErrNotFound

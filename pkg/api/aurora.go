@@ -228,7 +228,7 @@ func (s *server) auroraDownloadHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	r = r.WithContext(sctx.SetRootCID(r.Context(), address))
+	r = r.WithContext(sctx.SetRootHash(r.Context(), address))
 	if !s.chunkInfo.Init(r.Context(), nil, address) {
 		logger.Debugf("aurora download: chunkInfo init %s: %v", nameOrHex, err)
 		jsonhttp.NotFound(w, nil)
@@ -360,7 +360,7 @@ func (s *server) downloadHandler(w http.ResponseWriter, r *http.Request, referen
 		r = r.WithContext(sctx.SetTargets(r.Context(), targets))
 	}
 
-	reader, l, err := joiner.New(r.Context(), s.storer, reference)
+	reader, l, err := joiner.New(r.Context(), s.storer, storage.ModeGetRequest, reference)
 	if err != nil {
 		if errors.Is(err, storage.ErrNotFound) {
 			logger.Debugf("api download: not found %s: %v", reference, err)

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+
 	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/file"
 	"github.com/gauss-project/aurorafs/pkg/file/joiner"
@@ -45,7 +46,7 @@ func NewReadonly(storer PutGetter) file.LoadSaver {
 }
 
 func (ls *loadSave) Load(ctx context.Context, ref []byte) ([]byte, error) {
-	j, _, err := joiner.New(ctx, ls.storer, boson.NewAddress(ref))
+	j, _, err := joiner.New(ctx, ls.storer, storage.ModeGetRequest, boson.NewAddress(ref))
 	if err != nil {
 		return nil, err
 	}

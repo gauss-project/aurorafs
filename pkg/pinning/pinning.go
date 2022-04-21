@@ -66,7 +66,7 @@ type Service struct {
 // CreatePin implements Interface.CreatePin method.
 func (s *Service) CreatePin(ctx context.Context, ref boson.Address, traverse bool) error {
 	// iterFn is a pinning iterator function over the leaves of the root.
-	ctx = sctx.SetRootCID(sctx.SetLocalGet(ctx), ref)
+	ctx = sctx.SetRootHash(ctx, ref)
 	iterFn := func(leaf boson.Address) error {
 		switch err := s.pinStorage.Set(ctx, storage.ModeSetPin, leaf); {
 		case errors.Is(err, storage.ErrNotFound):
@@ -96,7 +96,7 @@ func (s *Service) CreatePin(ctx context.Context, ref boson.Address, traverse boo
 // DeletePin implements Interface.DeletePin method.
 func (s *Service) DeletePin(ctx context.Context, ref boson.Address) error {
 	var iterErr error
-	ctx = sctx.SetRootCID(sctx.SetLocalGet(ctx), ref)
+	ctx = sctx.SetRootHash(ctx, ref)
 	// iterFn is a unpinning iterator function over the leaves of the root.
 	iterFn := func(leaf boson.Address) error {
 		err := s.pinStorage.Set(ctx, storage.ModeSetUnpin, leaf)

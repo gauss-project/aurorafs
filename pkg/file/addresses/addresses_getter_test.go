@@ -58,7 +58,7 @@ func TestAddressesGetterIterateChunkAddresses(t *testing.T) {
 
 	addressesGetter := addresses.NewGetter(store, addressIterFunc)
 
-	j, _, err := joiner.New(ctx, addressesGetter, rootChunk.Address())
+	j, _, err := joiner.New(ctx, addressesGetter, storage.ModeGetRequest, rootChunk.Address())
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -17,14 +17,13 @@ var (
 )
 
 type (
-	HTTPRequestIDKey  struct{}
-	requestHostKey    struct{}
-	//tagKey            struct{}
+	HTTPRequestIDKey struct{}
+	requestHostKey   struct{}
+	// tagKey            struct{}
 	targetsContextKey struct{}
 	gasPriceKey       struct{}
 	gasLimitKey       struct{}
-	rootCIDKey        struct{}
-	localGetKey       struct{}
+	rootHashKey       struct{}
 )
 
 // SetHost sets the http request host in the context
@@ -93,23 +92,14 @@ func GetGasPrice(ctx context.Context) *big.Int {
 	return nil
 }
 
-func SetRootCID(ctx context.Context, rootCID boson.Address) context.Context {
-	return context.WithValue(ctx, rootCIDKey{}, rootCID)
+func SetRootHash(ctx context.Context, rootHash boson.Address) context.Context {
+	return context.WithValue(ctx, rootHashKey{}, rootHash)
 }
 
-func GetRootCID(ctx context.Context) boson.Address {
-	v, ok := ctx.Value(rootCIDKey{}).(boson.Address)
+func GetRootHash(ctx context.Context) boson.Address {
+	v, ok := ctx.Value(rootHashKey{}).(boson.Address)
 	if ok {
 		return v
 	}
 	return boson.ZeroAddress
-}
-
-func SetLocalGet(ctx context.Context) context.Context {
-	return context.WithValue(ctx, localGetKey{}, true)
-}
-
-func GetLocalGet(ctx context.Context) bool {
-	_, ok := ctx.Value(localGetKey{}).(bool)
-	return ok
 }

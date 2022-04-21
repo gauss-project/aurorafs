@@ -165,7 +165,7 @@ func TestModePutUploadPin(t *testing.T) {
 			}
 
 			for _, file := range FileList {
-				ctx := sctx.SetRootCID(context.Background(), file)
+				ctx := sctx.SetRootHash(context.Background(), file)
 
 				_, err := db.Put(ctx, storage.ModePutUploadPin, chunks...)
 				if err != nil {

@@ -79,7 +79,7 @@ func (s *service) traverseAndProcess(ctx context.Context, addr boson.Address, pr
 // Traverse implements Traverser.Traverse method.
 func (s *service) Traverse(ctx context.Context, addr boson.Address, iterFn boson.AddressIterFunc) error {
 	processBytes := func(ref boson.Address) error {
-		j, _, err := joiner.New(ctx, s.store, ref)
+		j, _, err := joiner.New(ctx, s.store, storage.ModeGetLookup, ref)
 		if err != nil {
 			return fmt.Errorf("traversal: joiner error on %q: %w", ref, err)
 		}
@@ -107,7 +107,7 @@ func dataWithSpan(data []byte, size uint64) []byte {
 // GetPyramid implements Traverser.GetPyramid method.
 func (s *service) GetPyramid(ctx context.Context, addr boson.Address) (pyramid map[string][]byte, err error) {
 	storePyramidHashes := func(ref boson.Address) error {
-		j, span, err := joiner.New(ctx, s.store, ref)
+		j, span, err := joiner.New(ctx, s.store, storage.ModeGetLookup, ref)
 		if err != nil {
 			return fmt.Errorf("traversal: joiner error on %q: %w", ref, err)
 		}
@@ -151,7 +151,7 @@ func (s *service) GetChunkHashes(ctx context.Context, addr boson.Address, pyrami
 		switch nodeType {
 		case int(manifest.File):
 			ref := boson.NewAddress(hash)
-			j, span, err := joiner.New(ctx, store, ref)
+			j, span, err := joiner.New(ctx, store, storage.ModeGetLookup, ref)
 			if err != nil {
 				return fmt.Errorf("traversal: joiner error on %q: %w", ref, err)
 			}
@@ -202,9 +202,9 @@ func (s *service) GetChunkHashes(ctx context.Context, addr boson.Address, pyrami
 				return
 			}
 			// here we can put those data into localstore.
-			rctx := sctx.SetRootCID(ctx, addr)
+			rCtx := sctx.SetRootHash(ctx, addr)
 			// first we put root chunk
-			_, err = s.store.Put(rctx, storage.ModePutRequest, boson.NewChunk(addr, pyramid[addr.String()]))
+			_, err = s.store.Put(rCtx, storage.ModePutRequest, boson.NewChunk(addr, pyramid[addr.String()]))
 			if err != nil {
 				return
 			}
@@ -214,7 +214,7 @@ func (s *service) GetChunkHashes(ctx context.Context, addr boson.Address, pyrami
 				if err != nil {
 					return
 				}
-				_, err = s.store.Put(rctx, storage.ModePutRequest, boson.NewChunk(addr, pyramid[k]))
+				_, err = s.store.Put(rCtx, storage.ModePutRequest, boson.NewChunk(addr, pyramid[k]))
 				if err != nil {
 					return
 				}
