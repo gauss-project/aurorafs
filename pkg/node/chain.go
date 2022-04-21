@@ -43,10 +43,14 @@ func InitChain(
 		logger.Infof("could not connect to backend at %v. In a swap-enabled network a working blockchain node (for goerli network in production) is required. Check your node or specify another node using --traffic-endpoint.", endpoint)
 		return nil, nil, nil, nil, fmt.Errorf("get chain id: %w", err)
 	}
+	cc, err := chainCommon.New(logger, signer, chainID, endpoint)
+	if err != nil {
+		return nil, nil, nil, nil, fmt.Errorf("new common serveice: %v", err)
+	}
 	if oracleContractAddress == "" {
 		return nil, nil, nil, nil, fmt.Errorf("oracle contract address is empty")
 	}
-	oracleServer, err := oracle.NewServer(logger, backend, oracleContractAddress, signer)
+	oracleServer, err := oracle.NewServer(logger, backend, oracleContractAddress, signer, cc)
 	if err != nil {
 		return nil, nil, nil, nil, fmt.Errorf("new oracle service: %w", err)
 	}
@@ -56,14 +60,11 @@ func InitChain(
 	if err != nil {
 		return nil, nil, nil, nil, fmt.Errorf("chain address: %w", err)
 	}
-	transactionService, err := transaction.NewService(logger, backend, signer, stateStore, chainID)
+	transactionService, err := transaction.NewService(logger, backend, signer, stateStore, cc, chainID)
 	if err != nil {
 		return nil, nil, nil, nil, fmt.Errorf("new transaction service: %w", err)
 	}
-	cc, err := chainCommon.New(logger, signer, chainID, endpoint)
-	if err != nil {
-		return nil, nil, nil, nil, fmt.Errorf("new common serveice: %v", err)
-	}
+
 	if !trafficEnable {
 		service := pseudosettle.New(p2pService, logger, stateStore, address)
 		if err = service.Init(); err != nil {
@@ -72,7 +73,7 @@ func InitChain(
 
 		return oracleServer, service, service, cc, nil
 	}
-	trafficChainService, err := chainTraffic.NewServer(logger, chainID, backend, signer, transactionService, trafficContractAddr)
+	trafficChainService, err := chainTraffic.NewServer(logger, chainID, backend, signer, transactionService, trafficContractAddr, cc)
 	if err != nil {
 		return nil, nil, nil, nil, fmt.Errorf("new traffic service: %w", err)
 	}

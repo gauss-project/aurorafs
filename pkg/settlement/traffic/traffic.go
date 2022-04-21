@@ -404,12 +404,14 @@ func (s *Service) CashCheque(ctx context.Context, peer boson.Address) (common.Ha
 	if !known {
 		return common.Hash{}, chequePkg.ErrNoCheque
 	}
-
-	c, err := s.cashout.CashCheque(ctx, chainAddress, s.chainAddress)
+	traffic := s.getTraffic(chainAddress)
+	traffic.Lock()
+	defer traffic.Unlock()
+	c, err := s.cashout.CashCheque(ctx, peer, chainAddress, s.chainAddress)
 	if err != nil {
 		return common.Hash{}, err
 	}
-	s.getTraffic(chainAddress).updateStatus(Operation)
+	traffic.updateStatus(Operation)
 	s.cashChequeChan <- cashCheque{
 		txHash:       c,
 		peer:         peer,

@@ -33,6 +33,11 @@ type AllResponse struct {
 	Result interface{}
 }
 
+type TxInfo struct {
+	Type   TransactionType `json:"type"`
+	Value  string          `json:"value"`
+	TxHash string          `json:"txHash"`
+}
 type Resolver interface {
 	// GetCid Resolve cid from  uri
 	GetCid(aufsUri string) []byte
@@ -48,7 +53,7 @@ type Resolver interface {
 
 	// DataStoreFinished when data retrieved and saved, use this function to report onchain
 	DataStoreFinished(cid boson.Address, dataLen uint64, salt uint64, proof []byte, resCh chan ChainResult)
-	RegisterCidAndNode(ctx context.Context, rootCid boson.Address, address boson.Address) (common.Hash, error)
+	RegisterCidAndNode(ctx context.Context, rootCid boson.Address, address boson.Address) (hash common.Hash, err error)
 	RemoveCidAndNode(ctx context.Context, rootCid boson.Address, address boson.Address) (common.Hash, error)
 	GetRegisterState(ctx context.Context, rootCid boson.Address, address boson.Address) (bool, error)
 	WaitForReceipt(ctx context.Context, rootCid boson.Address, txHash common.Hash) (receipt *types.Receipt, err error)
@@ -70,7 +75,7 @@ type Traffic interface {
 
 	TransAmount(beneficiary, recipient common.Address) (*big.Int, error)
 
-	CashChequeBeneficiary(ctx context.Context, beneficiary, recipient common.Address, cumulativePayout *big.Int, signature []byte) (*types.Transaction, error)
+	CashChequeBeneficiary(ctx context.Context, peer boson.Address, beneficiary, recipient common.Address, cumulativePayout *big.Int, signature []byte) (*types.Transaction, error)
 }
 
 // Service is the service to send transactions. It takes care of gas price, gas
@@ -86,6 +91,21 @@ type Transaction interface {
 	NextNonce(ctx context.Context) (uint64, error)
 }
 
+type TransactionType string
+
+const (
+	ORACLE  TransactionType = "oracle"
+	TRAFFIC TransactionType = "traffic"
+)
+
 type Common interface {
 	All(ctx context.Context, request *AllRequest) (*AllResponse, error)
+
+	SyncTransaction(t TransactionType, value, txHash string)
+
+	IsTransaction() bool
+
+	UpdateStatus(status bool)
+
+	GetTransaction() *TxInfo
 }

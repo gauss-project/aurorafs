@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/settlement/chain"
 	"github.com/gauss-project/aurorafs/pkg/storage"
 )
@@ -11,7 +12,7 @@ import (
 // CashoutService is the service responsible for managing cashout actions
 type CashoutService interface {
 	// CashCheque
-	CashCheque(ctx context.Context, beneficiary common.Address, recipient common.Address) (common.Hash, error)
+	CashCheque(ctx context.Context, peer boson.Address, beneficiary common.Address, recipient common.Address) (common.Hash, error)
 	//WaitForReceipt
 	WaitForReceipt(ctx context.Context, ctxHash common.Hash) (uint64, error)
 }
@@ -37,7 +38,7 @@ func NewCashoutService(store storage.StateStorer, transactionService chain.Trans
 }
 
 // CashCheque
-func (s *cashoutService) CashCheque(ctx context.Context, beneficiary, recipient common.Address) (common.Hash, error) {
+func (s *cashoutService) CashCheque(ctx context.Context, peer boson.Address, beneficiary, recipient common.Address) (common.Hash, error) {
 	cheque, err := s.chequeStore.LastReceivedCheque(beneficiary)
 	if err != nil {
 		return common.Hash{}, err
@@ -47,7 +48,7 @@ func (s *cashoutService) CashCheque(ctx context.Context, beneficiary, recipient 
 		return common.Hash{}, errors.New("exchange failed")
 	}
 
-	tx, err := s.trafficService.CashChequeBeneficiary(ctx, beneficiary, recipient, cheque.CumulativePayout, cheque.Signature)
+	tx, err := s.trafficService.CashChequeBeneficiary(ctx, peer, beneficiary, recipient, cheque.CumulativePayout, cheque.Signature)
 	if err != nil {
 		return common.Hash{}, err
 	}

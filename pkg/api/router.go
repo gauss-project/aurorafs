@@ -257,6 +257,7 @@ func (s *server) newLoopbackRouter(router *mux.Router) {
 	handle("/chain", web.ChainHandlers(
 		web.FinalHandler(jsonhttp.MethodHandler{
 			"POST": http.HandlerFunc(s.chainHandler),
+			"GET":  http.HandlerFunc(s.chainTransactionHandler),
 		})),
 	)
 

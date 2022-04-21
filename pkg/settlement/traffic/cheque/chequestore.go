@@ -24,6 +24,7 @@ var (
 	ErrWrongBeneficiary = errors.New("wrong beneficiary")
 	// ErrBouncingCheque is the error returned if the chainAddress is demonstrably illiquid.
 	ErrBouncingCheque        = errors.New("bouncing cheque")
+	ErrCashOut               = errors.New("cashout not completing")
 	lastReceivedChequePrefix = "traffic_last_received_cheque_"
 	lastSendChequePrefix     = "traffic_last_send_cheque_"
 	retrievedTrafficPrefix   = "retrieved_traffic_"

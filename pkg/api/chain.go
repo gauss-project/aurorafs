@@ -58,3 +58,8 @@ func (s *server) chainHandler(w http.ResponseWriter, r *http.Request) {
 		Result:  resp.Result,
 	})
 }
+
+func (s *server) chainTransactionHandler(w http.ResponseWriter, r *http.Request) {
+	tx := s.commonChain.GetTransaction()
+	jsonhttp.OK(w, tx)
+}

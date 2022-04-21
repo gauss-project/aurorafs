@@ -2,27 +2,33 @@ package traffic
 
 import (
 	"context"
+	"errors"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethclient"
+	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/crypto"
 	"github.com/gauss-project/aurorafs/pkg/logging"
 	"github.com/gauss-project/aurorafs/pkg/settlement/chain"
 	"math/big"
+	"sync"
 	"time"
 )
 
 type ChainTraffic struct {
+	sync.Mutex
 	logger             logging.Logger
 	signer             crypto.Signer
 	chainID            *big.Int
 	backend            *ethclient.Client
 	traffic            *Traffic
 	transactionService chain.Transaction
+	commonService      chain.Common
 }
 
-func NewServer(logger logging.Logger, chainID *big.Int, backend *ethclient.Client, signer crypto.Signer, transactionService chain.Transaction, address string) (chain.Traffic, error) {
+func NewServer(logger logging.Logger, chainID *big.Int, backend *ethclient.Client, signer crypto.Signer,
+	transactionService chain.Transaction, address string, commonService chain.Common) (chain.Traffic, error) {
 
 	traffic, err := NewTraffic(common.HexToAddress(address), backend)
 	if err != nil {
@@ -36,6 +42,7 @@ func NewServer(logger logging.Logger, chainID *big.Int, backend *ethclient.Clien
 		traffic:            traffic,
 		backend:            backend,
 		transactionService: transactionService,
+		commonService:      commonService,
 	}, nil
 }
 
@@ -86,7 +93,17 @@ func (chainTraffic *ChainTraffic) TransAmount(beneficiary, recipient common.Addr
 	return chainTraffic.traffic.TransTraffic(opts, beneficiary, recipient)
 }
 
-func (chainTraffic *ChainTraffic) CashChequeBeneficiary(ctx context.Context, beneficiary, recipient common.Address, cumulativePayout *big.Int, signature []byte) (*types.Transaction, error) {
+func (chainTraffic *ChainTraffic) CashChequeBeneficiary(ctx context.Context, peer boson.Address, beneficiary, recipient common.Address, cumulativePayout *big.Int, signature []byte) (tx *types.Transaction, err error) {
+	chainTraffic.Lock()
+	defer chainTraffic.Unlock()
+	defer func() {
+		if err == nil {
+			chainTraffic.commonService.SyncTransaction(chain.TRAFFIC, peer.String(), tx.Hash().String())
+		}
+	}()
+	if chainTraffic.commonService.IsTransaction() {
+		return nil, errors.New("existing chain transaction")
+	}
 	nonce, err := chainTraffic.transactionService.NextNonce(ctx)
 	if err != nil {
 		return nil, err
