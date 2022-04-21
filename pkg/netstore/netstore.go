@@ -8,6 +8,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+
 	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/chunkinfo"
 	"github.com/gauss-project/aurorafs/pkg/logging"
@@ -22,7 +23,7 @@ type Store struct {
 	logger    logging.Logger
 	chunkInfo chunkinfo.Interface
 	addr      boson.Address
-	//recoveryCallback recovery.Callback // this is the callback to be executed when a chunk fails to be retrieved
+	// recoveryCallback recovery.Callback // this is the callback to be executed when a chunk fails to be retrieved
 }
 
 var (
@@ -44,28 +45,23 @@ func (s *Store) Get(ctx context.Context, mode storage.ModeGet, addr boson.Addres
 	ch, err = s.Storer.Get(ctx, mode, addr)
 	if err != nil {
 		if errors.Is(err, storage.ErrNotFound) {
-			if !sctx.GetLocalGet(ctx) {
-				rootCID := sctx.GetRootCID(ctx)
-				if !rootCID.IsZero() {
-					// request from network
-					ch, err = s.retrieval.RetrieveChunk(ctx, rootCID, addr)
-					if err != nil {
-						return nil, ErrRecoveryAttempt
-					}
-
-					return ch, nil
-				}
+			rootCID := sctx.GetRootCID(ctx)
+			if rootCID.IsZero() {
+				return nil, err
 			}
-			return nil, err
+			// request from network
+			ch, err = s.retrieval.RetrieveChunk(ctx, rootCID, addr)
+			if err != nil {
+				return nil, ErrRecoveryAttempt
+			}
+			return ch, nil
 		}
 
 		return nil, fmt.Errorf("netstore get: %w", err)
 	}
-	if !sctx.GetLocalGet(ctx) {
-		rootCID := sctx.GetRootCID(ctx)
-		if !rootCID.IsZero() && !rootCID.Equal(addr) {
-			_ = s.chunkInfo.OnChunkRetrieved(addr, rootCID, s.addr)
-		}
+	rootCID := sctx.GetRootCID(ctx)
+	if !rootCID.IsZero() && !rootCID.Equal(addr) {
+		_ = s.chunkInfo.OnChunkRetrieved(addr, rootCID, s.addr)
 	}
 
 	return ch, nil

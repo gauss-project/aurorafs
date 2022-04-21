@@ -339,22 +339,7 @@ func (s *server) auroraDeleteHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// MUST request local db
-	r = r.WithContext(sctx.SetRootCID(sctx.SetLocalGet(r.Context()), hash))
-
-	// There is no direct return success.
-	_, err = s.storer.Get(r.Context(), storage.ModeGetRequest, hash)
-	if err != nil {
-		if errors.Is(err, storage.ErrNotFound) {
-			jsonhttp.NotFound(w, nil)
-			return
-		}
-
-		s.logger.Debugf("aurora delete: check %s exists: %w", hash, err)
-		s.logger.Errorf("aurora delete: check %s exists", hash)
-		jsonhttp.InternalServerError(w, err)
-		return
-	}
+	r = r.WithContext(sctx.SetRootCID(r.Context(), hash))
 
 	del := func() {
 		pyramid := s.chunkInfo.GetChunkPyramid(hash)
