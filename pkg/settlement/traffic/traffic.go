@@ -405,8 +405,6 @@ func (s *Service) CashCheque(ctx context.Context, peer boson.Address) (common.Ha
 		return common.Hash{}, chequePkg.ErrNoCheque
 	}
 	traffic := s.getTraffic(chainAddress)
-	traffic.Lock()
-	defer traffic.Unlock()
 	c, err := s.cashout.CashCheque(ctx, peer, chainAddress, s.chainAddress)
 	if err != nil {
 		return common.Hash{}, err
