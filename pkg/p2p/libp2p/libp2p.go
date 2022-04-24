@@ -302,7 +302,7 @@ func New(ctx context.Context, signer beecrypto.Signer, networkID uint64, overlay
 			s.metrics.NumStreamsOutbound.Set(float64(scope.Stat().NumStreamsOutbound))
 			s.metrics.NumFD.Set(float64(scope.Stat().NumFD))
 			s.metrics.Memory.Set(float64(scope.Stat().Memory))
-			s.logger.Tracef("libp2p view system %v", scope.Stat())
+			// s.logger.Tracef("libp2p view system %v", scope.Stat())
 		})
 		return nil
 	})

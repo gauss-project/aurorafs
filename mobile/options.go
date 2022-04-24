@@ -20,6 +20,9 @@ type Options struct {
 	DebugAPIPort   int
 	EnableDebugAPI bool
 
+	// rpc setting
+	WebsocketPort int
+
 	// p2p setup
 	NetworkID      int64 // default type uint64
 	P2PPort        int
@@ -68,6 +71,7 @@ var defaultOptions = &Options{
 	EnableTLS:          true,
 	APIPort:            1633,
 	DebugAPIPort:       1635,
+	WebsocketPort:      1637,
 	P2PPort:            1634,
 	CacheCapacity:      4000,
 	EnableFullNode:     false,
@@ -97,6 +101,10 @@ func (o Options) DebugAPIAddr(c *node.Options) {
 	if o.EnableDebugAPI {
 		c.DebugAPIAddr = fmt.Sprintf("%s:%d", listenAddress, o.DebugAPIPort)
 	}
+}
+
+func (o Options) WSAddr(c *node.Options) {
+	c.WSAddr = fmt.Sprintf("%s:%d", listenAddress, o.WebsocketPort)
 }
 
 func (o Options) Bootnodes(c *node.Options) {
