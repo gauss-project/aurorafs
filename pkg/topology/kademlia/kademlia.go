@@ -1164,7 +1164,7 @@ func (k *Kad) onConnected(ctx context.Context, peer p2p.Peer) error {
 
 // Disconnected is called when peer disconnects.
 func (k *Kad) Disconnected(peer p2p.Peer, reason string) {
-	k.logger.Debugf("kademlia: disconnected peer %s", peer.Address)
+	k.logger.Debugf("kademlia: disconnected peer %s %s", peer.Address, reason)
 
 	k.connectedPeers.Remove(peer.Address)
 

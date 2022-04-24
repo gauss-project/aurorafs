@@ -901,7 +901,7 @@ func (s *Service) disconnected(peer p2p.Peer) {
 	s.protocolsmu.RUnlock()
 
 	if s.notifier != nil {
-		s.notifier.Disconnected(peer, "")
+		s.notifier.Disconnected(peer, "libp2p event")
 	}
 	if s.lightNodes != nil {
 		s.lightNodes.Disconnected(peer)
@@ -928,6 +928,9 @@ func (s *Service) ResourceManager() network.ResourceManager {
 
 func (s *Service) CallHandler(ctx context.Context, last p2p.Peer, stream p2p.Stream) (relayData *pb.RouteRelayReq, w p2p.WriterChan, r p2p.ReaderChan, forward bool, err error) {
 	defer func() {
+		if relayData == nil {
+			return
+		}
 		if bytes.Equal(relayData.Dest, s.self.Bytes()) {
 			forward = false
 		} else {
@@ -938,9 +941,17 @@ func (s *Service) CallHandler(ctx context.Context, last p2p.Peer, stream p2p.Str
 	}()
 	reqCh := make(chan *pb.RouteRelayReq, 1)
 	w, r, done := s.route.PackRelayResp(ctx, stream, reqCh)
-	relayData = <-reqCh
-	if !relayData.MidCall && !bytes.Equal(relayData.Dest, s.self.Bytes()) {
-		forward = true
+	select {
+	case relayData = <-reqCh:
+		if relayData == nil {
+			return
+		}
+		if !relayData.MidCall && !bytes.Equal(relayData.Dest, s.self.Bytes()) {
+			forward = true
+			return
+		}
+	case <-ctx.Done():
+		err = ctx.Err()
 		return
 	}
 	name := string(relayData.ProtocolName)
