@@ -144,7 +144,6 @@ check-xcode:
 .PHONY: download-vendor
 download-vendor:
 	$(GO) mod download
-	$(GO) get github.com/karalabe/usb
 
 .PHONY: check-version
 check-version:
