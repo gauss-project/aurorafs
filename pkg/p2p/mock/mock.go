@@ -204,6 +204,12 @@ func (s *Service) CallHandler(ctx context.Context, last p2p.Peer, stream p2p.Str
 	return
 }
 
+// NetworkStatus implements p2p.NetworkStatuser interface.
+// It always returns p2p.NetworkStatusAvailable.
+func (s *Service) NetworkStatus() p2p.NetworkStatus {
+	return p2p.NetworkStatusAvailable
+}
+
 type Option interface {
 	apply(*Service)
 }

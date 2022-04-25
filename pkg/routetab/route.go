@@ -908,16 +908,20 @@ func (s *Service) PackRelayResp(ctx context.Context, stream p2p.Stream, reqCh ch
 			for {
 				req := &pb.RouteRelayReq{}
 				err = r.ReadMsg(req)
+				if first {
+					first = false
+					if err != nil {
+						reqCh <- nil
+					} else {
+						reqCh <- req
+					}
+				}
 				if err != nil {
 					if quit {
 						err = nil
 					}
 					read.Err <- err
 					return
-				}
-				if first {
-					first = false
-					reqCh <- req
 				}
 				read.R <- req.Data
 			}
