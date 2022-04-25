@@ -6,6 +6,7 @@ package blocker_test
 
 import (
 	"io/ioutil"
+	"os"
 	"sync"
 	"testing"
 	"time"
@@ -14,6 +15,7 @@ import (
 	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/boson/test"
 	"github.com/gauss-project/aurorafs/pkg/logging"
+	"github.com/gauss-project/aurorafs/pkg/p2p"
 )
 
 var (
@@ -23,6 +25,15 @@ var (
 	addr      = test.RandomAddress()
 	logger    = logging.New(ioutil.Discard, 0)
 )
+
+func TestMain(m *testing.M) {
+	defer func(resolution time.Duration) {
+		*blocker.SequencerResolution = resolution
+	}(*blocker.SequencerResolution)
+	*blocker.SequencerResolution = time.Millisecond
+
+	os.Exit(m.Run())
+}
 
 func TestBlocksAfterFlagTimeout(t *testing.T) {
 	var (
@@ -155,4 +166,10 @@ func mockBlockLister(f func(boson.Address, time.Duration, string) error) *blockl
 
 func (b *blocklister) Blocklist(addr boson.Address, t time.Duration, r string) error {
 	return b.blocklistFunc(addr, t, r)
+}
+
+// NetworkStatus implements p2p.NetworkStatuser interface.
+// It always returns p2p.NetworkStatusAvailable.
+func (b *blocklister) NetworkStatus() p2p.NetworkStatus {
+	return p2p.NetworkStatusAvailable
 }

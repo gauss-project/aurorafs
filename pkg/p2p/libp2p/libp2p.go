@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"os"
 	"runtime"
 	"strconv"
 	"strings"
@@ -31,6 +32,7 @@ import (
 	"github.com/gauss-project/aurorafs/pkg/topology/lightnode"
 	"github.com/gauss-project/aurorafs/pkg/tracing"
 	"github.com/gogf/gf/v2/os/gtimer"
+	"github.com/hashicorp/go-multierror"
 	"github.com/libp2p/go-libp2p"
 	"github.com/libp2p/go-libp2p-core/crypto"
 	"github.com/libp2p/go-libp2p-core/event"
@@ -43,6 +45,7 @@ import (
 	"github.com/libp2p/go-libp2p-peerstore/pstoremem"
 	libp2pquic "github.com/libp2p/go-libp2p-quic-transport"
 	rcmgr "github.com/libp2p/go-libp2p-resource-manager"
+	lp2pswarm "github.com/libp2p/go-libp2p-swarm"
 	"github.com/libp2p/go-libp2p/p2p/host/autonat"
 	basichost "github.com/libp2p/go-libp2p/p2p/host/basic"
 	libp2pping "github.com/libp2p/go-libp2p/p2p/protocol/ping"
@@ -50,6 +53,7 @@ import (
 	ws "github.com/libp2p/go-ws-transport"
 	ma "github.com/multiformats/go-multiaddr"
 	"github.com/multiformats/go-multistream"
+	"go.uber.org/atomic"
 )
 
 var (
@@ -94,6 +98,7 @@ type Service struct {
 	self              boson.Address
 	nodeMode          aurora.Model
 	reacher           p2p.Reacher
+	networkStatus     atomic.Int32
 }
 
 type Options struct {
@@ -690,6 +695,10 @@ func (s *Service) BlocklistedPeers() ([]p2p.BlockPeers, error) {
 }
 
 func (s *Service) Blocklist(overlay boson.Address, duration time.Duration, reason string) error {
+	if s.NetworkStatus() != p2p.NetworkStatusAvailable {
+		return errors.New("blocklisting peer when network not available")
+	}
+
 	s.logger.Tracef("libp2p blocklist: peer %s for %v reason: %s", overlay.String(), duration, reason)
 	if err := s.blocklist.Add(overlay, duration); err != nil {
 		s.metrics.BlocklistedPeerErrCount.Inc()
@@ -721,6 +730,8 @@ func buildUnderlayAddress(addr ma.Multiaddr, peerID libp2ppeer.ID) (ma.Multiaddr
 }
 
 func (s *Service) Connect(ctx context.Context, addr ma.Multiaddr) (peer *p2p.Peer, err error) {
+	defer func() { err = multierror.Append(err, s.determineCurrentNetworkStatus(err)).ErrorOrNil() }()
+
 	// Extract the peer ID from the multiaddr.
 	info, err := libp2ppeer.AddrInfoFromP2pAddr(addr)
 	if err != nil {
@@ -805,7 +816,7 @@ func (s *Service) Connect(ctx context.Context, addr ma.Multiaddr) (peer *p2p.Pee
 		err = s.addressbook.Put(overlay, *i.Address)
 		if err != nil {
 			_ = s.Disconnect(overlay, "failed storing peer in addressbook")
-			return nil, fmt.Errorf("storing bzz address: %w", err)
+			return nil, fmt.Errorf("storing boson address: %w", err)
 		}
 	}
 
@@ -1041,7 +1052,8 @@ func (s *Service) NewRelayStream(ctx context.Context, target boson.Address, head
 		headers = make(p2p.Headers)
 	}
 	if err := s.tracer.AddContextHeader(ctx, headers); err != nil && !errors.Is(err, tracing.ErrContextNotFound) {
-		return nil, err
+		_ = stream.Reset()
+		return nil, fmt.Errorf("new stream add context header fail: %w", err)
 	}
 
 	// exchange headers
@@ -1083,7 +1095,8 @@ func (s *Service) NewStream(ctx context.Context, overlay boson.Address, headers 
 		headers = make(p2p.Headers)
 	}
 	if err := s.tracer.AddContextHeader(ctx, headers); err != nil && !errors.Is(err, tracing.ErrContextNotFound) {
-		return nil, err
+		_ = stream.Reset()
+		return nil, fmt.Errorf("new stream add context header fail: %w", err)
 	}
 
 	// exchange headers
@@ -1214,6 +1227,35 @@ func (s *Service) peerUserAgent(ctx context.Context, peerID libp2ppeer.ID) strin
 	return ua
 }
 
+// NetworkStatus implements the p2p.NetworkStatus interface.
+func (s *Service) NetworkStatus() p2p.NetworkStatus {
+	return p2p.NetworkStatus(s.networkStatus.Load())
+}
+
+// determineCurrentNetworkStatus determines if the network
+// is available/unavailable based on the given error, and
+// returns ErrNetworkUnavailable if unavailable.
+// The result of this operation is stored and can be reflected
+// in the results of future NetworkStatus method calls.
+func (s *Service) determineCurrentNetworkStatus(err error) error {
+	switch {
+	case err == nil:
+		s.networkStatus.Store(int32(p2p.NetworkStatusAvailable))
+	case errors.Is(err, lp2pswarm.ErrDialBackoff):
+		if s.NetworkStatus() == p2p.NetworkStatusUnavailable {
+			err = p2p.ErrNetworkUnavailable
+		}
+	case isNetworkOrHostUnreachableError(err):
+		s.networkStatus.Store(int32(p2p.NetworkStatusUnavailable))
+		err = p2p.ErrNetworkUnavailable
+	default:
+		if s.NetworkStatus() != p2p.NetworkStatusUnavailable {
+			s.networkStatus.Store(int32(p2p.NetworkStatusUnknown))
+		}
+	}
+	return nil
+}
+
 // appendSpace adds a leading space character if the string is not empty.
 // It is useful for constructing log messages with conditional substrings.
 func appendSpace(s string) string {
@@ -1242,4 +1284,34 @@ type connectionNotifier struct {
 
 func (c *connectionNotifier) Connected(_ network.Network, _ network.Conn) {
 	c.metrics.HandledConnectionCount.Inc()
+}
+
+// isNetworkOrHostUnreachableError determines based on the
+// given error whether the host or network is reachable.
+func isNetworkOrHostUnreachableError(err error) bool {
+	var de *lp2pswarm.DialError
+	if !errors.As(err, &de) {
+		return false
+	}
+
+	// Since TransportError doesn't implement the Unwrap
+	// method we need to inspect the errors manually.
+	for i := range de.DialErrors {
+		var te *lp2pswarm.TransportError
+		if !errors.As(&de.DialErrors[i], &te) {
+			continue
+		}
+
+		var ne *net.OpError
+		if !errors.As(te.Cause, &ne) || ne.Op != "dial" {
+			continue
+		}
+
+		var se *os.SyscallError
+		if errors.As(ne, &se) && strings.HasPrefix(se.Syscall, "connect") &&
+			(errors.Is(se.Err, errHostUnreachable) || errors.Is(se.Err, errNetworkUnreachable)) {
+			return true
+		}
+	}
+	return false
 }

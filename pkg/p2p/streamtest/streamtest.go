@@ -3,11 +3,12 @@ package streamtest
 import (
 	"context"
 	"errors"
-	"github.com/gauss-project/aurorafs/pkg/aurora"
 	"io"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/gauss-project/aurorafs/pkg/aurora"
 
 	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/p2p"
@@ -430,4 +431,10 @@ func (r *RecorderDisconnecter) IsBlocklisted(overlay boson.Address) (bool, time.
 
 	d, yes := r.blocklisted[overlay.String()]
 	return yes, d
+}
+
+// NetworkStatus implements p2p.NetworkStatuser interface.
+// It always returns p2p.NetworkStatusAvailable.
+func (r *RecorderDisconnecter) NetworkStatus() p2p.NetworkStatus {
+	return p2p.NetworkStatusAvailable
 }

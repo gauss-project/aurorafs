@@ -38,7 +38,10 @@ const (
 
 	addPeerBatchSize = 500
 
-	peerConnectionAttemptTimeout = 5 * time.Second // Timeout for establishing a new connection with peer.
+	// To avoid context.Timeout errors during network failure, the value of
+	// the peerConnectionAttemptTimeout constant must be equal to or greater
+	// than 15 seconds (empirically verified).
+	peerConnectionAttemptTimeout = 15 * time.Second // timeout for establishing a new connection with peer.
 
 	flagTimeout       = 5 * time.Minute  // how long before blocking a flagged peer
 	blockDuration     = time.Hour        // how long to blocklist an unresponsive peer for
@@ -371,6 +374,9 @@ func (k *Kad) Connection(ctx context.Context, addr *aurora.Address) error {
 	}
 	i, err := k.connect(ctx, addr.Overlay, addr.Underlay)
 	switch {
+	case errors.Is(err, p2p.ErrNetworkUnavailable):
+		k.logger.Debugf("kademlia: network unavailable when reaching peer with overlay %q and underlay %q", addr.Overlay, addr.Underlay)
+		return err
 	case errors.Is(err, errPruneEntry):
 		k.logger.Debugf("kademlia: dial to light node with overlay %q and underlay %q", addr.Overlay, addr.Underlay)
 		remove(addr.Overlay)
@@ -615,18 +621,18 @@ func (k *Kad) recordPeerLatencies(ctx context.Context) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			l, err := k.pinger.Ping(ctx, addr, "ping")
-			if err != nil {
+			switch l, err := k.pinger.Ping(ctx, addr, "ping"); {
+			case err != nil:
 				k.logger.Tracef("kademlia: cannot get latency for peer %s: %v", addr.String(), err)
 				k.blocker.Flag(addr)
 				k.metrics.Flag.Inc()
-				return
+			default:
+				k.blocker.Unflag(addr)
+				k.metrics.Unflag.Inc()
+				k.collector.Record(addr, im.PeerLatency(l))
+				v := k.collector.Inspect(addr).LatencyEWMA
+				k.metrics.PeerLatencyEWMA.Observe(v.Seconds())
 			}
-			k.blocker.Unflag(addr)
-			k.metrics.Unflag.Inc()
-			k.collector.Record(addr, im.PeerLatency(l))
-			v := k.collector.Inspect(addr).LatencyEWMA
-			k.metrics.PeerLatencyEWMA.Observe(v.Seconds())
 		}()
 		return false, false, nil
 	})
@@ -788,7 +794,7 @@ func (k *Kad) connectBootNodes(ctx context.Context) {
 			return
 		}
 		_, err := p2p.Discover(ctx, addr, func(addr ma.Multiaddr) (stop bool, err error) {
-			k.logger.Tracef("connecting to bootnode %s", addr)
+			k.logger.Tracef("kademlia: connecting to bootnode %s", addr)
 			if attempts >= maxBootNodeAttempts {
 				return true, nil
 			}
@@ -807,7 +813,7 @@ func (k *Kad) connectBootNodes(ctx context.Context) {
 
 			k.discovery.NotifyDiscoverWork(peer.Address)
 
-			k.logger.Tracef("connected to bootnode %s", addr)
+			k.logger.Tracef("kademlia: connected to bootnode %s", addr)
 			k.Outbound(*peer)
 
 			connected++
@@ -819,7 +825,7 @@ func (k *Kad) connectBootNodes(ctx context.Context) {
 			return
 		}
 		if err != nil {
-			k.logger.Warningf("discover to bootnode fail %s: %v", addr, err)
+			k.logger.Warningf("kademlia: discover to bootnode fail %s: %v", addr, err)
 		}
 	}
 }
@@ -931,6 +937,10 @@ func (k *Kad) connect(ctx context.Context, peer boson.Address, ma ma.Multiaddr) 
 
 	i, err := k.p2p.Connect(ctx, ma)
 	switch {
+	case errors.Is(err, p2p.ErrNetworkUnavailable):
+		return nil, err
+	case k.p2p.NetworkStatus() == p2p.NetworkStatusUnavailable:
+		return nil, p2p.ErrNetworkUnavailable
 	case errors.Is(err, p2p.ErrDialLightNode):
 		return nil, errPruneEntry
 	case errors.Is(err, p2p.ErrAlreadyConnected):
@@ -1610,13 +1620,14 @@ func (k *Kad) Snapshot() *model.KadParams {
 	})
 
 	return &model.KadParams{
-		Base:           k.base.String(),
-		Population:     k.knownPeers.Length(),
-		Connected:      k.connectedPeers.Length(),
-		Timestamp:      time.Now(),
-		NNLowWatermark: nnLowWatermark,
-		Depth:          k.NeighborhoodDepth(),
-		Reachability:   k.reachability.String(),
+		Base:                k.base.String(),
+		Population:          k.knownPeers.Length(),
+		Connected:           k.connectedPeers.Length(),
+		Timestamp:           time.Now(),
+		NNLowWatermark:      nnLowWatermark,
+		Depth:               k.NeighborhoodDepth(),
+		Reachability:        k.reachability.String(),
+		NetworkAvailability: k.p2p.NetworkStatus().String(),
 		Bins: model.KadBins{
 			Bin0:  infos[0],
 			Bin1:  infos[1],
