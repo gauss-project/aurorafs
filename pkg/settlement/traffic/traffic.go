@@ -214,6 +214,18 @@ func (s *Service) getTraffic(peer common.Address) (traffic *Traffic) {
 func (s *Service) getAllAddress(lastCheques map[common.Address]*chequePkg.Cheque, lastTransCheques map[common.Address]*chequePkg.SignedCheque) (map[common.Address]Traffic, error) {
 	chanResp := make(map[common.Address]Traffic)
 
+	for k := range lastCheques {
+		if _, ok := chanResp[k]; !ok {
+			chanResp[k] = Traffic{}
+		}
+	}
+
+	for k := range lastTransCheques {
+		if _, ok := chanResp[k]; !ok {
+			chanResp[k] = Traffic{}
+		}
+	}
+
 	retrieveList, err := s.trafficChainService.RetrievedAddress(s.chainAddress)
 	if err != nil {
 		return chanResp, err
@@ -230,18 +242,6 @@ func (s *Service) getAllAddress(lastCheques map[common.Address]*chequePkg.Cheque
 	for _, v := range transferList {
 		if _, ok := chanResp[v]; !ok {
 			chanResp[v] = Traffic{}
-		}
-	}
-
-	for k := range lastCheques {
-		if _, ok := chanResp[k]; !ok {
-			chanResp[k] = Traffic{}
-		}
-	}
-
-	for k := range lastTransCheques {
-		if _, ok := chanResp[k]; !ok {
-			chanResp[k] = Traffic{}
 		}
 	}
 
@@ -300,16 +300,13 @@ func (s *Service) replaceTraffic(addressList map[common.Address]Traffic, lastChe
 				<-workload
 				waitGroup.Done()
 			}()
-			_ = s.getTraffic(address)
 			err := s.trafficPeerChainUpdate(address, s.chainAddress)
 			if err != nil {
 				s.logger.Errorf("traffic: getChainTraffic %v", err.Error())
-				return
 			}
 			err = s.trafficPeerChequeUpdate(address, lastCheques, lastTransCheques)
 			if err != nil {
 				s.logger.Errorf("traffic: replaceTraffic %v", err.Error())
-				return
 			}
 		}(key, workload, waitGroup)
 	}
