@@ -5,6 +5,7 @@ import (
 	"errors"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/settlement/chain"
 	"math/big"
 )
@@ -67,7 +68,7 @@ func (m *ChainTrafficMock) TransAmount(beneficiary, recipient common.Address) (*
 	return big.NewInt(0), errors.New("not implemented")
 }
 
-func (m *ChainTrafficMock) CashChequeBeneficiary(ctx context.Context, beneficiary, recipient common.Address, cumulativePayout *big.Int, signature []byte) (*types.Transaction, error) {
+func (m *ChainTrafficMock) CashChequeBeneficiary(ctx context.Context, peer boson.Address, beneficiary, recipient common.Address, cumulativePayout *big.Int, signature []byte) (*types.Transaction, error) {
 	if m.cashChequeBeneficiary != nil {
 		return m.cashChequeBeneficiary(beneficiary, recipient, cumulativePayout, signature)
 	}

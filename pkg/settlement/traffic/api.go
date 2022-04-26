@@ -85,6 +85,7 @@ func (a *apiService) TrafficCheque(ctx context.Context, overlays []string) (*rpc
 			select {
 			case data := <-c:
 				cheque := data.(TrafficCheque)
+				a.s.logger.Infof("traffic cheque info:  %v", data)
 				mutex.Lock()
 				chequeMap[cheque.Peer.String()] = cheque
 				mutex.Unlock()
@@ -133,6 +134,7 @@ func (a *apiService) CashOut(ctx context.Context, overlays []string) (*rpc.Subsc
 			case data := <-c:
 				cashOut := data.(CashOutStatus)
 				mutex.Lock()
+				a.s.logger.Infof("cash out info:  %v", data)
 				cashOutMap[cashOut.Overlay.String()] = data
 				mutex.Unlock()
 			case <-ticker.C:
