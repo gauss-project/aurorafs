@@ -609,6 +609,7 @@ func (s *Service) PutRetrieveTraffic(peer boson.Address, traffic *big.Int) error
 	chainTraffic.retrieveTraffic = new(big.Int).Add(chainTraffic.retrieveTraffic, traffic)
 	chainTraffic.Unlock()
 	go s.PublishHeader()
+	go s.PublishTrafficCheque(chainAddress)
 	return s.chequeStore.PutRetrieveTraffic(chainAddress, chainTraffic.retrieveTraffic)
 }
 
@@ -623,6 +624,7 @@ func (s *Service) PutTransferTraffic(peer boson.Address, traffic *big.Int) error
 	localTraffic.transferTraffic = new(big.Int).Add(localTraffic.transferTraffic, traffic)
 	localTraffic.Unlock()
 	go s.PublishHeader()
+	go s.PublishTrafficCheque(chainAddress)
 	return s.chequeStore.PutTransferTraffic(chainAddress, localTraffic.transferTraffic)
 }
 
@@ -790,7 +792,6 @@ func (s *Service) cashChequeReceiptUpdate() {
 			s.peersLock.Lock()
 			s.trafficPeers.balance = balance
 			s.peersLock.Unlock()
-			_ = s.getTraffic(beneficiary)
 			err = s.trafficPeerChainUpdate(beneficiary, s.chainAddress)
 			if err != nil {
 				return err
@@ -803,7 +804,7 @@ func (s *Service) cashChequeReceiptUpdate() {
 			traffic := s.getTraffic(cashInfo.chainAddress)
 			traffic.updateStatus(UnOperation)
 			if err != nil {
-				s.Publish(fmt.Sprintf("CashOut:%s", cashInfo.peer.String()),
+				go s.Publish(fmt.Sprintf("CashOut:%s", cashInfo.peer.String()),
 					CashOutStatus{Overlay: cashInfo.peer, Status: false})
 				continue
 			}
@@ -811,14 +812,13 @@ func (s *Service) cashChequeReceiptUpdate() {
 				err := cashUpdate(cashInfo.chainAddress, cashInfo.peer)
 				if err != nil {
 					s.logger.Errorf("traffic:cashChequeReceiptUpdate - %v ", err.Error())
-					continue
 				}
 				go s.PublishHeader()
 				go s.PublishTrafficCheque(cashInfo.chainAddress)
-				s.Publish(fmt.Sprintf("CashOut:%s", cashInfo.peer.String()),
+				go s.Publish(fmt.Sprintf("CashOut:%s", cashInfo.peer.String()),
 					CashOutStatus{Overlay: cashInfo.peer, Status: true})
 			} else {
-				s.Publish(fmt.Sprintf("CashOut:%s", cashInfo.peer.String()),
+				go s.Publish(fmt.Sprintf("CashOut:%s", cashInfo.peer.String()),
 					CashOutStatus{Overlay: cashInfo.peer, Status: false})
 			}
 		}
