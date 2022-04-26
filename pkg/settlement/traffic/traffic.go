@@ -922,10 +922,11 @@ func (s *Service) Publish(key string, data interface{}) {
 	if c, ok := s.pubSub[key]; ok {
 		for _, i := range c {
 			i <- data
+			s.logger.Infof("Send data :%v to channel :%s", data, key)
 		}
 	}
 	keys := strings.Split(key, ":")
-	if keys[1] == "All" || len(keys) == 1 {
+	if len(keys) == 1 || keys[1] == "All" {
 		return
 	}
 	s.Publish(fmt.Sprintf("%s:%s", keys[0], "All"), data)
