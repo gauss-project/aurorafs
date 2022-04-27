@@ -919,6 +919,7 @@ func (s *Service) Publish(key string, data interface{}) {
 	defer func() {
 		recover()
 	}()
+LOOP:
 	if c, ok := s.pubSub[key]; ok {
 		for _, i := range c {
 			i <- data
@@ -929,7 +930,8 @@ func (s *Service) Publish(key string, data interface{}) {
 	if len(keys) == 1 || keys[1] == "All" {
 		return
 	}
-	s.Publish(fmt.Sprintf("%s:%s", keys[0], "All"), data)
+	key = fmt.Sprintf("%s:%s", keys[0], "All")
+	goto LOOP
 }
 
 func (s *Service) PublishHeader() {
