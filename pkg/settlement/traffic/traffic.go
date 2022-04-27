@@ -929,7 +929,13 @@ func (s *Service) Publish(key string, data interface{}) {
 	if len(keys) == 1 || keys[1] == "All" {
 		return
 	}
-	s.Publish(fmt.Sprintf("%s:%s", keys[0], "All"), data)
+	key = fmt.Sprintf("%s:%s", keys[0], "All")
+	if c, ok := s.pubSub[key]; ok {
+		for _, i := range c {
+			i <- data
+			s.logger.Infof("Send data :%v to channel :%s", data, key)
+		}
+	}
 }
 
 func (s *Service) PublishHeader() {
