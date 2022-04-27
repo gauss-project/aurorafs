@@ -919,6 +919,7 @@ func (s *Service) Publish(key string, data interface{}) {
 	defer func() {
 		recover()
 	}()
+LOOP:
 	if c, ok := s.pubSub[key]; ok {
 		for _, i := range c {
 			i <- data
@@ -930,12 +931,7 @@ func (s *Service) Publish(key string, data interface{}) {
 		return
 	}
 	key = fmt.Sprintf("%s:%s", keys[0], "All")
-	if c, ok := s.pubSub[key]; ok {
-		for _, i := range c {
-			i <- data
-			s.logger.Infof("Send data :%v to channel :%s", data, key)
-		}
-	}
+	goto LOOP
 }
 
 func (s *Service) PublishHeader() {
