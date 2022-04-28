@@ -26,6 +26,7 @@ type PutGetter interface {
 // load all of the subtrie of a given hash in memory.
 type loadSave struct {
 	storer     PutGetter
+	readMode   storage.ModeGet
 	pipelineFn func() pipeline.Interface
 }
 
@@ -39,14 +40,15 @@ func New(storer PutGetter, pipelineFn func() pipeline.Interface) file.LoadSaver 
 
 // NewReadonly returns a new read-only load-saver
 // which will error on write.
-func NewReadonly(storer PutGetter) file.LoadSaver {
+func NewReadonly(storer PutGetter, readMode storage.ModeGet) file.LoadSaver {
 	return &loadSave{
-		storer: storer,
+		storer:   storer,
+		readMode: readMode,
 	}
 }
 
 func (ls *loadSave) Load(ctx context.Context, ref []byte) ([]byte, error) {
-	j, _, err := joiner.New(ctx, ls.storer, storage.ModeGetRequest, boson.NewAddress(ref))
+	j, _, err := joiner.New(ctx, ls.storer, ls.readMode, boson.NewAddress(ref))
 	if err != nil {
 		return nil, err
 	}
