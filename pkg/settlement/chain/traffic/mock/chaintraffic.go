@@ -69,7 +69,7 @@ func (m *ChainTrafficMock) TransAmount(beneficiary, recipient common.Address) (*
 	return big.NewInt(0), errors.New("not implemented")
 }
 
-func (m *ChainTrafficMock) CashChequeBeneficiary(ctx context.Context, peer boson.Address, beneficiary common.Address, recipient common.Address, cumulativePayout *big.Int, signature []byte) (*types.Transaction, error) {
+func (m *ChainTrafficMock) CashChequeBeneficiary(ctx context.Context, peer boson.Address, beneficiary, recipient common.Address, cumulativePayout *big.Int, signature []byte) (*types.Transaction, error) {
 	if m.cashChequeBeneficiary != nil {
 		return m.cashChequeBeneficiary(ctx, peer, beneficiary, recipient, cumulativePayout, signature)
 	}
