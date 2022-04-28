@@ -834,7 +834,7 @@ func (s *Service) PackRelayReq(ctx context.Context, stream p2p.VirtualStream, re
 		defer func() {
 			stream.UpdateStatRealStreamClosed()
 			quit = true
-			_ = stream.Reset()
+			_ = stream.RealStream().Reset()
 		}()
 		go func() {
 			defer stream.UpdateStatRealStreamClosed()
@@ -879,7 +879,7 @@ func (s *Service) PackRelayResp(ctx context.Context, stream p2p.VirtualStream, r
 		defer func() {
 			stream.UpdateStatRealStreamClosed()
 			quit = true
-			_ = stream.Reset()
+			_ = stream.RealStream().Reset()
 		}()
 
 		first := true
