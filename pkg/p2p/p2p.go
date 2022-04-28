@@ -178,6 +178,7 @@ type VirtualStream interface {
 	Reader() *ReaderChan
 	Writer() *WriterChan
 	Done() chan struct{}
+	RealStream() Stream
 }
 
 // ProtocolSpec defines a collection of Stream specifications with handlers.

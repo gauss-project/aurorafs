@@ -829,7 +829,7 @@ func (s *Service) onRelay(ctx context.Context, p p2p.Peer, stream p2p.Stream) (e
 func (s *Service) PackRelayReq(ctx context.Context, stream p2p.VirtualStream, req *pb.RouteRelayReq) {
 	go func() {
 		var quit bool
-		w, r := protobuf.NewWriterAndReader(stream)
+		w, r := protobuf.NewWriterAndReader(stream.RealStream())
 		var err error
 		defer func() {
 			stream.UpdateStatRealStreamClosed()
@@ -874,7 +874,7 @@ func (s *Service) PackRelayReq(ctx context.Context, stream p2p.VirtualStream, re
 func (s *Service) PackRelayResp(ctx context.Context, stream p2p.VirtualStream, reqCh chan *pb.RouteRelayReq) {
 	go func() {
 		var quit bool
-		w, r := protobuf.NewWriterAndReader(stream)
+		w, r := protobuf.NewWriterAndReader(stream.RealStream())
 		var err error
 		defer func() {
 			stream.UpdateStatRealStreamClosed()

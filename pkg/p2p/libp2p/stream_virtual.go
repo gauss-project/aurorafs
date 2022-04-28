@@ -89,3 +89,7 @@ func (s *virtualStream) Writer() *p2p.WriterChan {
 func (s *virtualStream) Done() chan struct{} {
 	return s.done
 }
+
+func (s *virtualStream) RealStream() p2p.Stream {
+	return s.Stream
+}
