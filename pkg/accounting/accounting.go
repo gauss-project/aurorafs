@@ -152,8 +152,7 @@ func (a *Accounting) Debit(peer boson.Address, traffic uint64) error {
 	}
 	if tolerance.Cmp(traff) <= 0 {
 		a.metrics.AccountingDisconnectsCount.Inc()
-		a.logger.Errorf("block list %s", peer.String())
-		//return ErrDisconnectThresholdExceeded
+		a.logger.Errorf("block list %s traffic: %d tolerance: %d", peer.String(), traff, tolerance)
 		return p2p.NewBlockPeerError(24*time.Hour, ErrDisconnectThresholdExceeded)
 	}
 
