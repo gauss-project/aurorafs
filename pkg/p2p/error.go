@@ -16,6 +16,9 @@ var (
 	ErrDialLightNode = errors.New("target peer is a light node")
 	// ErrPeerBlocklisted is returned if peer is on blocklist
 	ErrPeerBlocklisted = errors.New("peer blocklisted")
+
+	ErrStreamClosed       = errors.New("stream closed")
+	ErrNetworkUnavailable = errors.New("network unavailable")
 )
 
 const (

@@ -8,12 +8,13 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"github.com/gauss-project/aurorafs/pkg/settlement/chain"
-	"github.com/gauss-project/aurorafs/pkg/settlement/chain/transaction"
-	"github.com/gauss-project/aurorafs/pkg/settlement/chain/transaction/backendmock"
 	"io/ioutil"
 	"math/big"
 	"testing"
+
+	"github.com/gauss-project/aurorafs/pkg/settlement/chain"
+	"github.com/gauss-project/aurorafs/pkg/settlement/chain/transaction"
+	"github.com/gauss-project/aurorafs/pkg/settlement/chain/transaction/backendmock"
 
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
@@ -125,6 +126,7 @@ func TestTransactionSend(t *testing.T) {
 			),
 			signerMockForTransaction(signedTx, sender, chainID, t),
 			store,
+			nil,
 			chainID,
 		)
 		if err != nil {
@@ -192,6 +194,7 @@ func TestTransactionSend(t *testing.T) {
 			),
 			signerMockForTransaction(signedTx, sender, chainID, t),
 			store,
+			nil,
 			chainID,
 		)
 		if err != nil {
@@ -264,6 +267,7 @@ func TestTransactionSend(t *testing.T) {
 			),
 			signerMockForTransaction(signedTx, sender, chainID, t),
 			store,
+			nil,
 			chainID,
 		)
 		if err != nil {
@@ -329,6 +333,7 @@ func TestTransactionSend(t *testing.T) {
 			),
 			signerMockForTransaction(signedTx, sender, chainID, t),
 			storemock.NewStateStore(),
+			nil,
 			chainID,
 		)
 		if err != nil {
@@ -360,6 +365,7 @@ func TestTransactionWaitForReceipt(t *testing.T) {
 			}),
 		),
 		signermock.New(),
+		nil,
 		nil,
 		chainID,
 	)
