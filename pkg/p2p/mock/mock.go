@@ -200,7 +200,7 @@ func (s *Service) SetConnectFunc(f func(ctx context.Context, addr ma.Multiaddr) 
 	s.connectFunc = f
 }
 
-func (s *Service) CallHandler(ctx context.Context, last p2p.Peer, stream p2p.Stream) (relayData *pb.RouteRelayReq, w p2p.WriterChan, r p2p.ReaderChan, forward bool, err error) {
+func (s *Service) CallHandler(ctx context.Context, last p2p.Peer, stream p2p.Stream) (relayData *pb.RouteRelayReq, w *p2p.WriterChan, r *p2p.ReaderChan, forward bool, err error) {
 	return
 }
 

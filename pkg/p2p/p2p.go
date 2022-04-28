@@ -4,7 +4,6 @@ package p2p
 
 import (
 	"context"
-	"errors"
 	"io"
 	"net"
 	"time"
@@ -53,11 +52,9 @@ const (
 	NetworkStatusUnavailable NetworkStatus = 2
 )
 
-var ErrNetworkUnavailable = errors.New("network unavailable")
-
 // Service provides methods to handle p2p Peers and Protocols.
 type Service interface {
-	CallHandler(ctx context.Context, last Peer, stream Stream) (relayData *pb.RouteRelayReq, w WriterChan, r ReaderChan, forward bool, err error)
+	CallHandler(ctx context.Context, last Peer, stream Stream) (relayData *pb.RouteRelayReq, w *WriterChan, r *ReaderChan, forward bool, err error)
 	AddProtocol(ProtocolSpec) error
 	Connect
 	Disconnecter
@@ -173,6 +170,14 @@ type Stream interface {
 	Headers() Headers
 	FullClose() error
 	Reset() error
+}
+
+type VirtualStream interface {
+	Stream
+	UpdateStatRealStreamClosed()
+	Reader() *ReaderChan
+	Writer() *WriterChan
+	Done() chan struct{}
 }
 
 // ProtocolSpec defines a collection of Stream specifications with handlers.

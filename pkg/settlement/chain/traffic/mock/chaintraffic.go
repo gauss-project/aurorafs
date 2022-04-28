@@ -3,10 +3,12 @@ package mock
 import (
 	"context"
 	"errors"
+	"math/big"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/settlement/chain"
-	"math/big"
 )
 
 type ChainTrafficMock struct {
@@ -22,7 +24,7 @@ type ChainTrafficMock struct {
 
 	transAmount func(beneficiary, recipient common.Address) (*big.Int, error)
 
-	cashChequeBeneficiary func(beneficiary, recipient common.Address, cumulativePayout *big.Int, signature []byte) (*types.Transaction, error)
+	cashChequeBeneficiary func(ctx context.Context, peer boson.Address, beneficiary common.Address, recipient common.Address, cumulativePayout *big.Int, signature []byte) (*types.Transaction, error)
 }
 
 func (m *ChainTrafficMock) TransferredAddress(address common.Address) ([]common.Address, error) {
@@ -67,9 +69,9 @@ func (m *ChainTrafficMock) TransAmount(beneficiary, recipient common.Address) (*
 	return big.NewInt(0), errors.New("not implemented")
 }
 
-func (m *ChainTrafficMock) CashChequeBeneficiary(ctx context.Context, beneficiary, recipient common.Address, cumulativePayout *big.Int, signature []byte) (*types.Transaction, error) {
+func (m *ChainTrafficMock) CashChequeBeneficiary(ctx context.Context, peer boson.Address, beneficiary common.Address, recipient common.Address, cumulativePayout *big.Int, signature []byte) (*types.Transaction, error) {
 	if m.cashChequeBeneficiary != nil {
-		return m.cashChequeBeneficiary(beneficiary, recipient, cumulativePayout, signature)
+		return m.cashChequeBeneficiary(ctx, peer, beneficiary, recipient, cumulativePayout, signature)
 	}
 	return nil, errors.New("not implemented")
 }
@@ -123,7 +125,7 @@ func WithTransAmount(f func(beneficiary, recipient common.Address) (*big.Int, er
 	})
 }
 
-func WithCashChequeBeneficiary(f func(beneficiary, recipient common.Address, cumulativePayout *big.Int, signature []byte) (*types.Transaction, error)) Option {
+func WithCashChequeBeneficiary(f func(ctx context.Context, peer boson.Address, beneficiary common.Address, recipient common.Address, cumulativePayout *big.Int, signature []byte) (*types.Transaction, error)) Option {
 	return optionFunc(func(s *ChainTrafficMock) {
 		s.cashChequeBeneficiary = f
 	})

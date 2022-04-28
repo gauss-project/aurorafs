@@ -6,6 +6,11 @@ import (
 	"crypto/ecdsa"
 	"errors"
 	"fmt"
+	"io"
+	"io/ioutil"
+	"math/big"
+	"testing"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/gauss-project/aurorafs/pkg/addressbook"
 	"github.com/gauss-project/aurorafs/pkg/aurora"
@@ -26,10 +31,6 @@ import (
 	"github.com/gauss-project/aurorafs/pkg/storage"
 	"github.com/gauss-project/aurorafs/pkg/topology/bootnode"
 	"github.com/gauss-project/aurorafs/pkg/topology/lightnode"
-	"io"
-	"io/ioutil"
-	"math/big"
-	"testing"
 )
 
 type libp2pServiceOpts struct {
@@ -54,12 +55,12 @@ func (m *trafficProtocolMock) EmitCheque(ctx context.Context, peer boson.Address
 }
 
 type cashOutMock struct {
-	cashCheque     func(ctx context.Context, chequebook common.Address, recipient common.Address) (common.Hash, error)
+	cashCheque     func(ctx context.Context, peer boson.Address, beneficiary common.Address, recipient common.Address) (common.Hash, error)
 	waitForReceipt func(ctx context.Context, ctxHash common.Hash) (uint64, error)
 }
 
-func (m *cashOutMock) CashCheque(ctx context.Context, chequebook common.Address, recipient common.Address) (common.Hash, error) {
-	return m.cashCheque(ctx, chequebook, recipient)
+func (m *cashOutMock) CashCheque(ctx context.Context, peer boson.Address, beneficiary common.Address, recipient common.Address) (common.Hash, error) {
+	return m.cashCheque(ctx, peer, beneficiary, recipient)
 }
 
 func (m *cashOutMock) WaitForReceipt(ctx context.Context, ctxHash common.Hash) (uint64, error) {
@@ -114,7 +115,7 @@ func TestHandSake(t *testing.T) {
 	p2pStream := &trafficProtocolMock{}
 
 	logger := logging.New(ioutil.Discard, 0)
-	//transactionService, err := chainTraffic.NewServer(logger, nil, "") //transaction.NewService(logger, nil, Signer, nil, new(big.Int).SetInt64(10))
+	// transactionService, err := chainTraffic.NewServer(logger, nil, "") //transaction.NewService(logger, nil, Signer, nil, new(big.Int).SetInt64(10))
 	transactionService := chainTrafficMock.New(
 		chainTrafficMock.WithBalanceOf(func(account common.Address) (*big.Int, error) {
 			return new(big.Int).SetInt64(0), nil
@@ -128,8 +129,8 @@ func TestHandSake(t *testing.T) {
 		},
 		chainID)
 
-	cashOut := cashOutMock{}          //chequePkg.NewCashoutService(store, transactionService, chequeStore)
-	addressBook := &addressBookMock{} //NewAddressBook(store)
+	cashOut := cashOutMock{}          // chequePkg.NewCashoutService(store, transactionService, chequeStore)
+	addressBook := &addressBookMock{} // NewAddressBook(store)
 	addressBook.putBeneficiary = func(peer boson.Address, beneficiary common.Address) error {
 		return nil
 	}
@@ -325,7 +326,7 @@ func TestPayIssueError(t *testing.T) {
 	p2pStream := &trafficProtocolMock{}
 
 	logger := logging.New(ioutil.Discard, 0)
-	transactionService, err := chainTraffic.NewServer(logger, nil, nil, nil, nil, "") //transaction.NewService(logger, nil, Signer, nil, new(big.Int).SetInt64(10))
+	transactionService, err := chainTraffic.NewServer(logger, nil, nil, nil, nil, "", nil) // transaction.NewService(logger, nil, Signer, nil, new(big.Int).SetInt64(10))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -337,8 +338,8 @@ func TestPayIssueError(t *testing.T) {
 		},
 		chainID)
 
-	cashOut := cashOutMock{}         //chequePkg.NewCashoutService(store, transactionService, chequeStore)
-	addressBook := addressBookMock{} //NewAddressBook(store)
+	cashOut := cashOutMock{}         // chequePkg.NewCashoutService(store, transactionService, chequeStore)
+	addressBook := addressBookMock{} // NewAddressBook(store)
 	addressBook.beneficiary = func(peer boson.Address) (beneficiary common.Address, known bool) {
 		return beneficiarys, true
 	}
@@ -389,7 +390,7 @@ func TestCashOut(t *testing.T) {
 	chainID := int64(1)
 	chequeStore := mockchequestore.NewChequeStore()
 	cashOut := &cashOutMock{}
-	cashOut.cashCheque = func(ctx context.Context, chequebook common.Address, recipient common.Address) (common.Hash, error) {
+	cashOut.cashCheque = func(ctx context.Context, peer boson.Address, beneficiary common.Address, recipient common.Address) (common.Hash, error) {
 		return txHash, nil
 	}
 	chequeSigner := &chequeSignerMock{}
@@ -468,7 +469,7 @@ func newTrafficTest(t *testing.T, store storage.StateStorer, logger logging.Logg
 	trafficChainService chain.Traffic, chequeStore chequePkg.ChequeStore, cashout chequePkg.CashoutService,
 	addressBook Addressbook, chequeSigner chequePkg.ChequeSigner, chainID int64) *Service {
 
-	//protocol := trafficprotocol.New(streamer, logger)
+	// protocol := trafficprotocol.New(streamer, logger)
 	p2pServer, _ := newP2pService(t, 1, libp2pServiceOpts{libp2pOpts: libp2p.Options{NodeMode: aurora.NewModel()}})
 
 	trafficService := New(

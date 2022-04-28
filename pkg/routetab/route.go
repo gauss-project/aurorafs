@@ -826,26 +826,18 @@ func (s *Service) onRelay(ctx context.Context, p p2p.Peer, stream p2p.Stream) (e
 }
 
 // PackRelayReq This packet mode is UDP mode and writing success does not mean that the final target has received a message
-func (s *Service) PackRelayReq(ctx context.Context, stream p2p.Stream, req *pb.RouteRelayReq) (write p2p.WriterChan, read p2p.ReaderChan, done chan struct{}) {
-	write = p2p.WriterChan{
-		W:   make(chan []byte, 1),
-		Err: make(chan error, 1),
-	}
-	read = p2p.ReaderChan{
-		R:   make(chan []byte, 1),
-		Err: make(chan error, 1),
-	}
-	done = make(chan struct{}, 1)
-
+func (s *Service) PackRelayReq(ctx context.Context, stream p2p.VirtualStream, req *pb.RouteRelayReq) {
 	go func() {
 		var quit bool
 		w, r := protobuf.NewWriterAndReader(stream)
 		var err error
 		defer func() {
+			stream.UpdateStatRealStreamClosed()
 			quit = true
 			_ = stream.Reset()
 		}()
 		go func() {
+			defer stream.UpdateStatRealStreamClosed()
 			for {
 				resp := &pb.RouteRelayResp{}
 				err = r.ReadMsg(resp)
@@ -853,51 +845,39 @@ func (s *Service) PackRelayReq(ctx context.Context, stream p2p.Stream, req *pb.R
 					if quit {
 						err = nil
 					}
-					read.Err <- err
+					stream.Reader().Err <- err
 					return
 				}
-				read.R <- resp.Data
+				stream.Reader().R <- resp.Data
 			}
 		}()
 		for {
 			select {
-			case <-done:
+			case <-stream.Done():
 				return
 			case <-ctx.Done():
 				return
-			case p := <-write.W:
+			case p := <-stream.Writer().W:
 				req.Data = p
 				err = w.WriteMsg(req)
-				write.Err <- err
+				stream.Writer().Err <- err
 				if err != nil {
 					return
 				}
 			}
 		}
 	}()
-	return
 }
 
 // PackRelayResp This packet mode is UDP mode and writing success does not mean that the final target has received a message
 // This channel is closed by the initiator node
-func (s *Service) PackRelayResp(ctx context.Context, stream p2p.Stream, reqCh chan *pb.RouteRelayReq) (write p2p.WriterChan, read p2p.ReaderChan, done chan struct{}) {
-	write = p2p.WriterChan{
-		W:   make(chan []byte, 1),
-		Err: make(chan error, 1),
-	}
-	read = p2p.ReaderChan{
-		R:   make(chan []byte, 1),
-		Err: make(chan error, 1),
-	}
-
-	// This relay can only be initiated by the requesting end to close
-	done = make(chan struct{}, 1)
-
+func (s *Service) PackRelayResp(ctx context.Context, stream p2p.VirtualStream, reqCh chan *pb.RouteRelayReq) {
 	go func() {
 		var quit bool
 		w, r := protobuf.NewWriterAndReader(stream)
 		var err error
 		defer func() {
+			stream.UpdateStatRealStreamClosed()
 			quit = true
 			_ = stream.Reset()
 		}()
@@ -905,6 +885,7 @@ func (s *Service) PackRelayResp(ctx context.Context, stream p2p.Stream, reqCh ch
 		first := true
 
 		go func() {
+			defer stream.UpdateStatRealStreamClosed()
 			for {
 				req := &pb.RouteRelayReq{}
 				err = r.ReadMsg(req)
@@ -920,26 +901,25 @@ func (s *Service) PackRelayResp(ctx context.Context, stream p2p.Stream, reqCh ch
 					if quit {
 						err = nil
 					}
-					read.Err <- err
+					stream.Reader().Err <- err
 					return
 				}
-				read.R <- req.Data
+				stream.Reader().R <- req.Data
 			}
 		}()
 		for {
 			select {
 			case <-ctx.Done():
 				return
-			case p := <-write.W:
+			case p := <-stream.Writer().W:
 				err = w.WriteMsg(&pb.RouteRelayResp{Data: p})
-				write.Err <- err
+				stream.Writer().Err <- err
 				if err != nil {
 					return
 				}
 			}
 		}
 	}()
-	return
 }
 
 func (s *Service) convUnderlayList(uType int32, target, last boson.Address, old []*pb.UnderlayResp) (out []*pb.UnderlayResp) {

@@ -937,7 +937,7 @@ func (s *Service) ResourceManager() network.ResourceManager {
 	return s.host.Network().ResourceManager()
 }
 
-func (s *Service) CallHandler(ctx context.Context, last p2p.Peer, stream p2p.Stream) (relayData *pb.RouteRelayReq, w p2p.WriterChan, r p2p.ReaderChan, forward bool, err error) {
+func (s *Service) CallHandler(ctx context.Context, last p2p.Peer, stream p2p.Stream) (relayData *pb.RouteRelayReq, w *p2p.WriterChan, r *p2p.ReaderChan, forward bool, err error) {
 	defer func() {
 		if relayData == nil {
 			return
@@ -951,7 +951,10 @@ func (s *Service) CallHandler(ctx context.Context, last p2p.Peer, stream p2p.Str
 		}
 	}()
 	reqCh := make(chan *pb.RouteRelayReq, 1)
-	w, r, done := s.route.PackRelayResp(ctx, stream, reqCh)
+	vst := newVirtualStream(stream)
+	w = vst.writer
+	r = vst.reader
+	s.route.PackRelayResp(ctx, vst, reqCh)
 	select {
 	case relayData = <-reqCh:
 		if relayData == nil {
@@ -1012,7 +1015,7 @@ func (s *Service) CallHandler(ctx context.Context, last p2p.Peer, stream p2p.Str
 
 	s.metrics.HandledStreamCount.Inc()
 
-	err = spec.Handler(ctx, src, newVirtualStream(stream, w, r, done))
+	err = spec.Handler(ctx, src, vst)
 	if err != nil {
 		var de *p2p.DisconnectError
 		if errors.As(err, &de) {
@@ -1062,7 +1065,8 @@ func (s *Service) NewRelayStream(ctx context.Context, target boson.Address, head
 		return nil, fmt.Errorf("send headers: %w", err)
 	}
 
-	w, r, done := s.route.PackRelayReq(ctx, stream, &pb.RouteRelayReq{
+	relay := newVirtualStream(stream)
+	s.route.PackRelayReq(ctx, relay, &pb.RouteRelayReq{
 		Src:             s.self.Bytes(),
 		SrcMode:         s.nodeMode.Bv.Bytes(),
 		Dest:            target.Bytes(),
@@ -1072,8 +1076,6 @@ func (s *Service) NewRelayStream(ctx context.Context, target boson.Address, head
 		Data:            nil,
 		MidCall:         midCall,
 	})
-
-	relay := newVirtualStream(stream, w, r, done)
 	return relay, nil
 }
 
