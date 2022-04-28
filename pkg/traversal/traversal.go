@@ -50,7 +50,7 @@ type service struct {
 
 // traverseAndProcess traverses the given reference on a storage and applies processFn on each chunk.
 func (s *service) traverseAndProcess(ctx context.Context, addr boson.Address, processFn boson.AddressIterFunc) error {
-	ls := loadsave.NewReadonly(s.store)
+	ls := loadsave.NewReadonly(s.store, storage.ModeGetLookup)
 	switch mf, err := manifest.NewDefaultManifestReference(addr, ls); {
 	case errors.Is(err, manifest.ErrInvalidManifestType):
 		break
@@ -226,7 +226,7 @@ func (s *service) GetChunkHashes(ctx context.Context, addr boson.Address, pyrami
 
 	// process as manifest
 	processNodes := func() error {
-		ls := loadsave.NewReadonly(store)
+		ls := loadsave.NewReadonly(store, storage.ModeGetLookup)
 		switch mf, err := manifest.NewDefaultManifestReference(addr, ls); {
 		case errors.Is(err, manifest.ErrInvalidManifestType):
 			break

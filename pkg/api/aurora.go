@@ -205,7 +205,7 @@ func (s *server) fileUploadHandler(w http.ResponseWriter, r *http.Request) {
 
 func (s *server) auroraDownloadHandler(w http.ResponseWriter, r *http.Request) {
 	logger := tracing.NewLoggerWithTraceID(r.Context(), s.logger)
-	ls := loadsave.NewReadonly(s.storer)
+	ls := loadsave.NewReadonly(s.storer, storage.ModeGetRequest)
 
 	targets := r.URL.Query().Get("targets")
 	if targets != "" {
@@ -664,7 +664,7 @@ type ManifestNode struct {
 
 func (s *server) manifestView(ctx context.Context, nameOrHex, pathVar string, depth int) (*ManifestNode, error) {
 	logger := tracing.NewLoggerWithTraceID(ctx, s.logger)
-	ls := loadsave.NewReadonly(s.storer)
+	ls := loadsave.NewReadonly(s.storer, storage.ModeGetRequest)
 
 	address, err := s.resolveNameOrAddress(nameOrHex)
 	if err != nil {

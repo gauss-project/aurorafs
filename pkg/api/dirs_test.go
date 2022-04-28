@@ -22,6 +22,7 @@ import (
 	"github.com/gauss-project/aurorafs/pkg/logging"
 	"github.com/gauss-project/aurorafs/pkg/manifest"
 	routetab "github.com/gauss-project/aurorafs/pkg/routetab/mock"
+	"github.com/gauss-project/aurorafs/pkg/storage"
 	"github.com/gauss-project/aurorafs/pkg/storage/mock"
 	"github.com/gauss-project/aurorafs/pkg/traversal"
 )
@@ -275,7 +276,7 @@ Disallow: /`),
 			// verify manifest content
 			verifyManifest, err := manifest.NewDefaultManifestReference(
 				resp.Reference,
-				loadsave.NewReadonly(storer),
+				loadsave.NewReadonly(storer, storage.ModeGetRequest),
 			)
 			if err != nil {
 				t.Fatal(err)
