@@ -139,6 +139,12 @@ func (a *Accounting) settle() {
 // existing credit).
 func (a *Accounting) Debit(peer boson.Address, traffic uint64) error {
 
+	accountingPeer, err := a.getAccountingPeer(peer)
+	if err != nil {
+		return err
+	}
+	accountingPeer.lock.Lock()
+	defer accountingPeer.lock.Unlock()
 	tolerance := a.paymentTolerance
 	traff, err := a.settlement.TransferTraffic(peer)
 	if err != nil {
