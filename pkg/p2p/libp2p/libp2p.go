@@ -9,7 +9,6 @@ import (
 	"net"
 	"os"
 	"runtime"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -46,8 +45,8 @@ import (
 	libp2pquic "github.com/libp2p/go-libp2p-quic-transport"
 	rcmgr "github.com/libp2p/go-libp2p-resource-manager"
 	lp2pswarm "github.com/libp2p/go-libp2p-swarm"
-	"github.com/libp2p/go-libp2p/p2p/host/autonat"
 	basichost "github.com/libp2p/go-libp2p/p2p/host/basic"
+	"github.com/libp2p/go-libp2p/p2p/net/connmgr"
 	libp2pping "github.com/libp2p/go-libp2p/p2p/protocol/ping"
 	"github.com/libp2p/go-tcp-transport"
 	ws "github.com/libp2p/go-ws-transport"
@@ -59,10 +58,6 @@ import (
 var (
 	_ p2p.Service      = (*Service)(nil)
 	_ p2p.DebugService = (*Service)(nil)
-
-	// reachabilityOverridePublic overrides autonat to simply report
-	// public reachability status, it is set in the makefile.
-	reachabilityOverridePublic = "false"
 )
 
 const (
@@ -74,7 +69,6 @@ type Service struct {
 	host              host.Host
 	natManager        basichost.NATManager
 	natAddrResolver   *staticAddressResolver
-	autonatDialer     host.Host
 	pingDialer        host.Host
 	libp2pPeerstore   peerstore.Peerstore
 	metrics           metrics
@@ -185,7 +179,16 @@ func New(ctx context.Context, signer beecrypto.Signer, networkID uint64, overlay
 		)
 	}
 
-	manager, err := rcmgr.NewResourceManager(newLimier(o))
+	limit := newLimier(o)
+	manager, err := rcmgr.NewResourceManager(limit)
+	if err != nil {
+		return nil, err
+	}
+
+	low := limit.GetSystemLimits().GetConnTotalLimit()
+	high := low + 200
+
+	connManager, err := connmgr.NewConnManager(low, high)
 	if err != nil {
 		return nil, err
 	}
@@ -194,6 +197,7 @@ func New(ctx context.Context, signer beecrypto.Signer, networkID uint64, overlay
 		libp2p.Transport(tcp.NewTCPTransport, tcp.DisableReuseport()),
 		libp2p.ResourceManager(manager),
 		libp2p.DisableRelay(),
+		libp2p.ConnectionManager(connManager),
 	}
 
 	if o.EnableWS {
@@ -214,30 +218,6 @@ func New(ctx context.Context, signer beecrypto.Signer, networkID uint64, overlay
 	h, err := o.hostFactory(opts...)
 	if err != nil {
 		return nil, err
-	}
-
-	// Support same non default security and transport options as
-	// original host.
-	dialer, err := o.hostFactory(append(transports, security)...)
-	if err != nil {
-		return nil, err
-	}
-
-	options := []autonat.Option{autonat.EnableService(dialer.Network())}
-
-	val, err := strconv.ParseBool(reachabilityOverridePublic)
-	if err != nil {
-		return nil, err
-	}
-	if val {
-		options = append(options, autonat.WithReachability(network.ReachabilityPublic))
-	}
-
-	// If you want to help other peers to figure out if they are behind
-	// NATs, you can launch the server-side of AutoNAT too (AutoRelay
-	// already runs the client)
-	if _, err = autonat.New(h, options...); err != nil {
-		return nil, fmt.Errorf("autonat: %w", err)
 	}
 
 	var advertisableAddresser handshake.AdvertisableAddressResolver
@@ -279,7 +259,6 @@ func New(ctx context.Context, signer beecrypto.Signer, networkID uint64, overlay
 		host:              h,
 		natManager:        natManager,
 		natAddrResolver:   natAddrResolver,
-		autonatDialer:     dialer,
 		pingDialer:        pingDialer,
 		handshakeService:  handshakeService,
 		libp2pPeerstore:   libp2pPeerstore,
@@ -1136,9 +1115,6 @@ func (s *Service) Close() error {
 		if err := s.natManager.Close(); err != nil {
 			return err
 		}
-	}
-	if err := s.autonatDialer.Close(); err != nil {
-		return err
 	}
 	if err := s.pingDialer.Close(); err != nil {
 		return err
