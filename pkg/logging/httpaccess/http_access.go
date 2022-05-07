@@ -109,6 +109,9 @@ func (l *responseLogger) Push(target string, opts *http.PushOptions) error {
 }
 
 func (l *responseLogger) Write(b []byte) (int, error) {
+	if l.w.Header().Get("hijack") == "true" {
+		return 0, nil
+	}
 	size, err := l.w.Write(b)
 	l.size += size
 	return size, err

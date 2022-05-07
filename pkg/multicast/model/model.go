@@ -46,6 +46,7 @@ type ConfigNodeGroup struct {
 	KeepPingPeers      int               `json:"keep-ping-peers"`
 	Nodes              []boson.Address   `json:"nodes,omitempty"`
 	AgentHttp          []ConfigNetDomain `json:"agent-http,omitempty"`
+	AgentWS            []ConfigNetDomain `json:"agent-ws,omitempty"`
 }
 
 type GType int

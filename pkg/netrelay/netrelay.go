@@ -1,11 +1,9 @@
 package netrelay
 
 import (
-	"bytes"
-	"encoding/json"
+	"bufio"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"strings"
 
@@ -15,7 +13,6 @@ import (
 	"github.com/gauss-project/aurorafs/pkg/logging"
 	"github.com/gauss-project/aurorafs/pkg/multicast"
 	"github.com/gauss-project/aurorafs/pkg/multicast/model"
-	"github.com/gauss-project/aurorafs/pkg/netrelay/pb"
 	"github.com/gauss-project/aurorafs/pkg/p2p"
 	"github.com/gauss-project/aurorafs/pkg/routetab"
 )
@@ -23,6 +20,7 @@ import (
 type NetRelay interface {
 	RelayHttpDo(w http.ResponseWriter, r *http.Request, address boson.Address)
 }
+
 type Service struct {
 	streamer  p2p.Streamer
 	logger    logging.Logger
@@ -37,30 +35,7 @@ func New(streamer p2p.Streamer, logging logging.Logger, groups []model.ConfigNod
 
 func (s *Service) RelayHttpDo(w http.ResponseWriter, r *http.Request, address boson.Address) {
 	url := strings.ReplaceAll(r.URL.String(), aurora.RelayPrefixHttp, "")
-	body, err := ioutil.ReadAll(r.Body)
-	if err != nil {
-		jsonhttp.InternalServerError(w, fmt.Errorf("error in getting body:%v", err.Error()))
-		return
-	}
-
-	mpHeader := make(map[string]string)
-	method := r.Method
-	for k, v := range r.Header {
-		mpHeader[k] = v[0]
-	}
-	header, err := json.Marshal(mpHeader)
-	if err != nil {
-		jsonhttp.InternalServerError(w, fmt.Errorf("error in getting header:%v", err.Error()))
-		return
-	}
-
-	var resp pb.RelayHttpResp
-	var msg pb.RelayHttpReq
-	msg.Url = url
-	msg.Method = []byte(method)
-	msg.Body = body
-	msg.Header = header
-
+	var forward []boson.Address
 	if boson.ZeroAddress.Equal(address) {
 		urls := strings.Split(url, "/")
 		group := urls[1]
@@ -74,46 +49,87 @@ func (s *Service) RelayHttpDo(w http.ResponseWriter, r *http.Request, address bo
 			jsonhttp.InternalServerError(w, fmt.Sprintf("No corresponding node found of group:%s", group))
 			return
 		}
-		nodes.Connected = append(nodes.Connected, nodes.Keep...)
-		for _, v := range nodes.Connected {
-			resp, err = s.SendHttp(r.Context(), v, msg)
-			if err == nil {
-				break
-			}
-		}
+		forward = append(forward, nodes.Connected...)
+		forward = append(forward, nodes.Keep...)
 	} else {
-		resp, err = s.SendHttp(r.Context(), address, msg)
+		forward = append(forward, address)
 	}
-	if err != nil {
-		jsonhttp.InternalServerError(w, fmt.Errorf("send http %s", err))
-		return
-	}
-
-	if len(resp.Header) > 0 {
-		resMpHeader := make(map[string]string)
-		err = json.Unmarshal(resp.Header, &resMpHeader)
-		if err != nil {
-			jsonhttp.InternalServerError(w, fmt.Errorf("error in returning header parsing:%v", err.Error()))
-			return
-		}
-		for k, v := range resMpHeader {
-			w.Header().Set(k, v)
+	for _, addr := range forward {
+		err := s.copyStream(w, r, addr)
+		if err == nil {
+			break
 		}
 	}
-	w.WriteHeader(int(resp.Status))
-	_, _ = io.Copy(w, bytes.NewBuffer(resp.Body))
 }
 
-func (s *Service) getDomainAddr(groupName, domainName string) (string, bool) {
-	for _, v := range s.groups {
-		if v.Name == groupName {
-			for _, domain := range v.AgentHttp {
-				if domain.Domain == domainName {
-					return domain.Addr, true
-				}
+func (s *Service) copyStream(w http.ResponseWriter, r *http.Request, addr boson.Address) error {
+	st, err := s.streamer.NewStream(r.Context(), addr, nil, protocolName, protocolVersion, streamRelayHttpReqV2)
+	if err != nil {
+		jsonhttp.InternalServerError(w, fmt.Errorf("new stream %s", err))
+		return err
+	}
+	defer func() {
+		if err != nil {
+			s.logger.Tracef("RelayHttpDoV2 to %s err %s", addr, err)
+			_ = st.Reset()
+		} else {
+			_ = st.Close()
+			s.logger.Tracef("RelayHttpDoV2 to %s stream close", addr)
+		}
+	}()
+	err = r.Write(st)
+	if err != nil {
+		jsonhttp.InternalServerError(w, err)
+		return err
+	}
+	if r.Header.Get("Connection") == "Upgrade" && r.Header.Get("Upgrade") == "websocket" {
+		w.Header().Set("hijack", "true")
+		conn, _, _ := w.(http.Hijacker).Hijack()
+		defer conn.Close()
+		// response
+		respErrCh := make(chan error, 1)
+		go func() {
+			_, err = io.Copy(conn, st)
+			s.logger.Tracef("RelayHttpDoV2 to %s io.copy resp err %v", addr, err)
+			respErrCh <- err
+		}()
+		// request
+		reqErrCh := make(chan error, 1)
+		go func() {
+			_, err = io.Copy(st, conn)
+			s.logger.Tracef("RelayHttpDoV2 to %s io.copy req err %v", addr, err)
+			reqErrCh <- err
+		}()
+		select {
+		case err = <-respErrCh:
+			return err
+		case err = <-reqErrCh:
+			return err
+		}
+	} else {
+		buf := bufio.NewReader(st)
+		resp, err := http.ReadResponse(buf, r)
+		if err != nil {
+			jsonhttp.InternalServerError(w, err)
+			return err
+		}
+		defer resp.Body.Close()
+
+		// Copy any headers
+		for k, v := range resp.Header {
+			for _, h := range v {
+				w.Header().Add(k, h)
 			}
 		}
+
+		// Write response status and headers
+		w.WriteHeader(resp.StatusCode)
+
+		_, err = io.Copy(w, resp.Body)
+		if err != nil {
+			jsonhttp.InternalServerError(w, err)
+			return err
+		}
+		return nil
 	}
-	s.logger.Errorf("domain %v not found in group %s", domainName, groupName)
-	return "", false
 }
