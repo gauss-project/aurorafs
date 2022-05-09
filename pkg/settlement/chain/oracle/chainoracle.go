@@ -64,7 +64,10 @@ func (ora *ChainOracle) GetCid(aufsUri string) []byte {
 }
 
 func (ora *ChainOracle) GetNodesFromCid(cid []byte) []boson.Address {
-	overlays, err := ora.oracle.Get(nil, common.BytesToHash(cid))
+	ctx, cancel := context.WithTimeout(context.TODO(), 30*time.Second)
+	defer cancel()
+	opts := &bind.CallOpts{Context: ctx}
+	overlays, err := ora.oracle.Get(opts, common.BytesToHash(cid))
 	overs := make([]boson.Address, 0)
 	if err != nil {
 		ora.logger.Errorf("Get overlays based on cid : %v", err)
@@ -162,8 +165,10 @@ func (ora *ChainOracle) WaitForReceipt(ctx context.Context, rootCid boson.Addres
 }
 
 func (ora *ChainOracle) GetRegisterState(ctx context.Context, rootCid boson.Address, address boson.Address) (bool, error) {
-
-	state, err := ora.oracle.OracleIMap(nil, common.BytesToHash(rootCid.Bytes()), common.BytesToHash(address.Bytes()))
+	ctx, cancel := context.WithTimeout(context.TODO(), 2*time.Second)
+	defer cancel()
+	opts := &bind.CallOpts{Context: ctx}
+	state, err := ora.oracle.OracleIMap(opts, common.BytesToHash(rootCid.Bytes()), common.BytesToHash(address.Bytes()))
 	if err != nil {
 		return false, err
 	}

@@ -677,9 +677,6 @@ func (k *Kad) pruneOversaturatedBins(depth uint8) {
 				if ss == nil {
 					continue
 				}
-				if ss.SessionConnectionDirection == model.PeerConnectionDirectionOutbound {
-					continue
-				}
 
 				peerID, found := k.p2p.PeerID(peer)
 				if found {
