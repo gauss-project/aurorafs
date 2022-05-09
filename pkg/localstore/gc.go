@@ -175,13 +175,14 @@ func (db *DB) collectGarbage() (collectedCount uint64, done bool, err error) {
 		db.metrics.GCStoreTimeStamps.Set(float64(item.StoreTimestamp))
 		db.metrics.GCStoreAccessTimeStamps.Set(float64(item.AccessTimestamp))
 
+		gcCount := uint64(0)
+
 		pyramid := db.discover.GetChunkPyramid(addr)
 		chunkHashes := make([]chunkinfo.PyramidCidNum, len(pyramid))
 		for i, chunk := range pyramid {
 			chunkHashes[i] = *chunk
+			gcCount += uint64(chunk.Number)
 		}
-
-		gcCount := uint64(len(chunkHashes) + 1)
 
 		del := db.discover.DelFile(addr, func() {})
 		if !del {
@@ -194,7 +195,7 @@ func (db *DB) collectGarbage() (collectedCount uint64, done bool, err error) {
 			if err == nil {
 				if pinItem.PinCounter > uint64(chunk.Number) {
 					pinItem.PinCounter -= uint64(chunk.Number)
-					gcCount--
+					gcCount -= uint64(chunk.Number)
 					err = db.pinIndex.Put(pinItem)
 					if err != nil {
 						db.logger.Errorf("localstore: collect garbage: update pin state failure: %v", err)
@@ -259,6 +260,7 @@ func (db *DB) collectGarbage() (collectedCount uint64, done bool, err error) {
 	err = batch.Commit()
 	if err != nil {
 		db.metrics.GCErrorCounter.Inc()
+		// TODO if driver is wiredtiger, commit doing nothing but collected count is not zero.
 		return 0, false, err
 	}
 
