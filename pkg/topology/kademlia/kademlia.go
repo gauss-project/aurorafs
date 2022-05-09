@@ -677,7 +677,8 @@ func (k *Kad) pruneOversaturatedBins(depth uint8) {
 				if ss == nil {
 					continue
 				}
-				if ss.SessionConnectionDirection == model.PeerConnectionDirectionOutbound {
+				// avoid being prune off immediately after connection
+				if ss.SessionConnectionDuration < time.Second*30 {
 					continue
 				}
 
