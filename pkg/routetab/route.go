@@ -25,12 +25,13 @@ import (
 )
 
 const (
-	ProtocolName         = "router"
-	ProtocolVersion      = "3.0.0"
-	StreamOnRelay        = "relay"
-	streamOnRouteReq     = "onRouteReq"
-	streamOnRouteResp    = "onRouteResp"
-	streamOnFindUnderlay = "onFindUnderlay"
+	ProtocolName           = "router"
+	ProtocolVersion        = "3.0.0"
+	StreamOnRelay          = "relay"
+	StreamOnRelayConnChain = "relayConnChain"
+	streamOnRouteReq       = "onRouteReq"
+	streamOnRouteResp      = "onRouteResp"
+	streamOnFindUnderlay   = "onFindUnderlay"
 )
 
 var (
@@ -171,6 +172,10 @@ func (s *Service) Protocol() p2p.ProtocolSpec {
 			{
 				Name:    StreamOnRelay,
 				Handler: s.onRelay,
+			},
+			{
+				Name:    StreamOnRelayConnChain,
+				Handler: s.onRelayConnChain,
 			},
 		},
 	}
@@ -952,5 +957,82 @@ func (s *Service) saveUnderlay(uList []*pb.UnderlayResp) {
 				s.logger.Errorf("route: address book put %s", err.Error())
 			}
 		}
+	}
+}
+
+func (s *Service) onRelayConnChain(ctx context.Context, p p2p.Peer, stream p2p.Stream) (err error) {
+	defer func() {
+		if err != nil {
+			s.logger.Tracef("onRelayConnChain from %s err %s", p.Address, err)
+			_ = stream.Reset()
+		} else {
+			_ = stream.Close()
+			s.logger.Tracef("onRelayConnChain from %s stream close", p.Address)
+		}
+	}()
+
+	var req pb.RouteRelayReq
+	r := protobuf.NewReader(stream)
+	err = r.ReadMsgWithContext(ctx, &req)
+	if err != nil {
+		return fmt.Errorf("read syn err %s", err)
+	}
+
+	req.Paths = append(req.Paths, s.self.Bytes())
+	target := boson.NewAddress(req.Dest)
+	if target.Equal(s.self) {
+		md, err := aurora.NewModelFromBytes(req.SrcMode)
+		if err != nil {
+			return err
+		}
+		src := p2p.Peer{
+			Address: boson.NewAddress(req.Src),
+			Mode:    md,
+		}
+		return s.p2ps.CallHandlerWithConnChain(ctx, p, src, stream, string(req.ProtocolName), string(req.ProtocolVersion), string(req.StreamName))
+	}
+
+	var next boson.Address
+	if s.IsNeighbor(target) {
+		next = target
+		s.logger.Tracef("route: onRelayConnChain the path has %d jump", len(req.Paths))
+	} else {
+		_, skips := generatePathItems(req.Paths)
+		next, err = s.GetNextHopRandomOrFind(ctx, target, skips...)
+		if err != nil {
+			return err
+		}
+	}
+
+	remoteConn, err := s.stream.NewStream(ctx, next, stream.Headers(), ProtocolName, ProtocolVersion, StreamOnRelayConnChain)
+	if err != nil {
+		return fmt.Errorf("new forward stream to %s %s", next, err)
+	}
+	defer remoteConn.Close()
+
+	w := protobuf.NewWriter(remoteConn)
+	err = w.WriteMsgWithContext(ctx, &req)
+	if err != nil {
+		return fmt.Errorf("forward syn err %s", err)
+	}
+	// response
+	respErrCh := make(chan error, 1)
+	go func() {
+		_, err = io.Copy(stream, remoteConn)
+		s.logger.Tracef("route: onRelayConnChain io.copy resp err %v", err)
+		respErrCh <- err
+	}()
+	// request
+	reqErrCh := make(chan error, 1)
+	go func() {
+		_, err = io.Copy(remoteConn, stream)
+		s.logger.Tracef("route: onRelayConnChain io.copy req err %v", err)
+		reqErrCh <- err
+	}()
+	select {
+	case err = <-respErrCh:
+		return err
+	case err = <-reqErrCh:
+		return err
 	}
 }
