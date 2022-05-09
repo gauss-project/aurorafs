@@ -154,7 +154,7 @@ func (ci *ChunkInfo) InitChunkInfo() error {
 		return err
 	}
 
-	if err := ci.chunkPutChanUpdate(ctx, ci.cs, ci.cs.initChunkInfoSource).err; err != nil {
+	if err := ci.chunkPutChanUpdate(ctx, ci.cs, ci.initChunkInfoSource).err; err != nil {
 		return err
 	}
 	ci.logger.Info("end of init chunkInfo")
