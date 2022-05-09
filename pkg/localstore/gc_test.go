@@ -966,7 +966,7 @@ func TestPinAndUnpinChunk(t *testing.T) {
 	for _, v := range chunks1 {
 		_, err := db.Get(rctx, storage.ModeGetRequest, v)
 		if err == nil {
-			t.Fatal(err)
+			t.Fatalf("chunk %s should be deleted", v)
 		}
 	}
 
@@ -975,6 +975,136 @@ func TestPinAndUnpinChunk(t *testing.T) {
 		_, err := db.Get(rctx, storage.ModeGetRequest, v)
 		if err != nil {
 			t.Fatal(err)
+		}
+	}
+}
+
+func TestIncorrectGcSize(t *testing.T) {
+	var (
+		err    error
+		closed chan struct{}
+	)
+
+	testHookCollectGarbageChan := make(chan uint64)
+	t.Cleanup(setTestHook(&testHookCollectGarbage, func(collectedCount uint64) {
+		select {
+		case testHookCollectGarbageChan <- collectedCount:
+		case <-closed:
+		}
+	}))
+
+	db := newTestDB(t, &Options{
+		Capacity: 100,
+	})
+	closed = db.close
+
+	err = db.gcSize.Put(uint64(float64(db.capacity) * 0.91))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// trigger gc
+	db.triggerGarbageCollection()
+	select {
+	case <-testHookCollectGarbageChan:
+	case <-time.After(10 * time.Second):
+		t.Error("collect garbage timeout")
+	}
+
+	gcSize, err := db.gcSize.Get()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if gcSize != 0 {
+		t.Fatal("gc size incorrect")
+	}
+}
+
+// TestBrokenPyramid checks that the garbage collection
+// can still be completed normally when the pyramid is broken.
+func TestBrokenPyramid(t *testing.T) {
+	var (
+		err    error
+		closed chan struct{}
+	)
+
+	testHookCollectGarbageChan := make(chan uint64)
+	t.Cleanup(setTestHook(&testHookCollectGarbage, func(collectedCount uint64) {
+		select {
+		case testHookCollectGarbageChan <- collectedCount:
+		case <-closed:
+		}
+	}))
+
+	dbCap := 100
+	chunkCount := int(100*0.9) - 4
+
+	db := newTestDB(t, &Options{
+		Capacity: uint64(dbCap),
+	})
+	closed = db.close
+
+	// upload random file
+	reference, chunks, addGc := addRandomFile(t, chunkCount, db, ci, false)
+
+	rctx := sctx.SetRootHash(context.Background(), reference)
+	addGc(t)
+
+	gcSize := uint64(0)
+
+	gcSize, err = db.gcSize.Get()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// remove some chunks
+	pyramid := ci.GetChunkPyramid(reference)
+	copyPyramid := make([]boson.Address, len(pyramid))
+	for i, p := range pyramid {
+		copyPyramid[i] = p.Cid
+	}
+	rnd := rand.New(rand.NewSource(time.Now().UnixNano()))
+	rnd.Shuffle(len(copyPyramid), func(i, j int) {
+		copyPyramid[i], copyPyramid[j] = copyPyramid[j], copyPyramid[i]
+	})
+	batch := db.shed.NewBatch()
+	for _, chunk := range copyPyramid[:len(copyPyramid)/3] {
+		// call setRemove to skip update gc size
+		_, err = db.setRemove(batch, chunk, boson.ZeroAddress)
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	batch.Commit()
+
+	currentSize, err := db.gcSize.Get()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if gcSize != currentSize {
+		t.Fatalf("gc size should not change, got %d wanted %d", currentSize, gcSize)
+	}
+
+	// trigger gc
+	db.triggerGarbageCollection()
+	select {
+	case <-testHookCollectGarbageChan:
+	case <-time.After(10 * time.Second):
+		t.Error("collect garbage timeout")
+	}
+
+	gcSize, err = db.gcSize.Get()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if gcSize != 0 {
+		t.Fatalf("gc not clean, size is %d", gcSize)
+	}
+
+	for _, chunk := range chunks {
+		_, err := db.Get(rctx, storage.ModeGetRequest, chunk)
+		if err == nil {
+			t.Fatal("chunk not recycle")
 		}
 	}
 }

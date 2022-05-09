@@ -79,7 +79,7 @@ func (s *service) traverseAndProcess(ctx context.Context, addr boson.Address, pr
 // Traverse implements Traverser.Traverse method.
 func (s *service) Traverse(ctx context.Context, addr boson.Address, iterFn boson.AddressIterFunc) error {
 	processBytes := func(ref boson.Address) error {
-		j, _, err := joiner.New(ctx, s.store, storage.ModeGetLookup, ref)
+		j, _, err := joiner.New(ctx, s.store, storage.ModeGetRequest, ref)
 		if err != nil {
 			return fmt.Errorf("traversal: joiner error on %q: %w", ref, err)
 		}
