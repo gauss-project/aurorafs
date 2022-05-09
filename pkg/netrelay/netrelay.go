@@ -62,8 +62,13 @@ func (s *Service) RelayHttpDo(w http.ResponseWriter, r *http.Request, address bo
 	}
 }
 
-func (s *Service) copyStream(w http.ResponseWriter, r *http.Request, addr boson.Address) error {
-	st, err := s.streamer.NewStream(r.Context(), addr, nil, protocolName, protocolVersion, streamRelayHttpReqV2)
+func (s *Service) copyStream(w http.ResponseWriter, r *http.Request, addr boson.Address) (err error) {
+	var st p2p.Stream
+	if s.route.IsNeighbor(addr) {
+		st, err = s.streamer.NewStream(r.Context(), addr, nil, protocolName, protocolVersion, streamRelayHttpReqV2)
+	} else {
+		st, err = s.streamer.NewConnChainRelayStream(r.Context(), addr, nil, protocolName, protocolVersion, streamRelayHttpReqV2)
+	}
 	if err != nil {
 		jsonhttp.InternalServerError(w, fmt.Errorf("new stream %s", err))
 		return err

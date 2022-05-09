@@ -294,14 +294,14 @@ func (s *Service) onRelayHttpReqV2(ctx context.Context, p p2p.Peer, stream p2p.S
 		respErrCh := make(chan error, 1)
 		go func() {
 			_, err = io.Copy(stream, remoteConn)
-			s.logger.Tracef("onRelayHttpReqV2 io.copy resp err %v", err)
+			s.logger.Tracef("onRelayHttpReqV2 from %s io.copy resp err %v", p.Address, err)
 			respErrCh <- err
 		}()
 		// request
 		reqErrCh := make(chan error, 1)
 		go func() {
 			_, err = io.Copy(remoteConn, stream)
-			s.logger.Tracef("onRelayHttpReqV2 io.copy req err %v", err)
+			s.logger.Tracef("onRelayHttpReqV2 from %s io.copy req err %v", p.Address, err)
 			reqErrCh <- err
 		}()
 		select {

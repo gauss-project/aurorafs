@@ -54,6 +54,7 @@ const (
 
 // Service provides methods to handle p2p Peers and Protocols.
 type Service interface {
+	CallHandlerWithConnChain(ctx context.Context, last, src Peer, stream Stream, protocolName, protocolVersion, streamName string) error
 	CallHandler(ctx context.Context, last Peer, stream Stream) (relayData *pb.RouteRelayReq, w *WriterChan, r *ReaderChan, forward bool, err error)
 	AddProtocol(ProtocolSpec) error
 	Connect
@@ -143,6 +144,7 @@ type DebugService interface {
 type Streamer interface {
 	NewStream(ctx context.Context, address boson.Address, h Headers, protocol, version, stream string) (Stream, error)
 	NewRelayStream(ctx context.Context, address boson.Address, h Headers, protocol, version, stream string, midCall bool) (Stream, error)
+	NewConnChainRelayStream(ctx context.Context, target boson.Address, h Headers, protocolName, protocolVersion, streamName string) (Stream, error)
 }
 
 type StreamerDisconnecter interface {
