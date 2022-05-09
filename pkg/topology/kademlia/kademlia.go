@@ -658,26 +658,34 @@ func (k *Kad) pruneOversaturatedBins(depth uint8) {
 
 		binPeers := k.connectedPeers.BinPeers(uint8(i))
 
+		var freeList []boson.Address
+		for _, peer := range binPeers {
+			if k.IsProtectPeer(peer) {
+				continue
+			}
+			peerID, found := k.p2p.PeerID(peer)
+			if found {
+				_ = k.p2p.ResourceManager().ViewPeer(peerID, func(scope network.PeerScope) error {
+					if scope.Stat().NumStreamsInbound+scope.Stat().NumStreamsOutbound <= 0 {
+						freeList = append(freeList, peer)
+					}
+					return nil
+				})
+			}
+		}
+
 		peersToRemove := binPeersCount - over
 
 		for j := 0; peersToRemove > 0 && j < len(k.commonBinPrefixes[i]); j++ {
 
 			pseudoAddr := k.commonBinPrefixes[i][j]
-			peers := k.balancedSlotPeers(pseudoAddr, binPeers, i)
+			peers := k.balancedSlotPeers(pseudoAddr, freeList, i)
 
 			if len(peers) <= 1 {
 				continue
 			}
 
 			for _, peer := range peers {
-				if k.IsProtectPeer(peer) {
-					continue
-				}
-				ss := k.collector.Inspect(peer)
-				if ss == nil {
-					continue
-				}
-
 				peerID, found := k.p2p.PeerID(peer)
 				if found {
 					var delOK bool
