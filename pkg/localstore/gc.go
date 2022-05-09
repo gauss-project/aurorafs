@@ -105,7 +105,7 @@ func (db *DB) collectGarbage() (collectedCount uint64, done bool, err error) {
 	if err != nil {
 		return 0, true, err
 	}
-	if gcSize == target {
+	if gcSize <= target {
 		return 0, true, nil
 	}
 	db.metrics.GCSize.Set(float64(gcSize))
