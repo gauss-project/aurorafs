@@ -41,17 +41,17 @@ func (ci *ChunkInfo) initChunkInfoDiscover() error {
 		key := string(k)
 		rootCid, overlay, err := unmarshalKey(discoverKeyPrefix, key)
 		if err != nil {
-			return true, err
+			return false, err
 		}
 		var vb BitVector
 		if err := ci.storer.Get(key, &vb); err != nil {
-			return true, err
+			return false, err
 		}
 		bit, _ := bitvector.NewFromBytes(vb.B, vb.Len)
-		ci.cd.putChunkInfoDiscover(rootCid, overlay, *bit)
 		if err := ci.chunkPutChanUpdate(context.Background(), ci.cp, ci.initChunkPyramid, context.Background(), rootCid).err; err != nil {
-			return true, err
+			return false, nil
 		}
+		ci.cd.putChunkInfoDiscover(rootCid, overlay, *bit)
 		return false, nil
 	}); err != nil {
 		return err

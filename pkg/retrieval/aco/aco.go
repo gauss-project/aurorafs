@@ -2,6 +2,7 @@ package aco
 
 import (
 	"fmt"
+	"github.com/gauss-project/aurorafs/pkg/retrieval/weight"
 	"math/rand"
 	"sync"
 	"time"
@@ -165,41 +166,19 @@ func (s *AcoServer) GetRouteAcoIndex(routeList []Route, count ...int) []int {
 	routeScoreList := s.getSelectRouteListScore(routeList)
 
 	// decide the order of the route
-	routeIndexList := make([]int, 0)
-
-	totalScore := int64(0)
-	for _, v := range routeScoreList {
-		totalScore += v
-	}
+	routeIndexList := make([]int, maxSelectCount)
 
 	rand.Seed(time.Now().Unix())
 	selectRouteCount := 0
-	for {
-		selectRouteIndex, curScore, curSum := 0, int64(0), int64(0)
-
-		randNum := rand.Int63() % ((totalScore) + 1)
-		for k, v := range routeScoreList {
-			curScore = v
-			if curScore == 0 {
-				continue
-			}
-			nextSum := curSum + curScore
-			if curSum < randNum && randNum <= nextSum {
-				selectRouteIndex = k
-				break
-			}
-			curSum = nextSum
+	for i := 0; i < maxSelectCount; i++ {
+		w, err := weight.New(routeScoreList)
+		if err != nil {
+			return routeIndexList
 		}
-
-		routeIndexList = append(routeIndexList, selectRouteIndex)
-
+		selectRouteIndex := w.PickIndex()
+		routeIndexList[selectRouteCount] = selectRouteIndex
 		routeScoreList[selectRouteIndex] = 0
-		totalScore -= curScore
 		selectRouteCount += 1
-
-		if selectRouteCount >= maxSelectCount {
-			break
-		}
 	}
 	return routeIndexList
 }
