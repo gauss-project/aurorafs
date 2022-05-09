@@ -40,9 +40,9 @@ func newChunkSource(store storage.StateStorer, logger logging.Logger) *chunkInfo
 		sourcePutChan: make(chan chunkPut, 1000)}
 }
 
-func (cs *chunkInfoSource) initChunkInfoSource() error {
+func (ci *ChunkInfo) initChunkInfoSource() error {
 
-	if err := cs.storer.Iterate(pyramidKeyPrefix, func(k, value []byte) (stop bool, err error) {
+	if err := ci.storer.Iterate(pyramidKeyPrefix, func(k, value []byte) (stop bool, err error) {
 		if !strings.HasPrefix(string(k), pyramidKeyPrefix) {
 			return true, nil
 		}
@@ -54,17 +54,19 @@ func (cs *chunkInfoSource) initChunkInfoSource() error {
 		}
 
 		var overlay string
-		if err = cs.storer.Get(key, &overlay); err != nil {
+		if err = ci.cs.storer.Get(key, &overlay); err != nil {
 			return false, err
 		}
-
-		cs.putPyramidSource(rootCid, overlay)
+		if err := ci.chunkPutChanUpdate(context.Background(), ci.cp, ci.initChunkPyramid, context.Background(), rootCid).err; err != nil {
+			return false, nil
+		}
+		ci.cs.putPyramidSource(rootCid, overlay)
 		return false, nil
 	}); err != nil {
 		return err
 	}
 
-	if err := cs.storer.Iterate(chunkSourceKeyPrefix, func(k, value []byte) (stop bool, err error) {
+	if err := ci.storer.Iterate(chunkSourceKeyPrefix, func(k, value []byte) (stop bool, err error) {
 		if !strings.HasPrefix(string(k), chunkSourceKeyPrefix) {
 			return true, nil
 		}
@@ -76,14 +78,17 @@ func (cs *chunkInfoSource) initChunkInfoSource() error {
 		}
 
 		var vb BitVector
-		if err = cs.storer.Get(key, &vb); err != nil {
+		if err = ci.storer.Get(key, &vb); err != nil {
 			return false, err
 		}
 		bit, err := bitvector.NewFromBytes(vb.B, vb.Len)
 		if err != nil {
 			return false, err
 		}
-		cs.putChunkInfoChunkInfoSource(rootCid, overlay, *bit)
+		if err := ci.chunkPutChanUpdate(context.Background(), ci.cp, ci.initChunkPyramid, context.Background(), rootCid).err; err != nil {
+			return false, nil
+		}
+		ci.cs.putChunkInfoChunkInfoSource(rootCid, overlay, *bit)
 		return false, nil
 	}); err != nil {
 		return err

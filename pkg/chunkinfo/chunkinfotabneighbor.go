@@ -48,17 +48,17 @@ func (ci *ChunkInfo) initChunkInfoTabNeighbor() error {
 		key := string(k)
 		rootCid, overlay, err := unmarshalKey(keyPrefix, key)
 		if err != nil {
-			return true, err
+			return false, err
 		}
 		var vb BitVector
 		if err := ci.storer.Get(key, &vb); err != nil {
-			return true, err
+			return false, err
 		}
 		bit, _ := bitvector.NewFromBytes(vb.B, vb.Len)
-		ci.ct.putChunkInfoTabNeighbor(rootCid, overlay, *bit)
 		if err := ci.initChunkPyramid(context.Background(), rootCid); err != nil {
-			return true, err
+			return false, nil
 		}
+		ci.ct.putChunkInfoTabNeighbor(rootCid, overlay, *bit)
 		return false, nil
 	}); err != nil {
 		return err
