@@ -677,10 +677,6 @@ func (k *Kad) pruneOversaturatedBins(depth uint8) {
 				if ss == nil {
 					continue
 				}
-				// avoid being prune off immediately after connection
-				if ss.SessionConnectionDuration < time.Second*30 {
-					continue
-				}
 
 				peerID, found := k.p2p.PeerID(peer)
 				if found {
