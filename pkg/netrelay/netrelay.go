@@ -54,11 +54,16 @@ func (s *Service) RelayHttpDo(w http.ResponseWriter, r *http.Request, address bo
 	} else {
 		forward = append(forward, address)
 	}
+
+	var err error
 	for _, addr := range forward {
-		err := s.copyStream(w, r, addr)
+		err = s.copyStream(w, r, addr)
 		if err == nil {
 			break
 		}
+	}
+	if err != nil {
+		jsonhttp.InternalServerError(w, err)
 	}
 }
 
@@ -70,8 +75,7 @@ func (s *Service) copyStream(w http.ResponseWriter, r *http.Request, addr boson.
 		st, err = s.streamer.NewConnChainRelayStream(r.Context(), addr, nil, protocolName, protocolVersion, streamRelayHttpReqV2)
 	}
 	if err != nil {
-		jsonhttp.InternalServerError(w, fmt.Errorf("new stream %s", err))
-		return err
+		return fmt.Errorf("new stream %s", err)
 	}
 	defer func() {
 		if err != nil {
@@ -84,7 +88,6 @@ func (s *Service) copyStream(w http.ResponseWriter, r *http.Request, addr boson.
 	}()
 	err = r.Write(st)
 	if err != nil {
-		jsonhttp.InternalServerError(w, err)
 		return err
 	}
 	if r.Header.Get("Connection") == "Upgrade" && r.Header.Get("Upgrade") == "websocket" {
@@ -115,7 +118,6 @@ func (s *Service) copyStream(w http.ResponseWriter, r *http.Request, addr boson.
 		buf := bufio.NewReader(st)
 		resp, err := http.ReadResponse(buf, r)
 		if err != nil {
-			jsonhttp.InternalServerError(w, err)
 			return err
 		}
 		defer resp.Body.Close()
@@ -124,10 +126,6 @@ func (s *Service) copyStream(w http.ResponseWriter, r *http.Request, addr boson.
 		w.WriteHeader(resp.StatusCode)
 
 		_, err = io.Copy(w, resp.Body)
-		if err != nil {
-			jsonhttp.InternalServerError(w, err)
-			return err
-		}
-		return nil
+		return err
 	}
 }

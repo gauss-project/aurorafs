@@ -118,6 +118,9 @@ func (l *responseLogger) Write(b []byte) (int, error) {
 }
 
 func (l *responseLogger) WriteHeader(s int) {
+	if l.w.Header().Get("hijack") == "true" {
+		return
+	}
 	l.w.WriteHeader(s)
 	if l.status == 0 {
 		l.status = s
