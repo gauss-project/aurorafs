@@ -732,10 +732,8 @@ func (s *Service) onRelay(ctx context.Context, p p2p.Peer, stream p2p.Stream) (e
 
 	defer func() {
 		if forwardStream != nil {
-			go func() {
-				quit = true
-				_ = forwardStream.Reset()
-			}()
+			quit = true
+			_ = forwardStream.Reset()
 		}
 	}()
 
