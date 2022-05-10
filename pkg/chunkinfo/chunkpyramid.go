@@ -171,19 +171,19 @@ func (ci *ChunkInfo) isExists(rootCid boson.Address) bool {
 	return ok
 }
 
-func (ci *ChunkInfo) getChunkSize(cxt context.Context, rootCid boson.Address) (int, error) {
+func (ci *ChunkInfo) getChunkSize(ctx context.Context, rootCid boson.Address) (int, error) {
 	info, ok := ci.cp.hashData[rootCid.String()]
 	if !ok {
 		v, err := ci.getChunkPyramid(context.Background(), rootCid)
 		if err != nil {
 			return 0, nil
 		}
-		trie, _, err := ci.traversal.GetChunkHashes(cxt, rootCid, nil)
+		trie, _, err := ci.traversal.GetChunkHashes(ctx, rootCid, nil)
 		if err != nil {
 			return 0, err
 		}
-		ci.updateChunkPyramid(rootCid, trie, v)
-		return ci.getChunkSize(cxt, rootCid)
+		ci.chunkPutChanUpdate(ctx, ci.cp, ci.updateChunkPyramid, rootCid, trie, v)
+		return ci.getChunkSize(ctx, rootCid)
 	}
 	return int(info.chunkMax), nil
 }
