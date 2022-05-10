@@ -31,6 +31,11 @@ type Service struct {
 	welcomeMessage        string
 }
 
+func (s *Service) CallHandlerWithConnChain(ctx context.Context, last, src p2p.Peer, stream p2p.Stream, protocolName, protocolVersion, streamName string) error {
+	// TODO implement me
+	panic("implement me")
+}
+
 // WithAddProtocolFunc sets the mock implementation of the AddProtocol function
 func WithAddProtocolFunc(f func(p2p.ProtocolSpec) error) Option {
 	return optionFunc(func(s *Service) {

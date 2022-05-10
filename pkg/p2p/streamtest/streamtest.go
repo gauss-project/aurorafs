@@ -40,6 +40,11 @@ type Recorder struct {
 	protocolsWithPeers map[string]p2p.ProtocolSpec
 }
 
+func (r *Recorder) NewConnChainRelayStream(ctx context.Context, target boson.Address, h p2p.Headers, protocolName, protocolVersion, streamName string) (p2p.Stream, error) {
+	// TODO implement me
+	panic("implement me")
+}
+
 func WithProtocols(protocols ...p2p.ProtocolSpec) Option {
 	return optionFunc(func(r *Recorder) {
 		r.protocols = append(r.protocols, protocols...)

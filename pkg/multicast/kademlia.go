@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"sort"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -23,7 +24,6 @@ import (
 	topModel "github.com/gauss-project/aurorafs/pkg/topology/model"
 	"github.com/gauss-project/aurorafs/pkg/topology/pslice"
 	"github.com/gogf/gf/v2/util/gconv"
-	"github.com/gogo/protobuf/sortkeys"
 )
 
 const (
@@ -1224,20 +1224,27 @@ func (s *Service) subscribeGroupPeers(gid boson.Address, client *PeersSubClient)
 }
 
 func (s *Service) getOptimumPeers(list []boson.Address) (now []boson.Address) {
-	l := len(list)
-	sortIndex := make([]int64, 0)
-	m := make(map[int64]int, l)
+	sortIdx := make([][]int64, len(list))
 	for i, v := range list {
 		ss := s.kad.SnapshotAddr(v)
 		if ss != nil {
 			t := ss.LatencyEWMA.Nanoseconds()
-			sortIndex = append(sortIndex, t)
-			m[t] = i
+			sortIdx[i] = []int64{int64(i), t}
+		} else {
+			sortIdx[i] = []int64{int64(i), 1e10}
 		}
 	}
-	sortkeys.Int64s(sortIndex)
-	for _, t := range sortIndex {
-		now = append(now, list[m[t]])
+
+	sort.Slice(sortIdx, func(i, j int) bool {
+		if sortIdx[i][1] != sortIdx[j][1] {
+			return sortIdx[i][1] < sortIdx[j][1]
+		} else {
+			return sortIdx[i][0] < sortIdx[j][0]
+		}
+	})
+
+	for _, v := range sortIdx {
+		now = append(now, list[v[0]])
 	}
 	return now
 }
