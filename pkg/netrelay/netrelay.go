@@ -122,6 +122,13 @@ func (s *Service) copyStream(w http.ResponseWriter, r *http.Request, addr boson.
 		}
 		defer resp.Body.Close()
 
+		// Copy any headers
+		for k, v := range resp.Header {
+			w.Header().Del(k)
+			for _, h := range v {
+				w.Header().Add(k, h)
+			}
+		}
 		// Write response status and headers
 		w.WriteHeader(resp.StatusCode)
 
