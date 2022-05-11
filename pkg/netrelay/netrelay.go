@@ -17,6 +17,10 @@ import (
 	"github.com/gauss-project/aurorafs/pkg/routetab"
 )
 
+const (
+	defaultCopyBuffer = 256 * 1024 * 1024
+)
+
 type NetRelay interface {
 	RelayHttpDo(w http.ResponseWriter, r *http.Request, address boson.Address)
 }
@@ -97,14 +101,14 @@ func (s *Service) copyStream(w http.ResponseWriter, r *http.Request, addr boson.
 		// response
 		respErrCh := make(chan error, 1)
 		go func() {
-			_, err = io.Copy(conn, st)
+			_, err = io.CopyBuffer(conn, st, make([]byte, defaultCopyBuffer))
 			s.logger.Tracef("RelayHttpDoV2 to %s io.copy resp err %v", addr, err)
 			respErrCh <- err
 		}()
 		// request
 		reqErrCh := make(chan error, 1)
 		go func() {
-			_, err = io.Copy(st, conn)
+			_, err = io.CopyBuffer(st, conn, make([]byte, defaultCopyBuffer))
 			s.logger.Tracef("RelayHttpDoV2 to %s io.copy req err %v", addr, err)
 			reqErrCh <- err
 		}()
@@ -125,7 +129,7 @@ func (s *Service) copyStream(w http.ResponseWriter, r *http.Request, addr boson.
 		// Write response status and headers
 		w.WriteHeader(resp.StatusCode)
 
-		_, err = io.Copy(w, resp.Body)
+		_, err = io.CopyBuffer(w, resp.Body, make([]byte, defaultCopyBuffer))
 		return err
 	}
 }
