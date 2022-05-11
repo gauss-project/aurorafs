@@ -1154,7 +1154,7 @@ func (s *Service) NewStream(ctx context.Context, overlay boson.Address, headers 
 	return s.exchangeHeaders(ctx, streamlibp2p, headers)
 }
 
-func (s *Service) exchangeHeaders(ctx context.Context, streamlibp2p network.Stream, headers p2p.Headers) (*stream, error) {
+func (s *Service) exchangeHeaders(ctx context.Context, streamlibp2p network.Stream, headers p2p.Headers) (p2p.Stream, error) {
 	st := newStream(streamlibp2p)
 
 	// tracing: add span context header
