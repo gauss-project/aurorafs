@@ -43,10 +43,6 @@ var (
 )
 
 const (
-	defaultCopyBuffer = 256 * 1024 * 1024
-)
-
-const (
 	uTypeZero int32 = iota // Don't do anything
 	uTypeTarget
 )
@@ -1020,14 +1016,14 @@ func (s *Service) onRelayConnChain(ctx context.Context, p p2p.Peer, stream p2p.S
 	// response
 	respErrCh := make(chan error, 1)
 	go func() {
-		_, err = io.CopyBuffer(stream, remoteConn, make([]byte, defaultCopyBuffer))
+		_, err = io.Copy(stream, remoteConn)
 		s.logger.Tracef("route: onRelayConnChain io.copy resp err %v", err)
 		respErrCh <- err
 	}()
 	// request
 	reqErrCh := make(chan error, 1)
 	go func() {
-		_, err = io.CopyBuffer(remoteConn, stream, make([]byte, defaultCopyBuffer))
+		_, err = io.Copy(remoteConn, stream)
 		s.logger.Tracef("route: onRelayConnChain io.copy req err %v", err)
 		reqErrCh <- err
 	}()
