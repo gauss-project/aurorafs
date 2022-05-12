@@ -3,16 +3,11 @@ package routetab_test
 import (
 	"context"
 	"errors"
-	"github.com/gauss-project/aurorafs/pkg/subscribe"
 	"io"
 	"math/rand"
 	"sync/atomic"
 	"testing"
 	"time"
-
-	"github.com/gauss-project/aurorafs/pkg/shed"
-	"github.com/gauss-project/aurorafs/pkg/topology/kademlia"
-	"github.com/gauss-project/aurorafs/pkg/topology/lightnode"
 
 	"github.com/gauss-project/aurorafs/pkg/addressbook"
 	"github.com/gauss-project/aurorafs/pkg/aurora"
@@ -24,7 +19,11 @@ import (
 	p2pmock "github.com/gauss-project/aurorafs/pkg/p2p/mock"
 	"github.com/gauss-project/aurorafs/pkg/p2p/streamtest"
 	"github.com/gauss-project/aurorafs/pkg/routetab"
+	"github.com/gauss-project/aurorafs/pkg/shed"
 	mockstate "github.com/gauss-project/aurorafs/pkg/statestore/mock"
+	"github.com/gauss-project/aurorafs/pkg/subscribe"
+	"github.com/gauss-project/aurorafs/pkg/topology/kademlia"
+	"github.com/gauss-project/aurorafs/pkg/topology/lightnode"
 	ma "github.com/multiformats/go-multiaddr"
 	"github.com/sirupsen/logrus"
 )

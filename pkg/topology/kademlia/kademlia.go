@@ -5,8 +5,6 @@ import (
 	random "crypto/rand"
 	"encoding/json"
 	"errors"
-	"github.com/gauss-project/aurorafs/pkg/subscribe"
-	"github.com/gauss-project/aurorafs/pkg/topology/lightnode"
 	"math/big"
 	"net"
 	"sync"
@@ -22,10 +20,12 @@ import (
 	"github.com/gauss-project/aurorafs/pkg/p2p"
 	"github.com/gauss-project/aurorafs/pkg/pingpong"
 	"github.com/gauss-project/aurorafs/pkg/shed"
+	"github.com/gauss-project/aurorafs/pkg/subscribe"
 	"github.com/gauss-project/aurorafs/pkg/topology"
 	"github.com/gauss-project/aurorafs/pkg/topology/bootnode"
 	im "github.com/gauss-project/aurorafs/pkg/topology/kademlia/internal/metrics"
 	"github.com/gauss-project/aurorafs/pkg/topology/kademlia/internal/waitnext"
+	"github.com/gauss-project/aurorafs/pkg/topology/lightnode"
 	"github.com/gauss-project/aurorafs/pkg/topology/model"
 	"github.com/gauss-project/aurorafs/pkg/topology/pslice"
 	"github.com/libp2p/go-libp2p-core/network"
@@ -1443,8 +1443,6 @@ func (k *Kad) RandomSubset(array []boson.Address, count int) ([]boson.Address, e
 	return randomSubset(array, count)
 }
 
-// SubscribePeersChange returns the channel that signals when the connected peers
-// set changes. Returned function is safe to be called multiple times.
 func (k *Kad) SubscribePeersChange(notifier subscribe.INotifier) {
 	_ = k.subPub.Subscribe(notifier, "kad", "peersChange", "")
 }

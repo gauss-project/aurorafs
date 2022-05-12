@@ -4,12 +4,13 @@ package topology
 
 import (
 	"errors"
-	"github.com/gauss-project/aurorafs/pkg/subscribe"
+
 	"io"
 	"time"
 
 	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/p2p"
+	"github.com/gauss-project/aurorafs/pkg/subscribe"
 	"github.com/gauss-project/aurorafs/pkg/topology/model"
 )
 

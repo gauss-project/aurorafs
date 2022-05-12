@@ -5,19 +5,18 @@ import (
 	"context"
 	"encoding/hex"
 	"fmt"
-	"github.com/gauss-project/aurorafs/pkg/chunkinfo/mock"
-	rmock "github.com/gauss-project/aurorafs/pkg/routetab/mock"
-	"github.com/gauss-project/aurorafs/pkg/subscribe"
 	"sync"
 
 	"io"
 	"testing"
 	"time"
 
+	"github.com/gauss-project/aurorafs/pkg/chunkinfo/mock"
 	"github.com/gauss-project/aurorafs/pkg/logging"
+	rmock "github.com/gauss-project/aurorafs/pkg/routetab/mock"
+	"github.com/gauss-project/aurorafs/pkg/subscribe"
 	// "github.com/gauss-project/aurorafs/pkg/cac"
 	// "github.com/gauss-project/aurorafs/pkg/soc"
-
 	"github.com/gauss-project/aurorafs/pkg/bmtpool"
 	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/p2p"
@@ -27,7 +26,6 @@ import (
 	"github.com/gauss-project/aurorafs/pkg/retrieval/pb"
 	"github.com/gauss-project/aurorafs/pkg/storage"
 	storemock "github.com/gauss-project/aurorafs/pkg/storage/mock"
-	// "io"
 	// "os"
 	// "github.com/sirupsen/logrus"
 )

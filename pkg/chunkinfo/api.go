@@ -2,12 +2,13 @@ package chunkinfo
 
 import (
 	"context"
+	"time"
+
 	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/logging"
 	"github.com/gauss-project/aurorafs/pkg/rpc"
 	"github.com/gauss-project/aurorafs/pkg/subscribe"
 	"github.com/prometheus/client_golang/prometheus"
-	"time"
 )
 
 func (ci *ChunkInfo) API() rpc.API {

@@ -5,7 +5,6 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"github.com/gauss-project/aurorafs/pkg/subscribe"
 	"io"
 	"testing"
 	"time"
@@ -27,6 +26,7 @@ import (
 	smock "github.com/gauss-project/aurorafs/pkg/statestore/mock"
 	"github.com/gauss-project/aurorafs/pkg/storage"
 	"github.com/gauss-project/aurorafs/pkg/storage/mock"
+	"github.com/gauss-project/aurorafs/pkg/subscribe"
 	"github.com/gauss-project/aurorafs/pkg/traversal"
 	"golang.org/x/sync/errgroup"
 )
