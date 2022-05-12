@@ -64,8 +64,10 @@ type Service struct {
 	close          chan struct{}
 	sessionStream  sync.Map // key= sessionID, value= *WsStream
 
-	logSig    []chan LogContent
-	logSigMtx sync.Mutex
+	//logSig    []chan LogContent
+	//logSigMtx sync.Mutex
+
+	subPub subscribe.SubPub
 }
 
 type WsStream struct {
@@ -83,16 +85,18 @@ type PeersSubClient struct {
 }
 
 type Group struct {
-	gid               boson.Address
-	connectedPeers    *pslice.PSlice
-	keepPeers         *pslice.PSlice // Need to maintain the connection with ping
-	knownPeers        *pslice.PSlice
-	srv               *Service
-	option            model.ConfigNodeGroup
-	multicastCh       chan Message
-	groupMessageCh    chan GroupMessage
-	groupPeersCh      sync.Map
-	groupPeersChAfter sync.Map
+	gid            boson.Address
+	connectedPeers *pslice.PSlice
+	keepPeers      *pslice.PSlice // Need to maintain the connection with ping
+	knownPeers     *pslice.PSlice
+	srv            *Service
+	option         model.ConfigNodeGroup
+
+	multicastSub bool
+	groupMsgSub  bool
+
+	groupPeersLastSend time.Time     // groupPeersMsg last send time
+	groupPeersSending  chan struct{} // whether a goroutine is sending msg. This chan needs to be declared whit "make(chan struct{}, 1)"
 }
 
 func (s *Service) newGroup(gid boson.Address, o model.ConfigNodeGroup) *Group {
@@ -108,6 +112,9 @@ func (s *Service) newGroup(gid boson.Address, o model.ConfigNodeGroup) *Group {
 		knownPeers: pslice.New(1, s.self),
 		srv:        s,
 		option:     o,
+
+		groupPeersLastSend: time.Now(),
+		groupPeersSending:  make(chan struct{}, 1),
 	}
 	conn, ok := s.connectedPeers.Load(gid.String())
 	if ok {
@@ -122,7 +129,7 @@ type Option struct {
 	Dev bool
 }
 
-func NewService(self boson.Address, nodeMode aurora.Model, service p2p.Service, streamer p2p.Streamer, kad topology.Driver, route routetab.RouteTab, logger logging.Logger, o Option) *Service {
+func NewService(self boson.Address, nodeMode aurora.Model, service p2p.Service, streamer p2p.Streamer, kad topology.Driver, route routetab.RouteTab, logger logging.Logger, subPub subscribe.SubPub, o Option) *Service {
 	srv := &Service{
 		o:        o,
 		nodeMode: nodeMode,
@@ -132,6 +139,7 @@ func NewService(self boson.Address, nodeMode aurora.Model, service p2p.Service, 
 		logger:   logger,
 		kad:      kad,
 		route:    route,
+		subPub:   subPub,
 		close:    make(chan struct{}, 1),
 	}
 	return srv
@@ -465,7 +473,7 @@ func (s *Service) notifyMulticast(gid boson.Address, msg Message) (e error) {
 	g, ok := s.groups.Load(gid.String())
 	if ok {
 		v := g.(*Group)
-		if v.multicastCh == nil {
+		if v.multicastSub == false {
 			return nil
 		}
 		defer func() {
@@ -473,14 +481,11 @@ func (s *Service) notifyMulticast(gid boson.Address, msg Message) (e error) {
 			if err != nil {
 				e = fmt.Errorf("group %s , notify msg %s", gid, err)
 				s.logger.Error(e)
-				v.multicastCh = nil
+				v.multicastSub = false
 			}
 		}()
 
-		select {
-		case v.multicastCh <- msg:
-		default:
-		}
+		_ = s.subPub.Publish("group", "multicastMsg", gid.String(), msg)
 	}
 	return nil
 }
@@ -558,22 +563,22 @@ func (s *Service) joinGroup(gid boson.Address, option model.ConfigNodeGroup) err
 	return nil
 }
 
-func (s *Service) SubscribeMulticastMsg(gid boson.Address) (c <-chan Message, unsubscribe func(), err error) {
-	unsubscribe = func() {}
-	channel := make(chan Message, 1)
+func (s *Service) SubscribeMulticastMsg(n *rpc.Notifier, sub *rpc.Subscription, gid boson.Address) (err error) {
+	notifier := subscribe.NewNotifier(n, sub)
 	var g *Group
 	value, ok := s.groups.Load(gid.String())
 	if ok {
 		g = value.(*Group)
-		if g.option.GType == model.GTypeJoin && g.multicastCh == nil {
-			g.multicastCh = channel
-			return channel, func() { g.multicastCh = nil }, nil
+		if g.option.GType == model.GTypeJoin && g.multicastSub == false {
+			g.multicastSub = true
+			_ = s.subPub.Subscribe(notifier, "group", "multicastMsg", gid.String())
+			return nil
 		}
-		if g.multicastCh != nil {
-			return nil, unsubscribe, errors.New("multicast message subscription already exists")
+		if g.multicastSub == true {
+			return errors.New("multicast message subscription already exists")
 		}
 	}
-	return nil, unsubscribe, errors.New("the group notfound")
+	return errors.New("the group notfound")
 }
 
 func (s *Service) AddGroup(groups []model.ConfigNodeGroup) error {
@@ -789,45 +794,14 @@ func (s *Service) getConnectedInfo(ss map[string]*topModel.PeerInfo) (out []*mod
 	return out
 }
 
-func (s *Service) SubscribeLogContent() (c <-chan LogContent, unsubscribe func()) {
-	channel := make(chan LogContent, 1)
-	var closeOnce sync.Once
-
-	s.logSigMtx.Lock()
-	defer s.logSigMtx.Unlock()
-
-	s.logSig = append(s.logSig, channel)
-
-	unsubscribe = func() {
-		s.logSigMtx.Lock()
-		defer s.logSigMtx.Unlock()
-
-		for i, c := range s.logSig {
-			if c == channel {
-				s.logSig = append(s.logSig[:i], s.logSig[i+1:]...)
-				break
-			}
-		}
-
-		closeOnce.Do(func() { close(channel) })
-	}
-
-	return channel, unsubscribe
+func (s *Service) SubscribeLogContent(n *rpc.Notifier, sub *rpc.Subscription) {
+	notifier := subscribe.NewNotifier(n, sub)
+	_ = s.subPub.Subscribe(notifier, "group", "logContent", "")
+	return
 }
 
 func (s *Service) notifyLogContent(data LogContent) {
-	s.logSigMtx.Lock()
-	defer s.logSigMtx.Unlock()
-
-	for _, c := range s.logSig {
-		// Every logSig channel has a buffer capacity of 1,
-		// so every receiver will get the signal even if the
-		// select statement has the default case to avoid blocking.
-		select {
-		case c <- data:
-		default:
-		}
-	}
+	_ = s.subPub.Publish("group", "logContent", "", data)
 }
 
 // GetGroupPeers the peers order by EWMA optimal
@@ -1023,7 +997,7 @@ func (s *Service) onMessage(ctx context.Context, peer p2p.Peer, stream p2p.Strea
 		g := value.(*Group)
 		if g.gid.Equal(msg.GID) && g.option.GType == model.GTypeJoin {
 			haveNotify = true
-			if g.groupMessageCh == nil {
+			if g.groupMsgSub == false {
 				notifyErr = fmt.Errorf("target not subscribe the group message")
 				return false
 			}
@@ -1050,22 +1024,23 @@ func (s *Service) onMessage(ctx context.Context, peer p2p.Peer, stream p2p.Strea
 	return nil
 }
 
-func (s *Service) SubscribeGroupMessage(gid boson.Address) (c <-chan GroupMessage, err error) {
-	channel := make(chan GroupMessage, 1)
+func (s *Service) SubscribeGroupMessage(n *rpc.Notifier, sub *rpc.Subscription, gid boson.Address) (err error) {
+	notifier := subscribe.NewNotifier(n, sub)
 	var g *Group
 	value, ok := s.groups.Load(gid.String())
 	if ok {
 		g = value.(*Group)
 		if g.option.GType == model.GTypeJoin {
-			g.groupMessageCh = channel
-			return channel, nil
+			g.groupMsgSub = true
+			_ = s.subPub.Subscribe(notifier, "group", "groupMessage", gid.String())
+			return nil
 		}
 	}
-	return nil, errors.New("the joined group notfound")
+	return errors.New("the joined group notfound")
 }
 
 func (s *Service) notifyMessage(g *Group, msg GroupMessage, st *WsStream) (e error) {
-	if g.groupMessageCh == nil {
+	if g.groupMsgSub == false {
 		return nil
 	}
 	defer func() {
@@ -1073,7 +1048,7 @@ func (s *Service) notifyMessage(g *Group, msg GroupMessage, st *WsStream) (e err
 		if err != nil {
 			e = fmt.Errorf("group %s , notify msg %s", g.gid, err)
 			s.logger.Error(e)
-			g.groupMessageCh = nil
+			g.groupMsgSub = false
 		}
 	}()
 
@@ -1081,10 +1056,7 @@ func (s *Service) notifyMessage(g *Group, msg GroupMessage, st *WsStream) (e err
 		msg.SessionID = rpc.NewID()
 	}
 
-	select {
-	case g.groupMessageCh <- msg:
-	default:
-	}
+	_ = s.subPub.Publish("group", "groupMessage", g.gid.String(), msg)
 
 	s.logger.Debugf("group: sessionID %s %s from %s", msg.SessionID, st.sendOption, msg.From)
 	switch st.sendOption {
@@ -1152,6 +1124,19 @@ func (s *Service) notifyGroupPeers(gid boson.Address) {
 	if !ok {
 		return
 	}
+	g := value.(*Group)
+
+	// prevent other goroutine from continuing
+	select {
+	case g.groupPeersSending <- struct{}{}:
+	default:
+		return
+	}
+
+	defer func() {
+		<-g.groupPeersSending
+	}()
+
 	peers, err := s.GetGroupPeers(gid.String())
 	if err != nil {
 		return
@@ -1167,62 +1152,33 @@ func (s *Service) notifyGroupPeers(gid boson.Address) {
 	}
 	_ = cache.Set(cacheCtx, key, b, 0)
 
-	g := value.(*Group)
-	g.groupPeersCh.Range(func(key, value interface{}) bool {
-		client := value.(*PeersSubClient)
-		select {
-		case <-client.sub.Err():
-			g.groupPeersCh.Delete(key)
-			return true
-		default:
-		}
-		var minInterval = time.Millisecond * 500
-		ms := time.Since(client.lastPushTime)
-		if ms >= minInterval {
-			_ = client.notify.Notify(client.sub.ID, peers)
-			client.lastPushTime = time.Now()
-		} else {
-			s.afterPush(client, g, minInterval-ms)
-		}
-		return true
-	})
-}
-
-func (s *Service) afterPush(client *PeersSubClient, g *Group, duration time.Duration) {
-	_, ok := g.groupPeersChAfter.Load(client.sub.ID)
-	if ok {
-		return
-	}
-	g.groupPeersChAfter.Store(client.sub.ID, 0)
-	go func() {
-		defer g.groupPeersChAfter.Delete(client.sub.ID)
-		<-time.After(duration)
-		select {
-		case <-client.sub.Err():
-			g.groupPeersCh.Delete(client.sub.ID)
-		default:
-		}
-		peers, err := s.GetGroupPeers(g.gid.String())
-		if err != nil {
+	var minInterval = time.Millisecond * 500
+	ms := time.Since(g.groupPeersLastSend)
+	if ms >= minInterval {
+		_ = s.subPub.Publish("group", "groupPeers", gid.String(), peers)
+		g.groupPeersLastSend = time.Now()
+	} else {
+		<-time.After(minInterval - ms)
+		p, e := s.GetGroupPeers(g.gid.String())
+		if e != nil {
 			return
 		}
-		_ = client.notify.Notify(client.sub.ID, peers)
-		client.lastPushTime = time.Now()
-	}()
+		_ = s.subPub.Publish("group", "groupPeers", gid.String(), p)
+		g.groupPeersLastSend = time.Now()
+	}
 }
 
-func (s *Service) subscribeGroupPeers(gid boson.Address, client *PeersSubClient) (err error) {
-	var g *Group
-	value, ok := s.groups.Load(gid.String())
+func (s *Service) subscribeGroupPeers(n *rpc.Notifier, sub *rpc.Subscription, gid boson.Address) (err error) {
+	notifier := subscribe.NewNotifier(n, sub)
+	_, ok := s.groups.Load(gid.String())
 	if ok {
-		g = value.(*Group)
-		g.groupPeersCh.Store(client.sub.ID, client)
+		_ = s.subPub.Subscribe(notifier, "group", "groupPeers", gid.String())
 		go func() {
 			peers, err := s.GetGroupPeers(gid.String())
 			if err != nil {
 				return
 			}
-			_ = client.notify.Notify(client.sub.ID, peers)
+			_ = n.Notify(sub.ID, peers)
 		}()
 		return nil
 	}

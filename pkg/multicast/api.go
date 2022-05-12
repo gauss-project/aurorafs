@@ -2,8 +2,6 @@ package multicast
 
 import (
 	"context"
-	"time"
-
 	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/rpc"
 )
@@ -33,22 +31,10 @@ func (a *apiService) Message(ctx context.Context, name string) (*rpc.Subscriptio
 	if err != nil {
 		gid = GenerateGID(name)
 	}
-	ch, err := a.s.SubscribeGroupMessage(gid)
+	err = a.s.SubscribeGroupMessage(notifier, sub, gid)
 	if err != nil {
 		return nil, err
 	}
-	a.s.logger.Debugf("group %s message subscribe success", name)
-	go func() {
-		for {
-			select {
-			case data := <-ch:
-				_ = notifier.Notify(sub.ID, data)
-			case e := <-sub.Err():
-				a.s.logger.Errorf("group %s message subscribe quit err=%v", name, e)
-				return
-			}
-		}
-	}()
 	return sub, nil
 }
 
@@ -64,22 +50,10 @@ func (a *apiService) Multicast(ctx context.Context, name string) (*rpc.Subscript
 	if err != nil {
 		gid = GenerateGID(name)
 	}
-	ch, unsub, err := a.s.SubscribeMulticastMsg(gid)
+	err = a.s.SubscribeMulticastMsg(notifier, sub, gid)
 	if err != nil {
 		return nil, err
 	}
-
-	go func() {
-		for {
-			select {
-			case data := <-ch:
-				_ = notifier.Notify(sub.ID, data)
-			case <-sub.Err():
-				unsub()
-				return
-			}
-		}
-	}()
 	return sub, nil
 }
 
@@ -94,11 +68,7 @@ func (a *apiService) Peers(ctx context.Context, name string) (*rpc.Subscription,
 	if err != nil {
 		gid = GenerateGID(name)
 	}
-	err = a.s.subscribeGroupPeers(gid, &PeersSubClient{
-		notify:       notifier,
-		sub:          sub,
-		lastPushTime: time.Now(),
-	})
+	err = a.s.subscribeGroupPeers(notifier, sub, gid)
 	if err != nil {
 		return nil, err
 	}
