@@ -4,6 +4,7 @@ package topology
 
 import (
 	"errors"
+	"github.com/gauss-project/aurorafs/pkg/subscribe"
 	"io"
 	"time"
 
@@ -25,8 +26,8 @@ type Driver interface {
 	EachPeerer
 	EachNeighbor
 	NeighborhoodDepther
-	SubscribePeersChange() (c <-chan struct{}, unsubscribe func())
-	SubscribePeerState() (c <-chan p2p.PeerInfo, unsubscribe func())
+	SubscribePeersChange(notifier subscribe.INotifier)
+	SubscribePeerState(notifier subscribe.INotifier)
 	io.Closer
 	Halter
 	Snapshot() *model.KadParams

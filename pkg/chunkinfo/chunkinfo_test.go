@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"github.com/gauss-project/aurorafs/pkg/subscribe"
 	"io"
 	"testing"
 	"time"
@@ -422,7 +423,7 @@ func mockChunkInfo(traversal traversal.Traverser, r *streamtest.Recorder, overla
 	ret := smock.NewStateStore()
 	route := rmock.NewMockRouteTable()
 	oracle := omock.NewServer()
-	server := New(overlay, r, logger, traversal, ret, &route, oracle)
+	server := New(overlay, r, logger, traversal, ret, &route, oracle, subscribe.NewSubPub())
 	err := server.InitChunkInfo()
 	if err != nil {
 		return nil

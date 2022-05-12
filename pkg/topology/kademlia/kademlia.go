@@ -5,6 +5,8 @@ import (
 	random "crypto/rand"
 	"encoding/json"
 	"errors"
+	"github.com/gauss-project/aurorafs/pkg/subscribe"
+	"github.com/gauss-project/aurorafs/pkg/topology/lightnode"
 	"math/big"
 	"net"
 	"sync"
@@ -101,15 +103,12 @@ type Kad struct {
 	connectedPeers    *pslice.PSlice        // a slice of peers sorted and indexed by po, indexes kept in `bins`
 	knownPeers        *pslice.PSlice        // both are po aware slice of addresses
 	bootnodes         []ma.Multiaddr
+	lightNodes        *lightnode.Container
 	bootNodes         *bootnode.Container
-	depth             uint8         // current neighborhood depth
-	radius            uint8         // storage area of responsibility
-	depthMu           sync.RWMutex  // protect depth changes
-	manageC           chan struct{} // trigger the manage forever loop to connect to new peers
-	peerSig           []chan struct{}
-	peerSigMtx        sync.Mutex
-	peerStateSig      []chan p2p.PeerInfo
-	peerStateSigMtx   sync.Mutex
+	depth             uint8          // current neighborhood depth
+	radius            uint8          // storage area of responsibility
+	depthMu           sync.RWMutex   // protect depth changes
+	manageC           chan struct{}  // trigger the manage forever loop to connect to new peers
 	logger            logging.Logger // logger
 	nodeMode          aurora.Model   // indicates whether the node working mode
 	collector         *im.Collector
@@ -129,6 +128,7 @@ type Kad struct {
 	peerFilter        peerFilterFunc
 	protectPeers      []boson.Address
 	protectMix        sync.RWMutex
+	subPub            subscribe.SubPub
 }
 
 // New returns a new Kademlia.
@@ -138,9 +138,11 @@ func New(
 	discovery discovery.Driver,
 	p2ps p2p.Service,
 	pinger pingpong.Interface,
+	lightNodes *lightnode.Container,
 	bootNodes *bootnode.Container,
 	metricsDB *shed.DB,
 	logger logging.Logger,
+	subPub subscribe.SubPub,
 	o Options,
 ) (*Kad, error) {
 	if o.BinMaxPeers > 0 {
@@ -185,6 +187,7 @@ func New(
 		connectedPeers:    pslice.New(int(boson.MaxBins), base),
 		knownPeers:        pslice.New(int(boson.MaxBins), base),
 		bootnodes:         o.Bootnodes,
+		lightNodes:        lightNodes,
 		bootNodes:         bootNodes,
 		manageC:           make(chan struct{}, 1),
 		waitNext:          waitnext.New(),
@@ -200,6 +203,7 @@ func New(
 		pinger:            pinger,
 		staticPeer:        isStaticPeer(o.StaticNodes),
 		peerFilter:        o.ReachabilityFunc,
+		subPub:            subPub,
 	}
 
 	blocklistCallback := func(a boson.Address) {
@@ -1228,18 +1232,7 @@ func (k *Kad) DisconnectForce(addr boson.Address, reason string) error {
 }
 
 func (k *Kad) notifyPeerSig() {
-	k.peerSigMtx.Lock()
-	defer k.peerSigMtx.Unlock()
-
-	for _, c := range k.peerSig {
-		// Every peerSig channel has a buffer capacity of 1,
-		// so every receiver will get the signal even if the
-		// select statement has the default case to avoid blocking.
-		select {
-		case c <- struct{}{}:
-		default:
-		}
-	}
+	k.PublishPeersChange()
 }
 
 func closestPeer(peers *pslice.PSlice, addr boson.Address, spf sanctionedPeerFunc) (boson.Address, error) {
@@ -1452,65 +1445,40 @@ func (k *Kad) RandomSubset(array []boson.Address, count int) ([]boson.Address, e
 
 // SubscribePeersChange returns the channel that signals when the connected peers
 // set changes. Returned function is safe to be called multiple times.
-func (k *Kad) SubscribePeersChange() (c <-chan struct{}, unsubscribe func()) {
-	channel := make(chan struct{}, 1)
-	var closeOnce sync.Once
-
-	k.peerSigMtx.Lock()
-	defer k.peerSigMtx.Unlock()
-
-	k.peerSig = append(k.peerSig, channel)
-
-	unsubscribe = func() {
-		k.peerSigMtx.Lock()
-		defer k.peerSigMtx.Unlock()
-
-		for i, c := range k.peerSig {
-			if c == channel {
-				k.peerSig = append(k.peerSig[:i], k.peerSig[i+1:]...)
-				break
-			}
-		}
-
-		closeOnce.Do(func() { close(channel) })
-	}
-
-	return channel, unsubscribe
+func (k *Kad) SubscribePeersChange(notifier subscribe.INotifier) {
+	_ = k.subPub.Subscribe(notifier, "kad", "peersChange", "")
 }
 
-func (k *Kad) SubscribePeerState() (c <-chan p2p.PeerInfo, unsubscribe func()) {
-	channel := make(chan p2p.PeerInfo, 1)
-	var closeOnce sync.Once
-
-	k.peerStateSigMtx.Lock()
-	defer k.peerStateSigMtx.Unlock()
-
-	k.peerStateSig = append(k.peerStateSig, channel)
-
-	unsubscribe = func() {
-		k.peerStateSigMtx.Lock()
-		defer k.peerStateSigMtx.Unlock()
-		for i, c := range k.peerStateSig {
-			if c == channel {
-				k.peerStateSig = append(k.peerStateSig[:i], k.peerStateSig[i+1:]...)
-				break
-			}
-		}
-		closeOnce.Do(func() { close(channel) })
+func (k *Kad) PublishPeersChange() {
+	params := k.Snapshot()
+	if k.lightNodes != nil {
+		params.LightNodes = k.lightNodes.PeerInfo()
 	}
+	if k.bootNodes != nil {
+		params.BootNodes = k.bootNodes.PeerInfo()
+	}
+	result := &KadInfo{
+		Depth:      params.Depth,
+		Population: params.Population,
+		Connected: Connected{
+			FullNodes:  params.Connected,
+			LightNodes: params.LightNodes.BinConnected,
+			BootNodes:  params.BootNodes.BinConnected,
+		},
+	}
+	_ = k.subPub.Publish("kad", "peersChange", "", result)
+}
 
-	return channel, unsubscribe
+func (k *Kad) SubscribePeerState(notifier subscribe.INotifier) {
+	_ = k.subPub.Subscribe(notifier, "kad", "peerState", "")
+}
+
+func (k *Kad) PublishPeerState(info p2p.PeerInfo) {
+	_ = k.subPub.Publish("kad", "peerState", info.Overlay.String(), info)
 }
 
 func (k *Kad) NotifyPeerState(peer p2p.PeerInfo) {
-	k.peerStateSigMtx.Lock()
-	defer k.peerStateSigMtx.Unlock()
-	for _, c := range k.peerStateSig {
-		select {
-		case c <- peer:
-		default:
-		}
-	}
+	k.PublishPeerState(peer)
 }
 
 // NeighborhoodDepth returns the current Kademlia depth.

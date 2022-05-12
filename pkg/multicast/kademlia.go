@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/gauss-project/aurorafs/pkg/subscribe"
 	"sort"
 	"sync"
 	"sync/atomic"
@@ -166,19 +167,24 @@ func (s *Service) Protocol() p2p.ProtocolSpec {
 }
 
 func (s *Service) Start() {
-	ch, unsub := s.kad.SubscribePeerState()
+	mNotifier := subscribe.NewNotifierWithMsgChan()
+	s.kad.SubscribePeerState(mNotifier)
 	go func() {
 		ticker := time.NewTicker(keepPingInterval)
 		defer func() {
 			ticker.Stop()
-			unsub()
+			close(mNotifier.ErrChan)
 		}()
 
 		for {
 			select {
 			case <-s.close:
 				return
-			case peer := <-ch:
+			case info := <-mNotifier.MsgChan:
+				peer, ok := info.(p2p.PeerInfo)
+				if !ok {
+					continue
+				}
 				switch peer.State {
 				case p2p.PeerStateConnectOut:
 					s.logger.Tracef("event connectOut handshake with group protocol %s", peer.Overlay)

@@ -6,6 +6,7 @@ import (
 	"crypto/ecdsa"
 	"errors"
 	"fmt"
+	"github.com/gauss-project/aurorafs/pkg/subscribe"
 	"io"
 	"io/ioutil"
 	"math/big"
@@ -211,6 +212,7 @@ func TestPayUnknownBeneficiary(t *testing.T) {
 		chequeSigner,
 		protocol,
 		chainID,
+		subscribe.NewSubPub(),
 	)
 
 	err := trafficService.Pay(context.Background(), peer, big.NewInt(50))
@@ -291,6 +293,7 @@ func TestPay(t *testing.T) {
 			},
 		},
 		chainID,
+		subscribe.NewSubPub(),
 	)
 	tra.trafficPeers.balance = new(big.Int).SetInt64(120)
 	tra.trafficPeers.trafficPeers[beneficiary.String()] = &Traffic{
@@ -407,6 +410,7 @@ func TestCashOut(t *testing.T) {
 		chequeSigner,
 		trafficProtocol,
 		chainID,
+		subscribe.NewSubPub(),
 	)
 
 	returnedHash, err := tra.CashCheque(context.Background(), peer)
@@ -484,6 +488,7 @@ func newTrafficTest(t *testing.T, store storage.StateStorer, logger logging.Logg
 		chequeSigner,
 		protocol,
 		chainID,
+		subscribe.NewSubPub(),
 	)
 	return trafficService
 }

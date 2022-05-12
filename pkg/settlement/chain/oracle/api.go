@@ -4,7 +4,6 @@ import (
 	"context"
 	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/rpc"
-	"time"
 )
 
 func (ora *ChainOracle) API() rpc.API {
@@ -36,19 +35,6 @@ func (a *apiService) RegisterStatus(ctx context.Context, rootCids []string) (*rp
 		rcids = append(rcids, rcid)
 	}
 
-	c, unsub := a.ora.SubscribeRegisterStatus(rcids)
-	go func() {
-		ticker := time.NewTicker(time.Second * 1)
-		defer ticker.Stop()
-		for {
-			select {
-			case data := <-c:
-				_ = notifier.Notify(sub.ID, data)
-			case <-sub.Err():
-				unsub()
-				return
-			}
-		}
-	}()
+	a.ora.SubscribeRegisterStatus(notifier, sub, rcids)
 	return sub, nil
 }

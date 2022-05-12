@@ -19,6 +19,7 @@ import (
 	chequePkg "github.com/gauss-project/aurorafs/pkg/settlement/traffic/cheque"
 	"github.com/gauss-project/aurorafs/pkg/settlement/traffic/trafficprotocol"
 	"github.com/gauss-project/aurorafs/pkg/storage"
+	"github.com/gauss-project/aurorafs/pkg/subscribe"
 )
 
 // InitChain will initialize the Ethereum backend at the given endpoint and
@@ -32,7 +33,9 @@ func InitChain(
 	signer crypto.Signer,
 	trafficEnable bool,
 	trafficContractAddr string,
-	p2pService *libp2p.Service) (chain.Resolver, settlement.Interface, traffic.ApiInterface, chain.Common, error) {
+	p2pService *libp2p.Service,
+	subPub subscribe.SubPub,
+) (chain.Resolver, settlement.Interface, traffic.ApiInterface, chain.Common, error) {
 	backend, err := ethclient.Dial(endpoint)
 	if err != nil {
 		return nil, nil, nil, nil, fmt.Errorf("dial eth client: %w", err)
@@ -50,7 +53,7 @@ func InitChain(
 	if oracleContractAddress == "" {
 		return nil, nil, nil, nil, fmt.Errorf("oracle contract address is empty")
 	}
-	oracleServer, err := oracle.NewServer(logger, backend, oracleContractAddress, signer, cc)
+	oracleServer, err := oracle.NewServer(logger, backend, oracleContractAddress, signer, cc, subPub)
 	if err != nil {
 		return nil, nil, nil, nil, fmt.Errorf("new oracle service: %w", err)
 	}
@@ -78,7 +81,7 @@ func InitChain(
 		return nil, nil, nil, nil, fmt.Errorf("new traffic service: %w", err)
 	}
 
-	trafficService, err := InitTraffic(stateStore, address, trafficChainService, transactionService, logger, p2pService, signer, chainID.Int64(), trafficContractAddr)
+	trafficService, err := InitTraffic(stateStore, address, trafficChainService, transactionService, logger, p2pService, signer, chainID.Int64(), trafficContractAddr, subPub)
 	if err != nil {
 		return nil, nil, nil, nil, err
 	}
@@ -91,7 +94,7 @@ func InitChain(
 }
 
 func InitTraffic(store storage.StateStorer, address common.Address, trafficChainService chain.Traffic,
-	transactionService chain.Transaction, logger logging.Logger, p2pService *libp2p.Service, signer crypto.Signer, chainID int64, trafficContractAddr string) (*traffic.Service, error) {
+	transactionService chain.Transaction, logger logging.Logger, p2pService *libp2p.Service, signer crypto.Signer, chainID int64, trafficContractAddr string, subPub subscribe.SubPub) (*traffic.Service, error) {
 	chequeStore := chequePkg.NewChequeStore(store, address, chequePkg.RecoverCheque, chainID)
 	cashOut := chequePkg.NewCashoutService(store, transactionService, trafficChainService, chequeStore, common.HexToAddress(trafficContractAddr))
 	addressBook := traffic.NewAddressBook(store)
@@ -100,7 +103,7 @@ func InitTraffic(store storage.StateStorer, address common.Address, trafficChain
 		return nil, fmt.Errorf("traffic server :%v", err)
 	}
 	chequeSigner := chequePkg.NewChequeSigner(signer, chainID)
-	trafficService := traffic.New(logger, address, store, trafficChainService, chequeStore, cashOut, p2pService, addressBook, chequeSigner, protocol, chainID)
+	trafficService := traffic.New(logger, address, store, trafficChainService, chequeStore, cashOut, p2pService, addressBook, chequeSigner, protocol, chainID, subPub)
 	protocol.SetTraffic(trafficService)
 	return trafficService, nil
 }

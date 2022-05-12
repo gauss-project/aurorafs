@@ -2,26 +2,21 @@ package kademlia
 
 import (
 	"context"
-	"time"
-
 	"github.com/gauss-project/aurorafs/pkg/rpc"
-	"github.com/gauss-project/aurorafs/pkg/topology/bootnode"
-	"github.com/gauss-project/aurorafs/pkg/topology/lightnode"
+	"github.com/gauss-project/aurorafs/pkg/subscribe"
 )
 
-func (k *Kad) API(light *lightnode.Container, boot *bootnode.Container) rpc.API {
+func (k *Kad) API() rpc.API {
 	return rpc.API{
 		Namespace: "p2p",
 		Version:   "1.0",
-		Service:   &apiService{kad: k, lightNodes: light, bootNodes: boot},
+		Service:   &apiService{kad: k},
 		Public:    true,
 	}
 }
 
 type apiService struct {
-	kad        *Kad
-	lightNodes *lightnode.Container
-	bootNodes  *bootnode.Container
+	kad *Kad
 }
 
 type Connected struct {
@@ -43,54 +38,9 @@ func (a *apiService) KadInfo(ctx context.Context) (*rpc.Subscription, error) {
 	}
 	sub := notifier.CreateSubscription()
 
-	ch, unsub := a.kad.SubscribePeersChange()
+	iNotifier := subscribe.NewNotifierWithDelay(notifier, sub, 1, false)
+	a.kad.SubscribePeersChange(iNotifier)
 
-	go func() {
-		var (
-			lastTime    = time.Now()
-			minInterval = time.Second
-			waitAfter   bool
-		)
-		resFunc := func() {
-			params := a.kad.Snapshot()
-			params.LightNodes = a.lightNodes.PeerInfo()
-			params.BootNodes = a.bootNodes.PeerInfo()
-			result := &KadInfo{
-				Depth:      params.Depth,
-				Population: params.Population,
-				Connected: Connected{
-					FullNodes:  params.Connected,
-					LightNodes: params.LightNodes.BinConnected,
-					BootNodes:  params.BootNodes.BinConnected,
-				},
-			}
-			_ = notifier.Notify(sub.ID, result)
-			lastTime = time.Now()
-		}
-		resFunc()
-		for {
-			select {
-			case <-ch:
-				if waitAfter {
-					break
-				}
-				ms := time.Since(lastTime)
-				if ms >= minInterval {
-					resFunc()
-					break
-				}
-				go func() {
-					waitAfter = true
-					<-time.After(minInterval - ms)
-					resFunc()
-					waitAfter = false
-				}()
-			case <-sub.Err():
-				unsub()
-				return
-			}
-		}
-	}()
 	return sub, nil
 }
 
@@ -101,18 +51,7 @@ func (a *apiService) PeerState(ctx context.Context) (*rpc.Subscription, error) {
 	}
 	sub := notifier.CreateSubscription()
 
-	ch, unsub := a.kad.SubscribePeerState()
-
-	go func() {
-		for {
-			select {
-			case p := <-ch:
-				_ = notifier.Notify(sub.ID, p)
-			case <-sub.Err():
-				unsub()
-				return
-			}
-		}
-	}()
+	iNotifier := subscribe.NewNotifier(notifier, sub)
+	a.kad.SubscribePeerState(iNotifier)
 	return sub, nil
 }

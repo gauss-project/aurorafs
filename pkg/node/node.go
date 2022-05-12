@@ -7,6 +7,7 @@ import (
 	"context"
 	"crypto/ecdsa"
 	"fmt"
+	"github.com/gauss-project/aurorafs/pkg/subscribe"
 	"io"
 	"log"
 	"math/big"
@@ -141,6 +142,9 @@ func NewAurora(nodeMode aurora.Model, addr string, bosonAddress boson.Address, p
 		tracerCloser:   tracerCloser,
 	}
 
+	// a struct warped publish-subscribe function
+	subPub := subscribe.NewSubPub()
+
 	var authenticator *auth.Authenticator
 
 	if o.Restricted {
@@ -239,7 +243,8 @@ func NewAurora(nodeMode aurora.Model, addr string, bosonAddress boson.Address, p
 		signer,
 		o.TrafficEnable,
 		o.TrafficContractAddr,
-		p2ps)
+		p2ps,
+		subPub)
 	if err != nil {
 		return nil, err
 	}
@@ -306,7 +311,7 @@ func NewAurora(nodeMode aurora.Model, addr string, bosonAddress boson.Address, p
 		return nil, fmt.Errorf("hive service: %w", err)
 	}
 
-	kad, err := kademlia.New(bosonAddress, addressBook, hiveObj, p2ps, pingPong, bootNodes, metricsDB, logger, kademlia.Options{
+	kad, err := kademlia.New(bosonAddress, addressBook, hiveObj, p2ps, pingPong, lightNodes, bootNodes, metricsDB, logger, subPub, kademlia.Options{
 		Bootnodes:   bootnodes,
 		NodeMode:    nodeMode,
 		BinMaxPeers: o.KadBinMaxPeers,
@@ -352,7 +357,7 @@ func NewAurora(nodeMode aurora.Model, addr string, bosonAddress boson.Address, p
 	}
 	b.localstoreCloser = storer
 
-	retrieve := retrieval.New(bosonAddress, p2ps, route, storer, nodeMode.IsFull(), logger, tracer, acc)
+	retrieve := retrieval.New(bosonAddress, p2ps, route, storer, nodeMode.IsFull(), logger, tracer, acc, subPub)
 	if err = p2ps.AddProtocol(retrieve.Protocol()); err != nil {
 		return nil, fmt.Errorf("retrieval service: %w", err)
 	}
@@ -363,7 +368,7 @@ func NewAurora(nodeMode aurora.Model, addr string, bosonAddress boson.Address, p
 
 	pinningService := pinning.NewService(storer, stateStore, traversalService)
 
-	chunkInfo := chunkinfo.New(bosonAddress, p2ps, logger, traversalService, stateStore, route, oracleChain)
+	chunkInfo := chunkinfo.New(bosonAddress, p2ps, logger, traversalService, stateStore, route, oracleChain, subPub)
 	if err := chunkInfo.InitChunkInfo(); err != nil {
 		return nil, fmt.Errorf("chunk info init: %w", err)
 	}
@@ -511,12 +516,12 @@ func NewAurora(nodeMode aurora.Model, addr string, bosonAddress boson.Address, p
 		return nil, err
 	}
 	stack.RegisterAPIs([]rpc.API{
-		group.API(),                    // group
-		kad.API(lightNodes, bootNodes), // p2p
-		chunkInfo.API(),                // chunkInfo
-		apiInterface.API(),             // traffic
-		retrieve.API(),                 // retrieval
-		oracleChain.API(),              // oracle
+		group.API(),        // group
+		kad.API(),          // p2p
+		chunkInfo.API(),    // chunkInfo
+		apiInterface.API(), // traffic
+		retrieve.API(),     // retrieval
+		oracleChain.API(),  // oracle
 	})
 	if err = stack.Start(); err != nil {
 		return nil, err

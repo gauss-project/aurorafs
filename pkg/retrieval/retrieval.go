@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/gauss-project/aurorafs/pkg/subscribe"
 	"time"
 
 	"github.com/gauss-project/aurorafs/pkg/accounting"
@@ -52,6 +53,7 @@ type Service struct {
 	accounting   accounting.Interface
 	singleflight singleflight.Group
 	isFullNode   bool
+	subPub       subscribe.SubPub
 }
 
 type retrievalResult struct {
@@ -66,7 +68,7 @@ const (
 )
 
 func New(addr boson.Address, streamer p2p.Streamer, routeTable routetab.RouteTab, storer storage.Storer,
-	isFullNode bool, logger logging.Logger, tracer *tracing.Tracer, accounting accounting.Interface) *Service {
+	isFullNode bool, logger logging.Logger, tracer *tracing.Tracer, accounting accounting.Interface, subPub subscribe.SubPub) *Service {
 	acoServer := aco.NewAcoServer()
 	return &Service{
 		addr:       addr,
@@ -79,6 +81,7 @@ func New(addr boson.Address, streamer p2p.Streamer, routeTable routetab.RouteTab
 		routeTab:   routeTable,
 		accounting: accounting,
 		isFullNode: isFullNode,
+		subPub:     subPub,
 	}
 }
 
