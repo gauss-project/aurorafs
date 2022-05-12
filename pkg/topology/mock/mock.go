@@ -2,6 +2,7 @@ package mock
 
 import (
 	"context"
+	"github.com/gauss-project/aurorafs/pkg/subscribe"
 	"sync"
 	"time"
 
@@ -197,12 +198,12 @@ func (d *mock) ClosestPeers(addr boson.Address, limit int, _ topology.Filter, sk
 	return nil, nil
 }
 
-func (d *mock) SubscribePeersChange() (c <-chan struct{}, unsubscribe func()) {
-	return c, unsubscribe
+func (d *mock) SubscribePeersChange(notifier subscribe.INotifier) {
+	return
 }
 
-func (d *mock) SubscribePeerState() (c <-chan p2p.PeerInfo, unsubscribe func()) {
-	return c, unsubscribe
+func (d *mock) SubscribePeerState(notifier subscribe.INotifier) {
+	return
 }
 
 func (d *mock) NeighborhoodDepth() uint8 {
