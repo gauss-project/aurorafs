@@ -20,7 +20,7 @@ var (
 )
 
 func CacheRemove(ctx context.Context, keys ...interface{}) {
-	_, _ = cache.Remove(ctx, keys)
+	_, _ = cache.Remove(ctx, keys...)
 }
 
 func ProcessMetricMsg(sub *rpc.Subscription, metrics []prometheus.Metric) (send bool, out map[string]interface{}) {
