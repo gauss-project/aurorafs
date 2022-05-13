@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"sort"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -1224,27 +1223,5 @@ func (s *Service) subscribeGroupPeers(gid boson.Address, client *PeersSubClient)
 }
 
 func (s *Service) getOptimumPeers(list []boson.Address) (now []boson.Address) {
-	sortIdx := make([][]int64, len(list))
-	for i, v := range list {
-		ss := s.kad.SnapshotAddr(v)
-		if ss != nil {
-			t := ss.LatencyEWMA.Nanoseconds()
-			sortIdx[i] = []int64{int64(i), t}
-		} else {
-			sortIdx[i] = []int64{int64(i), 1e10}
-		}
-	}
-
-	sort.Slice(sortIdx, func(i, j int) bool {
-		if sortIdx[i][1] != sortIdx[j][1] {
-			return sortIdx[i][1] < sortIdx[j][1]
-		} else {
-			return sortIdx[i][0] < sortIdx[j][0]
-		}
-	})
-
-	for _, v := range sortIdx {
-		now = append(now, list[v[0]])
-	}
-	return now
+	return s.kad.GetPeersWithLatencyEWMA(list)
 }

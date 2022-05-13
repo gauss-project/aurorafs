@@ -432,7 +432,10 @@ func (s *Service) getNeighbor(target boson.Address, alpha int32, skip ...boson.A
 			return false, false, nil
 		})
 	}
-	forward, _ = s.kad.RandomSubset(now, int(alpha))
+	forward = s.kad.GetPeersWithLatencyEWMA(now)
+	if len(forward) > int(alpha) {
+		return forward[:int(alpha)]
+	}
 	return
 }
 
