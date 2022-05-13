@@ -15,8 +15,8 @@ type GroupInterface interface {
 	RemoveGroup(gid boson.Address, gType model.GType) error
 	Snapshot() *model.KadParams
 	StartDiscover()
-	SubscribeLogContent() (c <-chan LogContent, unsubscribe func())
-	SubscribeMulticastMsg(gid boson.Address) (c <-chan Message, unsubscribe func(), err error)
+	SubscribeLogContent(n *rpc.Notifier, sub *rpc.Subscription)
+	SubscribeMulticastMsg(n *rpc.Notifier, sub *rpc.Subscription, gid boson.Address) (err error)
 	GetGroupPeers(groupName string) (out *GroupPeers, err error)
 	GetOptimumPeer(groupName string) (peer boson.Address, err error)
 	GetSendStream(ctx context.Context, gid, dest boson.Address) (out SendStreamCh, err error)

@@ -14,7 +14,7 @@ import (
 	chequePkg "github.com/gauss-project/aurorafs/pkg/settlement/traffic/cheque"
 	"github.com/gauss-project/aurorafs/pkg/settlement/traffic/trafficprotocol"
 	"github.com/gauss-project/aurorafs/pkg/storage"
-	"strings"
+	"github.com/gauss-project/aurorafs/pkg/subscribe"
 	"time"
 
 	"math/big"
@@ -120,15 +120,14 @@ type Service struct {
 	protocol            trafficprotocol.Interface
 	notifyPaymentFunc   settlement.NotifyPaymentFunc
 	chainID             int64
-	pubSubLk            sync.RWMutex
-	pubSub              map[string][]chan interface{}
+	subPub              subscribe.SubPub
 	//txHash:beneficiary
 	cashChequeChan chan cashCheque
 }
 
 func New(logger logging.Logger, chainAddress common.Address, store storage.StateStorer, trafficChainService chain.Traffic,
 	chequeStore chequePkg.ChequeStore, cashout chequePkg.CashoutService, p2pService p2p.Service, addressBook Addressbook,
-	chequeSigner chequePkg.ChequeSigner, protocol trafficprotocol.Interface, chainID int64) *Service {
+	chequeSigner chequePkg.ChequeSigner, protocol trafficprotocol.Interface, chainID int64, subPub subscribe.SubPub) *Service {
 
 	service := &Service{
 		logger:              logger,
@@ -148,7 +147,7 @@ func New(logger logging.Logger, chainAddress common.Address, store storage.State
 			balance:      big.NewInt(0),
 			totalPaidOut: big.NewInt(0),
 		},
-		pubSub:         make(map[string][]chan interface{}),
+		subPub:         subPub,
 		cashChequeChan: make(chan cashCheque, 5),
 	}
 	service.triggerRefreshInit()
@@ -804,8 +803,7 @@ func (s *Service) cashChequeReceiptUpdate() {
 			traffic := s.getTraffic(cashInfo.chainAddress)
 			traffic.updateStatus(UnOperation)
 			if err != nil {
-				go s.Publish(fmt.Sprintf("CashOut:%s", cashInfo.peer.String()),
-					CashOutStatus{Overlay: cashInfo.peer, Status: false})
+				go s.PublishCashOut(CashOutStatus{Overlay: cashInfo.peer, Status: false})
 				continue
 			}
 			if status == 1 {
@@ -815,128 +813,46 @@ func (s *Service) cashChequeReceiptUpdate() {
 				}
 				go s.PublishHeader()
 				go s.PublishTrafficCheque(cashInfo.chainAddress)
-				go s.Publish(fmt.Sprintf("CashOut:%s", cashInfo.peer.String()),
-					CashOutStatus{Overlay: cashInfo.peer, Status: true})
+				go s.PublishCashOut(CashOutStatus{Overlay: cashInfo.peer, Status: true})
 			} else {
-				go s.Publish(fmt.Sprintf("CashOut:%s", cashInfo.peer.String()),
-					CashOutStatus{Overlay: cashInfo.peer, Status: false})
+				go s.PublishCashOut(CashOutStatus{Overlay: cashInfo.peer, Status: false})
 			}
 		}
 	}()
 
 }
 
-func (s *Service) SubscribeHeader() (c <-chan interface{}, unsub func()) {
-	channel := make(chan interface{}, 1)
-	s.Subscribe("header", channel)
-	unsub = func() {
-		s.UnSubscribe("header", channel)
-	}
-	return channel, unsub
+func (s *Service) SubscribeHeader(notifier *rpc.Notifier, sub *rpc.Subscription) {
+	iNotifier := subscribe.NewNotifierWithDelay(notifier, sub, 1, false)
+	_ = s.subPub.Subscribe(iNotifier, "traffic", "header", "")
+	return
 }
 
-func (s *Service) SubscribeTrafficCheque(addresses []common.Address) (c <-chan interface{}, unsub func()) {
-
+func (s *Service) SubscribeTrafficCheque(notifier *rpc.Notifier, sub *rpc.Subscription, addresses []common.Address) {
+	iNotifier := subscribe.NewNotifierWithDelay(notifier, sub, 1, true)
 	if len(addresses) == 0 {
-		channel := make(chan interface{}, 100)
-		s.Subscribe("TrafficCheque:All", channel)
-		unsub = func() {
-			s.UnSubscribe("TrafficCheque:All", channel)
-		}
-		return channel, unsub
+		_ = s.subPub.Subscribe(iNotifier, "traffic", "trafficCheque", "")
 	} else {
-		channel := make(chan interface{}, len(addresses))
 		for _, address := range addresses {
-			s.Subscribe(fmt.Sprintf("TrafficCheque:%s", address.String()), channel)
+			_ = s.subPub.Subscribe(iNotifier, "traffic", "trafficCheque", address.String())
 		}
-
-		unsub = func() {
-			for _, address := range addresses {
-				s.UnSubscribe(fmt.Sprintf("TrafficCheque:%s", address.String()), channel)
-			}
-		}
-		return channel, unsub
 	}
 }
 
-func (s *Service) SubscribeCashOut(peers []boson.Address) (c <-chan interface{}, unsub func()) {
+func (s *Service) SubscribeCashOut(notifier *rpc.Notifier, sub *rpc.Subscription, peers []boson.Address) {
+	iNotifier := subscribe.NewNotifierWithDelay(notifier, sub, 1, true)
 	if len(peers) == 0 {
-		channel := make(chan interface{}, 100)
-		s.Subscribe("CashOut:All", channel)
-		unsub = func() {
-			s.UnSubscribe("CashOut:All", channel)
-		}
-		return channel, unsub
+		_ = s.subPub.Subscribe(iNotifier, "traffic", "cashOut", "")
 	} else {
-		channel := make(chan interface{}, len(peers))
 		for _, overlay := range peers {
-			s.Subscribe(fmt.Sprintf("CashOut:%s", overlay.String()), channel)
-		}
-
-		unsub = func() {
-			for _, overlay := range peers {
-				s.UnSubscribe(fmt.Sprintf("CashOut:%s", overlay.String()), channel)
-			}
-		}
-		return channel, unsub
-	}
-}
-
-func (s *Service) Subscribe(key string, c chan interface{}) {
-	s.pubSubLk.Lock()
-	defer s.pubSubLk.Unlock()
-	if _, ok := s.pubSub[key]; !ok {
-		ch := []chan interface{}{c}
-		s.pubSub[key] = ch
-	} else {
-		s.pubSub[key] = append(s.pubSub[key], c)
-	}
-
-}
-
-func (s *Service) UnSubscribe(key string, ch chan interface{}) {
-	s.pubSubLk.Lock()
-	defer s.pubSubLk.Unlock()
-	defer func() {
-		recover()
-	}()
-	if len(s.pubSub[key]) == 1 {
-		delete(s.pubSub, key)
-		close(ch)
-	} else {
-		for i, c := range s.pubSub[key] {
-			if c == ch {
-				s.pubSub[key] = append(s.pubSub[key][:i], s.pubSub[key][i+1:]...)
-				close(ch)
-			}
+			_ = s.subPub.Subscribe(iNotifier, "traffic", "cashOut", overlay.String())
 		}
 	}
-}
-
-func (s *Service) Publish(key string, data interface{}) {
-	s.pubSubLk.RLock()
-	defer s.pubSubLk.RUnlock()
-	defer func() {
-		recover()
-	}()
-LOOP:
-	if c, ok := s.pubSub[key]; ok {
-		for _, i := range c {
-			i <- data
-			s.logger.Infof("Send data :%v to channel :%s", data, key)
-		}
-	}
-	keys := strings.Split(key, ":")
-	if len(keys) == 1 || keys[1] == "All" {
-		return
-	}
-	key = fmt.Sprintf("%s:%s", keys[0], "All")
-	goto LOOP
 }
 
 func (s *Service) PublishHeader() {
 	trafficInfo, _ := s.TrafficInfo()
-	s.Publish("header", &trafficInfo)
+	_ = s.subPub.Publish("traffic", "header", "", trafficInfo)
 }
 
 func (s *Service) PublishTrafficCheque(overlay common.Address) {
@@ -945,7 +861,7 @@ func (s *Service) PublishTrafficCheque(overlay common.Address) {
 	trans := new(big.Int).Sub(traffic.transferTraffic, traffic.transferChequeTraffic)
 	retrieve := new(big.Int).Sub(traffic.retrieveTraffic, traffic.retrieveChequeTraffic)
 	peer, _ := s.addressBook.BeneficiaryPeer(overlay)
-	trafficCheque := &TrafficCheque{
+	trafficCheque := TrafficCheque{
 		Peer:                peer,
 		OutstandingTraffic:  new(big.Int).Sub(trans, retrieve),
 		SentSettlements:     traffic.retrieveChequeTraffic,
@@ -955,7 +871,11 @@ func (s *Service) PublishTrafficCheque(overlay common.Address) {
 		Status:              traffic.status,
 	}
 	traffic.Unlock()
-	s.Publish(fmt.Sprintf("TrafficCheque:%s", overlay.String()), *trafficCheque)
+	_ = s.subPub.Publish("traffic", "trafficCheque", overlay.String(), trafficCheque)
+}
+
+func (s *Service) PublishCashOut(msg CashOutStatus) {
+	_ = s.subPub.Publish("traffic", "cashOut", msg.Overlay.String(), msg)
 }
 
 func (t *Traffic) updateStatus(status CashStatus) {

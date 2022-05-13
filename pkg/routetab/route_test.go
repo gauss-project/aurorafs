@@ -9,10 +9,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gauss-project/aurorafs/pkg/shed"
-	"github.com/gauss-project/aurorafs/pkg/topology/kademlia"
-	"github.com/gauss-project/aurorafs/pkg/topology/lightnode"
-
 	"github.com/gauss-project/aurorafs/pkg/addressbook"
 	"github.com/gauss-project/aurorafs/pkg/aurora"
 	"github.com/gauss-project/aurorafs/pkg/boson"
@@ -23,7 +19,11 @@ import (
 	p2pmock "github.com/gauss-project/aurorafs/pkg/p2p/mock"
 	"github.com/gauss-project/aurorafs/pkg/p2p/streamtest"
 	"github.com/gauss-project/aurorafs/pkg/routetab"
+	"github.com/gauss-project/aurorafs/pkg/shed"
 	mockstate "github.com/gauss-project/aurorafs/pkg/statestore/mock"
+	"github.com/gauss-project/aurorafs/pkg/subscribe"
+	"github.com/gauss-project/aurorafs/pkg/topology/kademlia"
+	"github.com/gauss-project/aurorafs/pkg/topology/lightnode"
 	ma "github.com/multiformats/go-multiaddr"
 	"github.com/sirupsen/logrus"
 )
@@ -111,7 +111,7 @@ func newTestNode(t *testing.T) *Node {
 	ab := addressbook.New(mockstate.NewStateStore()) // address book
 	p2ps := p2pMock(ab, base.Overlay, signer)
 	disc := mock.NewDiscovery()
-	kad, err := kademlia.New(base.Overlay, ab, disc, p2ps, nil, nil, metricsDB, noopLogger, kademlia.Options{BinMaxPeers: 10, NodeMode: aurora.NewModel().SetMode(aurora.FullNode)}) // kademlia instance
+	kad, err := kademlia.New(base.Overlay, ab, disc, p2ps, nil, nil, nil, metricsDB, noopLogger, subscribe.NewSubPub(), kademlia.Options{BinMaxPeers: 10, NodeMode: aurora.NewModel().SetMode(aurora.FullNode)}) // kademlia instance
 	if err != nil {
 		t.Fatal(err)
 	}

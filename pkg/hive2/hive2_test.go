@@ -21,6 +21,7 @@ import (
 	pingpongmock "github.com/gauss-project/aurorafs/pkg/pingpong/mock"
 	"github.com/gauss-project/aurorafs/pkg/shed"
 	mockstate "github.com/gauss-project/aurorafs/pkg/statestore/mock"
+	"github.com/gauss-project/aurorafs/pkg/subscribe"
 	"github.com/gauss-project/aurorafs/pkg/topology/kademlia"
 	ma "github.com/multiformats/go-multiaddr"
 	"github.com/sirupsen/logrus"
@@ -120,7 +121,7 @@ func newTestNode(t *testing.T, peer boson.Address, po int, underlay string, allo
 		return 0, nil
 	})
 
-	kad, err := kademlia.New(base.Overlay, ab, Hive2, p2ps, ppm, nil, metricsDB, noopLogger, kademlia.Options{BinMaxPeers: 5, NodeMode: aurora.NewModel().SetMode(aurora.FullNode)}) // kademlia instance
+	kad, err := kademlia.New(base.Overlay, ab, Hive2, p2ps, ppm, nil, nil, metricsDB, noopLogger, subscribe.NewSubPub(), kademlia.Options{BinMaxPeers: 5, NodeMode: aurora.NewModel().SetMode(aurora.FullNode)}) // kademlia instance
 	if err != nil {
 		t.Fatal(err)
 	}

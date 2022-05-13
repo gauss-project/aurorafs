@@ -5,11 +5,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/gauss-project/aurorafs/pkg/topology/model"
-
 	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/p2p"
+	"github.com/gauss-project/aurorafs/pkg/subscribe"
 	"github.com/gauss-project/aurorafs/pkg/topology"
+	"github.com/gauss-project/aurorafs/pkg/topology/model"
 )
 
 type mock struct {
@@ -197,12 +197,12 @@ func (d *mock) ClosestPeers(addr boson.Address, limit int, _ topology.Filter, sk
 	return nil, nil
 }
 
-func (d *mock) SubscribePeersChange() (c <-chan struct{}, unsubscribe func()) {
-	return c, unsubscribe
+func (d *mock) SubscribePeersChange(notifier subscribe.INotifier) {
+	return
 }
 
-func (d *mock) SubscribePeerState() (c <-chan p2p.PeerInfo, unsubscribe func()) {
-	return c, unsubscribe
+func (d *mock) SubscribePeerState(notifier subscribe.INotifier) {
+	return
 }
 
 func (d *mock) NeighborhoodDepth() uint8 {

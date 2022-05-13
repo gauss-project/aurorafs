@@ -26,6 +26,7 @@ import (
 	smock "github.com/gauss-project/aurorafs/pkg/statestore/mock"
 	"github.com/gauss-project/aurorafs/pkg/storage"
 	"github.com/gauss-project/aurorafs/pkg/storage/mock"
+	"github.com/gauss-project/aurorafs/pkg/subscribe"
 	"github.com/gauss-project/aurorafs/pkg/traversal"
 	"golang.org/x/sync/errgroup"
 )
@@ -423,7 +424,7 @@ func mockChunkInfo(traversal traversal.Traverser, r *streamtest.Recorder, overla
 	s := mock.NewStorer()
 	route := rmock.NewMockRouteTable()
 	oracle := omock.NewServer()
-	server := New(overlay, r, logger, traversal, ret, s, &route, oracle, nil)
+	server := New(overlay, r, logger, traversal, ret, s, &route, oracle, nil, subscribe.NewSubPub())
 	err := server.InitChunkInfo()
 	if err != nil {
 		return nil

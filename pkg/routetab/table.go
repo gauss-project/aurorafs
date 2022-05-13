@@ -5,6 +5,7 @@ import (
 	"errors"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -265,7 +266,7 @@ func (t *Table) ResumePaths() {
 		err = json.Unmarshal(value, path)
 		if err != nil {
 			_ = t.store.Delete(string(key))
-		} else {
+		} else if len(path.Items) <= int(atomic.LoadInt32(&MaxTTL)) {
 			t.paths.Store(pathKey, path)
 		}
 		return false, nil

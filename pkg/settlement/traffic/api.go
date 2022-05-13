@@ -5,8 +5,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/rpc"
-	"sync"
-	"time"
 )
 
 func (s *Service) API() rpc.API {
@@ -28,32 +26,7 @@ func (a *apiService) Header(ctx context.Context) (*rpc.Subscription, error) {
 		return &rpc.Subscription{}, rpc.ErrNotificationsUnsupported
 	}
 	sub := notifier.CreateSubscription()
-
-	c, unsub := a.s.SubscribeHeader()
-	go func() {
-		ticker := time.NewTicker(time.Second * 1)
-		defer ticker.Stop()
-		var (
-			send interface{}
-			ok   bool
-		)
-
-		for {
-			select {
-			case data := <-c:
-				ok = true
-				send = data
-			case <-ticker.C:
-				if ok {
-					_ = notifier.Notify(sub.ID, send)
-					ok = false
-				}
-			case <-sub.Err():
-				unsub()
-				return
-			}
-		}
-	}()
+	a.s.SubscribeHeader(notifier, sub)
 	return sub, nil
 }
 
@@ -75,38 +48,7 @@ func (a *apiService) TrafficCheque(ctx context.Context, overlays []string) (*rpc
 		}
 		overs = append(overs, recipient)
 	}
-	var mutex sync.Mutex
-	chequeMap := make(map[string]interface{})
-	c, unsub := a.s.SubscribeTrafficCheque(overs)
-	go func() {
-		ticker := time.NewTicker(time.Second * 1)
-		defer ticker.Stop()
-		for {
-			select {
-			case data := <-c:
-				cheque := data.(TrafficCheque)
-				a.s.logger.Infof("traffic cheque info:  %v", data)
-				mutex.Lock()
-				chequeMap[cheque.Peer.String()] = cheque
-				mutex.Unlock()
-			case <-ticker.C:
-				if len(chequeMap) == 0 {
-					continue
-				}
-				mutex.Lock()
-				cheques := make([]interface{}, 0, len(chequeMap))
-				for overlay, bit := range chequeMap {
-					cheques = append(cheques, bit)
-					delete(chequeMap, overlay)
-				}
-				mutex.Unlock()
-				_ = notifier.Notify(sub.ID, cheques)
-			case <-sub.Err():
-				unsub()
-				return
-			}
-		}
-	}()
+	a.s.SubscribeTrafficCheque(notifier, sub, overs)
 	return sub, nil
 }
 func (a *apiService) CashOut(ctx context.Context, overlays []string) (*rpc.Subscription, error) {
@@ -123,37 +65,6 @@ func (a *apiService) CashOut(ctx context.Context, overlays []string) (*rpc.Subsc
 		}
 		overs = append(overs, over)
 	}
-	var mutex sync.Mutex
-	cashOutMap := make(map[string]interface{})
-	c, unsub := a.s.SubscribeCashOut(overs)
-	go func() {
-		ticker := time.NewTicker(time.Second * 1)
-		defer ticker.Stop()
-		for {
-			select {
-			case data := <-c:
-				cashOut := data.(CashOutStatus)
-				mutex.Lock()
-				a.s.logger.Infof("cash out info:  %v", data)
-				cashOutMap[cashOut.Overlay.String()] = data
-				mutex.Unlock()
-			case <-ticker.C:
-				if len(cashOutMap) == 0 {
-					continue
-				}
-				mutex.Lock()
-				cashOuts := make([]interface{}, 0, len(cashOutMap))
-				for overlay, cashOut := range cashOutMap {
-					cashOuts = append(cashOuts, cashOut)
-					delete(cashOutMap, overlay)
-				}
-				mutex.Unlock()
-				_ = notifier.Notify(sub.ID, cashOuts)
-			case <-sub.Err():
-				unsub()
-				return
-			}
-		}
-	}()
+	a.s.SubscribeCashOut(notifier, sub, overs)
 	return sub, nil
 }

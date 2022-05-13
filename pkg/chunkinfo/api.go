@@ -2,10 +2,10 @@ package chunkinfo
 
 import (
 	"context"
-	"sync"
 	"time"
 
 	"github.com/gauss-project/aurorafs/pkg/boson"
+	"github.com/gauss-project/aurorafs/pkg/logging"
 	"github.com/gauss-project/aurorafs/pkg/rpc"
 	"github.com/gauss-project/aurorafs/pkg/subscribe"
 	"github.com/prometheus/client_golang/prometheus"
@@ -39,37 +39,8 @@ func (a *apiService) DownloadProgress(ctx context.Context, rootCids []string) (*
 		}
 		rcids = append(rcids, rcid)
 	}
-	var mutex sync.Mutex
-	bitMap := make(map[string]BitVectorInfo)
-	c, unsub, _ := a.ci.SubscribeDownloadProgress(rcids)
 
-	go func() {
-		ticker := time.NewTicker(time.Second * 2)
-		defer ticker.Stop()
-		for {
-			select {
-			case data := <-c:
-				bit := data.(BitVectorInfo)
-				mutex.Lock()
-				bitMap[bit.RootCid.String()] = bit
-				mutex.Unlock()
-			case <-ticker.C:
-				mutex.Lock()
-				bitList := make([]BitVectorInfo, 0, len(bitMap))
-				for rootCid, bit := range bitMap {
-					bitList = append(bitList, bit)
-					delete(bitMap, rootCid)
-				}
-				mutex.Unlock()
-				if len(bitList) > 0 {
-					_ = notifier.Notify(sub.ID, bitList)
-				}
-			case <-sub.Err():
-				unsub()
-				return
-			}
-		}
-	}()
+	a.ci.SubscribeDownloadProgress(notifier, sub, rcids)
 
 	return sub, nil
 }
@@ -85,36 +56,8 @@ func (a *apiService) RetrievalProgress(ctx context.Context, rootCid string) (*rp
 	if err != nil {
 		return nil, err
 	}
-	c, unsub, _ := a.ci.SubscribeRetrievalProgress(cid)
-	var mutex sync.Mutex
-	bitMap := make(map[string]BitVectorInfo)
-	go func() {
-		ticker := time.NewTicker(time.Second * 2)
-		defer ticker.Stop()
-		for {
-			select {
-			case data := <-c:
-				bit := data.(BitVectorInfo)
-				mutex.Lock()
-				bitMap[bit.Overlay.String()] = bit
-				mutex.Unlock()
-			case <-ticker.C:
-				mutex.Lock()
-				bitList := make([]BitVectorInfo, 0, len(bitMap))
-				for overlay, bit := range bitMap {
-					bitList = append(bitList, bit)
-					delete(bitMap, overlay)
-				}
-				mutex.Unlock()
-				if len(bitList) > 0 {
-					_ = notifier.Notify(sub.ID, bitList)
-				}
-			case <-sub.Err():
-				unsub()
-				return
-			}
-		}
-	}()
+
+	a.ci.SubscribeRetrievalProgress(notifier, sub, cid)
 	return sub, nil
 }
 
@@ -125,36 +68,7 @@ func (a *apiService) RootCidStatus(ctx context.Context) (*rpc.Subscription, erro
 	}
 	sub := notifier.CreateSubscription()
 
-	c, unsub := a.ci.SubscribeRootCidStatus()
-	var mutex sync.Mutex
-	rootCidMap := make(map[string]RootCidStatusEven)
-	go func() {
-		ticker := time.NewTicker(time.Second * 2)
-		defer ticker.Stop()
-		for {
-			select {
-			case data := <-c:
-				root := data.(RootCidStatusEven)
-				mutex.Lock()
-				rootCidMap[root.RootCid.String()] = root
-				mutex.Unlock()
-			case <-ticker.C:
-				mutex.Lock()
-				rootList := make([]RootCidStatusEven, 0, len(rootCidMap))
-				for overlay, bit := range rootCidMap {
-					rootList = append(rootList, bit)
-					delete(rootCidMap, overlay)
-				}
-				mutex.Unlock()
-				if len(rootList) > 0 {
-					_ = notifier.Notify(sub.ID, rootList)
-				}
-			case <-sub.Err():
-				unsub()
-				return
-			}
-		}
-	}()
+	a.ci.SubscribeRootCidStatus(notifier, sub)
 	return sub, nil
 }
 
@@ -165,9 +79,52 @@ func (a *apiService) Metrics(ctx context.Context) (*rpc.Subscription, error) {
 	}
 	sub := notifier.CreateSubscription()
 
-	go subscribe.AddMetrics(notifier, sub, []prometheus.Metric{
-		a.ci.metrics.PyramidTotalRetrieved,
-		a.ci.metrics.PyramidTotalTransferred,
-	})
+	iNotifier := subscribe.NewNotifier(notifier, sub)
+	_ = a.ci.subPub.Subscribe(iNotifier, "chunkInfo", "metrics", "")
+
+	go func() {
+		logging.Tracef("%s metrics subscribe success", sub.ID)
+
+		send, out := subscribe.ProcessMetricMsg(sub, []prometheus.Metric{
+			a.ci.metrics.PyramidTotalRetrieved,
+			a.ci.metrics.PyramidTotalTransferred,
+		})
+		if send {
+			err := a.ci.subPub.Publish("chunkInfo", "metrics", "", out)
+			if err != nil {
+				logging.Errorf("%s metrics notify %s", sub.ID, err)
+			} else {
+				logging.Tracef("%s metrics notify success", sub.ID)
+			}
+		}
+
+		t := time.NewTicker(time.Second * 5)
+		defer t.Stop()
+		for {
+			select {
+			case <-t.C:
+				send, out = subscribe.ProcessMetricMsg(sub, []prometheus.Metric{
+					a.ci.metrics.PyramidTotalRetrieved,
+					a.ci.metrics.PyramidTotalTransferred,
+				})
+				if send {
+					err := a.ci.subPub.Publish("retrieval", "metrics", "", out)
+					if err != nil {
+						logging.Errorf("%s metrics notify %s", sub.ID, err)
+					} else {
+						logging.Tracef("%s metrics notify success", sub.ID)
+					}
+				}
+			case e := <-sub.Err():
+				if e == nil {
+					logging.Debugf("%s metrics quit unsubscribe", sub.ID)
+				} else {
+					logging.Warningf("%s metrics quit %s", sub.ID, e)
+				}
+				subscribe.CacheRemove(ctx, sub.ID)
+				return
+			}
+		}
+	}()
 	return sub, nil
 }

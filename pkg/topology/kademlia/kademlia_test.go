@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/gauss-project/aurorafs/pkg/subscribe"
 	"io"
 	"math/rand"
 	"reflect"
@@ -1059,6 +1060,7 @@ func TestClosestPeer(t *testing.T) {
 		}
 	})
 
+	subPub := subscribe.NewSubPub()
 	_ = waitPeers
 	t.Skip("disabled due to kademlia inconsistencies hotfix")
 
@@ -1082,7 +1084,7 @@ func TestClosestPeer(t *testing.T) {
 		return 0, nil
 	})
 
-	kad, err := kademlia.New(base, ab, disc, p2pMock(ab, nil, nil, nil), ppm, nil, metricsDB, logger, kademlia.Options{})
+	kad, err := kademlia.New(base, ab, disc, p2pMock(ab, nil, nil, nil), ppm, nil, nil, metricsDB, logger, subPub, kademlia.Options{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1158,13 +1160,13 @@ func TestClosestPeer(t *testing.T) {
 }
 
 func TestKademlia_SubscribePeersChange(t *testing.T) {
-	testSignal := func(t *testing.T, k *kademlia.Kad, c <-chan struct{}) {
+	testPeerChangeMsg := func(t *testing.T, k *kademlia.Kad, notifier *subscribe.NotifierWithMsgChan) {
 		t.Helper()
 
 		select {
-		case _, ok := <-c:
+		case _, ok := <-notifier.MsgChan:
 			if !ok {
-				t.Error("closed signal channel")
+				t.Error("closed message channel")
 			}
 		case <-time.After(1 * time.Second):
 			t.Error("timeout")
@@ -1178,13 +1180,16 @@ func TestKademlia_SubscribePeersChange(t *testing.T) {
 		}
 		defer kad.Close()
 
-		c, u := kad.SubscribePeersChange()
-		defer u()
+		notifier := subscribe.NewNotifierWithMsgChan()
+		kad.SubscribePeersChange(notifier)
+		defer func() {
+			close(notifier.ErrChan)
+		}()
 
 		addr := test.RandomAddressAt(base, 9)
 		addOne(t, sg, kad, ab, addr)
 
-		testSignal(t, kad, c)
+		testPeerChangeMsg(t, kad, notifier)
 	})
 
 	t.Run("single subscription, remove peer", func(t *testing.T) {
@@ -1194,16 +1199,19 @@ func TestKademlia_SubscribePeersChange(t *testing.T) {
 		}
 		defer kad.Close()
 
-		c, u := kad.SubscribePeersChange()
-		defer u()
+		notifier := subscribe.NewNotifierWithMsgChan()
+		kad.SubscribePeersChange(notifier)
+		defer func() {
+			close(notifier.ErrChan)
+		}()
 
 		addr := test.RandomAddressAt(base, 9)
 		addOne(t, sg, kad, ab, addr)
 
-		testSignal(t, kad, c)
+		testPeerChangeMsg(t, kad, notifier)
 
 		removeOne(kad, addr)
-		testSignal(t, kad, c)
+		testPeerChangeMsg(t, kad, notifier)
 	})
 
 	t.Run("multiple subscriptions", func(t *testing.T) {
@@ -1213,18 +1221,24 @@ func TestKademlia_SubscribePeersChange(t *testing.T) {
 		}
 		defer kad.Close()
 
-		c1, u1 := kad.SubscribePeersChange()
-		defer u1()
+		notifier1 := subscribe.NewNotifierWithMsgChan()
+		kad.SubscribePeersChange(notifier1)
+		defer func() {
+			close(notifier1.ErrChan)
+		}()
 
-		c2, u2 := kad.SubscribePeersChange()
-		defer u2()
+		notifier2 := subscribe.NewNotifierWithMsgChan()
+		kad.SubscribePeersChange(notifier2)
+		defer func() {
+			close(notifier2.ErrChan)
+		}()
 
 		for i := 0; i < 4; i++ {
 			addr := test.RandomAddressAt(base, i)
 			addOne(t, sg, kad, ab, addr)
 		}
-		testSignal(t, kad, c1)
-		testSignal(t, kad, c2)
+		testPeerChangeMsg(t, kad, notifier1)
+		testPeerChangeMsg(t, kad, notifier2)
 	})
 
 	t.Run("multiple changes", func(t *testing.T) {
@@ -1234,22 +1248,25 @@ func TestKademlia_SubscribePeersChange(t *testing.T) {
 		}
 		defer kad.Close()
 
-		c, u := kad.SubscribePeersChange()
-		defer u()
+		notifier := subscribe.NewNotifierWithMsgChan()
+		kad.SubscribePeersChange(notifier)
+		defer func() {
+			close(notifier.ErrChan)
+		}()
 
 		for i := 0; i < 4; i++ {
 			addr := test.RandomAddressAt(base, i)
 			addOne(t, sg, kad, ab, addr)
 		}
 
-		testSignal(t, kad, c)
+		testPeerChangeMsg(t, kad, notifier)
 
 		for i := 0; i < 4; i++ {
 			addr := test.RandomAddressAt(base, i)
 			addOne(t, sg, kad, ab, addr)
 		}
 
-		testSignal(t, kad, c)
+		testPeerChangeMsg(t, kad, notifier)
 	})
 
 	t.Run("no depth change", func(t *testing.T) {
@@ -1259,15 +1276,18 @@ func TestKademlia_SubscribePeersChange(t *testing.T) {
 		}
 		defer kad.Close()
 
-		c, u := kad.SubscribePeersChange()
-		defer u()
+		notifier := subscribe.NewNotifierWithMsgChan()
+		kad.SubscribePeersChange(notifier)
+		defer func() {
+			close(notifier.ErrChan)
+		}()
 
 		select {
-		case _, ok := <-c:
+		case _, ok := <-notifier.MsgChan:
 			if !ok {
-				t.Error("closed signal channel")
+				t.Error("closed msg channel")
 			}
-			t.Error("signal received")
+			t.Error("msg received")
 		case <-time.After(1 * time.Second):
 			// all fine
 		}
@@ -1501,7 +1521,7 @@ func TestLatency(t *testing.T) {
 		}
 	})
 
-	kad, err := kademlia.New(base, ab, disc, p2pMock(ab, nil, nil, nil), ppm, nil, metricsDB, logger, kademlia.Options{NodeMode: aurora.NewModel()})
+	kad, err := kademlia.New(base, ab, disc, p2pMock(ab, nil, nil, nil), ppm, nil, nil, metricsDB, logger, subscribe.NewSubPub(), kademlia.Options{NodeMode: aurora.NewModel()})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1848,7 +1868,7 @@ func newTestKademliaWithAddrDiscovery(
 	if kadOpts.NodeMode.Bv == nil {
 		kadOpts.NodeMode = aurora.NewModel().SetMode(aurora.FullNode)
 	}
-	kad, err := kademlia.New(base, ab, disc, p2ps, ppm, nil, metricsDB, logger, kadOpts)
+	kad, err := kademlia.New(base, ab, disc, p2ps, ppm, nil, nil, metricsDB, logger, subscribe.NewSubPub(), kadOpts)
 	if err != nil {
 		t.Fatal(err)
 	}

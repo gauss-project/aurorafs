@@ -6,11 +6,11 @@ import (
 	"time"
 
 	"github.com/gauss-project/aurorafs/pkg/aurora"
-	"github.com/gauss-project/aurorafs/pkg/topology"
-	"github.com/gauss-project/aurorafs/pkg/topology/model"
-
 	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/p2p"
+	"github.com/gauss-project/aurorafs/pkg/subscribe"
+	"github.com/gauss-project/aurorafs/pkg/topology"
+	"github.com/gauss-project/aurorafs/pkg/topology/model"
 )
 
 type AddrTuple struct {
@@ -46,8 +46,7 @@ type Mock struct {
 	depth        uint8
 	depthReplies []uint8
 	depthCalls   int
-	trigs        []chan struct{}
-	trigMtx      sync.Mutex
+	subPub       subscribe.SubPub
 }
 
 func (m *Mock) RefreshProtectPeer(peer []boson.Address) {
@@ -60,7 +59,7 @@ func NewMockKademlia(o ...Option) *Mock {
 	for _, v := range o {
 		v.apply(m)
 	}
-
+	m.subPub = subscribe.NewSubPub()
 	return m
 }
 
@@ -202,45 +201,16 @@ func (m *Mock) AnnounceTo(_ context.Context, _, _ boson.Address, _ bool) error {
 	return nil
 }
 
-func (m *Mock) SubscribePeersChange() (c <-chan struct{}, unsubscribe func()) {
-	channel := make(chan struct{}, 1)
-	var closeOnce sync.Once
-
-	m.trigMtx.Lock()
-	defer m.trigMtx.Unlock()
-	m.trigs = append(m.trigs, channel)
-
-	unsubscribe = func() {
-		m.trigMtx.Lock()
-		defer m.trigMtx.Unlock()
-
-		for i, c := range m.trigs {
-			if c == channel {
-				m.trigs = append(m.trigs[:i], m.trigs[i+1:]...)
-				break
-			}
-		}
-
-		closeOnce.Do(func() { close(channel) })
-	}
-
-	return channel, unsubscribe
+func (m *Mock) SubscribePeersChange(notifier subscribe.INotifier) {
+	_ = m.subPub.Subscribe(notifier, "kad", "peerChange", "")
 }
 
-func (m *Mock) SubscribePeerState() (c <-chan p2p.PeerInfo, unsubscribe func()) {
-	panic("implement me")
+func (m *Mock) SubscribePeerState(notifier subscribe.INotifier) {
+	_ = m.subPub.Subscribe(notifier, "kad", "peerState", "")
 }
 
 func (m *Mock) Trigger() {
-	m.trigMtx.Lock()
-	defer m.trigMtx.Unlock()
-
-	for _, c := range m.trigs {
-		select {
-		case c <- struct{}{}:
-		default:
-		}
-	}
+	_ = m.subPub.Publish("kad", "peerChange", "", m.peers)
 }
 
 func (m *Mock) ResetPeers() {

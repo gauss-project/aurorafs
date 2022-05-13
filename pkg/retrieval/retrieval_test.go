@@ -5,18 +5,18 @@ import (
 	"context"
 	"encoding/hex"
 	"fmt"
-	"github.com/gauss-project/aurorafs/pkg/chunkinfo/mock"
-	rmock "github.com/gauss-project/aurorafs/pkg/routetab/mock"
 	"sync"
 
 	"io"
 	"testing"
 	"time"
 
+	"github.com/gauss-project/aurorafs/pkg/chunkinfo/mock"
 	"github.com/gauss-project/aurorafs/pkg/logging"
+	rmock "github.com/gauss-project/aurorafs/pkg/routetab/mock"
+	"github.com/gauss-project/aurorafs/pkg/subscribe"
 	// "github.com/gauss-project/aurorafs/pkg/cac"
 	// "github.com/gauss-project/aurorafs/pkg/soc"
-
 	"github.com/gauss-project/aurorafs/pkg/bmtpool"
 	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/p2p"
@@ -26,7 +26,6 @@ import (
 	"github.com/gauss-project/aurorafs/pkg/retrieval/pb"
 	"github.com/gauss-project/aurorafs/pkg/storage"
 	storemock "github.com/gauss-project/aurorafs/pkg/storage/mock"
-	// "io"
 	// "os"
 	// "github.com/sirupsen/logrus"
 )
@@ -61,7 +60,7 @@ func TestDelivery(t *testing.T) {
 
 	// create the server that will handle the request and will serve the response
 	mockRouteTable := rmock.NewMockRouteTable()
-	server := retrieval.New(serverAddr, nil, &mockRouteTable, mockStorer, true, logger, nil, nil)
+	server := retrieval.New(serverAddr, nil, &mockRouteTable, mockStorer, true, logger, nil, nil, subscribe.NewSubPub())
 	serverMockChunkInfo := mock.New(mockRouteTable)
 	server.Config(serverMockChunkInfo)
 
@@ -88,7 +87,7 @@ func TestDelivery(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	client := retrieval.New(clientAddr, recorder, &mockRouteTable, clientMockStorer, true, logger, nil, nil)
+	client := retrieval.New(clientAddr, recorder, &mockRouteTable, clientMockStorer, true, logger, nil, nil, subscribe.NewSubPub())
 	client.Config(mockChunkInfo)
 	ctx, cancel := context.WithTimeout(context.Background(), testTimeout)
 	defer cancel()
@@ -191,7 +190,7 @@ func TestRetrievalChunk(t *testing.T) {
 		}
 
 		serverMockChunkInfo := mock.New(rmock.MockRouteTable{})
-		server := retrieval.New(serverAddress, nil, &mockRouteTable, serverStorer, true, logger, nil, nil)
+		server := retrieval.New(serverAddress, nil, &mockRouteTable, serverStorer, true, logger, nil, nil, subscribe.NewSubPub())
 		server.Config(serverMockChunkInfo)
 
 		recorder := streamtest.New(
@@ -205,7 +204,7 @@ func TestRetrievalChunk(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		client := retrieval.New(clientAddress, recorder, &mockRouteTable, clientStorer, true, logger, nil, nil)
+		client := retrieval.New(clientAddress, recorder, &mockRouteTable, clientStorer, true, logger, nil, nil, subscribe.NewSubPub())
 		client.Config(clientMockChunkInfo)
 
 		got, err := client.RetrieveChunk(context.Background(), rootAddr, chunk.Address())
@@ -235,7 +234,7 @@ func TestRetrievalChunk(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		server := retrieval.New(serverAddress, nil, &mockRouteTable, serverStorer, true, logger, nil, nil)
+		server := retrieval.New(serverAddress, nil, &mockRouteTable, serverStorer, true, logger, nil, nil, subscribe.NewSubPub())
 
 		// config forwarder
 		f2sRecorder := streamtest.New(
@@ -243,7 +242,7 @@ func TestRetrievalChunk(t *testing.T) {
 			streamtest.WithBaseAddr(forwarderAddress),
 		)
 		forwarderStorer := storemock.NewStorer()
-		forwarder := retrieval.New(forwarderAddress, f2sRecorder, &mockRouteTable, forwarderStorer, true, logger, nil, nil)
+		forwarder := retrieval.New(forwarderAddress, f2sRecorder, &mockRouteTable, forwarderStorer, true, logger, nil, nil, subscribe.NewSubPub())
 
 		// config client
 		c2fRecorder := streamtest.New(
@@ -251,7 +250,7 @@ func TestRetrievalChunk(t *testing.T) {
 			streamtest.WithBaseAddr(clientAddress),
 		)
 		clientStorer := storemock.NewStorer()
-		client := retrieval.New(clientAddress, c2fRecorder, &mockRouteTable, clientStorer, true, logger, nil, nil)
+		client := retrieval.New(clientAddress, c2fRecorder, &mockRouteTable, clientStorer, true, logger, nil, nil, subscribe.NewSubPub())
 
 		clientChunkInfo := mock.New(rmock.MockRouteTable{})
 		client.Config(clientChunkInfo)
@@ -308,7 +307,7 @@ func TestNeighborRetrieval(t *testing.T) {
 		if _, err := serverStorer.Put(context.Background(), storage.ModePutUpload, chunk); err != nil {
 			t.Fatal(err)
 		}
-		server := retrieval.New(serverAddress, nil, &rmock.MockRouteTable{}, serverStorer, true, logger, nil, nil)
+		server := retrieval.New(serverAddress, nil, &rmock.MockRouteTable{}, serverStorer, true, logger, nil, nil, subscribe.NewSubPub())
 		neighbor2serverRecorder := streamtest.New(
 			streamtest.WithProtocols(
 				server.Protocol(),
@@ -324,7 +323,7 @@ func TestNeighborRetrieval(t *testing.T) {
 		// if _, err := relayStorer.Put(context.Background(), storage.ModePutUpload, chunk); err != nil{
 		// 	t.Fatal(err)
 		// }
-		neighborServer := retrieval.New(neighborServerAddress, neighbor2serverRecorder, &rmock.MockRouteTable{}, neighborStorer, true, logger, nil, nil)
+		neighborServer := retrieval.New(neighborServerAddress, neighbor2serverRecorder, &rmock.MockRouteTable{}, neighborStorer, true, logger, nil, nil, subscribe.NewSubPub())
 		client2neighborRecorder := streamtest.New(
 			streamtest.WithProtocols(
 				neighborServer.Protocol(),
@@ -341,7 +340,7 @@ func TestNeighborRetrieval(t *testing.T) {
 				serverAddress.String(): {neighborServerAddress},
 			},
 		}
-		client := retrieval.New(clientAddress, client2neighborRecorder, &clientRouteTable, clientStorer, true, logger, nil, nil)
+		client := retrieval.New(clientAddress, client2neighborRecorder, &clientRouteTable, clientStorer, true, logger, nil, nil, subscribe.NewSubPub())
 
 		clientChunkInfo := mock.New(clientRouteTable)
 		err := clientChunkInfo.OnChunkTransferred(chunkAddr, rootAddr, serverAddress, boson.ZeroAddress)
@@ -426,11 +425,11 @@ func TestRetrievePreemptiveRetry(t *testing.T) {
 		NeighborMap:    map[string][]boson.Address{},
 	}
 
-	server1 := retrieval.New(serverAddress1, nil, &server1RouteTable, serverStorer1, true, logger, nil, nil)
+	server1 := retrieval.New(serverAddress1, nil, &server1RouteTable, serverStorer1, true, logger, nil, nil, subscribe.NewSubPub())
 	server1ChunkInfo := mock.New(defaultMockRouteTable)
 	server1.Config(server1ChunkInfo)
 
-	server2 := retrieval.New(serverAddress2, nil, &defaultMockRouteTable, serverStorer2, true, logger, nil, nil)
+	server2 := retrieval.New(serverAddress2, nil, &defaultMockRouteTable, serverStorer2, true, logger, nil, nil, subscribe.NewSubPub())
 	server2ChunkInfo := mock.New(defaultMockRouteTable)
 	server2.Config(server2ChunkInfo)
 
@@ -460,7 +459,7 @@ func TestRetrievePreemptiveRetry(t *testing.T) {
 			),
 		)
 
-		client := retrieval.New(clientAddress, recorder, &defaultMockRouteTable, clientStorer, true, logger, nil, nil)
+		client := retrieval.New(clientAddress, recorder, &defaultMockRouteTable, clientStorer, true, logger, nil, nil, subscribe.NewSubPub())
 		clientChunkInfo := mock.New(defaultMockRouteTable)
 
 		err := clientChunkInfo.OnChunkTransferred(chunk.Address(), chunkRootAddr, serverAddress2, boson.ZeroAddress)
@@ -507,7 +506,7 @@ func TestRetrievePreemptiveRetry(t *testing.T) {
 
 		// client := retrieval.New(clientAddress, nil, recorder, peerSuggesterFn(peers...), logger, accountingmock.NewAccounting(), pricerMock, nil, false, noopStampValidator)
 		mockRouteTable := rmock.NewMockRouteTable()
-		client := retrieval.New(clientAddress, recorder, &mockRouteTable, clientStorer, true, logger, nil, nil)
+		client := retrieval.New(clientAddress, recorder, &mockRouteTable, clientStorer, true, logger, nil, nil, subscribe.NewSubPub())
 
 		clientChunkInfo := mock.New(mockRouteTable)
 		err := clientChunkInfo.OnChunkTransferred(chunk.Address(), chunkRootAddr, serverAddress1, boson.ZeroAddress)

@@ -1,6 +1,7 @@
 package multicast
 
 import (
+	"github.com/gauss-project/aurorafs/pkg/subscribe"
 	"io"
 	"testing"
 
@@ -46,7 +47,7 @@ func TestService_ObserveGroup(t *testing.T) {
 	gid := GenerateGID("gid1")
 	route := mockRoute.NewMockRouteTable()
 	kad := mock.NewMockKademlia()
-	s := NewService(test.RandomAddress(), aurora.NewModel(), nil, nil, kad, &route, logger, Option{Dev: true})
+	s := NewService(test.RandomAddress(), aurora.NewModel(), nil, nil, kad, &route, logger, subscribe.NewSubPub(), Option{Dev: true})
 	err := s.observeGroup(gid, model.ConfigNodeGroup{})
 	if err != nil {
 		t.Fatal(err)

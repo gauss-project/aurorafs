@@ -5,8 +5,10 @@ import (
 	"fmt"
 	"github.com/gauss-project/aurorafs/pkg/resolver"
 	"github.com/gauss-project/aurorafs/pkg/retrieval/aco"
+	"github.com/gauss-project/aurorafs/pkg/rpc"
 	"github.com/gauss-project/aurorafs/pkg/sctx"
 	"github.com/gauss-project/aurorafs/pkg/settlement/chain"
+	"github.com/gauss-project/aurorafs/pkg/subscribe"
 	"reflect"
 	"resenje.org/singleflight"
 	"runtime"
@@ -99,11 +101,12 @@ type ChunkInfo struct {
 	manifest     sync.Map
 	pubSubLk     sync.RWMutex
 	pubSub       map[string][]chan interface{}
+	subPub       subscribe.SubPub
 }
 
 func New(addr boson.Address, streamer p2p.Streamer, logger logging.Logger, traversal traversal.Traverser,
 	stateStorer storage.StateStorer, storer storage.Storer, route routetab.RouteTab, oracleChain chain.Resolver,
-	resolver resolver.Interface) *ChunkInfo {
+	resolver resolver.Interface, subPub subscribe.SubPub) *ChunkInfo {
 	chunkinfo := &ChunkInfo{
 		addr:        addr,
 		stateStorer: stateStorer,
@@ -122,6 +125,7 @@ func New(addr boson.Address, streamer p2p.Streamer, logger logging.Logger, trave
 		resolver:    resolver,
 		cs:          newChunkSource(stateStorer, logger),
 		pubSub:      make(map[string][]chan interface{}),
+		subPub:      subPub,
 	}
 	chunkinfo.triggerTimeOut()
 	chunkinfo.cleanDiscoverTrigger()
@@ -474,78 +478,33 @@ func (ci *ChunkInfo) pyramidCheck(rootCid, overlay, target boson.Address) error 
 	return nil
 }
 
-func (ci *ChunkInfo) SubscribeDownloadProgress(rootCids []boson.Address) (c <-chan interface{}, unsubscribe func(), err error) {
-	channel := make(chan interface{}, len(rootCids))
+func (ci *ChunkInfo) SubscribeDownloadProgress(notifier *rpc.Notifier, sub *rpc.Subscription, rootCids []boson.Address) {
+	iNotifier := subscribe.NewNotifierWithDelay(notifier, sub, 1, true)
 	for _, rootCid := range rootCids {
-		ci.Subscribe(fmt.Sprintf("%s%s", "down", rootCid.String()), channel)
-	}
-	unsubscribe = func() {
-		for _, rootCid := range rootCids {
-			ci.UnSubscribe(fmt.Sprintf("%s%s", "down", rootCid.String()), channel)
-		}
-	}
-	return channel, unsubscribe, nil
-}
-
-func (ci *ChunkInfo) SubscribeRetrievalProgress(rootCid boson.Address) (c <-chan interface{}, unsubscribe func(), err error) {
-	channel := make(chan interface{}, 1)
-	ci.Subscribe(fmt.Sprintf("%s%s", "retrieval", rootCid.String()), channel)
-	unsubscribe = func() {
-		ci.UnSubscribe(fmt.Sprintf("%s%s", "retrieval", rootCid.String()), channel)
-	}
-	return channel, unsubscribe, nil
-}
-
-func (ci *ChunkInfo) SubscribeRootCidStatus() (c <-chan interface{}, unsubscribe func()) {
-	channel := make(chan interface{}, 1)
-	ci.Subscribe("status", channel)
-	unsubscribe = func() {
-		ci.UnSubscribe("status", channel)
-	}
-	return channel, unsubscribe
-}
-
-func (ci *ChunkInfo) Subscribe(key string, c chan interface{}) {
-	ci.pubSubLk.Lock()
-	defer ci.pubSubLk.Unlock()
-	if _, ok := ci.pubSub[key]; !ok {
-		ch := []chan interface{}{c}
-		ci.pubSub[key] = ch
-	} else {
-		ci.pubSub[key] = append(ci.pubSub[key], c)
+		_ = ci.subPub.Subscribe(iNotifier, "chunkInfo", "downloadProgress", rootCid.String())
 	}
 }
 
-func (ci *ChunkInfo) UnSubscribe(key string, ch chan interface{}) {
-	ci.pubSubLk.Lock()
-	defer ci.pubSubLk.Unlock()
-	defer func() {
-		recover()
-	}()
-	if len(ci.pubSub[key]) == 1 {
-		delete(ci.pubSub, key)
-		close(ch)
-	} else {
-		for i, c := range ci.pubSub[key] {
-			if c == ch {
-				ci.pubSub[key] = append(ci.pubSub[key][:i], ci.pubSub[key][i+1:]...)
-				close(ch)
-			}
-		}
-	}
+func (ci *ChunkInfo) SubscribeRetrievalProgress(notifier *rpc.Notifier, sub *rpc.Subscription, rootCid boson.Address) {
+	iNotifier := subscribe.NewNotifierWithDelay(notifier, sub, 1, true)
+	_ = ci.subPub.Subscribe(iNotifier, "chunkInfo", "retrievalProgress", rootCid.String())
 }
 
-func (ci *ChunkInfo) Publish(key string, data interface{}) {
-	ci.pubSubLk.RLock()
-	defer ci.pubSubLk.RUnlock()
-	defer func() {
-		recover()
-	}()
-	if c, ok := ci.pubSub[key]; ok {
-		for _, i := range c {
-			i <- data
-		}
-	}
+func (ci *ChunkInfo) SubscribeRootCidStatus(notifier *rpc.Notifier, sub *rpc.Subscription) {
+	iNotifier := subscribe.NewNotifierWithDelay(notifier, sub, 1, true)
+	_ = ci.subPub.Subscribe(iNotifier, "chunkInfo", "rootCidStatus", "")
+}
+
+func (ci *ChunkInfo) PublishDownloadProgress(rootCid boson.Address, bitV BitVectorInfo) {
+	_ = ci.subPub.Publish("chunkInfo", "downloadProgress", rootCid.String(), bitV)
+}
+
+func (ci *ChunkInfo) PublishRetrievalProgress(rootCid boson.Address, bitV BitVectorInfo) {
+	_ = ci.subPub.Publish("chunkInfo", "retrievalProgress", rootCid.String(), bitV)
+}
+
+func (ci *ChunkInfo) PublishRootCidStatus(statusEvent RootCidStatusEven) {
+	_ = ci.subPub.Publish("chunkInfo", "rootCidStatus", statusEvent.RootCid.String(), statusEvent)
 }
 
 func generateKey(keyPrefix string, rootCid, overlay boson.Address) string {
