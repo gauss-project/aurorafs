@@ -7,6 +7,7 @@ import (
 	"errors"
 	"math/big"
 	"net"
+	"sort"
 	"sync"
 	"syscall"
 	"time"
@@ -1689,6 +1690,32 @@ func (k *Kad) SnapshotAddr(addr boson.Address) *model.Snapshot {
 
 func (k *Kad) RecordPeerLatency(add boson.Address, t time.Duration) {
 	k.collector.Record(add, im.PeerLatency(t))
+}
+
+func (k *Kad) GetPeersWithLatencyEWMA(list []boson.Address) (now []boson.Address) {
+	sortIdx := make([][]int64, len(list))
+	for i, v := range list {
+		ss := k.collector.Inspect(v)
+		if ss != nil {
+			t := ss.LatencyEWMA.Nanoseconds()
+			sortIdx[i] = []int64{int64(i), t}
+		} else {
+			sortIdx[i] = []int64{int64(i), 1e10}
+		}
+	}
+
+	sort.Slice(sortIdx, func(i, j int) bool {
+		if sortIdx[i][1] != sortIdx[j][1] {
+			return sortIdx[i][1] < sortIdx[j][1]
+		} else {
+			return sortIdx[i][0] < sortIdx[j][0]
+		}
+	})
+
+	for _, v := range sortIdx {
+		now = append(now, list[v[0]])
+	}
+	return now
 }
 
 // String returns a string represenstation of Kademlia.

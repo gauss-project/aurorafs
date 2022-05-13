@@ -197,7 +197,7 @@ func (s *server) resolveNameOrAddress(str string) (boson.Address, error) {
 	// Try and parse the name as a boson address.
 	addr, err := boson.ParseHexAddress(str)
 	if err == nil {
-		log.Tracef("name resolve: valid aurora address %q", str)
+		log.Infof("name resolve: valid aurora address %q", str)
 		return addr, nil
 	}
 
