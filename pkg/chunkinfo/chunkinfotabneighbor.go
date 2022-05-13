@@ -41,7 +41,7 @@ func newChunkInfoTabNeighbor() *chunkInfoTabNeighbor {
 }
 
 func (ci *ChunkInfo) initChunkInfoTabNeighbor() error {
-	if err := ci.storer.Iterate(keyPrefix, func(k, v []byte) (bool, error) {
+	if err := ci.stateStorer.Iterate(keyPrefix, func(k, v []byte) (bool, error) {
 		if !strings.HasPrefix(string(k), keyPrefix) {
 			return true, nil
 		}
@@ -51,7 +51,7 @@ func (ci *ChunkInfo) initChunkInfoTabNeighbor() error {
 			return false, err
 		}
 		var vb BitVector
-		if err := ci.storer.Get(key, &vb); err != nil {
+		if err := ci.stateStorer.Get(key, &vb); err != nil {
 			return false, err
 		}
 		bit, _ := bitvector.NewFromBytes(vb.B, vb.Len)
@@ -106,7 +106,7 @@ func (ci *ChunkInfo) updateNeighborChunkInfo(rootCid, cid boson.Address, overlay
 	}
 
 	// db
-	return ci.storer.Put(generateKey(keyPrefix, rootCid, overlay), &bit)
+	return ci.stateStorer.Put(generateKey(keyPrefix, rootCid, overlay), &bit)
 }
 
 func (ci *ChunkInfo) putChunkInfoNeighbor(rootCid, overlay boson.Address) error {
@@ -127,7 +127,7 @@ func (ci *ChunkInfo) putChunkInfoNeighbor(rootCid, overlay boson.Address) error 
 		}
 		b, _ := bitvector.New(v)
 		ci.ct.putChunkInfoTabNeighbor(rootCid, overlay, *b)
-		return ci.storer.Put(generateKey(keyPrefix, rootCid, overlay), &BitVector{B: b.Bytes(), Len: b.Len()})
+		return ci.stateStorer.Put(generateKey(keyPrefix, rootCid, overlay), &BitVector{B: b.Bytes(), Len: b.Len()})
 	}
 	return nil
 }
@@ -212,12 +212,12 @@ func (cn *chunkInfoTabNeighbor) createChunkInfoResp(rootCid boson.Address, ctn m
 func (ci *ChunkInfo) delPresence(rootCid boson.Address) bool {
 
 	delKey := fmt.Sprintf("%s%s", keyPrefix, rootCid.String())
-	if err := ci.storer.Iterate(delKey, func(k, v []byte) (bool, error) {
+	if err := ci.stateStorer.Iterate(delKey, func(k, v []byte) (bool, error) {
 		if !strings.HasPrefix(string(k), delKey) {
 			return false, nil
 		}
 		key := string(k)
-		err := ci.storer.Delete(key)
+		err := ci.stateStorer.Delete(key)
 		if err != nil {
 			return true, fmt.Errorf("del rootCid: %s : neighbor %v", rootCid.String(), err)
 		}

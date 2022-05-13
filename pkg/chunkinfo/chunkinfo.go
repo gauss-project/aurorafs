@@ -3,6 +3,7 @@ package chunkinfo
 import (
 	"context"
 	"fmt"
+	"github.com/gauss-project/aurorafs/pkg/resolver"
 	"github.com/gauss-project/aurorafs/pkg/retrieval/aco"
 	"github.com/gauss-project/aurorafs/pkg/sctx"
 	"github.com/gauss-project/aurorafs/pkg/settlement/chain"
@@ -50,6 +51,10 @@ type Interface interface {
 	OnChunkRetrieved(cid, rootCid, sourceOverlay boson.Address) error
 
 	GetChunkInfoSource(rootCid boson.Address) aurora.ChunkInfoSourceApi
+
+	ManifestView(ctx context.Context, nameOrHex, pathVar string, depth int) (*ManifestNode, error)
+
+	GetManifest(rootCid, pathVar string, depth int) (maniFest *ManifestNode)
 }
 
 type chunkPutEntry interface {
@@ -71,7 +76,8 @@ type chunkPutRes struct {
 
 type ChunkInfo struct {
 	addr         boson.Address
-	storer       storage.StateStorer
+	stateStorer  storage.StateStorer
+	storer       storage.Storer
 	traversal    traversal.Traverser
 	route        routetab.RouteTab
 	streamer     p2p.Streamer
@@ -89,13 +95,18 @@ type ChunkInfo struct {
 	singleflight singleflight.Group
 	oracleChain  chain.Resolver
 	cs           *chunkInfoSource
+	resolver     resolver.Interface
+	manifest     sync.Map
 	pubSubLk     sync.RWMutex
 	pubSub       map[string][]chan interface{}
 }
 
-func New(addr boson.Address, streamer p2p.Streamer, logger logging.Logger, traversal traversal.Traverser, storer storage.StateStorer, route routetab.RouteTab, oracleChain chain.Resolver) *ChunkInfo {
+func New(addr boson.Address, streamer p2p.Streamer, logger logging.Logger, traversal traversal.Traverser,
+	stateStorer storage.StateStorer, storer storage.Storer, route routetab.RouteTab, oracleChain chain.Resolver,
+	resolver resolver.Interface) *ChunkInfo {
 	chunkinfo := &ChunkInfo{
 		addr:        addr,
+		stateStorer: stateStorer,
 		storer:      storer,
 		route:       route,
 		metrics:     newMetrics(),
@@ -108,7 +119,8 @@ func New(addr boson.Address, streamer p2p.Streamer, logger logging.Logger, trave
 		logger:      logger,
 		traversal:   traversal,
 		oracleChain: oracleChain,
-		cs:          newChunkSource(storer, logger),
+		resolver:    resolver,
+		cs:          newChunkSource(stateStorer, logger),
 		pubSub:      make(map[string][]chan interface{}),
 	}
 	chunkinfo.triggerTimeOut()
@@ -157,6 +169,7 @@ func (ci *ChunkInfo) InitChunkInfo() error {
 	if err := ci.chunkPutChanUpdate(ctx, ci.cs, ci.initChunkInfoSource).err; err != nil {
 		return err
 	}
+	ci.InitManifest()
 	ci.logger.Info("end of init chunkInfo")
 	return nil
 }
@@ -297,7 +310,7 @@ func (ci *ChunkInfo) GetFileList(overlay boson.Address) (fileListInfo []map[stri
 	for root, node := range chunkInfo {
 		if v, ok := node[overlay.String()]; ok {
 			mp := make(map[string]interface{})
-			mp["rootCid"] = boson.MustParseHexAddress(root)
+			mp["rootCid"] = root
 			mp["pinState"] = false
 			mp["treeSize"] = ci.cp.getRootHash(root)
 			mp["fileSize"] = ci.getRootChunk(root)
@@ -328,6 +341,7 @@ func (ci *ChunkInfo) DelFile(rootCid boson.Address, del func()) bool {
 	}
 	h := *hashs
 	del()
+	ci.DelManifest(rootCid.String())
 	if !ci.chunkPutChanUpdate(ctx, ci.cp, ci.delRootCid, rootCid, pyr, h).state {
 		return false
 	}
