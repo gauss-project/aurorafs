@@ -142,6 +142,17 @@ func (db *DB) collectGarbage() (collectedCount uint64, done bool, err error) {
 		testHookGCIteratorDone()
 	}
 
+	// without batchMu lock, call chunkinfo to remove chunks
+	for _, item := range candidates {
+		addr := boson.NewAddress(item.Address)
+
+		if db.discover.IsDiscover(addr) {
+			db.discover.DelDiscover(addr)
+		}
+
+		db.discover.DelFile(addr, func() {})
+	}
+
 	// protect database from changing indexes and gcSize
 	db.batchMu.Lock()
 	defer totalTimeMetric(db.metrics.TotalTimeGCLock, time.Now())
@@ -164,14 +175,6 @@ func (db *DB) collectGarbage() (collectedCount uint64, done bool, err error) {
 			continue
 		}
 
-		if db.discover.IsDiscover(addr) {
-			db.logger.Tracef("localstore: collect garbage: hash %s is discovering", addr)
-			if gcSize-currentCollectedCount <= target {
-				break
-			}
-			db.discover.DelDiscover(addr)
-		}
-
 		db.metrics.GCStoreTimeStamps.Set(float64(item.StoreTimestamp))
 		db.metrics.GCStoreAccessTimeStamps.Set(float64(item.AccessTimestamp))
 
@@ -185,10 +188,6 @@ func (db *DB) collectGarbage() (collectedCount uint64, done bool, err error) {
 			gcCount += uint64(chunk.Number)
 		}
 
-		del := db.discover.DelFile(addr, func() {})
-		if !del {
-			db.logger.Errorf("chunkinfo report delete %s failed", addr)
-		}
 		// delete excepted root chunk
 		for _, chunk := range chunkHashes {
 			i := addressToItem(chunk.Cid)
@@ -255,7 +254,7 @@ func (db *DB) collectGarbage() (collectedCount uint64, done bool, err error) {
 
 	gcSize, err = db.gcSize.Get()
 	if err == nil {
-		db.logger.Tracef("current gc size: %d\n", gcSize)
+		db.logger.Tracef("current gc size: %d", gcSize)
 	}
 
 	err = batch.Commit()
