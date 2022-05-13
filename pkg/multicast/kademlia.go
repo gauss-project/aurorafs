@@ -495,7 +495,7 @@ func (s *Service) observeGroup(gid boson.Address, option model.ConfigNodeGroup) 
 		if s.route.IsNeighbor(addr) {
 			g.connectedPeers.Add(addr)
 		} else {
-			g.keepPeers.Add(addr)
+			g.knownPeers.Add(addr)
 		}
 	}
 	go s.discover(g)
@@ -538,7 +538,7 @@ func (s *Service) joinGroup(gid boson.Address, option model.ConfigNodeGroup) err
 		if s.route.IsNeighbor(v) {
 			g.connectedPeers.Add(v)
 		} else {
-			g.keepPeers.Add(v)
+			g.knownPeers.Add(v)
 		}
 	}
 
