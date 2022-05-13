@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"sort"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -507,7 +506,7 @@ func (s *Service) observeGroup(gid boson.Address, option model.ConfigNodeGroup) 
 		if s.route.IsNeighbor(addr) {
 			g.connectedPeers.Add(addr)
 		} else {
-			g.keepPeers.Add(addr)
+			g.knownPeers.Add(addr)
 		}
 	}
 	go s.discover(g)
@@ -550,7 +549,7 @@ func (s *Service) joinGroup(gid boson.Address, option model.ConfigNodeGroup) err
 		if s.route.IsNeighbor(v) {
 			g.connectedPeers.Add(v)
 		} else {
-			g.keepPeers.Add(v)
+			g.knownPeers.Add(v)
 		}
 	}
 
@@ -1186,27 +1185,5 @@ func (s *Service) subscribeGroupPeers(n *rpc.Notifier, sub *rpc.Subscription, gi
 }
 
 func (s *Service) getOptimumPeers(list []boson.Address) (now []boson.Address) {
-	sortIdx := make([][]int64, len(list))
-	for i, v := range list {
-		ss := s.kad.SnapshotAddr(v)
-		if ss != nil {
-			t := ss.LatencyEWMA.Nanoseconds()
-			sortIdx[i] = []int64{int64(i), t}
-		} else {
-			sortIdx[i] = []int64{int64(i), 1e10}
-		}
-	}
-
-	sort.Slice(sortIdx, func(i, j int) bool {
-		if sortIdx[i][1] != sortIdx[j][1] {
-			return sortIdx[i][1] < sortIdx[j][1]
-		} else {
-			return sortIdx[i][0] < sortIdx[j][0]
-		}
-	})
-
-	for _, v := range sortIdx {
-		now = append(now, list[v[0]])
-	}
-	return now
+	return s.kad.GetPeersWithLatencyEWMA(list)
 }

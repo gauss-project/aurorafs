@@ -34,6 +34,7 @@ type Driver interface {
 	Snapshot() *model.KadParams
 	SnapshotConnected() (connected int, peers map[string]*model.PeerInfo)
 	SnapshotAddr(addr boson.Address) *model.Snapshot
+	GetPeersWithLatencyEWMA(list []boson.Address) (now []boson.Address)
 	RecordPeerLatency(add boson.Address, t time.Duration)
 	DisconnectForce(addr boson.Address, reason string) error
 	Outbound(peer p2p.Peer)

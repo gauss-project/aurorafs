@@ -202,7 +202,7 @@ func TestHandlerChunkInfoResp(t *testing.T) {
 	time.Sleep(time.Millisecond * 500)
 
 	var vb BitVector
-	if err := aOverlay.storer.Get(generateKey(discoverKeyPrefix, rootCid, bAddress), &vb); err != nil {
+	if err := aOverlay.stateStorer.Get(generateKey(discoverKeyPrefix, rootCid, bAddress), &vb); err != nil {
 		t.Fatal(err)
 	}
 	vf, err := bitvector.NewFromBytes(vb.B, vb.Len)
@@ -421,9 +421,10 @@ func mockUploadFile(t *testing.T) (boson.Address, traversal.Traverser) {
 func mockChunkInfo(traversal traversal.Traverser, r *streamtest.Recorder, overlay boson.Address) *ChunkInfo {
 	logger := logging.New(io.Discard, 0)
 	ret := smock.NewStateStore()
+	s := mock.NewStorer()
 	route := rmock.NewMockRouteTable()
 	oracle := omock.NewServer()
-	server := New(overlay, r, logger, traversal, ret, &route, oracle, subscribe.NewSubPub())
+	server := New(overlay, r, logger, traversal, ret, s, &route, oracle, nil, subscribe.NewSubPub())
 	err := server.InitChunkInfo()
 	if err != nil {
 		return nil
