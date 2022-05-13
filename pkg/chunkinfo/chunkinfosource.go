@@ -42,7 +42,7 @@ func newChunkSource(store storage.StateStorer, logger logging.Logger) *chunkInfo
 
 func (ci *ChunkInfo) initChunkInfoSource() error {
 
-	if err := ci.storer.Iterate(pyramidKeyPrefix, func(k, value []byte) (stop bool, err error) {
+	if err := ci.stateStorer.Iterate(pyramidKeyPrefix, func(k, value []byte) (stop bool, err error) {
 		if !strings.HasPrefix(string(k), pyramidKeyPrefix) {
 			return true, nil
 		}
@@ -66,7 +66,7 @@ func (ci *ChunkInfo) initChunkInfoSource() error {
 		return err
 	}
 
-	if err := ci.storer.Iterate(chunkSourceKeyPrefix, func(k, value []byte) (stop bool, err error) {
+	if err := ci.stateStorer.Iterate(chunkSourceKeyPrefix, func(k, value []byte) (stop bool, err error) {
 		if !strings.HasPrefix(string(k), chunkSourceKeyPrefix) {
 			return true, nil
 		}
@@ -78,7 +78,7 @@ func (ci *ChunkInfo) initChunkInfoSource() error {
 		}
 
 		var vb BitVector
-		if err = ci.storer.Get(key, &vb); err != nil {
+		if err = ci.stateStorer.Get(key, &vb); err != nil {
 			return false, err
 		}
 		bit, err := bitvector.NewFromBytes(vb.B, vb.Len)

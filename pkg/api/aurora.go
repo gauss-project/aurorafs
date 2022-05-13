@@ -1,12 +1,11 @@
 package api
 
 import (
-	"bytes"
 	"context"
-	"encoding/binary"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/gauss-project/aurorafs/pkg/chunkinfo"
 	"io"
 	"io/ioutil"
 	"mime"
@@ -396,13 +395,13 @@ func (s *server) downloadHandler(w http.ResponseWriter, r *http.Request, referen
 }
 
 type auroraListResponse struct {
-	RootCid   boson.Address       `json:"rootCid"`
-	Size      int                 `json:"size"`
-	FileSize  int                 `json:"fileSize"`
-	PinState  bool                `json:"pinState"`
-	BitVector aurora.BitVectorApi `json:"bitVector"`
-	Register  bool                `json:"register"`
-	Manifest  *ManifestNode       `json:"manifest"`
+	RootCid   boson.Address           `json:"rootCid"`
+	Size      int                     `json:"size"`
+	FileSize  int                     `json:"fileSize"`
+	PinState  bool                    `json:"pinState"`
+	BitVector aurora.BitVectorApi     `json:"bitVector"`
+	Register  bool                    `json:"register"`
+	Manifest  *chunkinfo.ManifestNode `json:"manifest"`
 }
 
 type auroraPageResponse struct {
@@ -497,7 +496,8 @@ func (s *server) auroraListHandler(w http.ResponseWriter, r *http.Request) {
 	fileListInfo, _ := s.chunkInfo.GetFileList(s.overlay)
 
 	for i, v := range fileListInfo {
-		maniFest, err := s.manifestView(r.Context(), v["rootCid"].(boson.Address).String(), pathVar, depth)
+		rootCid := v["rootCid"].(string)
+		maniFest := s.chunkInfo.GetManifest(rootCid, pathVar, depth)
 		if err == nil && maniFest != nil {
 			fileListInfo[i]["manifest.type"] = maniFest.Type
 			fileListInfo[i]["manifest.hash"] = maniFest.Hash
@@ -508,7 +508,7 @@ func (s *server) auroraListHandler(w http.ResponseWriter, r *http.Request) {
 			fileListInfo[i]["manifest.sub"] = maniFest.Nodes
 			if maniFest.Nodes != nil {
 				var fileSize uint64
-				var maniFestNode ManifestNode
+				var maniFestNode chunkinfo.ManifestNode
 				for _, mv := range maniFest.Nodes {
 					fileSize = fileSize + mv.Size
 					maniFestNode = *mv
@@ -521,13 +521,13 @@ func (s *server) auroraListHandler(w http.ResponseWriter, r *http.Request) {
 				fileListInfo[i]["manifest.sub.mime"] = maniFestNode.MimeType
 			}
 		}
-		pinned, err := s.pinning.HasPin(v["rootCid"].(boson.Address))
+		pinned, err := s.pinning.HasPin(boson.MustParseHexAddress(rootCid))
 		if err != nil {
 			s.logger.Errorf("aurora list: check hash %s pinning err", v)
 			continue
 		}
 		fileListInfo[i]["pinState"] = pinned
-		fileListInfo[i]["register"] = registerStatus(v["rootCid"].(boson.Address))
+		fileListInfo[i]["register"] = registerStatus(boson.MustParseHexAddress(rootCid))
 	}
 
 	if isPage {
@@ -544,7 +544,7 @@ func (s *server) auroraListHandler(w http.ResponseWriter, r *http.Request) {
 			B:   v["bitvector.b"].([]byte),
 		}
 
-		var manifestNode ManifestNode
+		var manifestNode chunkinfo.ManifestNode
 		if _, ok := v["manifest.type"]; ok {
 			manifestNode.Type = v["manifest.type"].(string)
 			manifestNode.Hash = v["manifest.hash"].(string)
@@ -552,11 +552,11 @@ func (s *server) auroraListHandler(w http.ResponseWriter, r *http.Request) {
 			manifestNode.Size = v["manifest.size"].(uint64)
 			manifestNode.Extension = v["manifest.ext"].(string)
 			manifestNode.MimeType = v["manifest.mime"].(string)
-			manifestNode.Nodes = v["manifest.sub"].(map[string]*ManifestNode)
+			manifestNode.Nodes = v["manifest.sub"].(map[string]*chunkinfo.ManifestNode)
 		}
 
 		responseList = append(responseList, auroraListResponse{
-			RootCid:   v["rootCid"].(boson.Address),
+			RootCid:   boson.MustParseHexAddress(v["rootCid"].(string)),
 			Size:      v["treeSize"].(int),
 			FileSize:  v["fileSize"].(int),
 			PinState:  v["pinState"].(bool),
@@ -612,8 +612,8 @@ func (s *server) auroraListHandler(w http.ResponseWriter, r *http.Request) {
 		ch <- hashChain
 	}
 
-	close(ch)
 	wg.Wait()
+	close(ch)
 	if !isPage {
 		zeroAddress := boson.NewAddress([]byte{31: 0})
 		sort.Slice(responseList, func(i, j int) bool {
@@ -652,166 +652,6 @@ func manifestMetadataLoad(
 	return "", false
 }
 
-type ManifestNode struct {
-	Type      string                   `json:"type"`
-	Hash      string                   `json:"hash,omitempty"`
-	Name      string                   `json:"name,omitempty"`
-	Size      uint64                   `json:"size,omitempty"`
-	Extension string                   `json:"ext,omitempty"`
-	MimeType  string                   `json:"mime,omitempty"`
-	Nodes     map[string]*ManifestNode `json:"sub,omitempty"`
-}
-
-func (s *server) manifestView(ctx context.Context, nameOrHex, pathVar string, depth int) (*ManifestNode, error) {
-	logger := tracing.NewLoggerWithTraceID(ctx, s.logger)
-	ls := loadsave.NewReadonly(s.storer, storage.ModeGetRequest)
-
-	address, err := s.resolveNameOrAddress(nameOrHex)
-	if err != nil {
-		logger.Debugf("manifest view: parse address %s: %v", nameOrHex, err)
-		logger.Error("manifest view: parse address")
-		return nil, ErrNotFound
-	}
-
-	// read manifest entry
-	m, err := manifest.NewDefaultManifestReference(
-		address,
-		ls,
-	)
-	if err != nil {
-		logger.Debugf("aurora download: not manifest %s: %v", address, err)
-		logger.Errorf("aurora download: not manifest %s", address)
-		return nil, ErrNotFound
-	}
-
-	rootNode := &ManifestNode{
-		Type:  manifest.Directory.String(),
-		Nodes: make(map[string]*ManifestNode),
-	}
-
-	if pathVar == "" || strings.HasSuffix(pathVar, "/") {
-		findNode := func(n *ManifestNode, path []byte) *ManifestNode {
-			i := 0
-			p := n
-			for j := 0; j < len(path); j++ {
-				if path[j] == '/' {
-					if p.Nodes == nil {
-						p.Nodes = make(map[string]*ManifestNode)
-					}
-					dir := path[i:j]
-					sub, ok := p.Nodes[string(dir)]
-					if !ok {
-						p.Nodes[string(dir)] = &ManifestNode{
-							Type: manifest.Directory.String(),
-						}
-						sub = p.Nodes[string(dir)]
-					}
-					p = sub
-					i = j + 1
-				}
-			}
-			return p
-		}
-
-		fn := func(nodeType int, path, prefix, hash []byte, metadata map[string]string) error {
-			if bytes.Equal(path, []byte("/")) {
-				rootNode.Name = metadata[manifest.EntryMetadataDirnameKey]
-
-				return nil
-			}
-
-			node := findNode(rootNode, path)
-
-			switch nodeType {
-			case int(manifest.Directory):
-				if node.Nodes == nil {
-					node.Nodes = make(map[string]*ManifestNode)
-				}
-			case int(manifest.File):
-				filename := metadata[manifest.EntryMetadataFilenameKey]
-				extension := ""
-
-				lastDot := strings.LastIndexByte(filename, '.')
-				if lastDot != -1 {
-					extension = filename[lastDot:]
-				}
-
-				refChunk, err := s.storer.Get(ctx, storage.ModeGetRequest, boson.NewAddress(hash))
-				if err != nil {
-					return err
-				}
-
-				node.Nodes[string(prefix)] = &ManifestNode{
-					Type:      manifest.File.String(),
-					Hash:      boson.NewAddress(hash).String(),
-					Size:      binary.LittleEndian.Uint64(refChunk.Data()[:boson.SpanSize]),
-					Extension: extension,
-					MimeType:  metadata[manifest.EntryMetadataContentTypeKey],
-				}
-			}
-
-			return nil
-		}
-
-		pathVar = strings.TrimSuffix(pathVar, "/")
-		if pathVar != "" {
-			pathVar += "/"
-		}
-
-		if err := m.IterateDirectories(ctx, []byte(pathVar), depth, fn); err != nil {
-			return nil, ErrServerError
-		}
-	} else {
-		e, err := m.Lookup(ctx, pathVar)
-		if err != nil {
-			logger.Debugf("manifest view: invalid filename: %v", err)
-			logger.Error("manifest view: invalid filename")
-			return nil, ErrNotFound
-		}
-
-		filename := e.Metadata()[manifest.EntryMetadataFilenameKey]
-		extension := ""
-
-		lastDot := strings.LastIndexByte(filename, '.')
-		if lastDot != -1 {
-			extension = filename[lastDot:]
-		}
-
-		refChunk, err := s.storer.Get(ctx, storage.ModeGetRequest, e.Reference())
-		if err != nil {
-			logger.Debugf("manifest view: file not found: %v", err)
-			logger.Error("manifest view: file not found")
-			return nil, ErrNotFound
-		}
-
-		rootNode.Name = e.Metadata()[manifest.EntryMetadataDirnameKey]
-		rootNode.Nodes = map[string]*ManifestNode{
-			filename: {
-				Type:      manifest.File.String(),
-				Hash:      e.Reference().String(),
-				Size:      binary.LittleEndian.Uint64(refChunk.Data()[:boson.SpanSize]),
-				Extension: extension,
-				MimeType:  e.Metadata()[manifest.EntryMetadataContentTypeKey],
-			},
-		}
-	}
-
-	if indexDocumentSuffixKey, ok := manifestMetadataLoad(ctx, m, manifest.RootPath, manifest.WebsiteIndexDocumentSuffixKey); ok {
-		_, err := m.Lookup(ctx, indexDocumentSuffixKey)
-		if err != nil {
-			logger.Debugf("manifest view: invalid index %s/%s: %v", address, indexDocumentSuffixKey, err)
-			logger.Error("manifest view: invalid index")
-		}
-
-		indexNode, ok := rootNode.Nodes[indexDocumentSuffixKey]
-		if ok && indexNode.Type == manifest.File.String() {
-			indexNode.Type = manifest.IndexItem.String()
-		}
-	}
-
-	return rootNode, nil
-}
-
 // manifestViewHandler
 func (s *server) manifestViewHandler(w http.ResponseWriter, r *http.Request) {
 
@@ -823,7 +663,7 @@ func (s *server) manifestViewHandler(w http.ResponseWriter, r *http.Request) {
 		depth = -1
 	}
 
-	rootNode, err := s.manifestView(r.Context(), nameOrHex, pathVar, depth)
+	rootNode, err := s.chunkInfo.ManifestView(r.Context(), nameOrHex, pathVar, depth)
 	if errors.Is(err, ErrNotFound) {
 		jsonhttp.NotFound(w, nil)
 	}

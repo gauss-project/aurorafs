@@ -363,7 +363,14 @@ func NewAurora(nodeMode aurora.Model, addr string, bosonAddress boson.Address, p
 
 	pinningService := pinning.NewService(storer, stateStore, traversalService)
 
-	chunkInfo := chunkinfo.New(bosonAddress, p2ps, logger, traversalService, stateStore, route, oracleChain)
+	multiResolver := multiresolver.NewMultiResolver(
+		multiresolver.WithDefaultEndpoint(o.ChainEndpoint),
+		multiresolver.WithConnectionConfigs(o.ResolverConnectionCfgs),
+		multiresolver.WithLogger(o.Logger),
+	)
+	b.resolverCloser = multiResolver
+
+	chunkInfo := chunkinfo.New(bosonAddress, p2ps, logger, traversalService, stateStore, ns, route, oracleChain, multiResolver)
 	if err := chunkInfo.InitChunkInfo(); err != nil {
 		return nil, fmt.Errorf("chunk info init: %w", err)
 	}
@@ -373,13 +380,6 @@ func NewAurora(nodeMode aurora.Model, addr string, bosonAddress boson.Address, p
 	storer.SetChunkInfo(chunkInfo)
 	ns.SetChunkInfo(chunkInfo)
 	retrieve.Config(chunkInfo)
-
-	multiResolver := multiresolver.NewMultiResolver(
-		multiresolver.WithDefaultEndpoint(o.ChainEndpoint),
-		multiresolver.WithConnectionConfigs(o.ResolverConnectionCfgs),
-		multiresolver.WithLogger(o.Logger),
-	)
-	b.resolverCloser = multiResolver
 
 	group := multicast.NewService(bosonAddress, nodeMode, p2ps, p2ps, kad, route, logger, multicast.Option{Dev: o.IsDev})
 	group.Start()

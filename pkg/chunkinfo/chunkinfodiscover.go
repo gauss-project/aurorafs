@@ -34,7 +34,7 @@ type discoverBitVector struct {
 }
 
 func (ci *ChunkInfo) initChunkInfoDiscover() error {
-	if err := ci.storer.Iterate(discoverKeyPrefix, func(k, v []byte) (bool, error) {
+	if err := ci.stateStorer.Iterate(discoverKeyPrefix, func(k, v []byte) (bool, error) {
 		if !strings.HasPrefix(string(k), discoverKeyPrefix) {
 			return true, nil
 		}
@@ -44,7 +44,7 @@ func (ci *ChunkInfo) initChunkInfoDiscover() error {
 			return false, err
 		}
 		var vb BitVector
-		if err := ci.storer.Get(key, &vb); err != nil {
+		if err := ci.stateStorer.Get(key, &vb); err != nil {
 			return false, err
 		}
 		bit, _ := bitvector.NewFromBytes(vb.B, vb.Len)
@@ -154,7 +154,7 @@ func (cd *chunkInfoDiscover) putChunkInfoDiscover(rootCid, overlay boson.Address
 func (ci *ChunkInfo) delDiscoverPresence(rootCid boson.Address) bool {
 	if v, ok := ci.cd.presence[rootCid.String()]; ok {
 		for k := range v {
-			err := ci.storer.Delete(generateKey(discoverKeyPrefix, rootCid, boson.MustParseHexAddress(k)))
+			err := ci.stateStorer.Delete(generateKey(discoverKeyPrefix, rootCid, boson.MustParseHexAddress(k)))
 			if err != nil {
 				return false
 			}
@@ -189,7 +189,7 @@ func (ci *ChunkInfo) updateChunkInfo(rootCid, overlay boson.Address, bv []byte) 
 		}
 	}
 	// db
-	if err := ci.storer.Put(generateKey(discoverKeyPrefix, rootCid, overlay), &BitVector{B: vb.bit.Bytes(), Len: vb.bit.Len()}); err != nil {
+	if err := ci.stateStorer.Put(generateKey(discoverKeyPrefix, rootCid, overlay), &BitVector{B: vb.bit.Bytes(), Len: vb.bit.Len()}); err != nil {
 		ci.logger.Errorf("chunk discover: put store error")
 	}
 }
@@ -219,7 +219,7 @@ func (ci *ChunkInfo) cleanDiscoverTrigger() {
 				for overlay, db := range discover {
 					if db.time+maxTime < now {
 						delete(discover, overlay)
-						if err := ci.storer.Delete(generateKey(discoverKeyPrefix, rc, boson.MustParseHexAddress(overlay))); err != nil {
+						if err := ci.stateStorer.Delete(generateKey(discoverKeyPrefix, rc, boson.MustParseHexAddress(overlay))); err != nil {
 							continue
 						}
 						if q, ok := ci.queues.Load(rootCid); ok {

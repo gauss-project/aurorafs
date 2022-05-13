@@ -94,8 +94,10 @@ func (s *Service) initHandler(ctx context.Context, p p2p.Peer, stream p2p.Stream
 		s.logging.Error(err)
 	}
 
-	receiveCheque, _ := s.traffic.LastReceivedCheque(p.Address)
-
+	receiveCheque, err := s.traffic.LastReceivedCheque(p.Address)
+	if receiveCheque == nil {
+		return err
+	}
 	signedCheque, err := json.Marshal(receiveCheque)
 	if err != nil {
 		return err
@@ -127,8 +129,10 @@ func (s *Service) init(ctx context.Context, p p2p.Peer) error {
 		}
 	}()
 
-	receiveCheque, _ := s.traffic.LastReceivedCheque(p.Address)
-
+	receiveCheque, err := s.traffic.LastReceivedCheque(p.Address)
+	if receiveCheque == nil {
+		return err
+	}
 	w, r := protobuf.NewWriterAndReader(stream)
 	signedCheque, err := json.Marshal(receiveCheque)
 	if err != nil {
