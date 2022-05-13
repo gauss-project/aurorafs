@@ -249,7 +249,7 @@ func (s *server) auroraDownloadHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if pathVar == "" {
-		logger.Tracef("aurora download: handle empty path %s", address)
+		logger.Debugf("aurora download: handle empty path %s", address)
 
 		if indexDocumentSuffixKey, ok := manifestMetadataLoad(ctx, m, manifest.RootPath, manifest.WebsiteIndexDocumentSuffixKey); ok {
 			pathVar = path.Join(pathVar, indexDocumentSuffixKey)

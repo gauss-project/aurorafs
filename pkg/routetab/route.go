@@ -39,7 +39,7 @@ var (
 	NeighborAlpha int32 = 2
 	gcTime              = time.Minute * 10
 	gcInterval          = time.Minute
-	findTimeOut         = time.Second * 2 // find route timeout
+	findTimeOut         = time.Second * 3 // find route timeout
 )
 
 const (
@@ -234,10 +234,13 @@ func (s *Service) onRouteReq(ctx context.Context, p p2p.Peer, stream p2p.Stream)
 		return nil
 	}
 
+	nowPaths := make([]*Path, 0)
 	paths, err := s.GetRoute(ctx, target)
 	if err == nil && len(paths) > 0 {
-		nowPaths := make([]*Path, 0)
 		for _, v := range paths {
+			if len(v.Items)+len(reqPath) > int(atomic.LoadInt32(&MaxTTL)) {
+				continue
+			}
 			if !inPaths(reqPath, v.Items) {
 				nowPaths = append(nowPaths, v)
 			}
@@ -247,25 +250,25 @@ func (s *Service) onRouteReq(ctx context.Context, p p2p.Peer, stream p2p.Stream)
 			switch req.UType {
 			case uTypeTarget:
 				addr, _ := s.addressbook.Get(target)
-				if addr != nil {
-					s.logger.Tracef("route:%s onRouteReq target=%s in route table,uType=%d", s.self, target, req.UType)
-					s.doRouteResp(ctx, p.Address, target, target, nil, nowPaths, req.UType)
-					return nil
+				if addr == nil {
+					_, err = s.FindUnderlay(ctx, target)
+					if err != nil {
+						goto FORWARD
+					}
 				}
 			case uTypeZero:
-				s.logger.Tracef("route:%s onRouteReq target=%s in route table,uType=%d", s.self, target, req.UType)
-				s.doRouteResp(ctx, p.Address, target, boson.ZeroAddress, nil, nowPaths, req.UType)
-				return nil
 			}
+			s.doRouteResp(ctx, p.Address, target, boson.ZeroAddress, nil, nowPaths, req.UType)
+			return nil
 		}
 	}
 
+FORWARD:
 	// forward
 	skip := make([]boson.Address, 0)
 	for _, v := range req.Paths {
 		for _, addr := range v.Items {
 			skip = append(skip, boson.NewAddress(addr))
-
 		}
 	}
 	forward := s.getNeighbor(target, req.Alpha, skip...)
@@ -290,6 +293,20 @@ func (s *Service) onRouteResp(ctx context.Context, peer p2p.Peer, stream p2p.Str
 		return fmt.Errorf(content)
 	}
 	target := boson.NewAddress(resp.Dest)
+
+	now := make([]*pb.Path, 0)
+	for _, v := range resp.Paths {
+		if len(v.Items) <= int(atomic.LoadInt32(&MaxTTL)) {
+			now = append(now, v)
+		}
+	}
+	if len(now) == 0 {
+		// discard
+		s.logger.Tracef("route:%s onRouteResp target=%s discard, received path length gt max ttl", s.self.String(), target.String())
+		return nil
+	}
+	resp.Paths = now
+
 	s.logger.Tracef("route:%s onRouteResp received: dest= %s", s.self.String(), target.String())
 
 	s.metrics.FindRouteRespReceivedCount.Inc()
@@ -415,7 +432,10 @@ func (s *Service) getNeighbor(target boson.Address, alpha int32, skip ...boson.A
 			return false, false, nil
 		})
 	}
-	forward, _ = s.kad.RandomSubset(now, int(alpha))
+	forward = s.kad.GetPeersWithLatencyEWMA(now)
+	if len(forward) > int(alpha) {
+		return forward[:int(alpha)]
+	}
 	return
 }
 
