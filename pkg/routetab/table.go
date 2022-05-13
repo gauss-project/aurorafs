@@ -135,8 +135,14 @@ func (t *Table) SavePath(p *pb.Path) {
 			if existRoute(route, old) {
 				return
 			}
-			routes = []TargetRoute{route, old[0]}
-
+			routes = []TargetRoute{route}
+			if len(old) > int(NeighborAlpha) {
+				routes = append(routes, old[:NeighborAlpha]...)
+			} else if len(old) == int(NeighborAlpha) {
+				routes = append(routes, old[:NeighborAlpha-1]...)
+			} else {
+				routes = append(routes, old...)
+			}
 		} else {
 			routes = []TargetRoute{route}
 		}
