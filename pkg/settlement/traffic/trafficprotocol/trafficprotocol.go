@@ -3,6 +3,7 @@ package trafficprotocol
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 
@@ -156,6 +157,9 @@ func (s *Service) init(ctx context.Context, p p2p.Peer) error {
 	err = json.Unmarshal(req.SignedCheque, &c)
 	if err != nil {
 		return err
+	}
+	if c == nil {
+		return errors.New("cheque is nil")
 	}
 	return s.traffic.Handshake(p.Address, common.BytesToAddress(req.Address), c)
 }

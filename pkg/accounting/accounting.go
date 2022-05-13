@@ -5,7 +5,6 @@ package accounting
 import (
 	"context"
 	"errors"
-	"fmt"
 	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/logging"
 	"github.com/gauss-project/aurorafs/pkg/p2p"
@@ -156,17 +155,6 @@ func (a *Accounting) Debit(peer boson.Address, traffic uint64) error {
 		return p2p.NewBlockPeerError(24*time.Hour, ErrDisconnectThresholdExceeded)
 	}
 
-	balance, err := a.settlement.GetPeerBalance(peer)
-	if err != nil {
-		return err
-	}
-	unPaid, err := a.settlement.GetUnPaidBalance(peer)
-	if err != nil {
-		return err
-	}
-	if balance.Cmp(unPaid) < 0 {
-		return fmt.Errorf("low node traffic balance: %s, traffic: %d, unpaid: %d ", peer.String(), balance, unPaid)
-	}
 	if err := a.settlement.PutTransferTraffic(peer, new(big.Int).SetUint64(traffic)); err != nil {
 		return err
 	}
