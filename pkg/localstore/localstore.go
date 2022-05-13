@@ -314,6 +314,13 @@ func New(path string, baseKey []byte, o *Options, logger logging.Logger) (db *DB
 		return nil, err
 	}
 
+	// read gcSize from db
+	gcSize, err := db.gcSize.Get()
+	if err != nil {
+		return nil, err
+	}
+	db.logger.Infof("current gc size: %d", gcSize)
+
 	// start garbage collection worker
 	go db.collectGarbageWorker()
 
