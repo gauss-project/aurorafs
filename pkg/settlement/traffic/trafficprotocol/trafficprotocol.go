@@ -3,7 +3,6 @@ package trafficprotocol
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"time"
 
@@ -31,7 +30,7 @@ type Interface interface {
 type Traffic interface {
 	ReceiveCheque(ctx context.Context, peer boson.Address, cheque *cheque.SignedCheque) error
 
-	Handshake(peer boson.Address, beneficiary common.Address, cheque *cheque.SignedCheque) error
+	Handshake(peer boson.Address, beneficiary common.Address, cheque cheque.SignedCheque) error
 
 	LastReceivedCheque(peer boson.Address) (*cheque.SignedCheque, error)
 
@@ -85,7 +84,7 @@ func (s *Service) initHandler(ctx context.Context, p p2p.Peer, stream p2p.Stream
 		return fmt.Errorf("read request from peer %v: %w", p.Address, err)
 	}
 
-	var c *cheque.SignedCheque
+	var c cheque.SignedCheque
 	err = json.Unmarshal(req.SignedCheque, &c)
 	if err != nil {
 		return err
@@ -153,14 +152,12 @@ func (s *Service) init(ctx context.Context, p p2p.Peer) error {
 		return fmt.Errorf("read request from peer %v: %w", p.Address, err)
 	}
 
-	var c *cheque.SignedCheque
+	var c cheque.SignedCheque
 	err = json.Unmarshal(req.SignedCheque, &c)
 	if err != nil {
 		return err
 	}
-	if c == nil {
-		return errors.New("cheque is nil")
-	}
+
 	return s.traffic.Handshake(p.Address, common.BytesToAddress(req.Address), c)
 }
 
