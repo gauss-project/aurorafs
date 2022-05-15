@@ -641,7 +641,7 @@ func (s *Service) AvailableBalance() (*big.Int, error) {
 	return new(big.Int).Add(s.trafficPeers.balance, new(big.Int).Sub(cashed, transfer)), nil
 }
 
-func (s *Service) Handshake(peer boson.Address, recipient common.Address, signedCheque *chequePkg.SignedCheque) error {
+func (s *Service) Handshake(peer boson.Address, recipient common.Address, signedCheque chequePkg.SignedCheque) error {
 	recipientLocal, known := s.addressBook.Beneficiary(peer)
 
 	if !known {
@@ -664,11 +664,11 @@ func (s *Service) Handshake(peer boson.Address, recipient common.Address, signed
 		return err
 	}
 
-	if signedCheque == nil || signedCheque.Signature == nil {
+	if signedCheque.Signature == nil {
 		return nil
 	}
 
-	isUser, err := s.chequeStore.VerifyCheque(signedCheque, s.chainID) //chequePkg.RecoverCheque(cheque, s.chainID)
+	isUser, err := s.chequeStore.VerifyCheque(&signedCheque, s.chainID) //chequePkg.RecoverCheque(cheque, s.chainID)
 	if err != nil {
 		return err
 	}

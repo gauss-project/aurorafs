@@ -156,7 +156,7 @@ func TestHandSake(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	signedCheque := &chequePkg.SignedCheque{
+	signedCheque := chequePkg.SignedCheque{
 		Cheque:    c,
 		Signature: sin,
 	}
