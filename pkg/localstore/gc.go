@@ -111,7 +111,6 @@ func (db *DB) collectGarbage() (collectedCount uint64, done bool, err error) {
 	if gcSize <= target {
 		return 0, true, nil
 	}
-	db.logger.Infof("before gc, gc size is %d", gcSize)
 	db.metrics.GCSize.Set(float64(gcSize))
 
 	done = true
@@ -315,7 +314,6 @@ func (db *DB) incGCSizeInBatch(batch driver.Batching, change int64) (err error) 
 	if err != nil && !errors.Is(err, driver.ErrNotFound) {
 		return err
 	}
-	db.logger.Infof("gc size is %d, changed by %d", gcSize, change)
 
 	var newSize uint64
 	if change > 0 {
