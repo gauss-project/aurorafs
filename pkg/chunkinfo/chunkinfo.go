@@ -351,21 +351,21 @@ func (ci *ChunkInfo) DelFile(rootCid boson.Address, del func() error) error {
 
 	result = ci.chunkPutChanUpdate(ctx, ci.cp, ci.delRootCid, rootCid, pyr, h)
 	if !result.state {
-		return fmt.Errorf("chunkinfo: ")
+		return fmt.Errorf("chunkinfo: delete pyramid failed")
 	}
 
 	result = ci.chunkPutChanUpdate(ctx, ci.cd, ci.delDiscoverPresence, rootCid)
 	if !result.state {
-		return fmt.Errorf("chunkinfo: ")
+		return fmt.Errorf("chunkinfo: delete discover failed")
 	}
 
 	if !ci.DelChunkInfoSource(rootCid) {
-		return fmt.Errorf("chunkinfo: ")
+		return fmt.Errorf("chunkinfo: delete source failed")
 	}
 
 	result = ci.chunkPutChanUpdate(ctx, ci.ct, ci.delPresence, rootCid)
 	if !result.state {
-		return fmt.Errorf("chunkinfo: ")
+		return fmt.Errorf("chunkinfo: delete service failed")
 	}
 
 	return nil
