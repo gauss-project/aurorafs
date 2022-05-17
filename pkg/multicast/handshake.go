@@ -4,12 +4,14 @@ import (
 	"context"
 	"errors"
 	"io"
+	"sync"
 	"time"
 
 	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/multicast/pb"
 	"github.com/gauss-project/aurorafs/pkg/p2p"
 	"github.com/gauss-project/aurorafs/pkg/p2p/protobuf"
+	"github.com/gauss-project/aurorafs/pkg/topology/pslice"
 )
 
 func (s *Service) Handshake(ctx context.Context, addr boson.Address) (err error) {
@@ -113,4 +115,18 @@ func (s *Service) HandshakeIncoming(ctx context.Context, peer p2p.Peer, stream p
 	s.logger.Tracef("group: handshake ok")
 
 	return nil
+}
+
+func (s *Service) HandKept(wg *sync.WaitGroup, addr boson.Address, kept, known *pslice.PSlice) {
+	defer wg.Done()
+
+	err := s.Handshake(context.Background(), addr)
+	if err != nil {
+		kept.Remove(addr)
+		if known.Length() >= maxKnownPeers {
+			p := RandomPeer(known.BinPeers(0))
+			known.Remove(p)
+		}
+		known.Add(addr)
+	}
 }

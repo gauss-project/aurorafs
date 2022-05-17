@@ -268,6 +268,8 @@ func (t *Table) ResumePaths() {
 			_ = t.store.Delete(string(key))
 		} else if len(path.Items) <= int(atomic.LoadInt32(&MaxTTL)) {
 			t.paths.Store(pathKey, path)
+		} else {
+			_ = t.store.Delete(string(key))
 		}
 		return false, nil
 	})

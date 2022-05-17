@@ -980,7 +980,7 @@ func (s *Service) CallHandlerWithConnChain(ctx context.Context, last, src p2p.Pe
 		if errors.Is(err, p2p.ErrUnexpected) {
 			s.metrics.UnexpectedProtocolReqCount.Inc()
 		}
-		logger.Debugf("could not call handle protocol %s/%s: realy stream %s: peer %s: error: %v", protocolName, protocolVersion, streamName, src.Address, err)
+		logger.Debugf("could not call handle protocol %s/%s: relay stream %s: peer %s: error: %v", protocolName, protocolVersion, streamName, src.Address, err)
 	}
 	return
 }
@@ -1101,7 +1101,7 @@ func (s *Service) CallHandler(ctx context.Context, last p2p.Peer, stream p2p.Str
 		if errors.Is(err, p2p.ErrUnexpected) {
 			s.metrics.UnexpectedProtocolReqCount.Inc()
 		}
-		logger.Debugf("could not call handle protocol %s/%s: realy stream %s: peer %s: error: %v, forward=%v", name, version, streamName, src.Address, err, forward)
+		logger.Debugf("could not call handle protocol %s/%s: relay stream %s: peer %s: error: %v, forward=%v", name, version, streamName, src.Address, err, forward)
 	}
 	return
 }

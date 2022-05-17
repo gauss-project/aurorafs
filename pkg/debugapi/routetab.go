@@ -2,13 +2,14 @@ package debugapi
 
 import (
 	"errors"
+	"net/http"
+	"time"
+
 	"github.com/gauss-project/aurorafs/pkg/aurora"
 	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/jsonhttp"
 	"github.com/gauss-project/aurorafs/pkg/routetab"
 	"github.com/gorilla/mux"
-	"net/http"
-	"time"
 )
 
 type routeResponse struct {
@@ -116,7 +117,7 @@ func (s *Service) findUnderlayHandel(w http.ResponseWriter, r *http.Request) {
 		jsonhttp.BadRequest(w, "invalid peer address")
 		return
 	}
-	addr, err := s.routetab.FindUnderlay(ctx, address)
+	addr, err := s.routetab.FindUnderlay(ctx, address, time.Second*5)
 	if err != nil {
 		if errors.Is(err, routetab.ErrNotFound) {
 			jsonhttp.NotFound(w, err)

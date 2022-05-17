@@ -63,8 +63,8 @@ type Service struct {
 	close          chan struct{}
 	sessionStream  sync.Map // key= sessionID, value= *WsStream
 
-	//logSig    []chan LogContent
-	//logSigMtx sync.Mutex
+	// logSig    []chan LogContent
+	// logSigMtx sync.Mutex
 
 	subPub subscribe.SubPub
 }
@@ -203,31 +203,34 @@ func (s *Service) Start() {
 					s.leaveConnectedAll(peer.Overlay)
 				}
 			case <-ticker.C:
+				t := time.Now()
+				s.logger.Debugf("multicast: keep ping start")
 				wg := &sync.WaitGroup{}
+				skipMap := make(map[string]struct{})
 				s.groups.Range(func(_, value interface{}) bool {
 					v := value.(*Group)
-					_ = v.keepPeers.EachBin(func(address boson.Address, u uint8) (stop, jumpToNext bool, err error) {
+					for _, addr := range v.keepPeers.BinPeers(0) {
+						_, ok := skipMap[addr.ByteString()]
+						if ok {
+							continue
+						}
+						skipMap[addr.ByteString()] = struct{}{}
 						wg.Add(1)
-						go func() {
-							defer wg.Done()
-							err = s.Handshake(context.Background(), address)
-							if err != nil {
-								s.logger.Tracef("keep ping %s %s", address, err)
-								v.keepPeers.Remove(address)
-
-								if v.knownPeers.Length() >= maxKnownPeers {
-									p := RandomPeer(v.knownPeers.BinPeers(0))
-									v.knownPeers.Remove(p)
-								}
-
-								v.knownPeers.Add(address)
-							}
-						}()
-						return false, false, nil
-					})
+						go s.HandKept(wg, addr, v.keepPeers, v.knownPeers)
+					}
+					for _, addr := range v.connectedPeers.BinPeers(0) {
+						_, ok := skipMap[addr.ByteString()]
+						if ok {
+							continue
+						}
+						skipMap[addr.ByteString()] = struct{}{}
+						wg.Add(1)
+						go s.HandKept(wg, addr, v.connectedPeers, v.knownPeers)
+					}
 					return true
 				})
 				wg.Wait()
+				s.logger.Debugf("multicast: keep ping done took %s", time.Since(t))
 				s.refreshProtectPeers()
 				ticker.Reset(keepPingInterval)
 			}
@@ -840,7 +843,7 @@ func (s *Service) GetOptimumPeer(groupName string) (peer boson.Address, err erro
 
 func (s *Service) getStream(ctx context.Context, dest boson.Address, streamName string) (stream p2p.Stream, err error) {
 	if !s.route.IsNeighbor(dest) {
-		stream, err = s.stream.NewRelayStream(ctx, dest, nil, protocolName, protocolVersion, streamName, false)
+		stream, err = s.stream.NewConnChainRelayStream(ctx, dest, nil, protocolName, protocolVersion, streamName)
 	} else {
 		stream, err = s.stream.NewStream(ctx, dest, nil, protocolName, protocolVersion, streamName)
 	}
