@@ -176,7 +176,6 @@ func (db *DB) collectGarbage() (collectedCount uint64, done bool, err error) {
 			chunkHashes := make([]chunkinfo.PyramidCidNum, len(pyramid))
 			for i, chunk := range pyramid {
 				chunkHashes[i] = *chunk
-				gcCount += uint64(chunk.Number)
 			}
 
 			// delete excepted root chunk
@@ -186,7 +185,6 @@ func (db *DB) collectGarbage() (collectedCount uint64, done bool, err error) {
 				if err == nil {
 					if pinItem.PinCounter > uint64(chunk.Number) {
 						pinItem.PinCounter -= uint64(chunk.Number)
-						gcCount -= uint64(chunk.Number)
 						err = db.pinIndex.Put(pinItem)
 						if err != nil {
 							db.logger.Errorf("localstore: collect garbage: update pin state failure: %v", err)
@@ -198,14 +196,17 @@ func (db *DB) collectGarbage() (collectedCount uint64, done bool, err error) {
 					if err != nil {
 						db.logger.Errorf("localstore: collect garbage: delete chunk pin: %v", err)
 					}
-				} else if !errors.Is(err, driver.ErrNotFound) {
-					db.logger.Errorf("localstore: collect garbage: get pin state failure: %v", err)
 				}
-				err = db.retrievalDataIndex.DeleteInBatch(batch, i)
-				if err != nil {
-					db.logger.Errorf("localstore: collect garbage: delete chunk data: %v", err)
+				_, err = db.retrievalDataIndex.Get(i)
+				if err == nil {
+					err = db.retrievalDataIndex.DeleteInBatch(batch, i)
+					if err != nil {
+						db.logger.Errorf("localstore: collect garbage: delete chunk data: %v", err)
+					} else {
+						gcCount++
+						db.logger.Tracef("localstore: collect garbage: chunk %s has deleted", chunk.Cid)
+					}
 				}
-				db.logger.Tracef("localstore: collect garbage: chunk %s has deleted", chunk.Cid)
 			}
 
 			currentCollectedCount += gcCount
