@@ -3,14 +3,7 @@ package chunkinfo
 import (
 	"context"
 	"fmt"
-	"github.com/gauss-project/aurorafs/pkg/resolver"
-	"github.com/gauss-project/aurorafs/pkg/retrieval/aco"
-	"github.com/gauss-project/aurorafs/pkg/rpc"
-	"github.com/gauss-project/aurorafs/pkg/sctx"
-	"github.com/gauss-project/aurorafs/pkg/settlement/chain"
-	"github.com/gauss-project/aurorafs/pkg/subscribe"
 	"reflect"
-	"resenje.org/singleflight"
 	"runtime"
 	"strings"
 	"sync"
@@ -20,9 +13,16 @@ import (
 	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/logging"
 	"github.com/gauss-project/aurorafs/pkg/p2p"
+	"github.com/gauss-project/aurorafs/pkg/resolver"
+	"github.com/gauss-project/aurorafs/pkg/retrieval/aco"
 	"github.com/gauss-project/aurorafs/pkg/routetab"
+	"github.com/gauss-project/aurorafs/pkg/rpc"
+	"github.com/gauss-project/aurorafs/pkg/sctx"
+	"github.com/gauss-project/aurorafs/pkg/settlement/chain"
 	"github.com/gauss-project/aurorafs/pkg/storage"
+	"github.com/gauss-project/aurorafs/pkg/subscribe"
 	"github.com/gauss-project/aurorafs/pkg/traversal"
+	"resenje.org/singleflight"
 )
 
 type Interface interface {
@@ -46,7 +46,7 @@ type Interface interface {
 
 	GetFileList(overlay boson.Address) (fileListInfo []map[string]interface{}, rootList []boson.Address)
 
-	DelFile(rootCid boson.Address, del func()) bool
+	DelFile(rootCid boson.Address, del func() error) error
 
 	DelDiscover(rootCid boson.Address)
 
@@ -87,9 +87,9 @@ type ChunkInfo struct {
 	metrics      metrics
 	tt           *timeoutTrigger
 	queuesLk     sync.RWMutex
-	queues       sync.Map //map[string]*queue
+	queues       sync.Map // map[string]*queue
 	syncLk       sync.RWMutex
-	syncMsg      sync.Map //map[string]chan bool
+	syncMsg      sync.Map // map[string]chan bool
 	ct           *chunkInfoTabNeighbor
 	cd           *chunkInfoDiscover
 	cp           *chunkPyramid
@@ -173,7 +173,6 @@ func (ci *ChunkInfo) InitChunkInfo() error {
 	if err := ci.chunkPutChanUpdate(ctx, ci.cs, ci.initChunkInfoSource).err; err != nil {
 		return err
 	}
-	ci.InitManifest()
 	ci.logger.Info("end of init chunkInfo")
 	return nil
 }
@@ -327,7 +326,7 @@ func (ci *ChunkInfo) GetFileList(overlay boson.Address) (fileListInfo []map[stri
 	return
 }
 
-func (ci *ChunkInfo) DelFile(rootCid boson.Address, del func()) bool {
+func (ci *ChunkInfo) DelFile(rootCid boson.Address, del func() error) error {
 	ci.syncLk.Lock()
 	defer ci.syncLk.Unlock()
 	ctx := context.Background()
@@ -335,30 +334,41 @@ func (ci *ChunkInfo) DelFile(rootCid boson.Address, del func()) bool {
 	ci.queues.Delete(rootCid.String())
 	pyramid, err := ci.getPyramid(rootCid)
 	if err != nil {
-		return false
+		return err
 	}
 	pyr := *pyramid
 
 	hashs, err := ci.getPyramidHash(rootCid)
 	if err != nil {
-		return false
+		return err
 	}
 	h := *hashs
-	del()
-	ci.DelManifest(rootCid.String())
-	if !ci.chunkPutChanUpdate(ctx, ci.cp, ci.delRootCid, rootCid, pyr, h).state {
-		return false
+	if err := del(); err != nil {
+		return err
 	}
 
-	if res := ci.chunkPutChanUpdate(ctx, ci.cd, ci.delDiscoverPresence, rootCid).state; !res {
-		return false
+	var result chunkPutRes
+
+	result = ci.chunkPutChanUpdate(ctx, ci.cp, ci.delRootCid, rootCid, pyr, h)
+	if !result.state {
+		return fmt.Errorf("chunkinfo: ")
+	}
+
+	result = ci.chunkPutChanUpdate(ctx, ci.cd, ci.delDiscoverPresence, rootCid)
+	if !result.state {
+		return fmt.Errorf("chunkinfo: ")
 	}
 
 	if !ci.DelChunkInfoSource(rootCid) {
-		return false
+		return fmt.Errorf("chunkinfo: ")
 	}
 
-	return ci.chunkPutChanUpdate(ctx, ci.ct, ci.delPresence, rootCid).state
+	result = ci.chunkPutChanUpdate(ctx, ci.ct, ci.delPresence, rootCid)
+	if !result.state {
+		return fmt.Errorf("chunkinfo: ")
+	}
+
+	return nil
 }
 
 func (ci *ChunkInfo) DelDiscover(rootCid boson.Address) {

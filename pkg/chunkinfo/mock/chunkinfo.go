@@ -150,8 +150,8 @@ func (ci *ChunkInfo) ChangeDiscoverStatus(rootCid boson.Address, s chunkinfo.Pul
 	}
 }
 
-func (ci *ChunkInfo) DelFile(rootCid boson.Address, del func()) bool {
-	return true
+func (ci *ChunkInfo) DelFile(rootCid boson.Address, del func() error) error {
+	return nil
 }
 
 func (ci *ChunkInfo) DelDiscover(rootCid boson.Address) {

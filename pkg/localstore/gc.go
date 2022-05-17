@@ -24,6 +24,7 @@ import (
 	"github.com/gauss-project/aurorafs/pkg/chunkinfo"
 	"github.com/gauss-project/aurorafs/pkg/shed"
 	"github.com/gauss-project/aurorafs/pkg/shed/driver"
+	"github.com/gauss-project/aurorafs/pkg/storage"
 )
 
 var (
@@ -72,6 +73,8 @@ func (db *DB) collectGarbageWorker() {
 	}
 }
 
+var dirtyGarbageNoHandle = errors.New("dirty garbage no handle")
+
 // collectGarbage removes chunks from retrieval and other
 // indexes if maximal number of chunks in database is reached.
 // This function returns the number of removed chunks. If done
@@ -108,6 +111,7 @@ func (db *DB) collectGarbage() (collectedCount uint64, done bool, err error) {
 	if gcSize <= target {
 		return 0, true, nil
 	}
+	db.logger.Infof("before gc, gc size is %d", gcSize)
 	db.metrics.GCSize.Set(float64(gcSize))
 
 	done = true
@@ -142,6 +146,11 @@ func (db *DB) collectGarbage() (collectedCount uint64, done bool, err error) {
 		testHookGCIteratorDone()
 	}
 
+	defer totalTimeMetric(db.metrics.TotalTimeGCLock, time.Now())
+
+	currentCollectedCount := uint64(0)
+	recycledItems := make([]shed.Item, 0)
+
 	// without batchMu lock, call chunkinfo to remove chunks
 	for _, item := range candidates {
 		addr := boson.NewAddress(item.Address)
@@ -150,72 +159,84 @@ func (db *DB) collectGarbage() (collectedCount uint64, done bool, err error) {
 			db.discover.DelDiscover(addr)
 		}
 
-		db.discover.DelFile(addr, func() {})
-	}
+		err = db.discover.DelFile(addr, func() error {
+			// protect database from changing indexes
+			db.batchMu.Lock()
+			defer db.batchMu.Unlock()
 
-	// protect database from changing indexes and gcSize
-	db.batchMu.Lock()
-	defer totalTimeMetric(db.metrics.TotalTimeGCLock, time.Now())
-	defer db.batchMu.Unlock()
+			if addr.MemberOf(db.dirtyAddresses) {
+				return dirtyGarbageNoHandle
+			}
+
+			db.metrics.GCStoreTimeStamps.Set(float64(item.StoreTimestamp))
+			db.metrics.GCStoreAccessTimeStamps.Set(float64(item.AccessTimestamp))
+
+			gcCount := uint64(0)
+			pyramid := db.discover.GetChunkPyramid(addr)
+			chunkHashes := make([]chunkinfo.PyramidCidNum, len(pyramid))
+			for i, chunk := range pyramid {
+				chunkHashes[i] = *chunk
+				gcCount += uint64(chunk.Number)
+			}
+
+			// delete excepted root chunk
+			for _, chunk := range chunkHashes {
+				i := addressToItem(chunk.Cid)
+				pinItem, err := db.pinIndex.Get(i)
+				if err == nil {
+					if pinItem.PinCounter > uint64(chunk.Number) {
+						pinItem.PinCounter -= uint64(chunk.Number)
+						gcCount -= uint64(chunk.Number)
+						err = db.pinIndex.Put(pinItem)
+						if err != nil {
+							db.logger.Errorf("localstore: collect garbage: update pin state failure: %v", err)
+							break
+						}
+						continue
+					}
+					err = db.pinIndex.DeleteInBatch(batch, pinItem)
+					if err != nil {
+						db.logger.Errorf("localstore: collect garbage: delete chunk pin: %v", err)
+					}
+				} else if !errors.Is(err, driver.ErrNotFound) {
+					db.logger.Errorf("localstore: collect garbage: get pin state failure: %v", err)
+				}
+				err = db.retrievalDataIndex.DeleteInBatch(batch, i)
+				if err != nil {
+					db.logger.Errorf("localstore: collect garbage: delete chunk data: %v", err)
+				}
+				db.logger.Tracef("localstore: collect garbage: chunk %s has deleted", chunk.Cid)
+			}
+
+			currentCollectedCount += gcCount
+			db.logger.Infof("localstore: collect garbage: file %s(%d) has removed", addr, gcCount)
+
+			return nil
+		})
+		if err != nil {
+			if errors.Is(err, dirtyGarbageNoHandle) {
+				continue
+			}
+			if errors.Is(err, storage.ErrNotFound) {
+				continue
+			}
+
+			return 0, false, err
+		}
+
+		recycledItems = append(recycledItems, item)
+	}
 
 	// refresh gcSize value, since it might have
 	// changed in the meanwhile
+	db.batchMu.Lock()
+	defer db.batchMu.Unlock()
 	gcSize, err = db.gcSize.Get()
 	if err != nil {
 		return 0, false, err
 	}
 
-	currentCollectedCount := uint64(0)
-
-	// get rid of dirty entries
-	for _, item := range candidates {
-		addr := boson.NewAddress(item.Address)
-
-		if addr.MemberOf(db.dirtyAddresses) {
-			continue
-		}
-
-		db.metrics.GCStoreTimeStamps.Set(float64(item.StoreTimestamp))
-		db.metrics.GCStoreAccessTimeStamps.Set(float64(item.AccessTimestamp))
-
-		// root of file
-		gcCount := uint64(1)
-
-		pyramid := db.discover.GetChunkPyramid(addr)
-		chunkHashes := make([]chunkinfo.PyramidCidNum, len(pyramid))
-		for i, chunk := range pyramid {
-			chunkHashes[i] = *chunk
-			gcCount += uint64(chunk.Number)
-		}
-
-		// delete excepted root chunk
-		for _, chunk := range chunkHashes {
-			i := addressToItem(chunk.Cid)
-			pinItem, err := db.pinIndex.Get(i)
-			if err == nil {
-				if pinItem.PinCounter > uint64(chunk.Number) {
-					pinItem.PinCounter -= uint64(chunk.Number)
-					gcCount -= uint64(chunk.Number)
-					err = db.pinIndex.Put(pinItem)
-					if err != nil {
-						db.logger.Errorf("localstore: collect garbage: update pin state failure: %v", err)
-						break
-					}
-					continue
-				}
-				err = db.pinIndex.DeleteInBatch(batch, pinItem)
-				if err != nil {
-					db.logger.Errorf("localstore: collect garbage: delete chunk pin: %v", err)
-				}
-			} else if !errors.Is(err, driver.ErrNotFound) {
-				db.logger.Errorf("localstore: collect garbage: get pin state failure: %v", err)
-			}
-			err = db.retrievalDataIndex.DeleteInBatch(batch, i)
-			if err != nil {
-				db.logger.Errorf("localstore: collect garbage: delete chunk data: %v", err)
-			}
-			db.logger.Tracef("localstore: collect garbage: chunk %s has deleted", chunk.Cid)
-		}
+	for _, item := range recycledItems {
 		// delete from retrieve, gc
 		err = db.retrievalDataIndex.DeleteInBatch(batch, item)
 		if err != nil {
@@ -230,12 +251,11 @@ func (db *DB) collectGarbage() (collectedCount uint64, done bool, err error) {
 			return 0, false, err
 		}
 
-		currentCollectedCount += gcCount
-		db.logger.Tracef("localstore: collect garbage: hash %s will be clean at soon", addr)
+		currentCollectedCount++
 	}
 
 	// if gcIndex missing, we should set gcSize to zero.
-	if len(candidates) == 0 {
+	if len(recycledItems) == 0 {
 		// force gc clean
 		currentCollectedCount = gcSize
 	}
@@ -254,7 +274,7 @@ func (db *DB) collectGarbage() (collectedCount uint64, done bool, err error) {
 
 	gcSize, err = db.gcSize.Get()
 	if err == nil {
-		db.logger.Tracef("current gc size: %d", gcSize)
+		db.logger.Infof("current gc size: %d", gcSize)
 	}
 
 	err = batch.Commit()
@@ -294,6 +314,7 @@ func (db *DB) incGCSizeInBatch(batch driver.Batching, change int64) (err error) 
 	if err != nil && !errors.Is(err, driver.ErrNotFound) {
 		return err
 	}
+	db.logger.Infof("gc size is %d, changed by %d", gcSize, change)
 
 	var newSize uint64
 	if change > 0 {
