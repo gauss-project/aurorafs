@@ -314,10 +314,25 @@ func New(path string, baseKey []byte, o *Options, logger logging.Logger) (db *DB
 		return nil, err
 	}
 
-	// read gcSize from db
+	// read gcSize from index
+	currentSize := uint64(0)
+	err = db.gcIndex.Iterate(func(item shed.Item) (stop bool, err error) {
+		currentSize += item.GCounter
+		return false, nil
+	}, nil)
+	if err != nil {
+		return nil, err
+	}
 	gcSize, err := db.gcSize.Get()
 	if err != nil {
 		return nil, err
+	}
+	if gcSize < currentSize {
+		err = db.gcSize.Put(currentSize)
+		if err != nil {
+			return nil, err
+		}
+		gcSize = currentSize
 	}
 	db.logger.Infof("current gc size: %d", gcSize)
 
