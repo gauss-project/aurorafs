@@ -155,7 +155,7 @@ func (s *Service) Start() {
 					}
 				case p2p.PeerStateDisconnect:
 					for _, g := range s.getGroupAll() {
-						g.remove(peer.Overlay)
+						g.remove(peer.Overlay, true)
 					}
 				}
 			case <-ticker.C:
@@ -338,6 +338,7 @@ func (s *Service) joinGroup(gid boson.Address, option model.ConfigNodeGroup) err
 	}
 
 	go s.HandshakeAll()
+	go s.HandshakeAllKept(s.getGroupAll(), false)
 	go s.discover(g)
 
 	s.logger.Infof("join group success %s", gid)
@@ -441,7 +442,7 @@ func (s *Service) onNotify(ctx context.Context, peer p2p.Peer, stream p2p.Stream
 	case NotifyLeaveGroup: // leave group
 		for _, v := range msg.Gids {
 			g := s.getGroupOrCreate(boson.NewAddress(v))
-			g.remove(peer.Address)
+			g.remove(peer.Address, false)
 			s.logger.Tracef("onNotify remove peer %s with gid %s", peer.Address, g.gid)
 		}
 	default:

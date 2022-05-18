@@ -110,7 +110,7 @@ func (s *Service) updatePeerGroupsJoin(peer boson.Address, GIDs []boson.Address)
 	if ok {
 		for _, g := range gs {
 			if !g.gid.MemberOf(GIDs) {
-				g.remove(peer)
+				g.remove(peer, false)
 			}
 		}
 	}
@@ -130,7 +130,7 @@ func (g *Group) update(option model.ConfigNodeGroup) {
 	g.option = option
 }
 
-func (g *Group) remove(peer boson.Address) {
+func (g *Group) remove(peer boson.Address, intoKnown bool) {
 	var notify bool
 	defer func() {
 		if notify {
@@ -145,9 +145,14 @@ func (g *Group) remove(peer boson.Address) {
 		g.keepPeers.Remove(peer)
 		notify = true
 	}
-	if g.knownPeers.Exists(peer) {
+	if !intoKnown {
 		g.knownPeers.Remove(peer)
+	} else {
+		if !g.knownPeers.Exists(peer) {
+			g.knownPeers.Add(peer)
+		}
 	}
+
 	return
 }
 

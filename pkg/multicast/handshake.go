@@ -132,7 +132,10 @@ func (s *Service) HandshakeAllKept(gs []*Group, connected bool) {
 				wg.Add(1)
 				go func(addr boson.Address) {
 					defer wg.Done()
-					_ = s.Handshake(context.Background(), addr)
+					err := s.Handshake(context.Background(), addr)
+					if err != nil {
+						g.remove(addr, true)
+					}
 				}(v)
 			}
 		}
@@ -144,7 +147,10 @@ func (s *Service) HandshakeAllKept(gs []*Group, connected bool) {
 			wg.Add(1)
 			go func(addr boson.Address) {
 				defer wg.Done()
-				_ = s.Handshake(context.Background(), addr)
+				err := s.Handshake(context.Background(), addr)
+				if err != nil {
+					g.remove(addr, true)
+				}
 			}(v)
 		}
 		for _, v := range g.knownPeers.BinPeers(0) {
