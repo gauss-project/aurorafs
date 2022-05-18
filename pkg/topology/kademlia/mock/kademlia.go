@@ -49,9 +49,11 @@ type Mock struct {
 	subPub       subscribe.SubPub
 }
 
+func (m *Mock) GetPeersWithLatencyEWMA(list []boson.Address) (now []boson.Address) {
+	return list
+}
+
 func (m *Mock) RefreshProtectPeer(peer []boson.Address) {
-	// TODO implement me
-	panic("implement me")
 }
 
 func NewMockKademlia(o ...Option) *Mock {
