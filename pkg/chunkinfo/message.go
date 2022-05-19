@@ -120,6 +120,10 @@ func (ci *ChunkInfo) sendPyramids(ctx context.Context, address boson.Address, st
 			if err != nil {
 				ci.metrics.PyramidTotalErrors.Inc()
 				if i == len(overlays)-1 {
+					go func() {
+						ci.logger.Debugf("get pyramids from target %s trigger find route", address)
+						_, _ = ci.route.FindRoute(context.Background(), address, time.Second*5)
+					}()
 					return err
 				}
 				continue
