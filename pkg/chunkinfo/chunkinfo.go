@@ -195,6 +195,7 @@ func (ci *ChunkInfo) Init(ctx context.Context, authInfo []byte, rootCid boson.Ad
 				return false, nil
 			}
 		}
+		overlays = append(overlays, overlays...) // retry 1 times
 		return ci.FindChunkInfo(context.Background(), authInfo, rootCid, overlays), nil
 	})
 	if v == nil {
