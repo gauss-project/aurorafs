@@ -155,7 +155,7 @@ func (s *Service) Start() {
 					}
 				case p2p.PeerStateDisconnect:
 					for _, g := range s.getGroupAll() {
-						g.remove(peer.Overlay, true)
+						g.remove(peer.Overlay, false)
 					}
 				}
 			case <-ticker.C:
