@@ -148,9 +148,7 @@ func (g *Group) remove(peer boson.Address, intoKnown bool) {
 	if !intoKnown {
 		g.knownPeers.Remove(peer)
 	} else {
-		if !g.knownPeers.Exists(peer) {
-			g.knownPeers.Add(peer)
-		}
+		g.knownPeers.Add(peer)
 	}
 
 	return

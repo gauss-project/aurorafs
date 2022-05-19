@@ -303,7 +303,7 @@ func (s *Service) observeGroup(gid boson.Address, option model.ConfigNodeGroup) 
 			if peer.Equal(s.self) {
 				continue
 			}
-			g.add(peer, false)
+			g.knownPeers.Add(peer)
 		}
 	}
 	go s.discover(g)
@@ -330,11 +330,11 @@ func (s *Service) joinGroup(gid boson.Address, option model.ConfigNodeGroup) err
 	} else {
 		g = s.newGroup(gid, option)
 	}
-	for _, v := range option.Nodes {
-		if v.Equal(s.self) {
+	for _, peer := range option.Nodes {
+		if peer.Equal(s.self) {
 			continue
 		}
-		g.add(v, false)
+		g.knownPeers.Add(peer)
 	}
 
 	go s.HandshakeAll()
