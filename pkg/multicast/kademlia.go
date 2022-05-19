@@ -161,9 +161,9 @@ func (s *Service) Start() {
 			case <-ticker.C:
 				s.gcGroup()
 				t := time.Now()
-				s.logger.Debugf("multicast: keep ping start")
+				s.logger.Tracef("multicast: keep ping start")
 				s.HandshakeAllKept(s.getGroupAll(), true)
-				s.logger.Debugf("multicast: keep ping done took %s", time.Since(t))
+				s.logger.Tracef("multicast: keep ping done took %s", time.Since(t))
 				s.refreshProtectPeers()
 				ticker.Reset(keepPingInterval)
 			}

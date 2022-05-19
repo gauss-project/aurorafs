@@ -3,12 +3,13 @@ package chunkinfo
 import (
 	"context"
 	"fmt"
+	"time"
+
 	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/chunkinfo/pb"
 	"github.com/gauss-project/aurorafs/pkg/p2p"
 	"github.com/gauss-project/aurorafs/pkg/p2p/protobuf"
 	"github.com/gauss-project/aurorafs/pkg/tracing"
-	"time"
 )
 
 const (
@@ -46,7 +47,7 @@ func (ci *ChunkInfo) sendDatas(ctx context.Context, address boson.Address, strea
 	if err := ci.route.Connect(ctx1, address); err != nil {
 		overlays, errs := ci.route.GetTargetNeighbor(ctx, address, totalRouteCount)
 		if errs != nil {
-			ci.logger.Errorf("[chunk info] connect: %w", errs)
+			ci.logger.Errorf("[chunk info] connect %s: %s", address, errs)
 			return errs
 		}
 		for i, overlay := range overlays {

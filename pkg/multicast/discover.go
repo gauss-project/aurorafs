@@ -47,9 +47,9 @@ func (s *Service) discover(g *Group) {
 			return "all"
 		}
 	}
-	s.logger.Debugf("multicast discover %s start", gname())
+	s.logger.Tracef("multicast discover %s start", gname())
 	t := time.Now()
-	defer s.logger.Debugf("multicast discover %s done took %s", gname(), time.Since(t))
+	defer s.logger.Tracef("multicast discover %s done took %s", gname(), time.Since(t))
 
 	doFunc := func(wg *sync.WaitGroup, v *Group) {
 		if v.connectedPeers.Length() < v.option.KeepConnectedPeers {

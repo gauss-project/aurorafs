@@ -103,7 +103,7 @@ func (s *Service) getGIDsByte() [][]byte {
 
 func (s *Service) HandshakeAll() {
 	start := time.Now()
-	s.logger.Debugf("multicast HandshakeAll start")
+	s.logger.Tracef("multicast HandshakeAll start")
 	wg := sync.WaitGroup{}
 	_ = s.kad.EachPeer(func(addr boson.Address, u uint8) (stop, jumpToNext bool, err error) {
 		wg.Add(1)
@@ -114,12 +114,12 @@ func (s *Service) HandshakeAll() {
 		return false, false, nil
 	}, topology.Filter{Reachable: false})
 	wg.Wait()
-	s.logger.Debugf("multicast HandshakeAll took %s", time.Since(start))
+	s.logger.Tracef("multicast HandshakeAll took %s", time.Since(start))
 }
 
 func (s *Service) HandshakeAllKept(gs []*Group, connected bool) {
 	start := time.Now()
-	s.logger.Debugf("multicast HandshakeAllKept start")
+	s.logger.Tracef("multicast HandshakeAllKept start")
 	skipMap := make(map[string]struct{})
 	wg := sync.WaitGroup{}
 	for _, g := range gs {
@@ -167,12 +167,12 @@ func (s *Service) HandshakeAllKept(gs []*Group, connected bool) {
 		g.pruneKnown()
 	}
 	wg.Wait()
-	s.logger.Debugf("multicast HandshakeAllKept took %s", time.Since(start))
+	s.logger.Tracef("multicast HandshakeAllKept took %s", time.Since(start))
 }
 
 func (s *Service) HandshakeAllPeers(ps *pslice.PSlice) {
 	start := time.Now()
-	s.logger.Debugf("multicast HandshakeAllKept start")
+	s.logger.Tracef("multicast HandshakeAllKept start")
 	skipMap := make(map[string]struct{})
 	wg := sync.WaitGroup{}
 	for _, v := range ps.BinPeers(0) {
@@ -187,5 +187,5 @@ func (s *Service) HandshakeAllPeers(ps *pslice.PSlice) {
 		}(v)
 	}
 	wg.Wait()
-	s.logger.Debugf("multicast HandshakeAllKept took %s", time.Since(start))
+	s.logger.Tracef("multicast HandshakeAllKept took %s", time.Since(start))
 }

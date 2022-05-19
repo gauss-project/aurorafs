@@ -483,7 +483,7 @@ func (s *Service) FindRoute(ctx context.Context, target boson.Address, timeouts 
 	if len(timeouts) > 0 {
 		timeout = timeouts[0]
 	}
-	errTimeout := fmt.Errorf("timeout %.0fs", timeout.Seconds())
+	errTimeout := fmt.Errorf("find route timeout %.0fs", timeout.Seconds())
 
 	key := "find_route_" + target.String()
 	res := make(chan *finRoutePending, 1)
@@ -492,7 +492,7 @@ func (s *Service) FindRoute(ctx context.Context, target boson.Address, timeouts 
 		s.addFindRoutePending(key, res)
 		select {
 		case <-ctx.Done():
-			err = fmt.Errorf("praent ctx %s", ctx.Err())
+			err = fmt.Errorf("find route praent ctx %s", ctx.Err())
 			s.logger.Debugf("route: FindRoute dest %s %s", target, err)
 			return nil, err
 		case i := <-res:
@@ -506,7 +506,7 @@ func (s *Service) FindRoute(ctx context.Context, target boson.Address, timeouts 
 	forward := s.getNeighbor(target, NeighborAlpha, target)
 	if len(forward) == 0 {
 		s.metrics.TotalErrors.Inc()
-		err = fmt.Errorf("neighbor notfound")
+		err = fmt.Errorf("find route neighbor notfound")
 		s.logger.Errorf("route: FindRoute target %s %s", target, err)
 		return nil, err
 	}
@@ -614,7 +614,7 @@ func (s *Service) GetTargetNeighbor(ctx context.Context, target boson.Address, l
 	for _, v := range addresses {
 		logContent += v.String() + "\n"
 	}
-	s.logger.Debugf("get dest=%s neighbor \n%s", target, logContent)
+	s.logger.Tracef("get dest=%s neighbor \n%s", target, logContent)
 	return
 }
 
@@ -672,12 +672,12 @@ func (s *Service) isConnected(_ context.Context, target boson.Address) bool {
 	}
 	_ = s.kad.EachPeer(findFun, topology.Filter{Reachable: false})
 	if isConnected {
-		s.logger.Debugf("route: connect target in neighbor")
+		s.logger.Tracef("route: connect target %s in neighbor", target)
 		return true
 	}
 	_ = s.lightNodes.EachPeer(findFun)
 	if isConnected {
-		s.logger.Debugf("route: connect target(light) in neighbor")
+		s.logger.Tracef("route: connect target(light) %s in neighbor", target)
 		return true
 	}
 	return false
