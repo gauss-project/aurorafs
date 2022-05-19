@@ -2,14 +2,16 @@ package multicast
 
 import (
 	"context"
-	"errors"
-	"io"
+	"sync"
 	"time"
 
 	"github.com/gauss-project/aurorafs/pkg/boson"
+	"github.com/gauss-project/aurorafs/pkg/multicast/model"
 	"github.com/gauss-project/aurorafs/pkg/multicast/pb"
 	"github.com/gauss-project/aurorafs/pkg/p2p"
 	"github.com/gauss-project/aurorafs/pkg/p2p/protobuf"
+	"github.com/gauss-project/aurorafs/pkg/topology"
+	"github.com/gauss-project/aurorafs/pkg/topology/pslice"
 )
 
 func (s *Service) Handshake(ctx context.Context, addr boson.Address) (err error) {
@@ -20,7 +22,7 @@ func (s *Service) Handshake(ctx context.Context, addr boson.Address) (err error)
 	var stream p2p.Stream
 	stream, err = s.getStream(ctx, addr, streamHandshake)
 	if err != nil {
-		s.logger.Tracef("group: handshake new stream %s %s", addr, err)
+		s.logger.Errorf("multicast Handshake to %s %s", addr, err)
 		return
 	}
 	defer func() {
@@ -34,38 +36,23 @@ func (s *Service) Handshake(ctx context.Context, addr boson.Address) (err error)
 
 	GIDs := s.getGIDsByte()
 
-	s.logger.Tracef("group: send handshake syn")
-
 	err = w.WriteMsgWithContext(ctx, &pb.GIDs{Gid: GIDs})
 	if err != nil {
 		s.logger.Errorf("multicast Handshake write %s", err)
 		return err
 	}
 
-	s.logger.Tracef("group: receive handshake ack")
-
 	resp := &pb.GIDs{}
 	err = r.ReadMsgWithContext(ctx, resp)
 	if err != nil {
-		if errors.Is(err, io.EOF) {
-			err = errors.New("handshake failed")
-		}
+		s.logger.Errorf("multicast Handshake read %s", err)
 		return err
 	}
 
 	s.kad.RecordPeerLatency(addr, time.Since(start))
 
-	for _, v := range resp.Gid {
-		gid := boson.NewAddress(v)
-		s.logger.Tracef("group: exchange group info: %s", gid)
-		if s.route.IsNeighbor(addr) {
-			s.connectedAddToGroup(gid, addr)
-			s.logger.Tracef("group: handshake connected %s with gid %s", addr, gid)
-		} else {
-			s.keepAddToGroup(gid, addr)
-			s.logger.Tracef("group: handshake keep %s with gid %s", addr, gid)
-		}
-	}
+	s.updatePeerGroupsJoin(addr, ConvertGIDs(resp.Gid))
+
 	return nil
 }
 
@@ -78,9 +65,8 @@ func (s *Service) HandshakeIncoming(ctx context.Context, peer p2p.Peer, stream p
 		}
 	}()
 	w, r := protobuf.NewWriterAndReader(stream)
-	resp := &pb.GIDs{}
 
-	s.logger.Tracef("group: receive handshake syn")
+	resp := &pb.GIDs{}
 
 	err = r.ReadMsgWithContext(ctx, resp)
 	if err != nil {
@@ -88,21 +74,7 @@ func (s *Service) HandshakeIncoming(ctx context.Context, peer p2p.Peer, stream p
 		return err
 	}
 
-	for _, v := range resp.Gid {
-		gid := boson.NewAddress(v)
-		s.logger.Tracef("group: exchange group info: %s", gid)
-		if s.route.IsNeighbor(peer.Address) {
-			s.connectedAddToGroup(gid, peer.Address)
-			s.logger.Tracef("HandshakeIncoming connected %s with gid %s", peer.Address, gid)
-		} else {
-			s.keepAddToGroup(gid, peer.Address)
-			s.logger.Tracef("HandshakeIncoming keep %s with gid %s", peer.Address, gid)
-		}
-	}
-
 	GIDs := s.getGIDsByte()
-
-	s.logger.Tracef("group: send back handshake ack")
 
 	err = w.WriteMsgWithContext(ctx, &pb.GIDs{Gid: GIDs})
 	if err != nil {
@@ -110,7 +82,110 @@ func (s *Service) HandshakeIncoming(ctx context.Context, peer p2p.Peer, stream p
 		return err
 	}
 
-	s.logger.Tracef("group: handshake ok")
+	s.updatePeerGroupsJoin(peer.Address, ConvertGIDs(resp.Gid))
 
 	return nil
+}
+
+func (s *Service) getGIDsByte() [][]byte {
+	GIDs := make([][]byte, 0)
+	if s.nodeMode.IsBootNode() || !s.nodeMode.IsFull() {
+		return GIDs
+	}
+	list := s.getGroupAll()
+	for _, g := range list {
+		if g.option.GType == model.GTypeJoin {
+			GIDs = append(GIDs, g.gid.Bytes())
+		}
+	}
+	return GIDs
+}
+
+func (s *Service) HandshakeAll() {
+	start := time.Now()
+	s.logger.Tracef("multicast HandshakeAll start")
+	wg := sync.WaitGroup{}
+	_ = s.kad.EachPeer(func(addr boson.Address, u uint8) (stop, jumpToNext bool, err error) {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			_ = s.Handshake(context.Background(), addr)
+		}()
+		return false, false, nil
+	}, topology.Filter{Reachable: false})
+	wg.Wait()
+	s.logger.Tracef("multicast HandshakeAll took %s", time.Since(start))
+}
+
+func (s *Service) HandshakeAllKept(gs []*Group, connected bool) {
+	start := time.Now()
+	s.logger.Tracef("multicast HandshakeAllKept start")
+	skipMap := make(map[string]struct{})
+	wg := sync.WaitGroup{}
+	for _, g := range gs {
+		if connected {
+			for _, v := range g.connectedPeers.BinPeers(0) {
+				if _, ok := skipMap[v.ByteString()]; ok {
+					continue
+				}
+				skipMap[v.ByteString()] = struct{}{}
+				wg.Add(1)
+				go func(addr boson.Address) {
+					defer wg.Done()
+					err := s.Handshake(context.Background(), addr)
+					if err != nil {
+						g.remove(addr, true)
+					}
+				}(v)
+			}
+		}
+		for _, v := range g.keepPeers.BinPeers(0) {
+			if _, ok := skipMap[v.ByteString()]; ok {
+				continue
+			}
+			skipMap[v.ByteString()] = struct{}{}
+			wg.Add(1)
+			go func(addr boson.Address) {
+				defer wg.Done()
+				err := s.Handshake(context.Background(), addr)
+				if err != nil {
+					g.remove(addr, true)
+				}
+			}(v)
+		}
+		for _, v := range g.knownPeers.BinPeers(0) {
+			if _, ok := skipMap[v.ByteString()]; ok {
+				continue
+			}
+			skipMap[v.ByteString()] = struct{}{}
+			wg.Add(1)
+			go func(addr boson.Address) {
+				defer wg.Done()
+				_ = s.Handshake(context.Background(), addr)
+			}(v)
+		}
+		g.pruneKnown()
+	}
+	wg.Wait()
+	s.logger.Tracef("multicast HandshakeAllKept took %s", time.Since(start))
+}
+
+func (s *Service) HandshakeAllPeers(ps *pslice.PSlice) {
+	start := time.Now()
+	s.logger.Tracef("multicast HandshakeAllKept start")
+	skipMap := make(map[string]struct{})
+	wg := sync.WaitGroup{}
+	for _, v := range ps.BinPeers(0) {
+		if _, ok := skipMap[v.ByteString()]; ok {
+			continue
+		}
+		skipMap[v.ByteString()] = struct{}{}
+		wg.Add(1)
+		go func(addr boson.Address) {
+			defer wg.Done()
+			_ = s.Handshake(context.Background(), addr)
+		}(v)
+	}
+	wg.Wait()
+	s.logger.Tracef("multicast HandshakeAllKept took %s", time.Since(start))
 }

@@ -16,6 +16,14 @@ var (
 	cache    = gcache.New()
 )
 
+func ConvertGIDs(GIDs [][]byte) []boson.Address {
+	var gid []boson.Address
+	for _, v := range GIDs {
+		gid = append(gid, boson.NewAddress(v))
+	}
+	return gid
+}
+
 func GenerateGID(name string) boson.Address {
 	b := sha256.Sum256([]byte(name))
 	return boson.NewAddress(b[:])

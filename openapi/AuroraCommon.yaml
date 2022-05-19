@@ -1,6 +1,6 @@
 openapi: 3.0.3
 info:
-  version: 1.3.4
+  version: 1.3.5
   title: Common Data Types
   description: |
 
@@ -96,33 +96,19 @@ components:
                   type: array
                 knowPeers:
                   type: array
-        connectedInfo:
-          type: array
-          items:
-            - properties:
-                gid:
-                  type: string
-                connected:
-                  type: integer
-                connectedPeers:
-                  type: array
-                  items:
-                    - properties:
-                        address:
-                          type: string
-                        metrics:
-                          type: object
-                          properties:
-                            lastSeenTimestamp:
-                              type: integer
-                            sessionConnectionRetry:
-                              type: integer
-                            connectionTotalDuration:
-                              type: integer
-                            sessionConnectionDuration:
-                              type: integer
-                            sessionConnectionDirection:
-                              type: string
+                connectedInfo:
+                  type: object
+                  properties:
+                      connected:
+                        type: integer
+                      connectedPeers:
+                        type: array
+                        items:
+                          - properties:
+                              address:
+                                $ref: "#/components/schemas/BosonAddress"
+                              metrics:
+                                $ref: "#/components/schemas/PeerMetricsView"
 
     Topology:
       type: object

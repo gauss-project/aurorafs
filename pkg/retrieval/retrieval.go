@@ -127,9 +127,14 @@ func (s *Service) RetrieveChunk(ctx context.Context, rootAddr, chunkAddr boson.A
 			return nil, fmt.Errorf("no route available")
 		}
 
+		var target = boson.ZeroAddress
+
 		for requestAttempt < maxRequestAttempt {
 			requestAttempt++
 			for _, retrievalRoute := range routeList {
+				if target.IsZero() {
+					target = retrievalRoute.TargetNode
+				}
 				s.metrics.PeerRequestCounter.Inc()
 
 				go func() {
@@ -159,6 +164,12 @@ func (s *Service) RetrieveChunk(ctx context.Context, rootAddr, chunkAddr boson.A
 					s.logger.Tracef("retrieval: failed to get chunk: ctx.Done() (%s:%s): %v", rootAddr, chunkAddr, ctx.Err())
 					return nil, fmt.Errorf("retrieval: %w", ctx.Err())
 				}
+			}
+			if !target.IsZero() {
+				go func() {
+					s.logger.Debugf("RetrieveChunk target %s trigger find route", target)
+					_, _ = s.routeTab.FindRoute(context.Background(), target, time.Second*5)
+				}()
 			}
 		}
 
@@ -243,12 +254,6 @@ func (s *Service) retrieveChunk(ctx context.Context, route aco.Route, rootAddr, 
 		dataSize = 0
 	)
 	defer func() {
-		if err != nil && (ctx.Err() == nil || !errors.Is(ctx.Err(), context.Canceled)) {
-			go func() {
-				s.logger.Tracef("retrieveChunk trigger find route")
-				_, _ = s.routeTab.FindRoute(context.Background(), route.TargetNode, time.Second*5)
-			}()
-		}
 		if err == nil || (err != nil && (ctx.Err() == nil || !errors.Is(ctx.Err(), context.Canceled))) {
 			endMs = time.Now().UnixNano() / 1e6
 			s.logger.Tracef("link : %s  , from  %d  to %d, chunk size: %d ", route.ToString(), startMs, endMs, dataSize)
@@ -265,7 +270,7 @@ func (s *Service) retrieveChunk(ctx context.Context, route aco.Route, rootAddr, 
 	defer s.acoServer.OnDownloadEnd(route)
 
 	if err = s.routeTab.Connect(ctx, route.LinkNode); err != nil {
-		s.logger.Errorf("connect failed, peer: %v  err: %s", route.LinkNode.String(), err)
+		s.logger.Errorf("retrieve: connect failed, peer: %v  err: %s", route.LinkNode.String(), err)
 		return nil, fmt.Errorf("connect failed, peer: %v", route.LinkNode.String())
 	}
 

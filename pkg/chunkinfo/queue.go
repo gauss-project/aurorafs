@@ -3,8 +3,9 @@ package chunkinfo
 import (
 	"bytes"
 	"context"
-	"github.com/gauss-project/aurorafs/pkg/boson"
 	"sync"
+
+	"github.com/gauss-project/aurorafs/pkg/boson"
 )
 
 type Pull = uint32
@@ -48,12 +49,12 @@ func (q *queue) len(pull Pull) int {
 }
 
 // peek
-//func (q *queue) peek(pull Pull) *[]byte {
+// func (q *queue) peek(pull Pull) *[]byte {
 //	q.RLock()
 //	defer q.RLock()
 //	qu := q.getPull(pull)
 //	return qu[0]
-//}
+// }
 
 // pop
 func (q *queue) pop(pull Pull) *[]byte {
@@ -166,7 +167,7 @@ func (ci *ChunkInfo) queueProcess(ctx context.Context, rootCid boson.Address) {
 		go func() {
 			err := ci.sendDatas(ctx, overlay, streamChunkInfoReqName, ciReq)
 			if err != nil {
-				ci.logger.Errorf("[chunk info] send error :%v", err)
+				ci.logger.Errorf("[chunk info] send to %s error :%v", overlay, err)
 			}
 		}()
 	}

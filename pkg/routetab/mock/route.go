@@ -3,10 +3,11 @@ package mock
 import (
 	"context"
 	"fmt"
+	"time"
+
 	"github.com/gauss-project/aurorafs/pkg/aurora"
 	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/routetab"
-	"time"
 )
 
 type MockRouteTable struct {
@@ -44,6 +45,6 @@ func (r *MockRouteTable) DelRoute(ctx context.Context, dest boson.Address) (err 
 	return nil
 }
 
-func (r *MockRouteTable) FindUnderlay(ctx context.Context, target boson.Address) (addr *aurora.Address, err error) {
+func (r *MockRouteTable) FindUnderlay(ctx context.Context, target boson.Address, timeouts ...time.Duration) (addr *aurora.Address, err error) {
 	return nil, err
 }

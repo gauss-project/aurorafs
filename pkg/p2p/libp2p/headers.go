@@ -11,7 +11,7 @@ import (
 	"github.com/gauss-project/aurorafs/pkg/p2p/protobuf"
 )
 
-var sendHeadersTimeout = 2 * time.Second
+var sendHeadersTimeout = 3 * time.Second
 
 func sendHeaders(ctx context.Context, headers p2p.Headers, stream *stream) error {
 	w, r := protobuf.NewWriterAndReader(stream)

@@ -48,18 +48,25 @@ const (
 )
 
 type Service struct {
-	self         boson.Address
-	p2ps         p2p.Service
-	stream       p2p.Streamer
-	logger       logging.Logger
-	metrics      metrics
-	pendingCalls *pendCallResTab
-	routeTable   *Table
-	kad          *kademlia.Kad
-	lightNodes   *lightnode.Container
-	singleflight singleflight.Group
-	networkID    uint64
-	addressbook  addressbook.Interface
+	self          boson.Address
+	p2ps          p2p.Service
+	stream        p2p.Streamer
+	logger        logging.Logger
+	metrics       metrics
+	pendingCalls  *pendCallResTab
+	routeTable    *Table
+	kad           *kademlia.Kad
+	lightNodes    *lightnode.Container
+	singleflight  singleflight.Group
+	networkID     uint64
+	addressbook   addressbook.Interface
+	findRouteCall map[string][]chan *finRoutePending
+	findRouteMix  sync.Mutex
+}
+
+type finRoutePending struct {
+	err error
+	res []*Path
 }
 
 type Options struct {
@@ -82,17 +89,18 @@ func New(self boson.Address,
 	met := newMetrics()
 
 	service := &Service{
-		self:         self,
-		p2ps:         p2ps,
-		stream:       stream,
-		logger:       logger,
-		addressbook:  addressbook,
-		networkID:    networkID,
-		lightNodes:   lightNodes,
-		kad:          kad,
-		pendingCalls: newPendCallResTab(),
-		routeTable:   newRouteTable(self, store),
-		metrics:      met,
+		self:          self,
+		p2ps:          p2ps,
+		stream:        stream,
+		logger:        logger,
+		addressbook:   addressbook,
+		networkID:     networkID,
+		lightNodes:    lightNodes,
+		kad:           kad,
+		pendingCalls:  newPendCallResTab(),
+		routeTable:    newRouteTable(self, store),
+		metrics:       met,
+		findRouteCall: make(map[string][]chan *finRoutePending),
 	}
 
 	if o.Alpha > 0 {
@@ -251,10 +259,7 @@ func (s *Service) onRouteReq(ctx context.Context, p p2p.Peer, stream p2p.Stream)
 			case uTypeTarget:
 				addr, _ := s.addressbook.Get(target)
 				if addr == nil {
-					_, err = s.FindUnderlay(ctx, target)
-					if err != nil {
-						goto FORWARD
-					}
+					goto FORWARD
 				}
 			case uTypeZero:
 			}
@@ -432,68 +437,138 @@ func (s *Service) getNeighbor(target boson.Address, alpha int32, skip ...boson.A
 			return false, false, nil
 		})
 	}
-	forward = s.kad.GetPeersWithLatencyEWMA(now)
-	if len(forward) > int(alpha) {
-		return forward[:int(alpha)]
+	var direct, notDirect []boson.Address
+	for _, v := range now {
+		ss := s.kad.SnapshotAddr(v)
+		if ss != nil {
+			if ss.Reachability == p2p.ReachabilityStatusPublic {
+				direct = append(direct, v)
+			} else {
+				notDirect = append(notDirect, v)
+			}
+		}
 	}
+	if len(direct) >= int(alpha) {
+		forward, _ = s.kad.RandomSubset(direct, int(alpha))
+		return
+	}
+	forward = append(forward, direct...)
+
+	s.logger.Debugf("target %s getNeighbor limit %d direct %d notDirect %d", target, alpha, len(direct), len(notDirect))
+
+	n := int(alpha) - len(direct)
+	if len(notDirect) > n {
+		list, _ := s.kad.RandomSubset(notDirect, n)
+		forward = append(forward, list...)
+		return
+	}
+	forward = append(forward, notDirect...)
 	return
 }
 
 func (s *Service) IsNeighbor(dest boson.Address) (has bool) {
-	err := s.kad.EachPeer(func(address boson.Address, u uint8) (stop, jumpToNext bool, err error) {
-		if dest.Equal(address) {
-			has = true
-			return
-		}
-		return false, false, nil
-	}, topology.Filter{Reachable: false})
-	if err != nil {
-		s.logger.Warningf("route: isNeighbor %s", err.Error())
-	}
-	return
+	return s.kad.ConnectedPeers().Exists(dest)
 }
 
 func (s *Service) GetRoute(_ context.Context, dest boson.Address) ([]*Path, error) {
 	return s.routeTable.Get(dest)
 }
 
-func (s *Service) FindRoute(ctx context.Context, target boson.Address, timeout ...time.Duration) (paths []*Path, err error) {
+func (s *Service) FindRoute(ctx context.Context, target boson.Address, timeouts ...time.Duration) (paths []*Path, err error) {
 	if s.self.Equal(target) {
 		err = fmt.Errorf("target=%s is self", target.String())
 		return
 	}
-	forward := s.getNeighbor(target, NeighborAlpha, target)
-	if len(forward) > 0 {
-		if len(timeout) > 0 {
-			findTimeOut = timeout[0]
-		}
-		ct, cancel := context.WithTimeout(ctx, findTimeOut)
-		defer cancel()
-		resCh := make(chan struct{}, len(forward))
-		s.doRouteReq(ct, forward, s.self, target, nil, resCh)
-		remove := func() {
-			for _, v := range forward {
-				s.pendingCalls.Delete(target, v)
-			}
-		}
-		select {
-		case <-ct.Done():
-			remove()
-			err = fmt.Errorf("route: FindRoute dest %s timeout %.0fs", target.String(), findTimeOut.Seconds())
-			s.logger.Debugf(err.Error())
-		case <-ctx.Done():
-			remove()
-			err = fmt.Errorf("route: FindRoute dest %s praent ctx.Done %s", target.String(), ctx.Err())
-			s.logger.Debugf(err.Error())
-		case <-resCh:
-			paths, err = s.GetRoute(ctx, target)
-		}
-		return
+	var timeout = findTimeOut
+	if len(timeouts) > 0 {
+		timeout = timeouts[0]
 	}
-	s.metrics.TotalErrors.Inc()
-	s.logger.Errorf("route: FindRoute target=%s , neighbor notfound", target.String())
-	err = fmt.Errorf("neighbor notfound")
-	return
+	errTimeout := fmt.Errorf("find route timeout %.0fs", timeout.Seconds())
+
+	key := "find_route_" + target.String()
+	res := make(chan *finRoutePending, 1)
+	has, _ := cache.Contains(cacheCtx, key)
+	if has {
+		s.addFindRoutePending(key, res)
+		select {
+		case <-ctx.Done():
+			err = fmt.Errorf("find route praent ctx %s", ctx.Err())
+			s.logger.Debugf("route: FindRoute dest %s %s", target, err)
+			return nil, err
+		case i := <-res:
+			return i.res, i.err
+		case <-time.After(timeout):
+			s.logger.Debugf("route: FindRoute target %s %s", target, errTimeout)
+			return nil, errTimeout
+		}
+	}
+
+	forward := s.getNeighbor(target, NeighborAlpha, target)
+	if len(forward) == 0 {
+		s.metrics.TotalErrors.Inc()
+		err = fmt.Errorf("find route neighbor notfound")
+		s.logger.Errorf("route: FindRoute target %s %s", target, err)
+		return nil, err
+	}
+
+	_ = cache.Set(cacheCtx, key, 1, timeout)
+
+	ct, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+	resCh := make(chan struct{}, len(forward))
+	s.doRouteReq(ct, forward, s.self, target, nil, resCh)
+	remove := func() {
+		for _, v := range forward {
+			s.pendingCalls.Delete(target, v)
+		}
+	}
+	select {
+	case <-ct.Done():
+		remove()
+		err = errTimeout
+		s.logger.Debugf("route: FindRoute target %s %s", target, errTimeout)
+	case <-ctx.Done():
+		remove()
+		err = fmt.Errorf("praent ctx %s", ctx.Err())
+		s.logger.Debugf("route: FindRoute dest %s %s", target, err)
+	case <-resCh:
+		paths, err = s.GetRoute(ctx, target)
+	}
+
+	_, _ = cache.Remove(cacheCtx, key)
+
+	out := &finRoutePending{
+		err: err,
+		res: paths,
+	}
+	go s.returnFindRoutePending(key, out)
+	return paths, err
+}
+
+func (s *Service) addFindRoutePending(key string, res chan *finRoutePending) {
+	s.findRouteMix.Lock()
+	defer s.findRouteMix.Unlock()
+
+	resChs, ok := s.findRouteCall[key]
+	if ok {
+		s.findRouteCall[key] = append(resChs, res)
+	} else {
+		s.findRouteCall[key] = []chan *finRoutePending{res}
+	}
+}
+
+func (s *Service) returnFindRoutePending(key string, res *finRoutePending) {
+	s.findRouteMix.Lock()
+	chs := s.findRouteCall[key]
+	delete(s.findRouteCall, key)
+	s.findRouteMix.Unlock()
+
+	for _, v := range chs {
+		select {
+		case v <- res:
+		default:
+		}
+	}
 }
 
 func (s *Service) DelRoute(_ context.Context, target boson.Address) error {
@@ -535,9 +610,11 @@ func (s *Service) GetTargetNeighbor(ctx context.Context, target boson.Address, l
 	if list != nil {
 		addresses = list.([]boson.Address)
 	}
+	var logContent string
 	for _, v := range addresses {
-		s.logger.Debugf("get dest=%s neighbor %v", target, v.String())
+		logContent += v.String() + "\n"
 	}
+	s.logger.Tracef("get dest=%s neighbor \n%s", target, logContent)
 	return
 }
 
@@ -595,12 +672,12 @@ func (s *Service) isConnected(_ context.Context, target boson.Address) bool {
 	}
 	_ = s.kad.EachPeer(findFun, topology.Filter{Reachable: false})
 	if isConnected {
-		s.logger.Debugf("route: connect target in neighbor")
+		s.logger.Tracef("route: connect target %s in neighbor", target)
 		return true
 	}
 	_ = s.lightNodes.EachPeer(findFun)
 	if isConnected {
-		s.logger.Debugf("route: connect target(light) in neighbor")
+		s.logger.Tracef("route: connect target(light) %s in neighbor", target)
 		return true
 	}
 	return false
@@ -625,17 +702,27 @@ func (s *Service) getOrFindRoute(ctx context.Context, target boson.Address) (pat
 	return
 }
 
-func (s *Service) FindUnderlay(ctx context.Context, target boson.Address) (addr *aurora.Address, err error) {
+func (s *Service) FindUnderlay(ctx context.Context, target boson.Address, timeouts ...time.Duration) (addr *aurora.Address, err error) {
 	stream, err := s.stream.NewRelayStream(ctx, target, nil, ProtocolName, ProtocolVersion, streamOnFindUnderlay, true)
 	if err != nil {
 		return nil, err
 	}
+	var timeout time.Duration
+	if len(timeouts) > 0 {
+		timeout = timeouts[0]
+	} else {
+		timeout = time.Second * 3
+	}
+	ctx, cancel := context.WithTimeout(ctx, timeout)
 
+	start := time.Now()
 	defer func() {
+		cancel()
 		if err != nil {
 			_ = stream.Reset()
 		} else {
-			go stream.FullClose()
+			s.logger.Infof("find underlay dest %s successful %s", target.String(), time.Since(start))
+			_ = stream.Close()
 		}
 	}()
 

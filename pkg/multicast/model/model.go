@@ -14,25 +14,26 @@ type MetricSnapshotView struct {
 	ConnectionTotalDuration    float64 `json:"connectionTotalDuration"`
 	SessionConnectionDuration  float64 `json:"sessionConnectionDuration"`
 	SessionConnectionDirection string  `json:"sessionConnectionDirection"`
+	LatencyEWMA                int64   `json:"latencyEWMA"`
+	Reachability               string  `json:"reachability"`
 }
 
 type ConnectedInfo struct {
-	GroupID        boson.Address  `json:"gid"`
 	Connected      int            `json:"connected"`
 	ConnectedPeers []*md.PeerInfo `json:"connectedPeers"`
 }
 
 type GroupInfo struct {
-	GroupID   boson.Address   `json:"gid"`
-	Option    ConfigNodeGroup `json:"option"`
-	KeepPeers []boson.Address `json:"keepPeers"`
-	KnowPeers []boson.Address `json:"knowPeers"`
+	GroupID       boson.Address   `json:"gid"`
+	Option        ConfigNodeGroup `json:"option"`
+	KeepPeers     []boson.Address `json:"keepPeers"`
+	KnowPeers     []boson.Address `json:"knowPeers"`
+	ConnectedInfo *ConnectedInfo  `json:"connectedInfo"` // connected info
 }
 type KadParams struct {
-	Connected     int              `json:"connected"`     // connected count
-	Timestamp     time.Time        `json:"timestamp"`     // now
-	Groups        []*GroupInfo     `json:"groups"`        // known
-	ConnectedInfo []*ConnectedInfo `json:"connectedInfo"` // connected info
+	Connected int          `json:"connected"` // connected count
+	Timestamp time.Time    `json:"timestamp"` // now
+	Groups    []*GroupInfo `json:"groups"`    // known
 }
 
 type ConfigNetDomain struct {
@@ -41,7 +42,7 @@ type ConfigNetDomain struct {
 }
 type ConfigNodeGroup struct {
 	Name               string            `json:"name"`
-	GType              GType             `json:"type,omitempty"` // 0 join 1 observe
+	GType              GType             `json:"type"` // 0 join 1 observe
 	KeepConnectedPeers int               `json:"keep-connected-peers"`
 	KeepPingPeers      int               `json:"keep-ping-peers"`
 	Nodes              []boson.Address   `json:"nodes,omitempty"`
@@ -54,4 +55,5 @@ type GType int
 const (
 	GTypeJoin GType = iota
 	GTypeObserve
+	GTypeKnown
 )
