@@ -7,6 +7,13 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/routetab/pb"
+	"github.com/gogf/gf/v2/os/gcache"
+	"github.com/gogf/gf/v2/os/gctx"
+)
+
+var (
+	cacheCtx = gctx.New()
+	cache    = gcache.New()
 )
 
 func inPath(b []byte, path [][]byte) bool {

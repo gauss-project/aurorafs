@@ -48,18 +48,25 @@ const (
 )
 
 type Service struct {
-	self         boson.Address
-	p2ps         p2p.Service
-	stream       p2p.Streamer
-	logger       logging.Logger
-	metrics      metrics
-	pendingCalls *pendCallResTab
-	routeTable   *Table
-	kad          *kademlia.Kad
-	lightNodes   *lightnode.Container
-	singleflight singleflight.Group
-	networkID    uint64
-	addressbook  addressbook.Interface
+	self          boson.Address
+	p2ps          p2p.Service
+	stream        p2p.Streamer
+	logger        logging.Logger
+	metrics       metrics
+	pendingCalls  *pendCallResTab
+	routeTable    *Table
+	kad           *kademlia.Kad
+	lightNodes    *lightnode.Container
+	singleflight  singleflight.Group
+	networkID     uint64
+	addressbook   addressbook.Interface
+	findRouteCall map[string][]chan *finRoutePending
+	findRouteMix  sync.Mutex
+}
+
+type finRoutePending struct {
+	err error
+	res []*Path
 }
 
 type Options struct {
@@ -82,17 +89,18 @@ func New(self boson.Address,
 	met := newMetrics()
 
 	service := &Service{
-		self:         self,
-		p2ps:         p2ps,
-		stream:       stream,
-		logger:       logger,
-		addressbook:  addressbook,
-		networkID:    networkID,
-		lightNodes:   lightNodes,
-		kad:          kad,
-		pendingCalls: newPendCallResTab(),
-		routeTable:   newRouteTable(self, store),
-		metrics:      met,
+		self:          self,
+		p2ps:          p2ps,
+		stream:        stream,
+		logger:        logger,
+		addressbook:   addressbook,
+		networkID:     networkID,
+		lightNodes:    lightNodes,
+		kad:           kad,
+		pendingCalls:  newPendCallResTab(),
+		routeTable:    newRouteTable(self, store),
+		metrics:       met,
+		findRouteCall: make(map[string][]chan *finRoutePending),
 	}
 
 	if o.Alpha > 0 {
@@ -466,43 +474,101 @@ func (s *Service) GetRoute(_ context.Context, dest boson.Address) ([]*Path, erro
 	return s.routeTable.Get(dest)
 }
 
-func (s *Service) FindRoute(ctx context.Context, target boson.Address, timeout ...time.Duration) (paths []*Path, err error) {
+func (s *Service) FindRoute(ctx context.Context, target boson.Address, timeouts ...time.Duration) (paths []*Path, err error) {
 	if s.self.Equal(target) {
 		err = fmt.Errorf("target=%s is self", target.String())
 		return
 	}
-	forward := s.getNeighbor(target, NeighborAlpha, target)
-	if len(forward) > 0 {
-		if len(timeout) > 0 {
-			findTimeOut = timeout[0]
-		}
-		ct, cancel := context.WithTimeout(ctx, findTimeOut)
-		defer cancel()
-		resCh := make(chan struct{}, len(forward))
-		s.doRouteReq(ct, forward, s.self, target, nil, resCh)
-		remove := func() {
-			for _, v := range forward {
-				s.pendingCalls.Delete(target, v)
-			}
-		}
-		select {
-		case <-ct.Done():
-			remove()
-			err = fmt.Errorf("route: FindRoute dest %s timeout %.0fs", target.String(), findTimeOut.Seconds())
-			s.logger.Debugf(err.Error())
-		case <-ctx.Done():
-			remove()
-			err = fmt.Errorf("route: FindRoute dest %s praent ctx.Done %s", target.String(), ctx.Err())
-			s.logger.Debugf(err.Error())
-		case <-resCh:
-			paths, err = s.GetRoute(ctx, target)
-		}
-		return
+	var timeout = findTimeOut
+	if len(timeouts) > 0 {
+		timeout = timeouts[0]
 	}
-	s.metrics.TotalErrors.Inc()
-	s.logger.Errorf("route: FindRoute target=%s , neighbor notfound", target.String())
-	err = fmt.Errorf("neighbor notfound")
-	return
+	errTimeout := fmt.Errorf("timeout %.0fs", timeout.Seconds())
+
+	key := "find_route_" + target.String()
+	res := make(chan *finRoutePending, 1)
+	has, _ := cache.Contains(cacheCtx, key)
+	if has {
+		s.addFindRoutePending(key, res)
+		select {
+		case <-ctx.Done():
+			err = fmt.Errorf("praent ctx %s", ctx.Err())
+			s.logger.Debugf("route: FindRoute dest %s %s", target, err)
+			return nil, err
+		case i := <-res:
+			return i.res, i.err
+		case <-time.After(timeout):
+			s.logger.Debugf("route: FindRoute target %s %s", target, errTimeout)
+			return nil, errTimeout
+		}
+	}
+
+	forward := s.getNeighbor(target, NeighborAlpha, target)
+	if len(forward) == 0 {
+		s.metrics.TotalErrors.Inc()
+		err = fmt.Errorf("neighbor notfound")
+		s.logger.Errorf("route: FindRoute target %s %s", target, err)
+		return nil, err
+	}
+
+	_ = cache.Set(cacheCtx, key, 1, timeout)
+
+	ct, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+	resCh := make(chan struct{}, len(forward))
+	s.doRouteReq(ct, forward, s.self, target, nil, resCh)
+	remove := func() {
+		for _, v := range forward {
+			s.pendingCalls.Delete(target, v)
+		}
+	}
+	select {
+	case <-ct.Done():
+		remove()
+		err = errTimeout
+		s.logger.Debugf("route: FindRoute target %s %s", target, errTimeout)
+	case <-ctx.Done():
+		remove()
+		err = fmt.Errorf("praent ctx %s", ctx.Err())
+		s.logger.Debugf("route: FindRoute dest %s %s", target, err)
+	case <-resCh:
+		paths, err = s.GetRoute(ctx, target)
+	}
+
+	_, _ = cache.Remove(cacheCtx, key)
+
+	out := &finRoutePending{
+		err: err,
+		res: paths,
+	}
+	go s.returnFindRoutePending(key, out)
+	return paths, err
+}
+
+func (s *Service) addFindRoutePending(key string, res chan *finRoutePending) {
+	s.findRouteMix.Lock()
+	defer s.findRouteMix.Unlock()
+
+	resChs, ok := s.findRouteCall[key]
+	if ok {
+		s.findRouteCall[key] = append(resChs, res)
+	} else {
+		s.findRouteCall[key] = []chan *finRoutePending{res}
+	}
+}
+
+func (s *Service) returnFindRoutePending(key string, res *finRoutePending) {
+	s.findRouteMix.Lock()
+	chs := s.findRouteCall[key]
+	delete(s.findRouteCall, key)
+	s.findRouteMix.Unlock()
+
+	for _, v := range chs {
+		select {
+		case v <- res:
+		default:
+		}
+	}
 }
 
 func (s *Service) DelRoute(_ context.Context, target boson.Address) error {
