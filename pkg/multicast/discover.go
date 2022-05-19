@@ -328,18 +328,20 @@ func (s *Service) onFindGroup(ctx context.Context, peer p2p.Peer, stream p2p.Str
 	gid := boson.NewAddress(req.Gid)
 	g := s.getGroup(gid)
 
-	// connected
-	if g.connectedPeers.Length() > 0 {
-		_ = g.connectedPeers.EachBin(peerFunc)
-		if len(resp.Addresses) >= int(req.Limit) {
+	if g != nil {
+		// connected
+		if g.connectedPeers.Length() > 0 {
+			_ = g.connectedPeers.EachBin(peerFunc)
+			if len(resp.Addresses) >= int(req.Limit) {
+				return returnResp()
+			}
+		}
+
+		// keep
+		_ = g.keepPeers.EachBin(peerFunc)
+		if len(resp.Addresses) > 0 {
 			return returnResp()
 		}
-	}
-
-	// keep
-	_ = g.keepPeers.EachBin(peerFunc)
-	if len(resp.Addresses) > 0 {
-		return returnResp()
 	}
 
 	if req.Ttl >= maxTTL {
