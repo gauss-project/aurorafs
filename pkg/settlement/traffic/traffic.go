@@ -320,13 +320,28 @@ func (s *Service) trafficPeerChainUpdate(peerAddress, chainAddress common.Addres
 	defer traffic.Unlock()
 	transferTotal, err := s.trafficChainService.TransAmount(peerAddress, chainAddress)
 	if err != nil {
-		return err
+		transferTotal, err = s.chequeStore.GetChainTransferTraffic(peerAddress)
+		if err != nil {
+			return err
+		}
+	} else {
+		err = s.chequeStore.PutChainTransferTraffic(peerAddress, transferTotal)
+		if err != nil {
+			return err
+		}
 	}
 	retrievedTotal, err := s.trafficChainService.TransAmount(chainAddress, peerAddress)
 	if err != nil {
-		return err
+		retrievedTotal, err = s.chequeStore.GetChainRetrieveTraffic(peerAddress)
+		if err != nil {
+			return err
+		}
+	} else {
+		err = s.chequeStore.PutChainRetrieveTraffic(peerAddress, retrievedTotal)
+		if err != nil {
+			return err
+		}
 	}
-
 	traffic.retrieveChainTraffic = retrievedTotal
 	traffic.transferChainTraffic = transferTotal
 	return nil
@@ -807,7 +822,15 @@ func (s *Service) cashChequeReceiptUpdate() {
 				continue
 			}
 			if status == 1 {
-				err := cashUpdate(cashInfo.chainAddress, cashInfo.peer)
+				err := s.chequeStore.PutChainRetrieveTraffic(cashInfo.chainAddress, traffic.retrieveChequeTraffic)
+				if err != nil {
+					s.logger.Errorf("traffic:chainRetrieveTrafficUpdate - %v ", err.Error())
+				}
+				err = s.chequeStore.PutChainTransferTraffic(cashInfo.chainAddress, traffic.transferChequeTraffic)
+				if err != nil {
+					s.logger.Errorf("traffic:chainTransferTrafficUpdate - %v ", err.Error())
+				}
+				err = cashUpdate(cashInfo.chainAddress, cashInfo.peer)
 				if err != nil {
 					s.logger.Errorf("traffic:cashChequeReceiptUpdate - %v ", err.Error())
 				}

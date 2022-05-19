@@ -23,12 +23,14 @@ var (
 	// ErrWrongBeneficiary is the error returned if the cheque has the wrong beneficiary.
 	ErrWrongBeneficiary = errors.New("wrong beneficiary")
 	// ErrBouncingCheque is the error returned if the chainAddress is demonstrably illiquid.
-	ErrBouncingCheque        = errors.New("bouncing cheque")
-	ErrCashOut               = errors.New("cashout not completing")
-	lastReceivedChequePrefix = "traffic_last_received_cheque_"
-	lastSendChequePrefix     = "traffic_last_send_cheque_"
-	retrievedTrafficPrefix   = "retrieved_traffic_"
-	transferredTrafficPrefix = "transferred_traffic_"
+	ErrBouncingCheque             = errors.New("bouncing cheque")
+	ErrCashOut                    = errors.New("cashout not completing")
+	lastReceivedChequePrefix      = "traffic_last_received_cheque_"
+	lastSendChequePrefix          = "traffic_last_send_cheque_"
+	retrievedTrafficPrefix        = "retrieved_traffic_"
+	transferredTrafficPrefix      = "transferred_traffic_"
+	chainRetrievedTrafficPrefix   = "chain_retrieved_traffic_"
+	chainTransferredTrafficPrefix = "chain_transferred_traffic_"
 )
 
 // ChequeStore handles the verification and storage of received cheques
@@ -57,6 +59,14 @@ type ChequeStore interface {
 	PutReceivedCheques(chainAddress common.Address, cheque SignedCheque) error
 
 	VerifyCheque(cheque *SignedCheque, chaindID int64) (common.Address, error)
+
+	PutChainRetrieveTraffic(chainAddress common.Address, traffic *big.Int) error
+
+	PutChainTransferTraffic(chainAddress common.Address, traffic *big.Int) error
+
+	GetChainRetrieveTraffic(chainAddress common.Address) (traffic *big.Int, err error)
+
+	GetChainTransferTraffic(chainAddress common.Address) (traffic *big.Int, err error)
 }
 
 type chequeStore struct {
@@ -98,6 +108,14 @@ func retrievedTraffic(chainAddress common.Address) string {
 
 func transferredTraffic(chainAddress common.Address) string {
 	return fmt.Sprintf("%s_%x", transferredTrafficPrefix, chainAddress)
+}
+
+func chainRetrievedTraffic(chainAddress common.Address) string {
+	return fmt.Sprintf("%s_%x", chainRetrievedTrafficPrefix, chainAddress)
+}
+
+func chainTransferredTraffic(chainAddress common.Address) string {
+	return fmt.Sprintf("%s_%x", chainTransferredTrafficPrefix, chainAddress)
 }
 
 // LastReceivedCheque returns the last cheque we received from a specific chainAddress.
@@ -332,4 +350,36 @@ func (s *chequeStore) RecoverCheque(cheque *SignedCheque, chainID int64) (common
 
 func (s *chequeStore) VerifyCheque(cheque *SignedCheque, chaindID int64) (common.Address, error) {
 	return s.recoverChequeFunc(cheque, chaindID)
+}
+
+func (s *chequeStore) PutChainRetrieveTraffic(chainAddress common.Address, traffic *big.Int) error {
+	return s.store.Put(chainRetrievedTraffic(chainAddress), traffic)
+}
+
+func (s *chequeStore) PutChainTransferTraffic(chainAddress common.Address, traffic *big.Int) error {
+	return s.store.Put(chainTransferredTraffic(chainAddress), traffic)
+}
+
+func (s *chequeStore) GetChainRetrieveTraffic(chainAddress common.Address) (traffic *big.Int, err error) {
+	err = s.store.Get(chainRetrievedTraffic(chainAddress), &traffic)
+	if err != nil {
+		if err != storage.ErrNotFound {
+			return big.NewInt(0), err
+		}
+		return big.NewInt(0), nil
+	}
+
+	return traffic, nil
+}
+
+func (s *chequeStore) GetChainTransferTraffic(chainAddress common.Address) (traffic *big.Int, err error) {
+	err = s.store.Get(chainTransferredTraffic(chainAddress), &traffic)
+	if err != nil {
+		if err != storage.ErrNotFound {
+			return big.NewInt(0), err
+		}
+		return big.NewInt(0), nil
+	}
+
+	return traffic, nil
 }
