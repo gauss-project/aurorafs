@@ -78,17 +78,17 @@ func (s *Service) discover(g *Group) {
 	wg.Wait()
 }
 
-func (s *Service) doFindGroup(wg *sync.WaitGroup, group *Group) {
+func (s *Service) doFindGroup(wg *sync.WaitGroup, g *Group) {
 	defer wg.Done()
 	limit := func() int {
 		var a, b, at, bt int
-		at = group.connectedPeers.Length()
-		bt = group.keepPeers.Length()
-		if group.option.KeepConnectedPeers > at {
-			a = group.option.KeepConnectedPeers - at
+		at = g.connectedPeers.Length()
+		bt = g.keepPeers.Length()
+		if g.option.KeepConnectedPeers > at {
+			a = g.option.KeepConnectedPeers - at
 		}
-		if group.option.KeepPingPeers > bt {
-			b = group.option.KeepPingPeers - bt
+		if g.option.KeepPingPeers > bt {
+			b = g.option.KeepPingPeers - bt
 		}
 		return a + b
 	}
@@ -104,17 +104,17 @@ func (s *Service) doFindGroup(wg *sync.WaitGroup, group *Group) {
 			}
 			skip[v.String()] = struct{}{}
 			finds, err := s.getGroupNode(context.Background(), v, &pb.FindGroupReq{
-				Gid:   group.gid.Bytes(),
+				Gid:   g.gid.Bytes(),
 				Limit: int32(lim),
 				Ttl:   0,
-				Paths: s.getSkipInGroupPeers(group.gid),
+				Paths: s.getSkipInGroupPeers(g.gid),
 			})
 			if err != nil || len(finds) == 0 {
 				continue
 			}
-			s.logger.Tracef("doFindGroup got %d node in group %s from %s %s", len(finds), group.gid, tag, v)
+			s.logger.Tracef("doFindGroup got %d node in group %s from %s %s", len(finds), g.gid, tag, v)
 			for _, addr := range finds {
-				group.add(addr, false)
+				g.add(addr, false)
 			}
 		}
 	}
@@ -126,27 +126,27 @@ func (s *Service) doFindGroup(wg *sync.WaitGroup, group *Group) {
 	}
 
 	t := time.Now()
-	s.logger.Infof("doFindGroup start %s", group.gid)
-	defer s.logger.Infof("doFindGroup done %s took %v", group.gid, time.Since(t))
+	s.logger.Infof("doFindGroup start %s", g.gid)
+	defer s.logger.Infof("doFindGroup done %s took %v", g.gid, time.Since(t))
 
-	if group.connectedPeers.Length() > 0 {
-		s.logger.Tracef("doFindGroup connectedPeers %s got %d nodes", group.gid, group.connectedPeers.Length())
-		getNodes(group.connectedPeers.BinPeers(0), "connected")
+	if g.connectedPeers.Length() > 0 {
+		s.logger.Tracef("doFindGroup connectedPeers %s got %d nodes", g.gid, g.connectedPeers.Length())
+		getNodes(g.connectedPeers.BinPeers(0), "connected")
 		if limit() <= 0 {
 			return
 		}
 	}
-	if group.keepPeers.Length() > 0 {
-		s.logger.Tracef("doFindGroup keepPeers %s got %d nodes", group.gid, group.keepPeers.Length())
-		getNodes(group.keepPeers.BinPeers(0), "kept")
+	if g.keepPeers.Length() > 0 {
+		s.logger.Tracef("doFindGroup keepPeers %s got %d nodes", g.gid, g.keepPeers.Length())
+		getNodes(g.keepPeers.BinPeers(0), "kept")
 		if limit() <= 0 {
 			return
 		}
 	}
-	if group.knownPeers.Length() > 0 {
-		s.logger.Tracef("doFindGroup knownPeers %s got %d nodes", group.gid, group.knownPeers.Length())
-		s.HandshakeAllPeers(group.knownPeers)
-		group.pruneKnown()
+	if g.knownPeers.Length() > 0 {
+		s.logger.Tracef("doFindGroup knownPeers %s got %d nodes", g.gid, g.knownPeers.Length())
+		s.HandshakeAllPeers(g.knownPeers)
+		g.pruneKnown()
 	}
 }
 
