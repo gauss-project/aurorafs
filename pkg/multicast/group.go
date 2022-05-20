@@ -131,6 +131,8 @@ func (g *Group) update(option model.ConfigNodeGroup) {
 }
 
 func (g *Group) remove(peer boson.Address, intoKnown bool) {
+	g.mux.Lock()
+	defer g.mux.Unlock()
 	var notify bool
 	defer func() {
 		if notify {
@@ -140,41 +142,70 @@ func (g *Group) remove(peer boson.Address, intoKnown bool) {
 	if g.connectedPeers.Exists(peer) {
 		g.connectedPeers.Remove(peer)
 		notify = true
+		g.srv.logger.Tracef("group %s remove peer, remove %s from connected", g.gid, peer)
 	}
 	if g.keepPeers.Exists(peer) {
 		g.keepPeers.Remove(peer)
 		notify = true
+		g.srv.logger.Tracef("group %s remove peer, remove %s from kept", g.gid, peer)
 	}
-	if !intoKnown {
-		g.knownPeers.Remove(peer)
+	if g.knownPeers.Exists(peer) {
+		if !intoKnown {
+			g.knownPeers.Remove(peer)
+			g.srv.logger.Tracef("group %s remove peer, remove %s from known", g.gid, peer)
+		}
 	} else {
-		g.knownPeers.Add(peer)
+		if intoKnown && notify {
+			g.knownPeers.Add(peer)
+			g.srv.logger.Tracef("group %s remove peer, add %s to known", g.gid, peer)
+		}
 	}
-
 	return
 }
 
 // when keep is true, not direct connect add into g.keepPeers
 // else into g.knownPeers
 func (g *Group) add(peer boson.Address, keep bool) {
+	g.mux.Lock()
+	defer g.mux.Unlock()
 	var notify bool
 	defer func() {
 		if notify {
 			g.notifyPeers()
 		}
 	}()
+	if !keep {
+		if g.connectedPeers.Exists(peer) {
+			g.connectedPeers.Remove(peer)
+			notify = true
+			g.srv.logger.Tracef("group %s add peer, remove %s from connected", g.gid, peer)
+		}
+		if g.keepPeers.Exists(peer) {
+			g.keepPeers.Remove(peer)
+			notify = true
+			g.srv.logger.Tracef("group %s add peer, remove %s from kept", g.gid, peer)
+		}
+		if !g.knownPeers.Exists(peer) {
+			g.knownPeers.Add(peer)
+			g.srv.logger.Tracef("group %s add peer, add %s to known", g.gid, peer)
+		}
+		return
+	}
 	// direct connect peer
 	if g.srv.route.IsNeighbor(peer) {
 		if !g.connectedPeers.Exists(peer) {
 			g.connectedPeers.Add(peer)
 			notify = true
+			g.srv.logger.Tracef("group %s add peer, add %s to connected", g.gid, peer)
 		}
 		if g.keepPeers.Exists(peer) {
 			g.keepPeers.Remove(peer)
 			notify = true
+			g.srv.logger.Tracef("group %s add peer, remove %s from kept", g.gid, peer)
 		}
 		if g.knownPeers.Exists(peer) {
 			g.knownPeers.Remove(peer)
+			g.srv.logger.Tracef("group %s add peer, remove %s from known", g.gid, peer)
 		}
 		return
 	}
@@ -182,26 +213,35 @@ func (g *Group) add(peer boson.Address, keep bool) {
 	if g.connectedPeers.Exists(peer) {
 		g.connectedPeers.Remove(peer)
 		notify = true
+		g.srv.logger.Tracef("group %s add peer, remove %s from connected", g.gid, peer)
 	}
-	if keep {
-		if !g.keepPeers.Exists(peer) {
-			g.keepPeers.Add(peer)
-			notify = true
-		}
-		if g.knownPeers.Exists(peer) {
-			g.knownPeers.Remove(peer)
-		}
-	} else {
-		if g.keepPeers.Exists(peer) {
-			g.keepPeers.Remove(peer)
-			notify = true
-		}
-		if !g.knownPeers.Exists(peer) {
-			g.knownPeers.Add(peer)
-		}
+	if !g.keepPeers.Exists(peer) {
+		g.keepPeers.Add(peer)
+		notify = true
+		g.srv.logger.Tracef("group %s add peer, add %s to kept", g.gid, peer)
 	}
-
+	if g.knownPeers.Exists(peer) {
+		g.knownPeers.Remove(peer)
+		g.srv.logger.Tracef("group %s add peer, remove %s from known", g.gid, peer)
+	}
 	return
+}
+
+func (g *Group) pruneKnown() {
+	g.mux.Lock()
+	defer g.mux.Unlock()
+	k := g.knownPeers.Length() - maxKnownPeers
+	if k > 0 {
+		peers := g.knownPeers.BinPeers(0)
+		for _, peer := range peers {
+			g.knownPeers.Remove(peer)
+			g.srv.logger.Tracef("group %s pruneKnown, remove %s from known", g.gid, peer)
+			k--
+			if k <= 0 {
+				break
+			}
+		}
+	}
 }
 
 func (g *Group) multicast(msg protobuf.Message, skip ...boson.Address) {
@@ -271,19 +311,5 @@ func (g *Group) notifyPeers() {
 		p := g.getPeers()
 		_ = g.srv.subPub.Publish("group", "groupPeers", g.gid.String(), p)
 		g.groupPeersLastSend = time.Now()
-	}
-}
-
-func (g *Group) pruneKnown() {
-	k := g.knownPeers.Length() - maxKnownPeers
-	if k > 0 {
-		peers := g.knownPeers.BinPeers(0)
-		for _, v := range peers {
-			g.knownPeers.Remove(v)
-			k--
-			if k <= 0 {
-				break
-			}
-		}
 	}
 }

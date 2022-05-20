@@ -155,7 +155,7 @@ func (s *Service) Start() {
 					}
 				case p2p.PeerStateDisconnect:
 					for _, g := range s.getGroupAll() {
-						g.remove(peer.Overlay, false)
+						g.remove(peer.Overlay, true)
 					}
 				}
 			case <-ticker.C:
@@ -303,7 +303,7 @@ func (s *Service) observeGroup(gid boson.Address, option model.ConfigNodeGroup) 
 			if peer.Equal(s.self) {
 				continue
 			}
-			g.knownPeers.Add(peer)
+			g.add(peer, false)
 		}
 	}
 	go s.discover(g)
@@ -334,7 +334,7 @@ func (s *Service) joinGroup(gid boson.Address, option model.ConfigNodeGroup) err
 		if peer.Equal(s.self) {
 			continue
 		}
-		g.knownPeers.Add(peer)
+		g.add(peer, false)
 	}
 
 	go s.HandshakeAll()
