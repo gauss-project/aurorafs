@@ -211,10 +211,16 @@ func (s *Service) getTraffic(peer common.Address) (traffic *Traffic) {
 	return
 }
 
-func (s *Service) getAllAddress(addresses map[common.Address]struct{}) (map[common.Address]Traffic, error) {
+func (s *Service) getAllAddress(lastCheques map[common.Address]*chequePkg.Cheque, lastTransCheques map[common.Address]*chequePkg.SignedCheque) (map[common.Address]Traffic, error) {
 	chanResp := make(map[common.Address]Traffic)
 
-	for k := range addresses {
+	for k := range lastCheques {
+		if _, ok := chanResp[k]; !ok {
+			chanResp[k] = Traffic{}
+		}
+	}
+
+	for k := range lastTransCheques {
 		if _, ok := chanResp[k]; !ok {
 			chanResp[k] = Traffic{}
 		}
@@ -257,13 +263,7 @@ func (s *Service) trafficInit() error {
 		return err
 	}
 
-	allRetrieveTransfer, err := s.chequeStore.GetAllRetrieveTransferAddresses()
-	if err != nil {
-		s.logger.Errorf("Traffic failed to obtain local check information. ")
-		return err
-	}
-
-	addressList, err := s.getAllAddress(allRetrieveTransfer)
+	addressList, err := s.getAllAddress(lastCheques, lastTransCheques)
 	if err != nil {
 		return fmt.Errorf("traffic: Failed to get chain node information:%v ", err)
 	}
@@ -320,28 +320,13 @@ func (s *Service) trafficPeerChainUpdate(peerAddress, chainAddress common.Addres
 	defer traffic.Unlock()
 	transferTotal, err := s.trafficChainService.TransAmount(peerAddress, chainAddress)
 	if err != nil {
-		transferTotal, err = s.chequeStore.GetChainTransferTraffic(peerAddress)
-		if err != nil {
-			return err
-		}
-	} else {
-		err = s.chequeStore.PutChainTransferTraffic(peerAddress, transferTotal)
-		if err != nil {
-			return err
-		}
+		return err
 	}
 	retrievedTotal, err := s.trafficChainService.TransAmount(chainAddress, peerAddress)
 	if err != nil {
-		retrievedTotal, err = s.chequeStore.GetChainRetrieveTraffic(peerAddress)
-		if err != nil {
-			return err
-		}
-	} else {
-		err = s.chequeStore.PutChainRetrieveTraffic(peerAddress, retrievedTotal)
-		if err != nil {
-			return err
-		}
+		return err
 	}
+
 	traffic.retrieveChainTraffic = retrievedTotal
 	traffic.transferChainTraffic = transferTotal
 	return nil
@@ -822,15 +807,7 @@ func (s *Service) cashChequeReceiptUpdate() {
 				continue
 			}
 			if status == 1 {
-				err := s.chequeStore.PutChainRetrieveTraffic(cashInfo.chainAddress, traffic.retrieveChequeTraffic)
-				if err != nil {
-					s.logger.Errorf("traffic:chainRetrieveTrafficUpdate - %v ", err.Error())
-				}
-				err = s.chequeStore.PutChainTransferTraffic(cashInfo.chainAddress, traffic.transferChequeTraffic)
-				if err != nil {
-					s.logger.Errorf("traffic:chainTransferTrafficUpdate - %v ", err.Error())
-				}
-				err = cashUpdate(cashInfo.chainAddress, cashInfo.peer)
+				err := cashUpdate(cashInfo.chainAddress, cashInfo.peer)
 				if err != nil {
 					s.logger.Errorf("traffic:cashChequeReceiptUpdate - %v ", err.Error())
 				}
