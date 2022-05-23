@@ -38,7 +38,12 @@ type ChequeStore interface {
 	// ReceiveCheque verifies and stores a cheque. It returns the totam amount earned.
 	ReceiveCheque(ctx context.Context, cheque *SignedCheque) (*big.Int, error)
 
+	VerifyCheque(cheque *SignedCheque, chaindID int64) (common.Address, error)
+
 	PutSendCheque(ctx context.Context, cheque *Cheque, chainAddress common.Address) error
+
+	PutReceivedCheques(chainAddress common.Address, cheque SignedCheque) error
+
 	// LastReceivedCheque returns the last cheque we received from a specific chainAddress.
 	LastReceivedCheque(chainAddress common.Address) (*SignedCheque, error)
 	// LastReceivedCheques returns the last received cheques from every known chainAddress.
@@ -56,10 +61,6 @@ type ChequeStore interface {
 
 	GetTransferTraffic(chainAddress common.Address) (traffic *big.Int, err error)
 
-	PutReceivedCheques(chainAddress common.Address, cheque SignedCheque) error
-
-	VerifyCheque(cheque *SignedCheque, chaindID int64) (common.Address, error)
-
 	PutChainRetrieveTraffic(chainAddress common.Address, traffic *big.Int) error
 
 	PutChainTransferTraffic(chainAddress common.Address, traffic *big.Int) error
@@ -67,6 +68,9 @@ type ChequeStore interface {
 	GetChainRetrieveTraffic(chainAddress common.Address) (traffic *big.Int, err error)
 
 	GetChainTransferTraffic(chainAddress common.Address) (traffic *big.Int, err error)
+
+	// GetAllRetrieveTransferAddresses return all addresses that we have transferred or retrieved traffic
+	GetAllRetrieveTransferAddresses() (map[common.Address]struct{}, error)
 }
 
 type chequeStore struct {
@@ -382,4 +386,33 @@ func (s *chequeStore) GetChainTransferTraffic(chainAddress common.Address) (traf
 	}
 
 	return traffic, nil
+}
+
+func (s *chequeStore) GetAllRetrieveTransferAddresses() (map[common.Address]struct{}, error) {
+	result := make(map[common.Address]struct{})
+	err := s.store.Iterate(retrievedTrafficPrefix, func(key, val []byte) (stop bool, err error) {
+		addr, err := keyChainAddress(key, retrievedTrafficPrefix+"_")
+		if err != nil {
+			return false, fmt.Errorf("parse address from key: %s: %w", string(key), err)
+		}
+		result[addr] = struct{}{}
+		return false, nil
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	err = s.store.Iterate(transferredTrafficPrefix, func(key, val []byte) (stop bool, err error) {
+		addr, err := keyChainAddress(key, transferredTrafficPrefix+"_")
+		if err != nil {
+			return false, fmt.Errorf("parse address from key: %s: %w", string(key), err)
+		}
+		result[addr] = struct{}{}
+		return false, nil
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return result, nil
 }

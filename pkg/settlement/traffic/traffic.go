@@ -211,16 +211,10 @@ func (s *Service) getTraffic(peer common.Address) (traffic *Traffic) {
 	return
 }
 
-func (s *Service) getAllAddress(lastCheques map[common.Address]*chequePkg.Cheque, lastTransCheques map[common.Address]*chequePkg.SignedCheque) (map[common.Address]Traffic, error) {
+func (s *Service) getAllAddress(addresses map[common.Address]struct{}) (map[common.Address]Traffic, error) {
 	chanResp := make(map[common.Address]Traffic)
 
-	for k := range lastCheques {
-		if _, ok := chanResp[k]; !ok {
-			chanResp[k] = Traffic{}
-		}
-	}
-
-	for k := range lastTransCheques {
+	for k := range addresses {
 		if _, ok := chanResp[k]; !ok {
 			chanResp[k] = Traffic{}
 		}
@@ -263,7 +257,13 @@ func (s *Service) trafficInit() error {
 		return err
 	}
 
-	addressList, err := s.getAllAddress(lastCheques, lastTransCheques)
+	allRetrieveTransfer, err := s.chequeStore.GetAllRetrieveTransferAddresses()
+	if err != nil {
+		s.logger.Errorf("Traffic failed to obtain local check information. ")
+		return err
+	}
+
+	addressList, err := s.getAllAddress(allRetrieveTransfer)
 	if err != nil {
 		return fmt.Errorf("traffic: Failed to get chain node information:%v ", err)
 	}
