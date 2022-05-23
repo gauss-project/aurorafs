@@ -108,7 +108,7 @@ func (a *apiService) Metrics(ctx context.Context) (*rpc.Subscription, error) {
 					a.ci.metrics.PyramidTotalTransferred,
 				})
 				if send {
-					err := a.ci.subPub.Publish("retrieval", "metrics", "", out)
+					err := a.ci.subPub.Publish("chunkInfo", "metrics", "", out)
 					if err != nil {
 						logging.Errorf("%s metrics notify %s", sub.ID, err)
 					} else {
