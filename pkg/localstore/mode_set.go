@@ -192,7 +192,11 @@ func (db *DB) setRemove(batch driver.Batching, addr, rootAddr boson.Address) (gc
 	if err != nil {
 		return 0, err
 	}
-
+	if item.Counter > 1 {
+		item.Counter--
+		err = db.retrievalDataIndex.PutInBatch(batch, item)
+		return 0, err
+	}
 	i, err := db.retrievalAccessIndex.Get(item)
 	switch {
 	case err == nil:
@@ -421,4 +425,10 @@ func (db *DB) setUnpin(batch driver.Batching, item, rootItem shed.Item) (gcSizeC
 	}
 
 	return
+}
+
+func (db *DB) setRemoveTransfer(batch driver.Batching, rootCid boson.Address) error {
+	item := addressToItem(rootCid)
+	err := db.transferDataIndex.DeleteInBatch(batch, item)
+	return err
 }

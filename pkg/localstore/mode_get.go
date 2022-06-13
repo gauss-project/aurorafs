@@ -18,6 +18,7 @@ package localstore
 
 import (
 	"context"
+	"encoding/binary"
 	"errors"
 	"time"
 
@@ -70,6 +71,9 @@ func (db *DB) get(mode storage.ModeGet, addr, rootAddr boson.Address) (out shed.
 		} else {
 			db.updateGCItems(out)
 		}
+		if out.Type != 1 && out.Type != 0 {
+			return out, storage.ErrNotFound
+		}
 
 	case storage.ModeGetPin:
 		pinnedItem, err := db.pinIndex.Get(item)
@@ -77,7 +81,10 @@ func (db *DB) get(mode storage.ModeGet, addr, rootAddr boson.Address) (out shed.
 			return out, err
 		}
 		return pinnedItem, nil
-
+	case storage.ModeGetChain:
+		if out.Type != 2 && out.Type != 0 {
+			return out, storage.ErrNotFound
+		}
 	// no updates to indexes
 	case storage.ModeGetSync:
 	case storage.ModeGetLookup:
@@ -190,6 +197,53 @@ func (db *DB) updateGC(item shed.Item) (err error) {
 	}
 
 	return batch.Commit()
+}
+
+func (db *DB) getTransfer(rootCid boson.Address) ([]boson.Address, error) {
+	item := addressToItem(rootCid)
+	out, err := db.transferDataIndex.Get(item)
+	if err != nil {
+		return nil, err
+	}
+	data := out.Data
+	chs := make([]boson.Address, 0, len(data)/boson.SectionSize)
+	for i := 0; i < len(data); i += boson.SectionSize {
+		addr := data[i : i+32]
+		ch := boson.NewAddress(addr)
+		chs = append(chs, ch)
+	}
+	return chs, nil
+}
+
+func (db *DB) getChunk(ch boson.Address) (chs []boson.Address, err error) {
+	item := addressToItem(ch)
+	exists, err := db.retrievalDataIndex.Has(item)
+	if err != nil {
+		return nil, err
+	}
+	if !exists {
+		return nil, nil
+	}
+	item, err = db.retrievalDataIndex.Get(item)
+	if err != nil {
+		return nil, err
+	}
+	chs = append(chs, ch)
+	data := item.Data[8:]
+	size := int64(binary.LittleEndian.Uint64(item.Data[:8]))
+	if size <= int64(len(data)) {
+		return
+	}
+
+	for i := 0; i < len(data); i += boson.SectionSize {
+		ch = boson.NewAddress(data[i : i+boson.SectionSize])
+		ps, err := db.getChunk(ch)
+		if err != nil {
+			return
+		}
+		chs = append(chs, ps...)
+	}
+	return
 }
 
 // testHookUpdateGC is a hook that can provide

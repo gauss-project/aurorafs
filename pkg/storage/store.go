@@ -31,6 +31,8 @@ func (m ModeGet) String() string {
 		return "Lookup"
 	case ModeGetPin:
 		return "PinLookup"
+	case ModeGetChain:
+		return "Chain"
 	default:
 		return "Unknown"
 	}
@@ -46,6 +48,7 @@ const (
 	ModeGetLookup
 	// ModeGetPin: used when a pinned chunk is accessed
 	ModeGetPin
+	ModeGetChain
 )
 
 type ModeHas int
@@ -71,6 +74,8 @@ func (m ModePut) String() string {
 		return "Upload"
 	case ModePutUploadPin:
 		return "UploadPin"
+	case ModePutChain:
+		return "Chain"
 	default:
 		return "Unknown"
 	}
@@ -86,6 +91,8 @@ const (
 	ModePutUploadPin
 	// ModePutRequestPin: the same as ModePutRequest but also pin the chunk with the put
 	ModePutRequestPin
+
+	ModePutChain
 )
 
 // ModeSet enumerates different Setter modes.

@@ -86,10 +86,10 @@ func (bv *BitVector) Unset(i int) {
 //
 // The argument must be the same as the bitvector length
 func (bv *BitVector) SetBytes(bs []byte) error {
-	if len(bs) != len(bv.b) {
+	if len(bs) > len(bv.b) {
 		return errors.New("invalid length")
 	}
-	for i := 0; i < len(bv.b)*8; i++ {
+	for i := 0; i < len(bs)*8; i++ {
 		bi := i / 8
 		if bs[bi]&(0x01<<uint(i%8)) > 0 {
 			bv.set(i, true)
@@ -102,10 +102,10 @@ func (bv *BitVector) SetBytes(bs []byte) error {
 //
 // The argument must be the same as the bitvector length
 func (bv *BitVector) UnsetBytes(bs []byte) error {
-	if len(bs) != len(bv.b) {
+	if len(bs) > len(bv.b) {
 		return errors.New("invalid length")
 	}
-	for i := 0; i < len(bv.b)*8; i++ {
+	for i := 0; i < len(bs)*8; i++ {
 		bi := i / 8
 		if bs[bi]&(0x01<<uint(i%8)) > 0 {
 			bv.set(i, false)

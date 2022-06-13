@@ -351,7 +351,7 @@ func NewAurora(nodeMode aurora.Model, addr string, bosonAddress boson.Address, p
 		Capacity: o.CacheCapacity,
 		Driver:   o.DBDriver,
 	}
-	storer, err := localstore.New(path, bosonAddress.Bytes(), lo, logger)
+	storer, err := localstore.New(path, bosonAddress.Bytes(), stateStore, lo, logger)
 	if err != nil {
 		return nil, fmt.Errorf("localstore: %w", err)
 	}
@@ -382,7 +382,6 @@ func NewAurora(nodeMode aurora.Model, addr string, bosonAddress boson.Address, p
 	if err = p2ps.AddProtocol(chunkInfo.Protocol()); err != nil {
 		return nil, fmt.Errorf("chunkInfo service: %w", err)
 	}
-	storer.SetChunkInfo(chunkInfo)
 	ns.SetChunkInfo(chunkInfo)
 	retrieve.Config(chunkInfo)
 

@@ -217,7 +217,7 @@ func storeDir(
 		}
 	}
 
-	storeSizeFn := []manifest.StoreSizeFunc{}
+	var storeSizeFn []manifest.StoreSizeFunc
 
 	// save manifest
 	manifestReference, err := dirManifest.Store(ctx, storeSizeFn...)

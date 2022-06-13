@@ -55,18 +55,6 @@ func (db *DB) Put(ctx context.Context, mode storage.ModePut, chs ...boson.Chunk)
 // slice. This is the same behaviour as if the same chunks are passed one by one
 // in multiple put method calls.
 func (db *DB) put(mode storage.ModePut, rootAddr boson.Address, chs ...boson.Chunk) (exist []bool, err error) {
-	// this is an optimization that tries to optimize on already existing chunks
-	// not needing to acquire batchMu. This is in order to reduce lock contention
-	// when chunks are retried across the network for whatever reason.
-	if len(chs) == 1 && mode != storage.ModePutRequestPin && mode != storage.ModePutUploadPin {
-		has, err := db.retrievalDataIndex.Has(chunkToItem(chs[0]))
-		if err != nil {
-			return nil, err
-		}
-		if has {
-			return []bool{true}, nil
-		}
-	}
 
 	// protect parallel updates
 	db.batchMu.Lock()
@@ -101,7 +89,9 @@ func (db *DB) put(mode storage.ModePut, rootAddr boson.Address, chs ...boson.Chu
 				continue
 			}
 			pin := mode == storage.ModePutRequestPin
-			exists, c, err := db.putRequest(batch, binIDs, chunkToItem(ch), rootItem, pin)
+			item := chunkToItem(ch)
+			item.Type = 1
+			exists, c, err := db.putRequest(batch, binIDs, item, rootItem, pin)
 			if err != nil {
 				return nil, err
 			}
@@ -116,7 +106,8 @@ func (db *DB) put(mode storage.ModePut, rootAddr boson.Address, chs ...boson.Chu
 				continue
 			}
 			item := chunkToItem(ch)
-			exists, err := db.putUpload(batch, binIDs, chunkToItem(ch))
+			item.Type = 1
+			exists, err := db.putUpload(batch, binIDs, item)
 			if err != nil {
 				return nil, err
 			}
@@ -128,13 +119,28 @@ func (db *DB) put(mode storage.ModePut, rootAddr boson.Address, chs ...boson.Chu
 				}
 			}
 		}
-
+	case storage.ModePutChain:
+		for i, ch := range chs {
+			if containsChunk(ch.Address(), chs[:i]...) {
+				exist[i] = true
+				continue
+			}
+			pin := mode == storage.ModePutRequestPin
+			item := chunkToItem(ch)
+			item.Type = 2
+			exists, c, err := db.putRequest(batch, binIDs, item, rootItem, pin)
+			if err != nil {
+				return nil, err
+			}
+			exist[i] = exists
+			gcSizeChange += c
+		}
 	default:
 		return nil, ErrInvalidMode
 	}
 
 	for po, id := range binIDs {
-		db.binIDs.PutInBatch(batch, uint64(po), id)
+		_ = db.binIDs.PutInBatch(batch, uint64(po), id)
 	}
 
 	err = db.incGCSizeInBatch(batch, gcSizeChange)
@@ -156,23 +162,10 @@ func (db *DB) put(mode storage.ModePut, rootAddr boson.Address, chs ...boson.Chu
 // The batch can be written to the database.
 // Provided batch and binID map are updated.
 func (db *DB) putRequest(batch driver.Batching, binIDs map[uint8]uint64, item, rootItem shed.Item, forcePin bool) (exists bool, gcSizeChange int64, err error) {
-	has, err := db.retrievalDataIndex.Has(item)
-	if err != nil {
-		return false, 0, err
-	}
-	if has {
-		return true, 0, nil
-	}
+	exists, err = db.putUpload(batch, binIDs, item)
 
-	item.StoreTimestamp = now()
-	item.BinID, err = db.incBinID(binIDs, db.po(boson.NewAddress(item.Address)))
-	if err != nil {
-		return false, 0, err
-	}
-
-	err = db.retrievalDataIndex.PutInBatch(batch, item)
-	if err != nil {
-		return false, 0, err
+	if exists || err != nil {
+		return exists, 0, err
 	}
 
 	if bytes.Equal(item.Address, rootItem.Address) {
@@ -194,23 +187,32 @@ func (db *DB) putRequest(batch driver.Batching, binIDs map[uint8]uint64, item, r
 func (db *DB) putUpload(batch driver.Batching, binIDs map[uint8]uint64, item shed.Item) (exists bool, err error) {
 	exists, err = db.retrievalDataIndex.Has(item)
 	if err != nil {
-		return false, err
+		return
 	}
 	if exists {
-		return true, nil
-	}
-
-	item.StoreTimestamp = now()
-	item.BinID, err = db.incBinID(binIDs, db.po(boson.NewAddress(item.Address)))
-	if err != nil {
-		return false, err
+		t := item.Type
+		item, err = db.retrievalDataIndex.Get(item)
+		if t != item.Type {
+			item.Type = 0
+		}
+		item.Counter++
+		if err != nil {
+			return
+		}
+	} else {
+		item.Counter = 1
+		item.StoreTimestamp = now()
+		item.BinID, err = db.incBinID(binIDs, db.po(boson.NewAddress(item.Address)))
+		if err != nil {
+			return
+		}
 	}
 	err = db.retrievalDataIndex.PutInBatch(batch, item)
 	if err != nil {
-		return false, err
+		return
 	}
 
-	return false, nil
+	return
 }
 
 // preserveOrCache is a helper function used to add chunks to either a pinned reserve or gc cache
@@ -294,4 +296,26 @@ func containsChunk(addr boson.Address, chs ...boson.Chunk) bool {
 		}
 	}
 	return false
+}
+
+func (db *DB) putTransfer(batch driver.Batching, addr boson.Address, chs ...boson.Address) error {
+	item := addressToItem(addr)
+	exists, err := db.transferDataIndex.Has(item)
+	if err != nil {
+		return err
+	}
+	if exists {
+		item, err = db.transferDataIndex.Get(item)
+		if err != nil {
+			return err
+		}
+	}
+	b := make([]byte, 0, len(item.Data)+len(chs)*boson.SectionSize)
+	b = append(b, item.Data...)
+	for _, c := range chs {
+		b = append(b, c.Bytes()...)
+	}
+	item.Data = b
+	err = db.transferDataIndex.PutInBatch(batch, item)
+	return err
 }

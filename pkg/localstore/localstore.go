@@ -19,13 +19,14 @@ package localstore
 import (
 	"encoding/binary"
 	"errors"
+	"github.com/gauss-project/aurorafs/pkg/localstore/chunkstore"
+	"github.com/gauss-project/aurorafs/pkg/localstore/filestore"
 	"os"
 	"runtime/pprof"
 	"sync"
 	"time"
 
 	"github.com/gauss-project/aurorafs/pkg/boson"
-	"github.com/gauss-project/aurorafs/pkg/chunkinfo"
 	"github.com/gauss-project/aurorafs/pkg/logging"
 	"github.com/gauss-project/aurorafs/pkg/shed"
 	"github.com/gauss-project/aurorafs/pkg/shed/driver"
@@ -49,19 +50,26 @@ var (
 	maxParallelUpdateGC = 1000
 )
 
+//type FileInterface interface {
+//	GetListFile(page filestore.Page, filter []filestore.Filter, sort filestore.Sort) []filestore.FileView
+//	PutFile(file filestore.FileView) error
+//	DeleteFile(reference boson.Address) error
+//	HashFile(reference boson.Address) bool
+//}
+
 // DB is the local store implementation and holds
 // database related objects.
 type DB struct {
-	shed     *shed.DB
-	discover chunkinfo.Interface
+	shed *shed.DB
 
+	stateStore storage.StateStorer
 	// schema name of loaded data
 	schemaName shed.StringField
 
 	// retrieval indexes
 	retrievalDataIndex   shed.Index
 	retrievalAccessIndex shed.Index
-
+	transferDataIndex    shed.Index
 	// binIDs stores the latest chunk serial ID for every
 	// proximity order bin
 	binIDs shed.Uint64Vector
@@ -75,6 +83,9 @@ type DB struct {
 	// field that stores number of intems in gc index
 	gcSize shed.Uint64Field
 
+	chunkstore chunkstore.Interface
+
+	filestore filestore.Interface
 	// garbage collection is triggered when gcSize exceeds
 	// the capacity value
 	capacity uint64
@@ -93,7 +104,7 @@ type DB struct {
 	// baseKey is the overlay address
 	baseKey []byte
 
-	batchMu sync.Mutex
+	batchMu sync.RWMutex
 
 	// gcRunning is true while GC is running. it is
 	// used to avoid touching dirty gc index entries
@@ -134,7 +145,7 @@ type Options struct {
 // New returns a new DB.  All fields and indexes are initialized
 // and possible conflicts with schema from existing database is checked.
 // One goroutine for writing batches is created.
-func New(path string, baseKey []byte, o *Options, logger logging.Logger) (db *DB, err error) {
+func New(path string, baseKey []byte, stateStore storage.StateStorer, o *Options, logger logging.Logger) (db *DB, err error) {
 	if o == nil {
 		// default options
 		o = &Options{
@@ -143,8 +154,9 @@ func New(path string, baseKey []byte, o *Options, logger logging.Logger) (db *DB
 	}
 
 	db = &DB{
-		capacity: o.Capacity,
-		baseKey:  baseKey,
+		capacity:   o.Capacity,
+		baseKey:    baseKey,
+		stateStore: stateStore,
 		// channel collectGarbageTrigger
 		// needs to be buffered with the size of 1
 		// to signal another event if it
@@ -210,25 +222,29 @@ func New(path string, baseKey []byte, o *Options, logger logging.Logger) (db *DB
 	}
 
 	// Index storing actual chunk address, data and bin id.
-	db.retrievalDataIndex, err = db.shed.NewIndex("Address->StoreTimestamp|BinID|Data", shed.IndexFuncs{
+	db.retrievalDataIndex, err = db.shed.NewIndex("Address->BinID|StoreTimestamp|Type|Counter|Data", shed.IndexFuncs{
 		EncodeKey: func(fields shed.Item) (key []byte, err error) {
 			return fields.Address, nil
 		},
 		DecodeKey: func(key []byte) (e shed.Item, err error) {
-			e.Address = key
+			e.Type = binary.BigEndian.Uint64(key[:8])
+			e.Address = key[8:]
 			return e, nil
 		},
 		EncodeValue: func(fields shed.Item) (value []byte, err error) {
-			b := make([]byte, 16)
+			b := make([]byte, 32)
 			binary.BigEndian.PutUint64(b[:8], fields.BinID)
 			binary.BigEndian.PutUint64(b[8:16], uint64(fields.StoreTimestamp))
+			binary.BigEndian.PutUint64(b[16:24], fields.Type)
+			binary.BigEndian.PutUint64(b[24:32], fields.Counter)
 			value = append(b, fields.Data...)
 			return value, nil
 		},
 		DecodeValue: func(keyItem shed.Item, value []byte) (e shed.Item, err error) {
 			e.StoreTimestamp = int64(binary.BigEndian.Uint64(value[8:16]))
 			e.BinID = binary.BigEndian.Uint64(value[:8])
-			e.Data = value[16:]
+			e.Counter = binary.BigEndian.Uint64(value[16:24])
+			e.Data = value[24:]
 			return e, nil
 		},
 	})
@@ -252,6 +268,25 @@ func New(path string, baseKey []byte, o *Options, logger logging.Logger) (db *DB
 		},
 		DecodeValue: func(keyItem shed.Item, value []byte) (e shed.Item, err error) {
 			e.AccessTimestamp = int64(binary.BigEndian.Uint64(value))
+			return e, nil
+		},
+	})
+	if err != nil {
+		return nil, err
+	}
+	db.transferDataIndex, err = db.shed.NewIndex("Address->Cids", shed.IndexFuncs{
+		EncodeKey: func(fields shed.Item) (key []byte, err error) {
+			return fields.Address, nil
+		},
+		DecodeKey: func(key []byte) (e shed.Item, err error) {
+			e.Address = key
+			return e, nil
+		},
+		EncodeValue: func(fields shed.Item) (value []byte, err error) {
+			return fields.Data, nil
+		},
+		DecodeValue: func(keyItem shed.Item, value []byte) (e shed.Item, err error) {
+			e.Data = value
 			return e, nil
 		},
 	})
@@ -340,10 +375,6 @@ func New(path string, baseKey []byte, o *Options, logger logging.Logger) (db *DB
 	go db.collectGarbageWorker()
 
 	return db, nil
-}
-
-func (db *DB) SetChunkInfo(chunkInfo chunkinfo.Interface) {
-	db.discover = chunkInfo
 }
 
 // Close closes the underlying database.
@@ -453,4 +484,52 @@ func totalTimeMetric(metric prometheus.Counter, start time.Time) {
 	totalTime := time.Since(start)
 	metric.Add(float64(totalTime))
 
+}
+
+func (db *DB) GetListFile(page filestore.Page, filter []filestore.Filter, sort filestore.Sort) []filestore.FileView {
+	db.batchMu.RLock()
+	defer db.batchMu.RUnlock()
+	return db.filestore.GetList(page, filter, sort)
+}
+func (db *DB) PutFile(file filestore.FileView) error {
+	db.batchMu.Lock()
+	defer db.batchMu.Unlock()
+	return db.filestore.Put(file)
+}
+func (db *DB) DeleteFile(reference boson.Address) error {
+	db.batchMu.Lock()
+	defer db.batchMu.Unlock()
+	return db.filestore.Delete(reference)
+}
+
+func (db *DB) HasFile(reference boson.Address) bool {
+	db.batchMu.RLock()
+	defer db.batchMu.RUnlock()
+	return db.filestore.Has(reference)
+}
+
+func (db *DB) PutChunk(chunkType chunkstore.ChunkType, reference boson.Address, providers []chunkstore.Provider) error {
+	db.batchMu.Lock()
+	defer db.batchMu.Unlock()
+	return db.chunkstore.Put(chunkType, reference, providers)
+}
+func (db *DB) GetChunk(chunkType chunkstore.ChunkType, reference boson.Address) ([]chunkstore.Consumer, error) {
+	db.batchMu.RLock()
+	defer db.batchMu.RUnlock()
+	return db.chunkstore.Get(chunkType, reference)
+}
+func (db *DB) RemoveChunk(chunkType chunkstore.ChunkType, reference, overlay boson.Address) error {
+	db.batchMu.Lock()
+	defer db.batchMu.Unlock()
+	return db.chunkstore.Remove(chunkType, reference, overlay)
+}
+func (db *DB) RemoveAllChunk(chunkType chunkstore.ChunkType, reference boson.Address) error {
+	db.batchMu.Lock()
+	defer db.batchMu.Unlock()
+	return db.chunkstore.RemoveAll(chunkType, reference)
+}
+func (db *DB) HasChunk(chunkType chunkstore.ChunkType, reference, overlay boson.Address) (bool, error) {
+	db.batchMu.RLock()
+	defer db.batchMu.RUnlock()
+	return db.chunkstore.Has(chunkType, reference, overlay)
 }
