@@ -199,6 +199,24 @@ func (db *DB) updateGC(item shed.Item) (err error) {
 	return batch.Commit()
 }
 
+func (db *DB) getAllChunks(rootCid boson.Address) ([]boson.Address, error) {
+	chunks, err := db.getTransfer(rootCid)
+	if err != nil {
+		if err != driver.ErrNotFound {
+			return nil, err
+		}
+		chunks, err = db.getChunk(rootCid)
+		if err != nil {
+			if err == driver.ErrNotFound {
+				return nil, storage.ErrNotFound
+			}
+			return nil, err
+		}
+	}
+
+	return chunks, nil
+}
+
 func (db *DB) getTransfer(rootCid boson.Address) ([]boson.Address, error) {
 	item := addressToItem(rootCid)
 	out, err := db.transferDataIndex.Get(item)
@@ -206,9 +224,10 @@ func (db *DB) getTransfer(rootCid boson.Address) ([]boson.Address, error) {
 		return nil, err
 	}
 	data := out.Data
-	chs := make([]boson.Address, 0, len(data)/boson.SectionSize)
-	for i := 0; i < len(data); i += boson.SectionSize {
-		addr := data[i : i+32]
+	chs := make([]boson.Address, 0, boson.HashSize+len(data)/boson.HashSize)
+	chs = append(chs, rootCid)
+	for i := 0; i < len(data); i += boson.HashSize {
+		addr := data[i : i+boson.HashSize]
 		ch := boson.NewAddress(addr)
 		chs = append(chs, ch)
 	}
@@ -235,11 +254,11 @@ func (db *DB) getChunk(ch boson.Address) (chs []boson.Address, err error) {
 		return
 	}
 
-	for i := 0; i < len(data); i += boson.SectionSize {
-		ch = boson.NewAddress(data[i : i+boson.SectionSize])
+	for i := 0; i < len(data); i += boson.HashSize {
+		ch = boson.NewAddress(data[i : i+boson.HashSize])
 		ps, err := db.getChunk(ch)
 		if err != nil {
-			return
+			return nil, err
 		}
 		chs = append(chs, ps...)
 	}

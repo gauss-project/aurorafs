@@ -3,6 +3,7 @@ package filestore
 import (
 	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/storage"
+	"strings"
 )
 
 type Interface interface {
@@ -55,6 +56,20 @@ func New(storer storage.StateStorer) Interface {
 }
 
 func (fs *fileStore) Init() error {
+	if err := fs.stateStore.Iterate(keyPrefix, func(k, v []byte) (bool, error) {
+		if !strings.HasPrefix(string(k), keyPrefix) {
+			return true, nil
+		}
+		key := string(k)
+		var fv FileView
+		if err := fs.stateStore.Get(key, &fv); err != nil {
+			return false, err
+		}
+		fs.put(fv)
+		return false, nil
+	}); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -75,6 +90,14 @@ func (fs *fileStore) Put(file FileView) error {
 		return err
 	}
 	return nil
+}
+
+func (fs *fileStore) put(file FileView) {
+	exists := fs.Has(file.RootCid)
+	if exists {
+		return
+	}
+	fs.files[file.RootCid.String()] = file
 }
 
 func (fs *fileStore) Delete(reference boson.Address) error {

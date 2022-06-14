@@ -432,3 +432,33 @@ func (db *DB) setRemoveTransfer(batch driver.Batching, rootCid boson.Address) er
 	err := db.transferDataIndex.DeleteInBatch(batch, item)
 	return err
 }
+
+func (db *DB) setRemoveAll(rootCid boson.Address) error {
+	batch := db.shed.NewBatch()
+	var gcSizeChange int64 // number to add or subtract from gcSize
+	chunks, err := db.getAllChunks(rootCid)
+	if err != nil {
+		return err
+	}
+	for _, addr := range chunks {
+		c, err := db.setRemove(batch, addr, rootCid)
+		if err != nil {
+			return err
+		}
+		gcSizeChange += c
+	}
+	err = db.setRemoveTransfer(batch, rootCid)
+	if err != nil {
+		return err
+	}
+	err = db.incGCSizeInBatch(batch, gcSizeChange)
+	if err != nil {
+		return err
+	}
+
+	err = batch.Commit()
+	if err != nil {
+		return err
+	}
+	return nil
+}

@@ -355,6 +355,10 @@ func NewAurora(nodeMode aurora.Model, addr string, bosonAddress boson.Address, p
 	if err != nil {
 		return nil, fmt.Errorf("localstore: %w", err)
 	}
+	err = storer.Init()
+	if err != nil {
+		return nil, fmt.Errorf("localstore init: %w", err)
+	}
 	b.localstoreCloser = storer
 
 	retrieve := retrieval.New(bosonAddress, p2ps, route, storer, nodeMode.IsFull(), logger, tracer, acc, subPub)

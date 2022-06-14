@@ -3,13 +3,53 @@ package chunkstore
 import (
 	"github.com/gauss-project/aurorafs/pkg/bitvector"
 	"github.com/gauss-project/aurorafs/pkg/boson"
+	"strings"
 )
 
 var sourceKeyPrefix = "source"
 
+func (cs *chunkStore) initSource() error {
+	if err := cs.stateStore.Iterate(sourceKeyPrefix, func(k, v []byte) (bool, error) {
+		if !strings.HasPrefix(string(k), sourceKeyPrefix) {
+			return true, nil
+		}
+		key := string(k)
+		rootCid, overlay, err := unmarshalKey(sourceKeyPrefix, key)
+		if err != nil {
+			return false, err
+		}
+		var vb BitVector
+		if err := cs.stateStore.Get(key, &vb); err != nil {
+			return false, err
+		}
+		cs.putInitSource(rootCid, overlay, vb.B, vb.Len)
+		return false, nil
+	}); err != nil {
+		return err
+	}
+	return nil
+}
 func (cs *chunkStore) getChunkSource(rootCid boson.Address) map[string]*bitvector.BitVector {
 	r := rootCid.String()
 	return cs.source[r]
+}
+
+func (cs *chunkStore) putInitSource(rootCid, overlay boson.Address, b []byte, len int) {
+	if cs.hasDiscover(rootCid, overlay) {
+		return
+	}
+	r := rootCid.String()
+	o := overlay.String()
+	v, ok := cs.source[r]
+	if !ok {
+		v = make(map[string]*bitvector.BitVector)
+	}
+	bv, err := bitvector.NewFromBytes(b, len)
+	if err != nil {
+		return
+	}
+	v[o] = bv
+	cs.source[r] = v
 }
 
 func (cs *chunkStore) putChunkSource(rootCid, source boson.Address, bit, len int) error {

@@ -84,10 +84,6 @@ func (db *DB) put(mode storage.ModePut, rootAddr boson.Address, chs ...boson.Chu
 	switch mode {
 	case storage.ModePutRequest, storage.ModePutRequestPin:
 		for i, ch := range chs {
-			if containsChunk(ch.Address(), chs[:i]...) {
-				exist[i] = true
-				continue
-			}
 			pin := mode == storage.ModePutRequestPin
 			item := chunkToItem(ch)
 			item.Type = 1
@@ -95,20 +91,23 @@ func (db *DB) put(mode storage.ModePut, rootAddr boson.Address, chs ...boson.Chu
 			if err != nil {
 				return nil, err
 			}
+			if err = db.putTransfer(batch, rootAddr, ch.Address()); err != nil {
+				return nil, err
+			}
+
 			exist[i] = exists
 			gcSizeChange += c
 		}
 
 	case storage.ModePutUpload, storage.ModePutUploadPin:
 		for i, ch := range chs {
-			if containsChunk(ch.Address(), chs[:i]...) {
-				exist[i] = true
-				continue
-			}
 			item := chunkToItem(ch)
 			item.Type = 1
 			exists, err := db.putUpload(batch, binIDs, item)
 			if err != nil {
+				return nil, err
+			}
+			if err = db.putTransfer(batch, rootAddr, ch.Address()); err != nil {
 				return nil, err
 			}
 			exist[i] = exists
@@ -121,14 +120,9 @@ func (db *DB) put(mode storage.ModePut, rootAddr boson.Address, chs ...boson.Chu
 		}
 	case storage.ModePutChain:
 		for i, ch := range chs {
-			if containsChunk(ch.Address(), chs[:i]...) {
-				exist[i] = true
-				continue
-			}
-			pin := mode == storage.ModePutRequestPin
 			item := chunkToItem(ch)
 			item.Type = 2
-			exists, c, err := db.putRequest(batch, binIDs, item, rootItem, pin)
+			exists, c, err := db.putRequest(batch, binIDs, item, rootItem, false)
 			if err != nil {
 				return nil, err
 			}
@@ -190,8 +184,8 @@ func (db *DB) putUpload(batch driver.Batching, binIDs map[uint8]uint64, item she
 		return
 	}
 	if exists {
-		t := item.Type
 		item, err = db.retrievalDataIndex.Get(item)
+		t := item.Type
 		if t != item.Type {
 			item.Type = 0
 		}
@@ -287,17 +281,6 @@ func (db *DB) incBinID(binIDs map[uint8]uint64, po uint8) (id uint64, err error)
 	return binIDs[po], nil
 }
 
-// containsChunk returns true if the chunk with a specific address
-// is present in the provided chunk slice.
-func containsChunk(addr boson.Address, chs ...boson.Chunk) bool {
-	for _, c := range chs {
-		if addr.Equal(c.Address()) {
-			return true
-		}
-	}
-	return false
-}
-
 func (db *DB) putTransfer(batch driver.Batching, addr boson.Address, chs ...boson.Address) error {
 	item := addressToItem(addr)
 	exists, err := db.transferDataIndex.Has(item)
@@ -310,7 +293,7 @@ func (db *DB) putTransfer(batch driver.Batching, addr boson.Address, chs ...boso
 			return err
 		}
 	}
-	b := make([]byte, 0, len(item.Data)+len(chs)*boson.SectionSize)
+	b := make([]byte, 0, len(item.Data)+len(chs)*boson.HashSize)
 	b = append(b, item.Data...)
 	for _, c := range chs {
 		b = append(b, c.Bytes()...)

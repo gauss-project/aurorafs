@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"github.com/gauss-project/aurorafs/pkg/statestore/mock"
 	"io"
 	"math/rand"
 	"os"
@@ -29,18 +30,11 @@ import (
 	"time"
 
 	"github.com/gauss-project/aurorafs/pkg/boson"
-	chunkinfo "github.com/gauss-project/aurorafs/pkg/chunkinfo/mock"
 	"github.com/gauss-project/aurorafs/pkg/logging"
-	routetab "github.com/gauss-project/aurorafs/pkg/routetab/mock"
 	"github.com/gauss-project/aurorafs/pkg/shed"
 	"github.com/gauss-project/aurorafs/pkg/shed/driver"
 	"github.com/gauss-project/aurorafs/pkg/storage"
 	chunktesting "github.com/gauss-project/aurorafs/pkg/storage/testing"
-)
-
-var (
-	// chunkinfo service inject
-	ci = chunkinfo.New(routetab.NewMockRouteTable())
 )
 
 func init() {
@@ -173,11 +167,11 @@ func newTestDB(t testing.TB, o *Options) *DB {
 		}
 		path = dir
 	}
-	db, err := New(path, baseKey, o, logger)
+	s := mock.NewStateStore()
+	db, err := New(path, baseKey, s, o, logger)
 	if err != nil {
 		t.Fatal(err)
 	}
-	db.SetChunkInfo(ci)
 	t.Cleanup(func() {
 		err := db.Close()
 		if err != nil {

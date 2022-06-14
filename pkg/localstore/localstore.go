@@ -62,7 +62,6 @@ var (
 type DB struct {
 	shed *shed.DB
 
-	stateStore storage.StateStorer
 	// schema name of loaded data
 	schemaName shed.StringField
 
@@ -91,7 +90,8 @@ type DB struct {
 	capacity uint64
 
 	// triggers garbage collection event loop
-	collectGarbageTrigger chan struct{}
+	collectGarbageTrigger       chan struct{}
+	collectMemoryGarbageTrigger chan struct{}
 
 	// a buffered channel acting as a semaphore
 	// to limit the maximal number of goroutines
@@ -156,16 +156,18 @@ func New(path string, baseKey []byte, stateStore storage.StateStorer, o *Options
 	db = &DB{
 		capacity:   o.Capacity,
 		baseKey:    baseKey,
-		stateStore: stateStore,
+		chunkstore: chunkstore.New(stateStore),
+		filestore:  filestore.New(stateStore),
 		// channel collectGarbageTrigger
 		// needs to be buffered with the size of 1
 		// to signal another event if it
 		// is triggered during already running function
-		collectGarbageTrigger:    make(chan struct{}, 1),
-		close:                    make(chan struct{}),
-		collectGarbageWorkerDone: make(chan struct{}),
-		metrics:                  newMetrics(),
-		logger:                   logger,
+		collectGarbageTrigger:       make(chan struct{}, 1),
+		collectMemoryGarbageTrigger: make(chan struct{}, 1),
+		close:                       make(chan struct{}),
+		collectGarbageWorkerDone:    make(chan struct{}),
+		metrics:                     newMetrics(),
+		logger:                      logger,
 	}
 	if db.capacity == 0 {
 		db.capacity = defaultCapacity
@@ -486,6 +488,15 @@ func totalTimeMetric(metric prometheus.Counter, start time.Time) {
 
 }
 
+func (db *DB) Init() error {
+	err := db.filestore.Init()
+	if err != nil {
+		return err
+	}
+	err = db.chunkstore.Init()
+	return err
+}
+
 func (db *DB) GetListFile(page filestore.Page, filter []filestore.Filter, sort filestore.Sort) []filestore.FileView {
 	db.batchMu.RLock()
 	defer db.batchMu.RUnlock()
@@ -499,7 +510,24 @@ func (db *DB) PutFile(file filestore.FileView) error {
 func (db *DB) DeleteFile(reference boson.Address) error {
 	db.batchMu.Lock()
 	defer db.batchMu.Unlock()
-	return db.filestore.Delete(reference)
+	err := db.filestore.Delete(reference)
+	if err != nil {
+		return err
+	}
+	// chunkstore
+	err = db.DeleteAllChunk(chunkstore.DISCOVER, reference)
+	if err != nil {
+		return err
+	}
+	err = db.DeleteAllChunk(chunkstore.SERVICE, reference)
+	if err != nil {
+		return err
+	}
+	err = db.DeleteAllChunk(chunkstore.SOURCE, reference)
+	if err != nil {
+		return err
+	}
+	return db.setRemoveAll(reference)
 }
 
 func (db *DB) HasFile(reference boson.Address) bool {
@@ -518,12 +546,12 @@ func (db *DB) GetChunk(chunkType chunkstore.ChunkType, reference boson.Address) 
 	defer db.batchMu.RUnlock()
 	return db.chunkstore.Get(chunkType, reference)
 }
-func (db *DB) RemoveChunk(chunkType chunkstore.ChunkType, reference, overlay boson.Address) error {
+func (db *DB) DeleteChunk(chunkType chunkstore.ChunkType, reference, overlay boson.Address) error {
 	db.batchMu.Lock()
 	defer db.batchMu.Unlock()
 	return db.chunkstore.Remove(chunkType, reference, overlay)
 }
-func (db *DB) RemoveAllChunk(chunkType chunkstore.ChunkType, reference boson.Address) error {
+func (db *DB) DeleteAllChunk(chunkType chunkstore.ChunkType, reference boson.Address) error {
 	db.batchMu.Lock()
 	defer db.batchMu.Unlock()
 	return db.chunkstore.RemoveAll(chunkType, reference)

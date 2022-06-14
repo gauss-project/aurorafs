@@ -5,6 +5,7 @@ import (
 	"github.com/gauss-project/aurorafs/pkg/bitvector"
 	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/storage"
+	"strings"
 )
 
 type ChunkType int
@@ -68,6 +69,18 @@ func New(stateStore storage.StateStorer) Interface {
 }
 
 func (cs *chunkStore) Init() error {
+	err := cs.initService()
+	if err != nil {
+		return err
+	}
+	err = cs.initDiscover()
+	if err != nil {
+		return err
+	}
+	err = cs.initSource()
+	if err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -76,7 +89,7 @@ func (cs *chunkStore) Put(chunkType ChunkType, reference boson.Address, provider
 	switch chunkType {
 	case DISCOVER:
 		for _, provider := range providers {
-			err = cs.putChunkDiscover(reference, provider.Overlay, provider.B, provider.Len)
+			err = cs.putDiscover(reference, provider.Overlay, provider.B, provider.Len)
 		}
 	case SOURCE:
 		for _, provider := range providers {
@@ -94,7 +107,7 @@ func (cs *chunkStore) Put(chunkType ChunkType, reference boson.Address, provider
 func (cs *chunkStore) Get(chunkType ChunkType, reference boson.Address) ([]Consumer, error) {
 	switch chunkType {
 	case DISCOVER:
-		d := cs.getChunkDiscover(reference)
+		d := cs.getDiscover(reference)
 		p := make([]Consumer, 0, len(d))
 		for k, v := range d {
 			p = append(p, Consumer{
@@ -172,4 +185,18 @@ func (cs *chunkStore) Has(chunkType ChunkType, reference, overlay boson.Address)
 
 func generateKey(keyPrefix string, rootCid, overlay boson.Address) string {
 	return keyPrefix + "-" + rootCid.String() + "-" + overlay.String()
+}
+
+func unmarshalKey(keyPrefix, key string) (boson.Address, boson.Address, error) {
+	addr := strings.TrimPrefix(key, keyPrefix)
+	keys := strings.Split(addr, "-")
+	rootCid, err := boson.ParseHexAddress(keys[0])
+	if err != nil {
+		return boson.ZeroAddress, boson.ZeroAddress, err
+	}
+	overlay, err := boson.ParseHexAddress(keys[1])
+	if err != nil {
+		return boson.ZeroAddress, boson.ZeroAddress, err
+	}
+	return rootCid, overlay, nil
 }
