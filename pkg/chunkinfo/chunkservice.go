@@ -21,7 +21,7 @@ const (
 )
 
 func (ci *ChunkInfo) isDownload(ctx context.Context, rootCid, overlay boson.Address) bool {
-	consumerList, err := ci.chunkStore.Get(chunkstore.SERVICE, rootCid)
+	consumerList, err := ci.chunkStore.GetChunk(chunkstore.SERVICE, rootCid)
 	if err != nil {
 		ci.logger.Errorf("chunkInfo isDownload:%w", err)
 		return false
@@ -40,7 +40,7 @@ func (ci *ChunkInfo) isDownload(ctx context.Context, rootCid, overlay boson.Addr
 }
 
 func (ci *ChunkInfo) updateService(ctx context.Context, rootCid, cid boson.Address, bit int, overlay boson.Address) error {
-	has, err := ci.chunkStore.Has(chunkstore.SERVICE, rootCid, overlay)
+	has, err := ci.chunkStore.HasChunk(chunkstore.SERVICE, rootCid, overlay)
 	if err != nil {
 		return err
 	}
@@ -49,13 +49,13 @@ func (ci *ChunkInfo) updateService(ctx context.Context, rootCid, cid boson.Addre
 	provider.Len = bit
 	provider.Bit = bit
 	provider.Overlay = overlay
-	err = ci.chunkStore.Put(chunkstore.SERVICE, rootCid, []chunkstore.Provider{provider})
+	err = ci.chunkStore.PutChunk(chunkstore.SERVICE, rootCid, []chunkstore.Provider{provider})
 	if err != nil {
 		return err
 	}
 
 	var consumer chunkstore.Consumer
-	consumerList, err := ci.chunkStore.Get(chunkstore.SERVICE, rootCid)
+	consumerList, err := ci.chunkStore.GetChunk(chunkstore.SERVICE, rootCid)
 	if err != nil {
 		return err
 	}
@@ -97,7 +97,7 @@ func (ci *ChunkInfo) updateService(ctx context.Context, rootCid, cid boson.Addre
 
 func (ci *ChunkInfo) getService(ctx context.Context, rootCid boson.Address) ([]aurora.ChunkInfoOverlay, error) {
 	res := make([]aurora.ChunkInfoOverlay, 0)
-	consumerList, err := ci.chunkStore.Get(chunkstore.SERVICE, rootCid)
+	consumerList, err := ci.chunkStore.GetChunk(chunkstore.SERVICE, rootCid)
 	if err != nil {
 		return nil, err
 	}
@@ -110,7 +110,7 @@ func (ci *ChunkInfo) getService(ctx context.Context, rootCid boson.Address) ([]a
 }
 
 func (ci *ChunkInfo) removeService(ctx context.Context, rootCid boson.Address) error {
-	err := ci.chunkStore.RemoveAll(chunkstore.SERVICE, rootCid)
+	err := ci.chunkStore.DeleteAllChunk(chunkstore.SERVICE, rootCid)
 	if err != nil {
 		return err
 	}

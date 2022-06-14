@@ -7,7 +7,7 @@ import (
 	"sync"
 
 	"github.com/gauss-project/aurorafs/pkg/boson"
-	"github.com/gauss-project/aurorafs/pkg/localstore/chunkstore"
+	"github.com/gauss-project/aurorafs/pkg/localstore"
 	"github.com/gauss-project/aurorafs/pkg/logging"
 	"github.com/gauss-project/aurorafs/pkg/p2p"
 	"github.com/gauss-project/aurorafs/pkg/resolver"
@@ -49,11 +49,11 @@ type ChunkInfo struct {
 	syncMsg        sync.Map // map[string]chan bool
 	timeoutTrigger *timeoutTrigger
 	pendingFinder  *pendingFinderInfo
-	chunkStore     chunkstore.Interface
+	chunkStore     *localstore.DB
 }
 
 func New(addr boson.Address, streamer p2p.Streamer, logger logging.Logger, traversal traversal.Traverser,
-	chunkStore chunkstore.Interface, storer storage.Storer, route routetab.RouteTab, oracleChain chain.Resolver,
+	chunkStore *localstore.DB, storer storage.Storer, route routetab.RouteTab, oracleChain chain.Resolver,
 	resolver resolver.Interface, subPub subscribe.SubPub) *ChunkInfo {
 	chunkInfo := &ChunkInfo{
 		addr:        addr,

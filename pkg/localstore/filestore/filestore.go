@@ -8,6 +8,7 @@ import (
 
 type Interface interface {
 	Init() error
+	Get(reference boson.Address) (FileView, bool)
 	GetList(page Page, filter []Filter, sort Sort) []FileView
 	Put(file FileView) error
 	Delete(reference boson.Address) error
@@ -71,6 +72,11 @@ func (fs *fileStore) Init() error {
 		return err
 	}
 	return nil
+}
+
+func (fs *fileStore) Get(reference boson.Address) (FileView, bool) {
+	file, ok := fs.files[reference.String()]
+	return file, ok
 }
 
 func (fs *fileStore) GetList(page Page, filter []Filter, sort Sort) []FileView {

@@ -17,7 +17,7 @@ const (
 )
 
 func (ci *ChunkInfo) isDiscover(ctx context.Context, rootCid boson.Address) bool {
-	consumerList, err := ci.chunkStore.Get(chunkstore.DISCOVER, rootCid)
+	consumerList, err := ci.chunkStore.GetChunk(chunkstore.DISCOVER, rootCid)
 	if err != nil {
 		ci.logger.Errorf("chunkInfo isDiscover:%w", err)
 		return false
@@ -30,7 +30,7 @@ func (ci *ChunkInfo) isDiscover(ctx context.Context, rootCid boson.Address) bool
 
 func (ci *ChunkInfo) getRoutes(rootCid, cid boson.Address) ([]aco.Route, error) {
 	res := make([]aco.Route, 0)
-	consumerList, err := ci.chunkStore.Get(chunkstore.DISCOVER, rootCid)
+	consumerList, err := ci.chunkStore.GetChunk(chunkstore.DISCOVER, rootCid)
 	if err != nil {
 		return nil, err
 	}
@@ -85,7 +85,7 @@ func (ci *ChunkInfo) addRoutes(routes []aco.Route) []aco.Route {
 
 func (ci *ChunkInfo) getDiscover(rootCid boson.Address) ([]aurora.ChunkInfoOverlay, error) {
 	res := make([]aurora.ChunkInfoOverlay, 0)
-	consumerList, err := ci.chunkStore.Get(chunkstore.DISCOVER, rootCid)
+	consumerList, err := ci.chunkStore.GetChunk(chunkstore.DISCOVER, rootCid)
 	if err != nil {
 		return nil, err
 	}
@@ -98,7 +98,7 @@ func (ci *ChunkInfo) getDiscover(rootCid boson.Address) ([]aurora.ChunkInfoOverl
 }
 
 func (ci *ChunkInfo) removeDiscover(rootCid boson.Address) error {
-	return ci.chunkStore.RemoveAll(chunkstore.DISCOVER, rootCid)
+	return ci.chunkStore.DeleteAllChunk(chunkstore.DISCOVER, rootCid)
 }
 
 func (ci *ChunkInfo) updateDiscover(ctx context.Context, rootCid, overlay boson.Address, bv []byte) error {
@@ -106,7 +106,7 @@ func (ci *ChunkInfo) updateDiscover(ctx context.Context, rootCid, overlay boson.
 	provider.B = bv
 	provider.Len = len(bv) * 8
 	provider.Overlay = overlay
-	return ci.chunkStore.Put(chunkstore.DISCOVER, rootCid, []chunkstore.Provider{provider})
+	return ci.chunkStore.PutChunk(chunkstore.DISCOVER, rootCid, []chunkstore.Provider{provider})
 }
 
 func (ci *ChunkInfo) FindChunkInfo(ctx context.Context, authInfo []byte, rootCid boson.Address, overlays []boson.Address) bool {
@@ -150,7 +150,7 @@ func (ci *ChunkInfo) cleanDiscoverTrigger() {
 			<-t.C
 			now := time.Now().Unix()
 			ctx := context.Background()
-			discover, err := ci.chunkStore.GetAll(chunkstore.DISCOVER)
+			discover, err := ci.chunkStore.GetAllChunk(chunkstore.DISCOVER)
 			if err != nil {
 				ci.logger.Errorf("chunkInfo cleanDiscover get discover:%w", err)
 				continue
@@ -162,7 +162,7 @@ func (ci *ChunkInfo) cleanDiscoverTrigger() {
 					ci.cancelPendingFindInfo(rootCid)
 					ci.queues.Delete(rootCid.String())
 					ci.syncLk.Unlock()
-					err = ci.chunkStore.RemoveAll(chunkstore.DISCOVER, rootCid)
+					err = ci.chunkStore.DeleteAllChunk(chunkstore.DISCOVER, rootCid)
 					if err != nil {
 						ci.logger.Errorf("chunkInfo cleanDiscover remove discover:%w", err)
 					}
@@ -170,7 +170,7 @@ func (ci *ChunkInfo) cleanDiscoverTrigger() {
 				}
 				for _, provider := range providerList {
 					if provider.Time+maxTime < now {
-						err = ci.chunkStore.Remove(chunkstore.DISCOVER, rootCid, provider.Overlay)
+						err = ci.chunkStore.DeleteChunk(chunkstore.DISCOVER, rootCid, provider.Overlay)
 						if err != nil {
 							ci.logger.Errorf("chunkInfo cleanDiscover remove discover:%w", err)
 						}
