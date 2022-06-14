@@ -155,7 +155,7 @@ func (ci *ChunkInfo) handlerChunkInfoResp(ctx context.Context, p p2p.Peer, strea
 func (ci *ChunkInfo) onChunkInfoReq(ctx context.Context, authInfo []byte, overlay boson.Address, req pb.ChunkInfoReq) error {
 	rc := boson.NewAddress(req.RootCid)
 	info := make(map[string][]byte)
-	consumerList, err := ci.chunkStore.Get(chunkstore.SERVICE, rc)
+	consumerList, err := ci.chunkStore.GetChunk(chunkstore.SERVICE, rc)
 	if err != nil {
 		return err
 	}

@@ -13,11 +13,11 @@ func (ci *ChunkInfo) updateSource(ctx context.Context, rootCid, cid boson.Addres
 	provider.Bit = bit
 	provider.Len = bit
 	provider.Overlay = sourceOverlay
-	return ci.chunkStore.Put(chunkstore.SOURCE, rootCid, []chunkstore.Provider{provider})
+	return ci.chunkStore.PutChunk(chunkstore.SOURCE, rootCid, []chunkstore.Provider{provider})
 }
 
 func (ci *ChunkInfo) getSource(ctx context.Context, rootCid boson.Address) (sourceResp aurora.ChunkInfoSourceApi, err error) {
-	consumerList, err := ci.chunkStore.Get(chunkstore.SOURCE, rootCid)
+	consumerList, err := ci.chunkStore.GetChunk(chunkstore.SOURCE, rootCid)
 	if err != nil {
 		return
 	}
@@ -37,5 +37,5 @@ func (ci *ChunkInfo) getSource(ctx context.Context, rootCid boson.Address) (sour
 }
 
 func (ci *ChunkInfo) removeSource(ctx context.Context, rootCid boson.Address) error {
-	return ci.chunkStore.RemoveAll(chunkstore.SOURCE, rootCid)
+	return ci.chunkStore.DeleteAllChunk(chunkstore.SOURCE, rootCid)
 }

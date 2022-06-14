@@ -19,14 +19,14 @@ package localstore
 import (
 	"encoding/binary"
 	"errors"
-	"github.com/gauss-project/aurorafs/pkg/localstore/chunkstore"
-	"github.com/gauss-project/aurorafs/pkg/localstore/filestore"
 	"os"
 	"runtime/pprof"
 	"sync"
 	"time"
 
 	"github.com/gauss-project/aurorafs/pkg/boson"
+	"github.com/gauss-project/aurorafs/pkg/localstore/chunkstore"
+	"github.com/gauss-project/aurorafs/pkg/localstore/filestore"
 	"github.com/gauss-project/aurorafs/pkg/logging"
 	"github.com/gauss-project/aurorafs/pkg/shed"
 	"github.com/gauss-project/aurorafs/pkg/shed/driver"
