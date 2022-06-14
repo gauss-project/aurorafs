@@ -20,10 +20,10 @@ import (
 	"bytes"
 	"context"
 	"errors"
-	"github.com/gauss-project/aurorafs/pkg/statestore/mock"
+	"github.com/gauss-project/aurorafs/pkg/shed/leveldb"
+	mockstate "github.com/gauss-project/aurorafs/pkg/statestore/mock"
 	"io"
 	"math/rand"
-	"os"
 	"runtime"
 	"sync"
 	"testing"
@@ -156,19 +156,13 @@ func newTestDB(t testing.TB, o *Options) *DB {
 	if _, err := rand.Read(baseKey); err != nil {
 		t.Fatal(err)
 	}
-	logger := logging.New(io.Discard, 0)
-	var path string
-	switch shed.TestDriver {
-	case "leveldb":
-	case "wiredtiger":
-		dir, err := os.MkdirTemp("", "localstore-test")
-		if err != nil {
-			t.Fatal(err)
-		}
-		path = dir
+	if o == nil {
+		o = &Options{Driver: "leveldb", Capacity: 1000}
 	}
-	s := mock.NewStateStore()
-	db, err := New(path, baseKey, s, o, logger)
+	s := mockstate.NewStateStore()
+	shed.Register("leveldb", leveldb.Driver{})
+	logger := logging.New(io.Discard, 0)
+	db, err := New("", baseKey, s, o, logger)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -177,7 +171,6 @@ func newTestDB(t testing.TB, o *Options) *DB {
 		if err != nil {
 			t.Error(err)
 		}
-		_ = os.RemoveAll(path)
 	})
 	return db
 }

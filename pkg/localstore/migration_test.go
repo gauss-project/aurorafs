@@ -17,6 +17,7 @@
 package localstore
 
 import (
+	"github.com/gauss-project/aurorafs/pkg/statestore/mock"
 	"io"
 	"math/rand"
 	"os"
@@ -59,13 +60,12 @@ func TestOneMigration(t *testing.T) {
 	}
 
 	logger := logging.New(io.Discard, 0)
-
+	s := mock.NewStateStore()
 	// start the fresh localstore with the sanctuary schema name
-	db, err := New(dir, baseKey, nil, logger)
+	db, err := New(dir, baseKey, s, nil, logger)
 	if err != nil {
 		t.Fatal(err)
 	}
-	db.SetChunkInfo(ci)
 
 	err = db.Close()
 	if err != nil {
@@ -75,11 +75,10 @@ func TestOneMigration(t *testing.T) {
 	DbSchemaCurrent = dbSchemaNext
 
 	// start the existing localstore and expect the migration to run
-	db, err = New(dir, baseKey, nil, logger)
+	db, err = New(dir, baseKey, s, nil, logger)
 	if err != nil {
 		t.Fatal(err)
 	}
-	db.SetChunkInfo(ci)
 
 	schemaName, err := db.schemaName.Get()
 	if err != nil {
@@ -148,13 +147,12 @@ func TestManyMigrations(t *testing.T) {
 		t.Fatal(err)
 	}
 	logger := logging.New(io.Discard, 0)
-
+	s := mock.NewStateStore()
 	// start the fresh localstore with the sanctuary schema name
-	db, err := New(dir, baseKey, nil, logger)
+	db, err := New(dir, baseKey, s, nil, logger)
 	if err != nil {
 		t.Fatal(err)
 	}
-	db.SetChunkInfo(ci)
 
 	err = db.Close()
 	if err != nil {
@@ -164,11 +162,10 @@ func TestManyMigrations(t *testing.T) {
 	DbSchemaCurrent = "salvation"
 
 	// start the existing localstore and expect the migration to run
-	db, err = New(dir, baseKey, nil, logger)
+	db, err = New(dir, baseKey, s, nil, logger)
 	if err != nil {
 		t.Fatal(err)
 	}
-	db.SetChunkInfo(ci)
 
 	schemaName, err := db.schemaName.Get()
 	if err != nil {
@@ -230,13 +227,13 @@ func TestMigrationErrorFrom(t *testing.T) {
 		t.Fatal(err)
 	}
 	logger := logging.New(io.Discard, 0)
+	s := mock.NewStateStore()
 
 	// start the fresh localstore with the sanctuary schema name
-	db, err := New(dir, baseKey, nil, logger)
+	db, err := New(dir, baseKey, s, nil, logger)
 	if err != nil {
 		t.Fatal(err)
 	}
-	db.SetChunkInfo(ci)
 
 	err = db.Close()
 	if err != nil {
@@ -246,7 +243,7 @@ func TestMigrationErrorFrom(t *testing.T) {
 	DbSchemaCurrent = "foo"
 
 	// start the existing localstore and expect the migration to run
-	_, err = New(dir, baseKey, nil, logger)
+	_, err = New(dir, baseKey, s, nil, logger)
 	if !strings.Contains(err.Error(), errMissingCurrentSchema.Error()) {
 		t.Fatalf("expected errCannotFindSchema but got %v", err)
 	}
@@ -293,12 +290,12 @@ func TestMigrationErrorTo(t *testing.T) {
 
 	logger := logging.New(io.Discard, 0)
 
+	s := mock.NewStateStore()
 	// start the fresh localstore with the sanctuary schema name
-	db, err := New(dir, baseKey, nil, logger)
+	db, err := New(dir, baseKey, s, nil, logger)
 	if err != nil {
 		t.Fatal(err)
 	}
-	db.SetChunkInfo(ci)
 
 	err = db.Close()
 	if err != nil {
@@ -308,7 +305,7 @@ func TestMigrationErrorTo(t *testing.T) {
 	DbSchemaCurrent = "foo"
 
 	// start the existing localstore and expect the migration to run
-	_, err = New(dir, baseKey, nil, logger)
+	_, err = New(dir, baseKey, s, nil, logger)
 	if !strings.Contains(err.Error(), errMissingTargetSchema.Error()) {
 		t.Fatalf("expected errMissingTargetSchema but got %v", err)
 	}

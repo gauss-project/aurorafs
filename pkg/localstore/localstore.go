@@ -245,8 +245,9 @@ func New(path string, baseKey []byte, stateStore storage.StateStorer, o *Options
 		DecodeValue: func(keyItem shed.Item, value []byte) (e shed.Item, err error) {
 			e.StoreTimestamp = int64(binary.BigEndian.Uint64(value[8:16]))
 			e.BinID = binary.BigEndian.Uint64(value[:8])
-			e.Counter = binary.BigEndian.Uint64(value[16:24])
-			e.Data = value[24:]
+			e.Type = binary.BigEndian.Uint64(value[16:24])
+			e.Counter = binary.BigEndian.Uint64(value[24:32])
+			e.Data = value[32:]
 			return e, nil
 		},
 	})
