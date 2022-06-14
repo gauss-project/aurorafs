@@ -125,7 +125,7 @@ func (ci *ChunkInfo) handlerChunkInfoReq(ctx context.Context, p p2p.Peer, stream
 	}
 }
 
-func (ci *ChunkInfo) handlerChunkInfoResp(ctx context.Context, p p2p.Peer, stream p2p.Stream) (err error) {
+func (ci *ChunkInfo) handlerChunkInfoResp(ctx context.Context, _ p2p.Peer, stream p2p.Stream) (err error) {
 	r := protobuf.NewReader(stream)
 	defer func() {
 		if err != nil {
@@ -152,7 +152,7 @@ func (ci *ChunkInfo) handlerChunkInfoResp(ctx context.Context, p p2p.Peer, strea
 	return
 }
 
-func (ci *ChunkInfo) onChunkInfoReq(ctx context.Context, authInfo []byte, overlay boson.Address, req pb.ChunkInfoReq) error {
+func (ci *ChunkInfo) onChunkInfoReq(ctx context.Context, _ []byte, overlay boson.Address, req pb.ChunkInfoReq) error {
 	rc := boson.NewAddress(req.RootCid)
 	info := make(map[string][]byte)
 	consumerList, err := ci.chunkStore.GetChunk(chunkstore.SERVICE, rc)
@@ -182,10 +182,13 @@ func (ci *ChunkInfo) onFindChunkInfo(ctx context.Context, authInfo []byte, rootC
 
 	ov := overlay.String()
 	if chunkInfo[ov] != nil {
-		ci.updateDiscover(ctx, rootCid, overlay, chunkInfo[ov])
+		err := ci.updateDiscover(rootCid, overlay, chunkInfo[ov])
+		if err != nil {
+			ci.logger.Errorf("chunkInfo update:%w", err)
+		}
 	}
 
-	ci.updateQueue(ctx, authInfo, rootCid, overlay, chunkInfo)
+	ci.updateQueue(rootCid, overlay, chunkInfo)
 
 	ci.doFindChunkInfo(ctx, authInfo, rootCid)
 }

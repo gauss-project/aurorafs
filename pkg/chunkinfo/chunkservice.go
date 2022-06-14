@@ -1,7 +1,6 @@
 package chunkinfo
 
 import (
-	"context"
 	"github.com/gauss-project/aurorafs/pkg/aurora"
 	"github.com/gauss-project/aurorafs/pkg/bitvector"
 	"github.com/gauss-project/aurorafs/pkg/boson"
@@ -20,7 +19,7 @@ const (
 	RootCid_ADD
 )
 
-func (ci *ChunkInfo) isDownload(ctx context.Context, rootCid, overlay boson.Address) bool {
+func (ci *ChunkInfo) isDownload(rootCid, overlay boson.Address) bool {
 	consumerList, err := ci.chunkStore.GetChunk(chunkstore.SERVICE, rootCid)
 	if err != nil {
 		ci.logger.Errorf("chunkInfo isDownload:%w", err)
@@ -39,7 +38,7 @@ func (ci *ChunkInfo) isDownload(ctx context.Context, rootCid, overlay boson.Addr
 	return false
 }
 
-func (ci *ChunkInfo) updateService(ctx context.Context, rootCid, cid boson.Address, bit int, overlay boson.Address) error {
+func (ci *ChunkInfo) updateService(rootCid boson.Address, bit int, overlay boson.Address) error {
 	has, err := ci.chunkStore.HasChunk(chunkstore.SERVICE, rootCid, overlay)
 	if err != nil {
 		return err
@@ -95,7 +94,7 @@ func (ci *ChunkInfo) updateService(ctx context.Context, rootCid, cid boson.Addre
 	return nil
 }
 
-func (ci *ChunkInfo) getService(ctx context.Context, rootCid boson.Address) ([]aurora.ChunkInfoOverlay, error) {
+func (ci *ChunkInfo) getService(rootCid boson.Address) ([]aurora.ChunkInfoOverlay, error) {
 	res := make([]aurora.ChunkInfoOverlay, 0)
 	consumerList, err := ci.chunkStore.GetChunk(chunkstore.SERVICE, rootCid)
 	if err != nil {
@@ -109,7 +108,7 @@ func (ci *ChunkInfo) getService(ctx context.Context, rootCid boson.Address) ([]a
 	return res, nil
 }
 
-func (ci *ChunkInfo) removeService(ctx context.Context, rootCid boson.Address) error {
+func (ci *ChunkInfo) removeService(rootCid boson.Address) error {
 	err := ci.chunkStore.DeleteAllChunk(chunkstore.SERVICE, rootCid)
 	if err != nil {
 		return err

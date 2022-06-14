@@ -172,7 +172,7 @@ func (ci *ChunkInfo) queueProcess(ctx context.Context, rootCid boson.Address) {
 	}
 }
 
-func (ci *ChunkInfo) updateQueue(ctx context.Context, authInfo []byte, rootCid, overlay boson.Address, chunkInfo map[string][]byte) {
+func (ci *ChunkInfo) updateQueue(rootCid, overlay boson.Address, chunkInfo map[string][]byte) {
 	q := ci.getQueue(rootCid.String())
 	if q == nil {
 		return

@@ -16,7 +16,7 @@ const (
 	maxTime   = 24 * 60 * 60
 )
 
-func (ci *ChunkInfo) isDiscover(ctx context.Context, rootCid boson.Address) bool {
+func (ci *ChunkInfo) isDiscover(rootCid boson.Address) bool {
 	consumerList, err := ci.chunkStore.GetChunk(chunkstore.DISCOVER, rootCid)
 	if err != nil {
 		ci.logger.Errorf("chunkInfo isDiscover:%w", err)
@@ -28,20 +28,22 @@ func (ci *ChunkInfo) isDiscover(ctx context.Context, rootCid boson.Address) bool
 	return true
 }
 
-func (ci *ChunkInfo) getRoutes(rootCid, cid boson.Address) ([]aco.Route, error) {
+func (ci *ChunkInfo) getRoutes(rootCid boson.Address, bit int) ([]aco.Route, error) {
 	res := make([]aco.Route, 0)
 	consumerList, err := ci.chunkStore.GetChunk(chunkstore.DISCOVER, rootCid)
 	if err != nil {
 		return nil, err
 	}
 
-	s := ci.getCidSort(rootCid, cid)
 	for _, c := range consumerList {
 		bv, err := bitvector.NewFromBytes(c.B, c.Len)
 		if err != nil {
 			return nil, err
 		}
-		if bv.Get(s) {
+		if bv.Len() < bit {
+			continue
+		}
+		if bv.Get(bit) {
 			route := aco.NewRoute(c.Overlay, c.Overlay)
 			res = append(res, route)
 		}
@@ -101,7 +103,7 @@ func (ci *ChunkInfo) removeDiscover(rootCid boson.Address) error {
 	return ci.chunkStore.DeleteAllChunk(chunkstore.DISCOVER, rootCid)
 }
 
-func (ci *ChunkInfo) updateDiscover(ctx context.Context, rootCid, overlay boson.Address, bv []byte) error {
+func (ci *ChunkInfo) updateDiscover(rootCid, overlay boson.Address, bv []byte) error {
 	var provider chunkstore.Provider
 	provider.B = bv
 	provider.Len = len(bv) * 8
@@ -139,7 +141,7 @@ func (ci *ChunkInfo) findChunkInfo(ctx context.Context, authInfo []byte, rootCid
 	go ci.doFindChunkInfo(ctx, authInfo, rootCid)
 }
 
-func (ci *ChunkInfo) doFindChunkInfo(ctx context.Context, authInfo []byte, rootCid boson.Address) {
+func (ci *ChunkInfo) doFindChunkInfo(ctx context.Context, _ []byte, rootCid boson.Address) {
 	ci.queueProcess(ctx, rootCid)
 }
 
@@ -149,7 +151,6 @@ func (ci *ChunkInfo) cleanDiscoverTrigger() {
 		for {
 			<-t.C
 			now := time.Now().Unix()
-			ctx := context.Background()
 			discover, err := ci.chunkStore.GetAllChunk(chunkstore.DISCOVER)
 			if err != nil {
 				ci.logger.Errorf("chunkInfo cleanDiscover get discover:%w", err)
@@ -157,7 +158,7 @@ func (ci *ChunkInfo) cleanDiscoverTrigger() {
 			}
 			for rCid, providerList := range discover {
 				rootCid := boson.MustParseHexAddress(rCid)
-				if ci.isDownload(ctx, rootCid, ci.addr) {
+				if ci.isDownload(rootCid, ci.addr) {
 					ci.syncLk.Lock()
 					ci.cancelPendingFindInfo(rootCid)
 					ci.queues.Delete(rootCid.String())

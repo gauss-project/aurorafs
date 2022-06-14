@@ -1,14 +1,12 @@
 package chunkinfo
 
 import (
-	"context"
-
 	"github.com/gauss-project/aurorafs/pkg/aurora"
 	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/localstore/chunkstore"
 )
 
-func (ci *ChunkInfo) updateSource(ctx context.Context, rootCid, cid boson.Address, bit int, sourceOverlay boson.Address) error {
+func (ci *ChunkInfo) updateSource(rootCid boson.Address, bit int, sourceOverlay boson.Address) error {
 	var provider chunkstore.Provider
 	provider.Bit = bit
 	provider.Len = bit
@@ -16,7 +14,7 @@ func (ci *ChunkInfo) updateSource(ctx context.Context, rootCid, cid boson.Addres
 	return ci.chunkStore.PutChunk(chunkstore.SOURCE, rootCid, []chunkstore.Provider{provider})
 }
 
-func (ci *ChunkInfo) getSource(ctx context.Context, rootCid boson.Address) (sourceResp aurora.ChunkInfoSourceApi, err error) {
+func (ci *ChunkInfo) getSource(rootCid boson.Address) (sourceResp aurora.ChunkInfoSourceApi, err error) {
 	consumerList, err := ci.chunkStore.GetChunk(chunkstore.SOURCE, rootCid)
 	if err != nil {
 		return
@@ -36,6 +34,6 @@ func (ci *ChunkInfo) getSource(ctx context.Context, rootCid boson.Address) (sour
 	return
 }
 
-func (ci *ChunkInfo) removeSource(ctx context.Context, rootCid boson.Address) error {
+func (ci *ChunkInfo) removeSource(rootCid boson.Address) error {
 	return ci.chunkStore.DeleteAllChunk(chunkstore.SOURCE, rootCid)
 }
