@@ -497,6 +497,12 @@ func (db *DB) Init() error {
 	return err
 }
 
+func (db *DB) GetFile(reference boson.Address) (filestore.FileView, bool) {
+	db.batchMu.RLock()
+	defer db.batchMu.RUnlock()
+	return db.filestore.Get(reference)
+}
+
 func (db *DB) GetListFile(page filestore.Page, filter []filestore.Filter, sort filestore.Sort) []filestore.FileView {
 	db.batchMu.RLock()
 	defer db.batchMu.RUnlock()
@@ -546,6 +552,13 @@ func (db *DB) GetChunk(chunkType chunkstore.ChunkType, reference boson.Address) 
 	defer db.batchMu.RUnlock()
 	return db.chunkstore.Get(chunkType, reference)
 }
+
+func (db *DB) GetAllChunk(ChunkType chunkstore.ChunkType) (map[string][]chunkstore.Consumer, error) {
+	db.batchMu.RLock()
+	defer db.batchMu.RUnlock()
+	return db.chunkstore.GetAll(ChunkType)
+}
+
 func (db *DB) DeleteChunk(chunkType chunkstore.ChunkType, reference, overlay boson.Address) error {
 	db.batchMu.Lock()
 	defer db.batchMu.Unlock()
