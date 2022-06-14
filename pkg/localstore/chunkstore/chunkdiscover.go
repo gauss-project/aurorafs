@@ -104,6 +104,10 @@ func (cs *chunkStore) getDiscover(rootCid boson.Address) map[string]*discoverBit
 	return cs.discover[r]
 }
 
+func (cs *chunkStore) getAllDiscover() map[string]map[string]*discoverBitVector {
+	return cs.discover
+}
+
 func (cs *chunkStore) removeDiscover(rootCid boson.Address) error {
 	r := rootCid.String()
 	if v, ok := cs.discover[r]; ok {

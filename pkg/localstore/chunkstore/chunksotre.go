@@ -22,6 +22,7 @@ type Interface interface {
 	Init() error
 	Put(chunkType ChunkType, reference boson.Address, providers []Provider) error
 	Get(chunkType ChunkType, reference boson.Address) ([]Consumer, error)
+	GetAll(chunkType ChunkType) (map[string][]Consumer, error)
 	Remove(chunkType ChunkType, reference, overlay boson.Address) error
 	RemoveAll(chunkType ChunkType, reference boson.Address) error
 	Has(chunkType ChunkType, reference, overlay boson.Address) (bool, error)
@@ -144,6 +145,60 @@ func (cs *chunkStore) Get(chunkType ChunkType, reference boson.Address) ([]Consu
 		return nil, TypeError
 	}
 }
+
+func (cs *chunkStore) GetAll(chunkType ChunkType) (map[string][]Consumer, error) {
+	switch chunkType {
+	case DISCOVER:
+		r := make(map[string][]Consumer)
+		d := cs.getAllDiscover()
+		for rootCid, node := range d {
+			p := make([]Consumer, 0, len(node))
+			for overlay, bv := range node {
+				p = append(p, Consumer{
+					Overlay: boson.MustParseHexAddress(overlay),
+					Len:     bv.bit.Len(),
+					B:       bv.bit.Bytes(),
+					Time:    bv.time,
+				})
+			}
+			r[rootCid] = p
+		}
+		return r, nil
+	case SOURCE:
+		r := make(map[string][]Consumer)
+		d := cs.getAllChunkSource()
+		for rootCid, node := range d {
+			p := make([]Consumer, 0, len(node))
+			for overlay, bv := range node {
+				p = append(p, Consumer{
+					Overlay: boson.MustParseHexAddress(overlay),
+					Len:     bv.Len(),
+					B:       bv.Bytes(),
+				})
+			}
+			r[rootCid] = p
+		}
+		return r, nil
+	case SERVICE:
+		r := make(map[string][]Consumer)
+		d := cs.getAllChunkService()
+		for rootCid, node := range d {
+			p := make([]Consumer, 0, len(node))
+			for overlay, bv := range node {
+				p = append(p, Consumer{
+					Overlay: boson.MustParseHexAddress(overlay),
+					Len:     bv.Len(),
+					B:       bv.Bytes(),
+				})
+			}
+			r[rootCid] = p
+		}
+		return r, nil
+	default:
+		return nil, TypeError
+	}
+}
+
 func (cs *chunkStore) Remove(chunkType ChunkType, reference, overlay boson.Address) error {
 	switch chunkType {
 	case DISCOVER:

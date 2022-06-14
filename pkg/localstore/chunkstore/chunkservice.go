@@ -35,6 +35,10 @@ func (cs *chunkStore) getChunkService(rootCid boson.Address) map[string]*bitvect
 	return cs.service[r]
 }
 
+func (cs *chunkStore) getAllChunkService() map[string]map[string]*bitvector.BitVector {
+	return cs.service
+}
+
 func (cs *chunkStore) putInitService(rootCid, overlay boson.Address, b []byte, len int) {
 	if cs.hasDiscover(rootCid, overlay) {
 		return
