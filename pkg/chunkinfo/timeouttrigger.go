@@ -59,7 +59,7 @@ func (ci *ChunkInfo) triggerTimeOut() {
 	go func() {
 		for {
 			<-t.C
-			rootCid, overlay := ci.tt.getTimeOutRootCidAndNode()
+			rootCid, overlay := ci.timeoutTrigger.getTimeOutRootCidAndNode()
 			if !rootCid.Equal(boson.ZeroAddress) {
 				q := ci.getQueue(rootCid.String())
 				if q != nil {
@@ -70,9 +70,8 @@ func (ci *ChunkInfo) triggerTimeOut() {
 					q.popNode(Pulling, overlay.Bytes())
 					q.push(UnPull, overlay.Bytes())
 				} else {
-					ci.tt.removeTimeOutTrigger(rootCid, overlay)
+					ci.timeoutTrigger.removeTimeOutTrigger(rootCid, overlay)
 				}
-
 			}
 		}
 	}()

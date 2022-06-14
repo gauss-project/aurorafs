@@ -146,7 +146,7 @@ func (ci *ChunkInfo) queueProcess(ctx context.Context, rootCid boson.Address) {
 	if q.len(Pulled)+q.len(Pulling) >= PullMax {
 		return
 	}
-	if !ci.cpd.getPendingFinder(rootCid) {
+	if !ci.pendingFinder.getPendingFinder(rootCid) {
 		return
 	}
 	pullingLen := q.len(Pulling)
@@ -161,8 +161,8 @@ func (ci *ChunkInfo) queueProcess(ctx context.Context, rootCid boson.Address) {
 		unNode := q.pop(UnPull)
 		q.push(Pulling, *unNode)
 		overlay := boson.NewAddress(*unNode)
-		ci.tt.updateTimeOutTrigger(rootCid.Bytes(), *unNode)
-		ciReq := ci.cd.createChunkInfoReq(rootCid, overlay, ci.addr)
+		ci.timeoutTrigger.updateTimeOutTrigger(rootCid.Bytes(), *unNode)
+		ciReq := ci.createChunkInfoReq(rootCid, overlay, ci.addr)
 		go func() {
 			err := ci.sendDatas(ctx, overlay, streamChunkInfoReqName, ciReq)
 			if err != nil {
@@ -172,13 +172,8 @@ func (ci *ChunkInfo) queueProcess(ctx context.Context, rootCid boson.Address) {
 	}
 }
 
-// updateQueue
 func (ci *ChunkInfo) updateQueue(ctx context.Context, authInfo []byte, rootCid, overlay boson.Address, chunkInfo map[string][]byte) {
 	q := ci.getQueue(rootCid.String())
-	if chunkInfo[overlay.String()] != nil {
-		ci.chunkPutChanUpdate(ctx, ci.cd, ci.updateChunkInfo, rootCid, overlay, chunkInfo[overlay.String()])
-	}
-
 	if q == nil {
 		return
 	}
@@ -198,5 +193,4 @@ func (ci *ChunkInfo) updateQueue(ctx context.Context, authInfo []byte, rootCid, 
 	}
 	q.popNode(Pulling, overlay.Bytes())
 	q.push(Pulled, overlay.Bytes())
-	ci.doFindChunkInfo(ctx, authInfo, rootCid)
 }
