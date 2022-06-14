@@ -225,7 +225,6 @@ func (db *DB) getTransfer(rootCid boson.Address) ([]boson.Address, error) {
 	}
 	data := out.Data
 	chs := make([]boson.Address, 0, boson.HashSize+len(data)/boson.HashSize)
-	chs = append(chs, rootCid)
 	for i := 0; i < len(data); i += boson.HashSize {
 		addr := data[i : i+boson.HashSize]
 		ch := boson.NewAddress(addr)
@@ -250,7 +249,7 @@ func (db *DB) getChunk(ch boson.Address) (chs []boson.Address, err error) {
 	chs = append(chs, ch)
 	data := item.Data[8:]
 	size := int64(binary.LittleEndian.Uint64(item.Data[:8]))
-	if size <= int64(len(data)) {
+	if size <= int64(len(item.Data)) {
 		return
 	}
 

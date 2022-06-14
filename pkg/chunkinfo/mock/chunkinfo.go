@@ -101,19 +101,6 @@ func (ci *ChunkInfo) Init(ctx context.Context, authInfo []byte, rootCid boson.Ad
 	return true
 }
 
-func (ci *ChunkInfo) GetChunkPyramid(rootCid boson.Address) []*chunkinfo.PyramidCidNum {
-	v := ci.cp.pyramid[rootCid.String()]
-	cids := make([]*chunkinfo.PyramidCidNum, 0, len(v))
-	for overlay, cnt := range v {
-		over := boson.MustParseHexAddress(overlay)
-		cids = append(cids, &chunkinfo.PyramidCidNum{
-			Cid:    over,
-			Number: cnt,
-		})
-	}
-	return cids
-}
-
 func (ci *ChunkInfo) IsDiscover(rootCid boson.Address) bool {
 	if _, ok := ci.cpd.finder[rootCid.String()]; ok {
 		return true

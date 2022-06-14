@@ -19,6 +19,8 @@ package localstore
 import (
 	"bytes"
 	"context"
+	"github.com/gauss-project/aurorafs/pkg/boson"
+	filetest "github.com/gauss-project/aurorafs/pkg/file/testing"
 	"testing"
 	"time"
 
@@ -272,5 +274,34 @@ func TestSetTestHookUpdateGC(t *testing.T) {
 	// test if got variable is set correctly to original value
 	if got != original {
 		t.Errorf("got hook value %v, want %v", got, original)
+	}
+}
+
+func TestGetChunks(t *testing.T) {
+	db := newTestDB(t, nil)
+	// create root chunk and two data chunks referenced in the root chunk
+	rootChunk := filetest.GenerateTestRandomFileChunk(boson.ZeroAddress, boson.ChunkSize*2, boson.SectionSize*2)
+	_, err := db.put(storage.ModePutUpload, rootChunk.Address(), rootChunk)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	firstAddress := boson.NewAddress(rootChunk.Data()[8 : boson.SectionSize+8])
+	firstChunk := filetest.GenerateTestRandomFileChunk(firstAddress, boson.ChunkSize, boson.ChunkSize)
+	_, err = db.put(storage.ModePutUpload, rootChunk.Address(), firstChunk)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	secondAddress := boson.NewAddress(rootChunk.Data()[boson.SectionSize+8:])
+	secondChunk := filetest.GenerateTestRandomFileChunk(secondAddress, boson.ChunkSize, boson.ChunkSize)
+	_, err = db.put(storage.ModePutUpload, rootChunk.Address(), secondChunk)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	chs, _ := db.getChunk(rootChunk.Address())
+	if len(chs) != 3 {
+		t.Errorf("chs len %v, want 3", len(chs))
 	}
 }

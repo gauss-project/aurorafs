@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"github.com/gauss-project/aurorafs/pkg/statestore/mock"
 	"io"
 	"math/rand"
 	"os"
@@ -29,7 +30,6 @@ import (
 	"time"
 
 	"github.com/gauss-project/aurorafs/pkg/boson"
-	chunkinfo "github.com/gauss-project/aurorafs/pkg/chunkinfo/mock"
 	"github.com/gauss-project/aurorafs/pkg/file/loadsave"
 	"github.com/gauss-project/aurorafs/pkg/file/pipeline"
 	"github.com/gauss-project/aurorafs/pkg/file/pipeline/builder"
@@ -79,7 +79,7 @@ func testDBCollectGarbageWorker(t *testing.T) {
 	closed = db.close
 
 	// upload random file
-	reference, chunks, addGc := addRandomFile(t, chunkCount, db, ci, false)
+	reference, chunks, addGc := addRandomFile(t, chunkCount, db, false)
 
 	addGc(t)
 
@@ -146,10 +146,10 @@ func TestPinGC(t *testing.T) {
 	closed = db.close
 
 	// upload random file
-	_, chunksA, addGC1 := addRandomFile(t, int(cacheCapacity)-5, db, ci, false)
+	_, chunksA, addGC1 := addRandomFile(t, int(cacheCapacity)-5, db, false)
 	addGC1(t)
-	pinReference, pinChunks, _ := addRandomFile(t, chunkCount, db, ci, true)
-	_, chunksB, addGC2 := addRandomFile(t, 5, db, ci, false)
+	pinReference, pinChunks, _ := addRandomFile(t, chunkCount, db, true)
+	_, chunksB, addGC2 := addRandomFile(t, 5, db, false)
 	addGC2(t)
 
 	curSize, err := db.gcSize.Get()
@@ -243,7 +243,7 @@ func TestGCAfterPin(t *testing.T) {
 	})
 
 	// upload random chunks
-	reference, chunks, addGc := addRandomFile(t, chunkCount, db, ci, false)
+	reference, chunks, addGc := addRandomFile(t, chunkCount, db, false)
 
 	ctx := sctx.SetRootHash(context.Background(), reference)
 	for _, chunk := range chunks {
@@ -400,11 +400,11 @@ func TestDB_gcSize(t *testing.T) {
 		t.Fatal(err)
 	}
 	logger := logging.New(io.Discard, 0)
-	db, err := New(dir, baseKey, nil, logger)
+	s := mock.NewStateStore()
+	db, err := New(dir, baseKey, s, nil, logger)
 	if err != nil {
 		t.Fatal(err)
 	}
-	db.SetChunkInfo(ci)
 	count := 100
 
 	for i := 0; i < count; i++ {
@@ -420,11 +420,10 @@ func TestDB_gcSize(t *testing.T) {
 	if err := db.Close(); err != nil {
 		t.Fatal(err)
 	}
-	db, err = New(dir, baseKey, nil, logger)
+	db, err = New(dir, baseKey, s, nil, logger)
 	if err != nil {
 		t.Fatal(err)
 	}
-	db.SetChunkInfo(ci)
 	defer db.Close()
 
 	t.Run("gc index size", newIndexGCSizeTest(db))
@@ -663,7 +662,7 @@ func addRandomChunks(t *testing.T, count int, db *DB, pin bool) []boson.Chunk {
 	return chunks
 }
 
-func addRandomFile(t *testing.T, count int, db *DB, ci *chunkinfo.ChunkInfo, pin bool) (reference boson.Address, chunkHashes []boson.Address, addGc func(*testing.T)) {
+func addRandomFile(t *testing.T, count int, db *DB, pin bool) (reference boson.Address, chunkHashes []boson.Address, addGc func(*testing.T)) {
 	buf := new(bytes.Buffer)
 
 	mode := storage.ModePutRequest
@@ -718,11 +717,6 @@ func addRandomFile(t *testing.T, count int, db *DB, ci *chunkinfo.ChunkInfo, pin
 	})
 	if err != nil {
 		t.Fatal(err)
-	}
-	for i, chunk := range chunkHashes {
-		if !chunk.Equal(reference) {
-			ci.PutChunkPyramid(reference, chunk, i)
-		}
 	}
 	if !pin {
 		addGc = func(t2 *testing.T) {
@@ -923,7 +917,7 @@ func TestPinAndUnpinChunk(t *testing.T) {
 	closed = db.close
 
 	// upload random file
-	reference, chunks, addGc := addRandomFile(t, chunkCount, db, ci, false)
+	reference, chunks, addGc := addRandomFile(t, chunkCount, db, false)
 
 	rctx := sctx.SetRootHash(context.Background(), reference)
 	addGc(t)
@@ -937,7 +931,7 @@ func TestPinAndUnpinChunk(t *testing.T) {
 	}
 
 	chunkCount = 16
-	reference1, chunks1, addGc1 := addRandomFile(t, chunkCount, db, ci, false)
+	reference1, chunks1, addGc1 := addRandomFile(t, chunkCount, db, false)
 
 	rctx = sctx.SetRootHash(context.Background(), reference1)
 	for _, v := range chunks1 {
@@ -1045,7 +1039,7 @@ func TestBrokenPyramid(t *testing.T) {
 	closed = db.close
 
 	// upload random file
-	reference, chunks, addGc := addRandomFile(t, chunkCount, db, ci, false)
+	reference, chunks, addGc := addRandomFile(t, chunkCount, db, false)
 
 	rctx := sctx.SetRootHash(context.Background(), reference)
 	addGc(t)
@@ -1058,11 +1052,7 @@ func TestBrokenPyramid(t *testing.T) {
 	}
 
 	// remove some chunks
-	pyramid := ci.GetChunkPyramid(reference)
-	copyPyramid := make([]boson.Address, len(pyramid))
-	for i, p := range pyramid {
-		copyPyramid[i] = p.Cid
-	}
+	copyPyramid := make([]boson.Address, 1)
 	rnd := rand.New(rand.NewSource(time.Now().UnixNano()))
 	rnd.Shuffle(len(copyPyramid), func(i, j int) {
 		copyPyramid[i], copyPyramid[j] = copyPyramid[j], copyPyramid[i]
