@@ -36,7 +36,7 @@ const (
 var _ Interface = (*Service)(nil)
 
 type Interface interface {
-	RetrieveChunk(ctx context.Context, rootAddr, chunkAddr boson.Address) (chunk boson.Chunk, err error)
+	RetrieveChunk(ctx context.Context, rootAddr, chunkAddr boson.Address, index, len int64) (chunk boson.Chunk, err error)
 	GetRouteScore(time int64) map[string]int64
 }
 
@@ -102,7 +102,7 @@ func (s *Service) Protocol() p2p.ProtocolSpec {
 	}
 }
 
-func (s *Service) RetrieveChunk(ctx context.Context, rootAddr, chunkAddr boson.Address) (chunk boson.Chunk, err error) {
+func (s *Service) RetrieveChunk(ctx context.Context, rootAddr, chunkAddr boson.Address, index, l int64) (chunk boson.Chunk, err error) {
 	s.metrics.RequestCounter.Inc()
 
 	flightRoute := fmt.Sprintf("%s,%s", rootAddr, chunkAddr)

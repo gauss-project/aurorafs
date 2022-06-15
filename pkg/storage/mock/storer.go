@@ -11,16 +11,16 @@ import (
 var _ storage.Storer = (*MockStorer)(nil)
 
 type MockStorer struct {
-	store           map[string][]byte
-	modePut         map[string]storage.ModePut
-	modeSet         map[string]storage.ModeSet
-	pinnedAddress   []boson.Address // Stores the pinned address
-	pinnedCounter   []uint64        // and its respective counter. These are stored as slices to preserve the order.
-	morePull        chan struct{}
-	mtx             sync.Mutex
-	quit            chan struct{}
-	baseAddress     []byte
-	bins            []uint64
+	store         map[string][]byte
+	modePut       map[string]storage.ModePut
+	modeSet       map[string]storage.ModeSet
+	pinnedAddress []boson.Address // Stores the pinned address
+	pinnedCounter []uint64        // and its respective counter. These are stored as slices to preserve the order.
+	morePull      chan struct{}
+	mtx           sync.Mutex
+	quit          chan struct{}
+	baseAddress   []byte
+	bins          []uint64
 }
 
 func NewStorer(opts ...Option) *MockStorer {
@@ -40,7 +40,7 @@ func NewStorer(opts ...Option) *MockStorer {
 	return s
 }
 
-func (m *MockStorer) Get(_ context.Context, _ storage.ModeGet, addr boson.Address) (ch boson.Chunk, err error) {
+func (m *MockStorer) Get(_ context.Context, _ storage.ModeGet, addr boson.Address, index, len int64) (ch boson.Chunk, err error) {
 	m.mtx.Lock()
 	defer m.mtx.Unlock()
 

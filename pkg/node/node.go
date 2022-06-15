@@ -380,9 +380,6 @@ func NewAurora(nodeMode aurora.Model, addr string, bosonAddress boson.Address, p
 	b.resolverCloser = multiResolver
 
 	chunkInfo := chunkinfo.New(bosonAddress, p2ps, logger, traversalService, stateStore, ns, route, oracleChain, multiResolver, subPub)
-	if err := chunkInfo.InitChunkInfo(); err != nil {
-		return nil, fmt.Errorf("chunk info init: %w", err)
-	}
 	if err = p2ps.AddProtocol(chunkInfo.Protocol()); err != nil {
 		return nil, fmt.Errorf("chunkInfo service: %w", err)
 	}

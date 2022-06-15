@@ -21,6 +21,7 @@ type joiner struct {
 	rootData  []byte
 	span      int64
 	off       int64
+	lenChunks int64
 	refLength int
 
 	dataChunks    [][]byte
@@ -38,7 +39,7 @@ type joiner struct {
 func New(ctx context.Context, getter storage.Getter, getMode storage.ModeGet, address boson.Address) (file.Joiner, int64, error) {
 	getter = store.New(getter)
 	// retrieve the root chunk to read the total data length the be retrieved
-	rootChunk, err := getter.Get(ctx, getMode, address)
+	rootChunk, err := getter.Get(ctx, getMode, address, 0, 0)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -46,9 +47,10 @@ func New(ctx context.Context, getter storage.Getter, getMode storage.ModeGet, ad
 	var chunkData = rootChunk.Data()
 
 	span := int64(binary.LittleEndian.Uint64(chunkData[:boson.SpanSize]))
-
+	l := chunkLen(span) + 2
 	j := &joiner{
 		addr:      rootChunk.Address(),
+		lenChunks: l,
 		refLength: len(address.Bytes()),
 		ctx:       ctx,
 		getter:    getter,
@@ -102,7 +104,7 @@ func (j *joiner) ReadAt(buffer []byte, off int64) (read int, err error) {
 	}
 	var bytesRead int64
 	var eg errgroup.Group
-	j.readAtOffset(buffer, j.rootData, 0, j.span, off, 0, readLen, &bytesRead, &eg)
+	j.readAtOffset(buffer, j.rootData, 0, 0, j.lenChunks, 0, j.span, off, 0, readLen, &bytesRead, &eg)
 
 	err = eg.Wait()
 	if err != nil {
@@ -114,7 +116,7 @@ func (j *joiner) ReadAt(buffer []byte, off int64) (read int, err error) {
 
 var ErrMalformedTrie = errors.New("malformed tree")
 
-func (j *joiner) readAtOffset(b, data []byte, cur, subTrieSize, off, bufferOffset, bytesToRead int64, bytesRead *int64, eg *errgroup.Group) {
+func (j *joiner) readAtOffset(b, data []byte, index, lastIndex, l, cur, subTrieSize, off, bufferOffset, bytesToRead int64, bytesRead *int64, eg *errgroup.Group) {
 	// we are at a leaf data chunk
 	if subTrieSize <= int64(len(data)) {
 		dataOffsetStart := off - cur
@@ -149,7 +151,15 @@ func (j *joiner) readAtOffset(b, data []byte, cur, subTrieSize, off, bufferOffse
 		subtrieSpanLimit := sec
 
 		currentReadSize := subtrieSpan - (off - cur) // the size of the subtrie, minus the offset from the start of the trie
-
+		chunkIndex := int64(cursor / j.refLength)
+		subtree := int64(boson.Branches)
+		index1 := lastIndex + 1 + (index * subtree) + chunkIndex
+		var lastIndex1 int64 = 0
+		if index1 == 2 {
+			lastIndex1 = 0
+		} else {
+			lastIndex1 = int64(len(data) / j.refLength)
+		}
 		// upper bound alignments
 		if currentReadSize > bytesToRead {
 			currentReadSize = bytesToRead
@@ -158,9 +168,9 @@ func (j *joiner) readAtOffset(b, data []byte, cur, subTrieSize, off, bufferOffse
 			currentReadSize = subtrieSpan
 		}
 
-		func(address boson.Address, b []byte, cur, subTrieSize, off, bufferOffset, bytesToRead, subtrieSpanLimit int64) {
+		func(address boson.Address, b []byte, index, lastIndex, l, cur, subTrieSize, off, bufferOffset, bytesToRead, subtrieSpanLimit int64, cursor int) {
 			eg.Go(func() error {
-				ch, err := j.getter.Get(j.ctx, j.getMode, address)
+				ch, err := j.getter.Get(j.ctx, j.getMode, address, index, l)
 				if err != nil {
 					return err
 				}
@@ -172,10 +182,10 @@ func (j *joiner) readAtOffset(b, data []byte, cur, subTrieSize, off, bufferOffse
 					return ErrMalformedTrie
 				}
 
-				j.readAtOffset(b, chunkData, cur, subtrieSpan, off, bufferOffset, currentReadSize, bytesRead, eg)
+				j.readAtOffset(b, chunkData, index, lastIndex, l, cur, subtrieSpan, off, bufferOffset, currentReadSize, bytesRead, eg)
 				return nil
 			})
-		}(address, b, cur, subtrieSpan, off, bufferOffset, currentReadSize, subtrieSpanLimit)
+		}(address, b, index1, lastIndex1, l, cur, subtrieSpan, off, bufferOffset, currentReadSize, subtrieSpanLimit, cursor)
 
 		bufferOffset += currentReadSize
 		bytesToRead -= currentReadSize
@@ -249,11 +259,10 @@ func (j *joiner) IterateChunkAddresses(fn boson.AddressIterFunc) error {
 	if err != nil {
 		return err
 	}
-
-	return j.processChunkAddresses(j.ctx, fn, j.rootData, j.span)
+	return j.processChunkAddresses(j.ctx, fn, j.rootData, 0, 0, j.lenChunks, j.span)
 }
 
-func (j *joiner) processChunkAddresses(ctx context.Context, fn boson.AddressIterFunc, data []byte, subTrieSize int64) error {
+func (j *joiner) processChunkAddresses(ctx context.Context, fn boson.AddressIterFunc, data []byte, index, lastIndex, l, subTrieSize int64) error {
 	// we are at a leaf data chunk
 	if subTrieSize <= int64(len(data)) {
 		if j.allowSaveData {
@@ -288,13 +297,20 @@ func (j *joiner) processChunkAddresses(ctx context.Context, fn boson.AddressIter
 			continue
 		}
 
-		func(address boson.Address, eg *errgroup.Group) {
+		func(address boson.Address, index, lastIndex, l int64, eg *errgroup.Group) {
 			wg.Add(1)
 
 			eg.Go(func() error {
 				defer wg.Done()
-
-				ch, err := j.getter.Get(ectx, j.getMode, address)
+				chunkIndex := int64(cursor / j.refLength)
+				subtree := int64(boson.Branches)
+				index = lastIndex + 1 + (index * subtree) + chunkIndex
+				if index == 2 {
+					lastIndex = 0
+				} else {
+					lastIndex = int64(len(data) / j.refLength)
+				}
+				ch, err := j.getter.Get(ectx, j.getMode, address, index, l)
 				if err != nil {
 					return err
 				}
@@ -306,9 +322,9 @@ func (j *joiner) processChunkAddresses(ctx context.Context, fn boson.AddressIter
 					j.edgeChunks[address.String()] = ch.Data()
 				}
 
-				return j.processChunkAddresses(ectx, fn, chunkData, subtrieSpan)
+				return j.processChunkAddresses(ectx, fn, chunkData, index, lastIndex, l, subtrieSpan)
 			})
-		}(address, eg)
+		}(address, index, lastIndex, l, eg)
 
 		wg.Wait()
 	}
@@ -322,4 +338,33 @@ func (j *joiner) Size() int64 {
 
 func chunkToSpan(data []byte) uint64 {
 	return binary.LittleEndian.Uint64(data[:8])
+}
+
+func chunkLen(span int64) int64 {
+	count := span / boson.ChunkSize
+	count1 := span % boson.ChunkSize
+	if count1 > 0 {
+		count1 = 1
+	}
+	count += count1
+	if count > boson.Branches {
+		count += chunkLen1(count)
+	} else {
+		count++
+	}
+	return count
+}
+
+func chunkLen1(count int64) int64 {
+	count1 := count / boson.Branches
+	if count1 == 0 {
+		return 1
+	}
+	count2 := count % boson.Branches
+	count = count2 + count1
+	if count == 1 {
+		return count
+	}
+	count = chunkLen1(count)
+	return count1 + count
 }
