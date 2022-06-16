@@ -18,8 +18,8 @@ func NewGetter(getter storage.Getter, fn boson.AddressIterFunc) storage.Getter {
 	return &addressesGetterStore{getter, fn}
 }
 
-func (s *addressesGetterStore) Get(ctx context.Context, mode storage.ModeGet, addr boson.Address, index, len int64) (boson.Chunk, error) {
-	ch, err := s.getter.Get(ctx, mode, addr, index, len)
+func (s *addressesGetterStore) Get(ctx context.Context, mode storage.ModeGet, addr boson.Address, index int64) (boson.Chunk, error) {
+	ch, err := s.getter.Get(ctx, mode, addr, index)
 	if err != nil {
 		return nil, err
 	}

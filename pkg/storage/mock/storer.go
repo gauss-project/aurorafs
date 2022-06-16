@@ -40,7 +40,7 @@ func NewStorer(opts ...Option) *MockStorer {
 	return s
 }
 
-func (m *MockStorer) Get(_ context.Context, _ storage.ModeGet, addr boson.Address, index, len int64) (ch boson.Chunk, err error) {
+func (m *MockStorer) Get(_ context.Context, _ storage.ModeGet, addr boson.Address, index int64) (ch boson.Chunk, err error) {
 	m.mtx.Lock()
 	defer m.mtx.Unlock()
 

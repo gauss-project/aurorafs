@@ -34,7 +34,7 @@ import (
 // All required indexes will be updated required by the
 // Getter Mode. Get is required to implement chunk.Store
 // interface.
-func (db *DB) Get(ctx context.Context, mode storage.ModeGet, addr boson.Address, index, len int64) (ch boson.Chunk, err error) {
+func (db *DB) Get(ctx context.Context, mode storage.ModeGet, addr boson.Address, _ int64) (ch boson.Chunk, err error) {
 	db.metrics.ModeGet.Inc()
 	defer totalTimeMetric(db.metrics.TotalTimeGet, time.Now())
 

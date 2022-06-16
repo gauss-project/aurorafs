@@ -41,9 +41,9 @@ func (s *Store) SetChunkInfo(chunkInfo chunkinfo.Interface) {
 
 // Get retrieves a given chunk address.
 // It will request a chunk from the network whenever it cannot be found locally.
-func (s *Store) Get(ctx context.Context, mode storage.ModeGet, addr boson.Address, index, length int64) (ch boson.Chunk, err error) {
+func (s *Store) Get(ctx context.Context, mode storage.ModeGet, addr boson.Address, index int64) (ch boson.Chunk, err error) {
 	rootHash := sctx.GetRootHash(ctx)
-	ch, err = s.Storer.Get(ctx, mode, addr, index, length)
+	ch, err = s.Storer.Get(ctx, mode, addr, index)
 	if err != nil {
 		if errors.Is(err, storage.ErrNotFound) {
 			if rootHash.IsZero() {
