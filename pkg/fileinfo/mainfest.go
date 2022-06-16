@@ -108,7 +108,7 @@ func (f *FileInfo) ManifestView(ctx context.Context, nameOrHex string, pathVar s
 					extension = filename[lastDot:]
 				}
 
-				refChunk, err := f.localStore.Get(ctx, storage.ModeGetRequest, boson.NewAddress(hash), 0, 0)
+				refChunk, err := f.localStore.Get(ctx, storage.ModeGetRequest, boson.NewAddress(hash), 0)
 				if err != nil {
 					return err
 				}
@@ -149,7 +149,7 @@ func (f *FileInfo) ManifestView(ctx context.Context, nameOrHex string, pathVar s
 			extension = filename[lastDot:]
 		}
 
-		refChunk, err := f.localStore.Get(ctx, storage.ModeGetRequest, e.Reference(), 0, 0)
+		refChunk, err := f.localStore.Get(ctx, storage.ModeGetRequest, e.Reference(), 0)
 		if err != nil {
 			logger.Debugf("manifest view: file not found: %v", err)
 			logger.Error("manifest view: file not found")

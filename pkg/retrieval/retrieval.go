@@ -36,7 +36,7 @@ const (
 var _ Interface = (*Service)(nil)
 
 type Interface interface {
-	RetrieveChunk(ctx context.Context, rootAddr, chunkAddr boson.Address, index, len int64) (chunk boson.Chunk, err error)
+	RetrieveChunk(ctx context.Context, rootAddr, chunkAddr boson.Address, index int64) (chunk boson.Chunk, err error)
 	GetRouteScore(time int64) map[string]int64
 }
 
@@ -102,7 +102,7 @@ func (s *Service) Protocol() p2p.ProtocolSpec {
 	}
 }
 
-func (s *Service) RetrieveChunk(ctx context.Context, rootAddr, chunkAddr boson.Address, index, length int64) (chunk boson.Chunk, err error) {
+func (s *Service) RetrieveChunk(ctx context.Context, rootAddr, chunkAddr boson.Address, index int64) (chunk boson.Chunk, err error) {
 	s.metrics.RequestCounter.Inc()
 
 	flightRoute := fmt.Sprintf("%s,%s", rootAddr, chunkAddr)
@@ -122,7 +122,7 @@ func (s *Service) RetrieveChunk(ctx context.Context, rootAddr, chunkAddr boson.A
 		ticker := time.NewTicker(retrieveRetryIntervalDuration)
 		defer ticker.Stop()
 
-		routeList := s.getRetrievalRouteList(topCtx, rootAddr, chunkAddr, int(index))
+		routeList := s.getRetrievalRouteList(topCtx, rootAddr, chunkAddr, index)
 		if len(routeList) == 0 {
 			return nil, fmt.Errorf("no route available")
 		}
@@ -135,7 +135,7 @@ func (s *Service) RetrieveChunk(ctx context.Context, rootAddr, chunkAddr boson.A
 				go func() {
 					ctx, cancel := context.WithCancel(ctx)
 					defer cancel()
-					chunk, err := s.retrieveChunk(ctx, retrievalRoute, rootAddr, chunkAddr, int(index), int(length))
+					chunk, err := s.retrieveChunk(ctx, retrievalRoute, rootAddr, chunkAddr, index)
 					select {
 					case resultC <- retrievalResult{
 						chunk: chunk,
@@ -171,7 +171,7 @@ func (s *Service) RetrieveChunk(ctx context.Context, rootAddr, chunkAddr boson.A
 	return v.(boson.Chunk), nil
 }
 
-func (s *Service) RetrieveChunkFromNode(ctx context.Context, targetNode boson.Address, rootAddr, chunkAddr boson.Address, bit int, length int) (boson.Chunk, error) {
+func (s *Service) RetrieveChunkFromNode(ctx context.Context, targetNode boson.Address, rootAddr, chunkAddr boson.Address, index int64) (boson.Chunk, error) {
 	s.metrics.RequestCounter.Inc()
 
 	flightRoute := fmt.Sprintf("%s,%s", targetNode.String(), chunkAddr.String())
@@ -199,7 +199,7 @@ func (s *Service) RetrieveChunkFromNode(ctx context.Context, targetNode boson.Ad
 				ctx, cancel := context.WithCancel(ctx)
 				defer cancel()
 
-				chunk, err := s.retrieveChunk(ctx, retrievalRoute, rootAddr, chunkAddr, bit, length)
+				chunk, err := s.retrieveChunk(ctx, retrievalRoute, rootAddr, chunkAddr, index)
 				select {
 				case resultC <- retrievalResult{
 					chunk: chunk,
@@ -235,7 +235,7 @@ func (s *Service) RetrieveChunkFromNode(ctx context.Context, targetNode boson.Ad
 	return v.(boson.Chunk), nil
 }
 
-func (s *Service) retrieveChunk(ctx context.Context, route aco.Route, rootAddr, chunkAddr boson.Address, index int, length int) (chunk boson.Chunk, err error) {
+func (s *Service) retrieveChunk(ctx context.Context, route aco.Route, rootAddr, chunkAddr boson.Address, index int64) (chunk boson.Chunk, err error) {
 
 	var (
 		startMs  = time.Now().UnixNano() / 1e6
@@ -323,7 +323,7 @@ func (s *Service) retrieveChunk(ctx context.Context, route aco.Route, rootAddr, 
 	}
 
 	s.logger.Tracef("retrieval: chunk %s is received", chunkAddr)
-	err = s.chunkinfo.OnRetrieved(ctx, rootAddr, chunkAddr, index, length, route.LinkNode)
+	err = s.chunkinfo.OnRetrieved(ctx, rootAddr, chunkAddr, index, route.LinkNode)
 	if err != nil {
 		return nil, fmt.Errorf("retrieval: report chunk source: %v", err)
 	}
@@ -358,20 +358,20 @@ func (s *Service) handler(ctx context.Context, p p2p.Peer, stream p2p.Stream) (e
 		return fmt.Errorf("read request: %w peer %s", err, p.Address.String())
 	}
 
-	targetAddr, rootAddr, chunkAddr, bit := boson.NewAddress(req.TargetAddr), boson.NewAddress(req.RootAddr), boson.NewAddress(req.ChunkAddr), req.Bit
+	targetAddr, rootAddr, chunkAddr, index := boson.NewAddress(req.TargetAddr), boson.NewAddress(req.RootAddr), boson.NewAddress(req.ChunkAddr), req.Bit
 
 	span, _, ctx := s.tracer.StartSpanFromContext(ctx, "handle-retrieve-chunk",
 		s.logger, opentracing.Tag{Key: "address", Value: fmt.Sprintf("%s,%s", rootAddr, chunkAddr)},
 	)
 	defer span.Finish()
 
-	chunk, err := s.storer.Get(ctx, storage.ModeGetRequest, chunkAddr, 0, 0)
+	chunk, err := s.storer.Get(ctx, storage.ModeGetRequest, chunkAddr, 0)
 	if err != nil {
 		if errors.Is(err, storage.ErrNotFound) {
 			if s.addr.Equal(targetAddr) {
 				return fmt.Errorf("get from store: %w", err)
 			} else {
-				if chunk, err = s.RetrieveChunkFromNode(ctx, targetAddr, rootAddr, chunkAddr, int(bit), int(bit+1)); err != nil {
+				if chunk, err = s.RetrieveChunkFromNode(ctx, targetAddr, rootAddr, chunkAddr, index); err != nil {
 					return fmt.Errorf("retrieve chunk: %w", err)
 				}
 			}
@@ -390,7 +390,7 @@ func (s *Service) handler(ctx context.Context, p p2p.Peer, stream p2p.Stream) (e
 	}
 	if s.chunkinfo != nil && p.Mode.IsFull() {
 		s.logger.Tracef("retrieval: chunk %s transfer to node %s", chunkAddr, p.Address)
-		err := s.chunkinfo.OnTransferred(ctx, rootAddr, chunkAddr, int(bit), int(bit+1), p.Address)
+		err := s.chunkinfo.OnTransferred(ctx, rootAddr, chunkAddr, index, p.Address)
 		if err != nil {
 			return fmt.Errorf("retrieval: report chunk transfer: %w", err)
 		}
@@ -400,7 +400,7 @@ func (s *Service) handler(ctx context.Context, p p2p.Peer, stream p2p.Stream) (e
 	return nil
 }
 
-func (s *Service) getRetrievalRouteList(ctx context.Context, rootAddr, chunkAddr boson.Address, bit int) []aco.Route {
+func (s *Service) getRetrievalRouteList(ctx context.Context, rootAddr, chunkAddr boson.Address, bit int64) []aco.Route {
 
 	targets, _ := sctx.GetTargets(ctx)
 	routList := make([]aco.Route, 0)

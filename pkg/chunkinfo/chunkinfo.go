@@ -22,13 +22,13 @@ import (
 type Interface interface {
 	Discover(ctx context.Context, auth []byte, rootCid boson.Address) bool
 
-	FindRoutes(ctx context.Context, rootCid boson.Address, cid boson.Address, bit int) []aco.Route
+	FindRoutes(ctx context.Context, rootCid boson.Address, cid boson.Address, bit int64) []aco.Route
 
-	OnRetrieved(ctx context.Context, rootCid boson.Address, cid boson.Address, bit int, length int, overlay boson.Address) error
+	OnRetrieved(ctx context.Context, rootCid boson.Address, cid boson.Address, bit int64, overlay boson.Address) error
 
-	OnTransferred(ctx context.Context, rootCid boson.Address, cid boson.Address, bit int, length int, overlay boson.Address) error
+	OnTransferred(ctx context.Context, rootCid boson.Address, cid boson.Address, bit int64, overlay boson.Address) error
 
-	OnFileUpload(ctx context.Context, rootCid boson.Address, bitLen int) error
+	OnFileUpload(ctx context.Context, rootCid boson.Address, bitLen int64) error
 }
 
 type ChunkInfo struct {
@@ -109,8 +109,8 @@ func (ci *ChunkInfo) Discover(ctx context.Context, authInfo []byte, rootCid boso
 	return v.(bool)
 }
 
-func (ci *ChunkInfo) FindRoutes(_ context.Context, rootCid boson.Address, _ boson.Address, bit int) []aco.Route {
-	route, err := ci.getRoutes(rootCid, bit)
+func (ci *ChunkInfo) FindRoutes(_ context.Context, rootCid boson.Address, _ boson.Address, index int64) []aco.Route {
+	route, err := ci.getRoutes(rootCid, int(index))
 	if err != nil {
 		ci.logger.Errorf("chunkInfo FindRoutes:%w", err)
 		return nil
@@ -118,16 +118,16 @@ func (ci *ChunkInfo) FindRoutes(_ context.Context, rootCid boson.Address, _ boso
 	return route
 }
 
-func (ci *ChunkInfo) OnTransferred(_ context.Context, rootCid boson.Address, _ boson.Address, bit int, length int, overlay boson.Address) error {
-	return ci.updateService(rootCid, bit, length, overlay)
+func (ci *ChunkInfo) OnTransferred(_ context.Context, rootCid boson.Address, _ boson.Address, index int64, overlay boson.Address) error {
+	return ci.updateService(rootCid, index, overlay)
 }
 
-func (ci *ChunkInfo) OnRetrieved(_ context.Context, rootCid boson.Address, _ boson.Address, bit int, length int, overlay boson.Address) error {
-	err := ci.updateService(rootCid, bit, length, ci.addr)
+func (ci *ChunkInfo) OnRetrieved(_ context.Context, rootCid boson.Address, _ boson.Address, index int64, overlay boson.Address) error {
+	err := ci.updateService(rootCid, index, ci.addr)
 	if err != nil {
 		return err
 	}
-	err = ci.updateSource(rootCid, bit, length, overlay)
+	err = ci.updateSource(rootCid, index, overlay)
 	if err != nil {
 		return err
 	}
@@ -135,13 +135,13 @@ func (ci *ChunkInfo) OnRetrieved(_ context.Context, rootCid boson.Address, _ bos
 	return nil
 }
 
-func (ci *ChunkInfo) OnFileUpload(ctx context.Context, rootCid boson.Address, length int) error {
-	for i := 0; i < length; i++ {
-		err := ci.updateService(rootCid, i, length, ci.addr)
+func (ci *ChunkInfo) OnFileUpload(ctx context.Context, rootCid boson.Address, length int64) error {
+	for i := int64(0); i < length; i++ {
+		err := ci.updateService(rootCid, i, ci.addr)
 		if err != nil {
 			return err
 		}
-		err = ci.updateSource(rootCid, i, length, ci.addr)
+		err = ci.updateSource(rootCid, i, ci.addr)
 		if err != nil {
 			return err
 		}

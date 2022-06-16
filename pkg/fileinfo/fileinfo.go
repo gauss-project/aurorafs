@@ -23,7 +23,7 @@ type FileView struct {
 
 type Interface interface {
 	GetFileList(page filestore.Page, filter []filestore.Filter, sort filestore.Sort) []FileView
-	GetFileSize(rootCid boson.Address) (int, error)
+	GetFileSize(rootCid boson.Address) (int64, error)
 	ManifestView(ctx context.Context, nameOrHex string, pathVar string, depth int) (*ManifestNode, error)
 	AddFile(rootCid boson.Address) error
 	DeleteFile(rootCid boson.Address) error
@@ -50,16 +50,16 @@ func New(addr boson.Address, db *localstore.DB, logger logging.Logger, resolver 
 	}
 }
 
-func (f *FileInfo) GetFileSize(rootCid boson.Address) (int, error) {
+func (f *FileInfo) GetFileSize(rootCid boson.Address) (int64, error) {
 	ctx := context.TODO()
-	chunk, err := f.localStore.Get(ctx, storage.ModeGetRequest, rootCid, 0, 0)
+	chunk, err := f.localStore.Get(ctx, storage.ModeGetRequest, rootCid, 0)
 	if err != nil {
 		return 0, err
 	}
 	var chunkData = chunk.Data()
 	span := int64(binary.LittleEndian.Uint64(chunkData[:boson.SpanSize]))
 	size := chunkLen(span)
-	return int(size), nil
+	return size, nil
 }
 
 func (f *FileInfo) GetFileList(page filestore.Page, filter []filestore.Filter, sort filestore.Sort) []FileView {

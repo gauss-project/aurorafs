@@ -37,15 +37,23 @@ func (ci *ChunkInfo) isDownload(rootCid, overlay boson.Address) bool {
 	return false
 }
 
-func (ci *ChunkInfo) updateService(rootCid boson.Address, bit int, length int, overlay boson.Address) error {
+func (ci *ChunkInfo) updateService(rootCid boson.Address, index int64, overlay boson.Address) error {
 	has, err := ci.chunkStore.HasChunk(chunkstore.SERVICE, rootCid, overlay)
 	if err != nil {
 		return err
 	}
-
+	var length int64 = index + 1
+	if index == 0 {
+		size, err := ci.fileInfo.GetFileSize(rootCid)
+		if err != nil {
+			ci.logger.Errorf("chunkInfo updateService get file size:%w", err)
+		} else {
+			length = size
+		}
+	}
 	var provider chunkstore.Provider
-	provider.Len = length
-	provider.Bit = bit
+	provider.Len = int(length)
+	provider.Bit = int(index)
 	provider.Overlay = overlay
 	err = ci.chunkStore.PutChunk(chunkstore.SERVICE, rootCid, []chunkstore.Provider{provider})
 	if err != nil {
@@ -64,7 +72,7 @@ func (ci *ChunkInfo) updateService(rootCid boson.Address, bit int, length int, o
 			break
 		}
 	}
-	if bit == 0 || bit == 1 || bit == 2 {
+	if index == 0 || index == 1 || index == 2 {
 		bitV, _ := bitvector.NewFromBytes(consumer.B, consumer.Len)
 		if bitV.Get(0) && bitV.Get(1) && bitV.Get(2) {
 			err = ci.fileInfo.AddFile(rootCid)
