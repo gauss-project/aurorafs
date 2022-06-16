@@ -22,6 +22,7 @@ import (
 	"github.com/gauss-project/aurorafs/pkg/chunkinfo"
 	"github.com/gauss-project/aurorafs/pkg/file/pipeline"
 	"github.com/gauss-project/aurorafs/pkg/file/pipeline/builder"
+	"github.com/gauss-project/aurorafs/pkg/fileinfo"
 	"github.com/gauss-project/aurorafs/pkg/jsonhttp"
 	"github.com/gauss-project/aurorafs/pkg/logging"
 	m "github.com/gauss-project/aurorafs/pkg/metrics"
@@ -98,6 +99,7 @@ type server struct {
 	resolver    resolver.Interface
 	overlay     boson.Address
 	chunkInfo   chunkinfo.Interface
+	fileInfo    fileinfo.Interface
 	traversal   traversal.Traverser
 	pinning     pinning.Interface
 	logger      logging.Logger
@@ -139,7 +141,7 @@ const (
 )
 
 // New will create a and initialize a new API service.
-func New(storer storage.Storer, resolver resolver.Interface, addr boson.Address, chunkInfo chunkinfo.Interface,
+func New(storer storage.Storer, resolver resolver.Interface, addr boson.Address, chunkInfo chunkinfo.Interface, fileInfo fileinfo.Interface,
 	traversalService traversal.Traverser, pinning pinning.Interface, auth authenticator, logger logging.Logger,
 	tracer *tracing.Tracer, traffic traffic.ApiInterface, commonChain chain.Common, oracleChain chain.Resolver, netRelay netrelay.NetRelay,
 	multicast multicast.GroupInterface, o Options) Service {
@@ -149,6 +151,7 @@ func New(storer storage.Storer, resolver resolver.Interface, addr boson.Address,
 		resolver:        resolver,
 		overlay:         addr,
 		chunkInfo:       chunkInfo,
+		fileInfo:        fileInfo,
 		traversal:       traversalService,
 		pinning:         pinning,
 		Options:         o,

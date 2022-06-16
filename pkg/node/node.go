@@ -7,6 +7,7 @@ import (
 	"context"
 	"crypto/ecdsa"
 	"fmt"
+	"github.com/gauss-project/aurorafs/pkg/fileinfo"
 
 	"io"
 	"log"
@@ -379,7 +380,8 @@ func NewAurora(nodeMode aurora.Model, addr string, bosonAddress boson.Address, p
 	)
 	b.resolverCloser = multiResolver
 
-	chunkInfo := chunkinfo.New(bosonAddress, p2ps, logger, traversalService, stateStore, ns, route, oracleChain, multiResolver, subPub)
+	fileInfo := fileinfo.New(bosonAddress, storer, logger, multiResolver)
+	chunkInfo := chunkinfo.New(bosonAddress, p2ps, logger, storer, route, oracleChain, fileInfo, subPub)
 	if err = p2ps.AddProtocol(chunkInfo.Protocol()); err != nil {
 		return nil, fmt.Errorf("chunkInfo service: %w", err)
 	}
@@ -415,7 +417,7 @@ func NewAurora(nodeMode aurora.Model, addr string, bosonAddress boson.Address, p
 	var apiService api.Service
 	if o.APIAddr != "" {
 		// API server
-		apiService = api.New(ns, multiResolver, bosonAddress, chunkInfo, traversalService, pinningService,
+		apiService = api.New(ns, multiResolver, bosonAddress, chunkInfo, fileInfo, traversalService, pinningService,
 			authenticator, logger, tracer, apiInterface, commonChain, oracleChain, relay, group,
 			api.Options{
 				CORSAllowedOrigins: o.CORSAllowedOrigins,
@@ -484,7 +486,7 @@ func NewAurora(nodeMode aurora.Model, addr string, bosonAddress boson.Address, p
 		// }
 
 		// inject dependencies and configure full debug api http path routes
-		debugAPIService.Configure(p2ps, pingPong, group, kad, lightNodes, bootNodes, storer, route, chunkInfo, retrieve)
+		debugAPIService.Configure(p2ps, pingPong, group, kad, lightNodes, bootNodes, storer, route, chunkInfo, fileInfo, retrieve)
 		if apiInterface != nil {
 			debugAPIService.MustRegisterTraffic(apiInterface)
 		}

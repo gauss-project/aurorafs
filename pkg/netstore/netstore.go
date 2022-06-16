@@ -19,7 +19,6 @@ import (
 
 type Store struct {
 	storage.Storer
-	storage.NetStorer
 	retrieval retrieval.Interface
 	logger    logging.Logger
 	chunkInfo chunkinfo.Interface
@@ -42,16 +41,16 @@ func (s *Store) SetChunkInfo(chunkInfo chunkinfo.Interface) {
 
 // Get retrieves a given chunk address.
 // It will request a chunk from the network whenever it cannot be found locally.
-func (s *Store) Get(ctx context.Context, mode storage.ModeGet, addr boson.Address, index, len int64) (ch boson.Chunk, err error) {
+func (s *Store) Get(ctx context.Context, mode storage.ModeGet, addr boson.Address, index, length int64) (ch boson.Chunk, err error) {
 	rootHash := sctx.GetRootHash(ctx)
-	ch, err = s.Storer.Get(ctx, mode, addr, index, len)
+	ch, err = s.Storer.Get(ctx, mode, addr, index, length)
 	if err != nil {
 		if errors.Is(err, storage.ErrNotFound) {
 			if rootHash.IsZero() {
 				return nil, err
 			}
 			// request from network
-			ch, err = s.retrieval.RetrieveChunk(ctx, rootHash, addr, index, len)
+			ch, err = s.retrieval.RetrieveChunk(ctx, rootHash, addr, index, length)
 			if err != nil {
 				return nil, ErrRecoveryAttempt
 			}
@@ -61,7 +60,7 @@ func (s *Store) Get(ctx context.Context, mode storage.ModeGet, addr boson.Addres
 		return nil, fmt.Errorf("netstore get: %w", err)
 	}
 	if !rootHash.IsZero() && !rootHash.Equal(addr) {
-		_ = s.chunkInfo.OnChunkRetrieved(addr, rootHash, s.addr)
+		_ = s.chunkInfo.OnRetrieved(ctx, rootHash, addr, int(index), int(length), s.addr)
 	}
 
 	return ch, nil

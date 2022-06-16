@@ -46,6 +46,10 @@ func (s *server) pinRootHash(w http.ResponseWriter, r *http.Request) {
 		jsonhttp.InternalServerError(w, nil)
 		return
 	}
+	err = s.fileInfo.PinFile(ref, true)
+	if err != nil {
+		s.logger.Errorf("aurora upload file:update fileinfo pin failed:%v", err)
+	}
 
 	jsonhttp.Created(w, nil)
 }
@@ -82,6 +86,10 @@ func (s *server) unpinRootHash(w http.ResponseWriter, r *http.Request) {
 		s.logger.Error("unpin root hash: deletion of pin for failed")
 		jsonhttp.InternalServerError(w, nil)
 		return
+	}
+	err = s.fileInfo.PinFile(ref, false)
+	if err != nil {
+		s.logger.Errorf("aurora upload file:update fileinfo unpin failed:%v", err)
 	}
 
 	jsonhttp.OK(w, nil)

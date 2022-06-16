@@ -6,6 +6,7 @@ package debugapi
 import (
 	"context"
 	"crypto/ecdsa"
+	"github.com/gauss-project/aurorafs/pkg/fileinfo"
 	"net/http"
 	"sync"
 
@@ -53,6 +54,7 @@ type Service struct {
 	bootNodes      *bootnode.Container
 	routetab       routetab.RouteTab
 	chunkInfo      chunkinfo.Interface
+	fileInfo       fileinfo.Interface
 	retrieval      retrieval.Interface
 	traffic        traffic.ApiInterface
 	// accounting         accounting.Interface
@@ -107,7 +109,7 @@ func New(overlay boson.Address, publicKey ecdsa.PublicKey, logger logging.Logger
 // Configure injects required dependencies and configuration parameters and
 // constructs HTTP routes that depend on them. It is intended and safe to call
 // this method only once.
-func (s *Service) Configure(p2p p2p.DebugService, pingpong pingpong.Interface, group *multicast.Service, topologyDriver topology.Driver, lightNodes *lightnode.Container, bootNodes *bootnode.Container, storer storage.Storer, route routetab.RouteTab, chunkinfo chunkinfo.Interface, retrieval retrieval.Interface) {
+func (s *Service) Configure(p2p p2p.DebugService, pingpong pingpong.Interface, group *multicast.Service, topologyDriver topology.Driver, lightNodes *lightnode.Container, bootNodes *bootnode.Container, storer storage.Storer, route routetab.RouteTab, chunkinfo chunkinfo.Interface, fileInfo fileinfo.Interface, retrieval retrieval.Interface) {
 	s.p2p = p2p
 	s.pingpong = pingpong
 	s.topologyDriver = topologyDriver
@@ -117,6 +119,7 @@ func (s *Service) Configure(p2p p2p.DebugService, pingpong pingpong.Interface, g
 	s.bootNodes = bootNodes
 	s.routetab = route
 	s.chunkInfo = chunkinfo
+	s.fileInfo = fileInfo
 	s.retrieval = retrieval
 	// s.accounting = accounting
 	// s.settlement = settlement

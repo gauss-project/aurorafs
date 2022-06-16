@@ -13,6 +13,7 @@ type Interface interface {
 	Put(file FileView) error
 	Delete(reference boson.Address) error
 	Has(reference boson.Address) bool
+	Update(file FileView) error
 }
 type fileStore struct {
 	stateStore storage.StateStorer
@@ -20,15 +21,15 @@ type fileStore struct {
 }
 
 type FileView struct {
-	RootCid   boson.Address
-	Pinned    bool
-	Online    bool
-	Register  bool
-	Size      int
-	Type      string
-	Name      string
-	Extension string
-	MimeType  string
+	RootCid    boson.Address
+	Hash       string
+	Pinned     bool
+	Registered bool
+	Size       int
+	Type       string
+	Name       string
+	Extension  string
+	MimeType   string
 }
 
 type Page struct {
@@ -84,6 +85,14 @@ func (fs *fileStore) GetList(page Page, filter []Filter, sort Sort) []FileView {
 	sf := sortFile(ff, sort.Key, sort.Order)
 	pf := pageFile(sf, page)
 	return pf
+}
+
+func (fs *fileStore) Update(file FileView) error {
+	fs.files[file.RootCid.String()] = file
+	if err := fs.stateStore.Put(keyPrefix+"-"+file.RootCid.String(), file); err != nil {
+		return err
+	}
+	return nil
 }
 
 func (fs *fileStore) Put(file FileView) error {

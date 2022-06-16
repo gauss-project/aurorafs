@@ -78,13 +78,15 @@ func sortFile(list []FileView, sortName, sortType string) (sortList []FileView) 
 		}
 	}
 
-	sort.Slice(list, func(i, j int) bool {
-		defer func() {
-			recover()
-		}()
-		iv := reflect.ValueOf(list[i]).FieldByName(sortName).Interface()
-		jv := reflect.ValueOf(list[j]).FieldByName(sortName).Interface()
-		return sortFunc(iv, jv, sortType)
-	})
+	if sortName != "" && sortType != "" {
+		sort.Slice(list, func(i, j int) bool {
+			defer func() {
+				recover()
+			}()
+			iv := reflect.ValueOf(list[i]).FieldByName(sortName).Interface()
+			jv := reflect.ValueOf(list[j]).FieldByName(sortName).Interface()
+			return sortFunc(iv, jv, sortType)
+		})
+	}
 	return list
 }

@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/gauss-project/aurorafs/pkg/chunkinfo"
 	"io"
 	"io/ioutil"
 	"mime"
@@ -23,7 +22,9 @@ import (
 	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/file/joiner"
 	"github.com/gauss-project/aurorafs/pkg/file/loadsave"
+	"github.com/gauss-project/aurorafs/pkg/fileinfo"
 	"github.com/gauss-project/aurorafs/pkg/jsonhttp"
+	"github.com/gauss-project/aurorafs/pkg/localstore/filestore"
 	"github.com/gauss-project/aurorafs/pkg/manifest"
 	"github.com/gauss-project/aurorafs/pkg/sctx"
 	"github.com/gauss-project/aurorafs/pkg/storage"
@@ -168,31 +169,28 @@ func (s *server) fileUploadHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	logger.Debugf("Manifest Reference: %s", manifestReference.String())
 
-	dataChunks, _, err := s.traversal.GetChunkHashes(ctx, manifestReference, nil)
+	bitLen, err := s.fileInfo.GetFileSize(manifestReference)
 	if err != nil {
-		logger.Debugf("aurora upload file: get chunk hashes of file %q: %v", fileName, err)
-		logger.Errorf("aurora upload file: get chunk hashes of file %q", fileName)
-		jsonhttp.InternalServerError(w, "could not get chunk hashes")
+		logger.Errorf("aurora upload file: file size err:%v", err)
+	}
+	err = s.chunkInfo.OnFileUpload(ctx, manifestReference, bitLen)
+	if err != nil {
+		logger.Debugf("aurora upload file: chunk transfer data err: %v", err)
+		logger.Errorf("aurora upload file: chunk transfer data err")
+		jsonhttp.InternalServerError(w, "chunk transfer data error")
 		return
 	}
 
-	for _, li := range dataChunks {
-		for _, b := range li {
-			err := s.chunkInfo.OnChunkRetrieved(boson.NewAddress(b), manifestReference, s.overlay)
-			if err != nil {
-				logger.Debugf("aurora upload file: chunk transfer data err: %v", err)
-				logger.Errorf("aurora upload file: chunk transfer data err")
-				jsonhttp.InternalServerError(w, "chunk transfer data error")
-				return
-			}
-		}
-	}
 	if strings.ToLower(r.Header.Get(AuroraPinHeader)) == StringTrue {
 		if err := s.pinning.CreatePin(ctx, manifestReference, false); err != nil {
 			logger.Debugf("aurora upload file: creation of pin for %q failed: %v", manifestReference, err)
 			logger.Error("aurora upload file: creation of pin failed")
 			jsonhttp.InternalServerError(w, nil)
 			return
+		}
+		err = s.fileInfo.PinFile(manifestReference, true)
+		if err != nil {
+			s.logger.Errorf("aurora upload file:update fileinfo pin failed:%v", err)
 		}
 	}
 
@@ -228,7 +226,7 @@ func (s *server) auroraDownloadHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	r = r.WithContext(sctx.SetRootHash(r.Context(), address))
-	if !s.chunkInfo.Init(r.Context(), nil, address) {
+	if !s.chunkInfo.Discover(r.Context(), nil, address) {
 		logger.Debugf("aurora download: chunkInfo init %s: %v", nameOrHex, err)
 		jsonhttp.NotFound(w, nil)
 		return
@@ -395,13 +393,13 @@ func (s *server) downloadHandler(w http.ResponseWriter, r *http.Request, referen
 }
 
 type auroraListResponse struct {
-	RootCid   boson.Address           `json:"rootCid"`
-	Size      int                     `json:"size"`
-	FileSize  int                     `json:"fileSize"`
-	PinState  bool                    `json:"pinState"`
-	BitVector aurora.BitVectorApi     `json:"bitVector"`
-	Register  bool                    `json:"register"`
-	Manifest  *chunkinfo.ManifestNode `json:"manifest"`
+	RootCid   boson.Address          `json:"rootCid"`
+	Size      int                    `json:"size"`
+	FileSize  int                    `json:"fileSize"`
+	PinState  bool                   `json:"pinState"`
+	BitVector aurora.BitVectorApi    `json:"bitVector"`
+	Register  bool                   `json:"register"`
+	Manifest  *fileinfo.ManifestNode `json:"manifest"`
 }
 
 type auroraPageResponse struct {
@@ -412,14 +410,9 @@ type auroraPageResponse struct {
 func (s *server) auroraListHandler(w http.ResponseWriter, r *http.Request) {
 	var wg sync.WaitGroup
 	var reqs aurora.ApiBody
-	pathVar := ""
-	depth := 1
 	isBody := true
 	isPage := false
 	pageTotal := 0
-	if r.URL.Query().Get("recursive") != "" {
-		depth = -1
-	}
 
 	req, err := ioutil.ReadAll(r.Body)
 	if err != nil {
@@ -484,85 +477,53 @@ func (s *server) auroraListHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	registerStatus := func(rootCid boson.Address) bool {
-		if v, ok := s.auroraChainSate.Load(rootCid.String()); ok {
-			register := v.(bool)
-			return register
+	//if r.URL.Query().Get("recursive") != "" {
+	//	depth = -1
+	//}
+
+	var filePage filestore.Page
+	var fileFilter []filestore.Filter
+	var fileSort filestore.Sort
+	if isPage {
+		filePage = filestore.Page{
+			PageNum:  reqs.Page.PageNum,
+			PageSize: reqs.Page.PageSize,
 		}
-		return false
+		fileFilter = make([]filestore.Filter, 0, len(reqs.Filter))
+		for i := range reqs.Filter {
+			fileFilter = append(fileFilter, filestore.Filter{
+				Key:   reqs.Filter[i].Key,
+				Term:  reqs.Filter[i].Term,
+				Value: reqs.Filter[i].Value,
+			})
+		}
+		fileSort = filestore.Sort{
+			Key:   reqs.Sort.Key,
+			Order: reqs.Sort.Order,
+		}
+
 	}
+	fileListInfo := s.fileInfo.GetFileList(filePage, fileFilter, fileSort)
 
 	responseList := make([]auroraListResponse, 0)
-	fileListInfo, _ := s.chunkInfo.GetFileList(s.overlay)
 
-	for i, v := range fileListInfo {
-		rootCid := v["rootCid"].(string)
-		maniFest := s.chunkInfo.GetManifest(rootCid, pathVar, depth)
-		if err == nil && maniFest != nil {
-			fileListInfo[i]["manifest.type"] = maniFest.Type
-			fileListInfo[i]["manifest.hash"] = maniFest.Hash
-			fileListInfo[i]["manifest.name"] = maniFest.Name
-			fileListInfo[i]["manifest.size"] = maniFest.Size
-			fileListInfo[i]["manifest.ext"] = maniFest.Extension
-			fileListInfo[i]["manifest.mime"] = maniFest.MimeType
-			fileListInfo[i]["manifest.sub"] = maniFest.Nodes
-			if maniFest.Nodes != nil {
-				var fileSize uint64
-				var maniFestNode chunkinfo.ManifestNode
-				for _, mv := range maniFest.Nodes {
-					fileSize = fileSize + mv.Size
-					maniFestNode = *mv
-				}
-				fileListInfo[i]["manifest.sub.type"] = maniFestNode.Type
-				fileListInfo[i]["manifest.sub.hash"] = maniFestNode.Hash
-				fileListInfo[i]["manifest.sub.name"] = maniFestNode.Name
-				fileListInfo[i]["manifest.sub.size"] = fileSize
-				fileListInfo[i]["manifest.sub.ext"] = maniFestNode.Extension
-				fileListInfo[i]["manifest.sub.mime"] = maniFestNode.MimeType
-			}
-		}
-		pinned, err := s.pinning.HasPin(boson.MustParseHexAddress(rootCid))
-		if err != nil {
-			s.logger.Errorf("aurora list: check hash %s pinning err", v)
-			continue
-		}
-		fileListInfo[i]["pinState"] = pinned
-		fileListInfo[i]["register"] = registerStatus(boson.MustParseHexAddress(rootCid))
-	}
-
-	if isPage {
-		paging := aurora.NewPaging(s.logger, reqs.Page.PageNum, reqs.Page.PageSize, reqs.Sort.Key, reqs.Sort.Order)
-		fileListInfo = paging.ResponseFilter(fileListInfo, reqs.Filter)
-		fileListInfo = paging.PageSort(fileListInfo, reqs.Sort.Key, reqs.Sort.Order)
-		pageTotal = len(fileListInfo)
-		fileListInfo = paging.Page(fileListInfo)
-	}
-
-	for _, v := range fileListInfo {
-		bitvector := aurora.BitVectorApi{
-			Len: v["bitvector.len"].(int),
-			B:   v["bitvector.b"].([]byte),
-		}
-
-		var manifestNode chunkinfo.ManifestNode
-		if _, ok := v["manifest.type"]; ok {
-			manifestNode.Type = v["manifest.type"].(string)
-			manifestNode.Hash = v["manifest.hash"].(string)
-			manifestNode.Name = v["manifest.name"].(string)
-			manifestNode.Size = v["manifest.size"].(uint64)
-			manifestNode.Extension = v["manifest.ext"].(string)
-			manifestNode.MimeType = v["manifest.mime"].(string)
-			manifestNode.Nodes = v["manifest.sub"].(map[string]*chunkinfo.ManifestNode)
-		}
-
+	for i := range fileListInfo {
 		responseList = append(responseList, auroraListResponse{
-			RootCid:   boson.MustParseHexAddress(v["rootCid"].(string)),
-			Size:      v["treeSize"].(int),
-			FileSize:  v["fileSize"].(int),
-			PinState:  v["pinState"].(bool),
-			BitVector: bitvector,
-			Register:  v["register"].(bool),
-			Manifest:  &manifestNode,
+			RootCid:  fileListInfo[i].RootCid,
+			PinState: fileListInfo[i].Pinned,
+			BitVector: aurora.BitVectorApi{
+				Len: fileListInfo[i].BvLen,
+				B:   fileListInfo[i].Bv,
+			},
+			Register: fileListInfo[i].Registered,
+			Manifest: &fileinfo.ManifestNode{
+				Type:      fileListInfo[i].Type,
+				Hash:      fileListInfo[i].Hash,
+				Name:      fileListInfo[i].Name,
+				Size:      uint64(fileListInfo[i].Size),
+				Extension: fileListInfo[i].Extension,
+				MimeType:  fileListInfo[i].MimeType,
+			},
 		})
 	}
 	wg.Add(len(responseList))
@@ -663,7 +624,7 @@ func (s *server) manifestViewHandler(w http.ResponseWriter, r *http.Request) {
 		depth = -1
 	}
 
-	rootNode, err := s.chunkInfo.ManifestView(r.Context(), nameOrHex, pathVar, depth)
+	rootNode, err := s.fileInfo.ManifestView(r.Context(), nameOrHex, pathVar, depth)
 	if errors.Is(err, ErrNotFound) {
 		jsonhttp.NotFound(w, nil)
 	}
@@ -706,6 +667,10 @@ func (s *server) fileRegister(w http.ResponseWriter, r *http.Request) {
 		logger.Errorf("aurora fileRegister failed: %v ", err)
 		jsonhttp.InternalServerError(w, fmt.Sprintf("aurora fileRegister failed: %v ", err))
 		return
+	}
+	err = s.fileInfo.RegisterFile(address, true)
+	if err != nil {
+		logger.Errorf("aurora fileRegister update info:%v", err)
 	}
 
 	trans := TransactionResponse{
@@ -756,6 +721,11 @@ func (s *server) fileRegisterRemove(w http.ResponseWriter, r *http.Request) {
 		s.logger.Error("aurora fileRegisterRemove failed: %v ", err)
 		jsonhttp.InternalServerError(w, fmt.Sprintf("aurora fileRegisterRemove failed: %v ", err))
 		return
+	}
+
+	err = s.fileInfo.RegisterFile(address, false)
+	if err != nil {
+		logger.Errorf("aurora fileRegister update info:%v", err)
 	}
 
 	trans := TransactionResponse{

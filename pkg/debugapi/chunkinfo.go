@@ -18,7 +18,7 @@ func (s *Service) chunkInfoDiscoverHandler(w http.ResponseWriter, r *http.Reques
 		jsonhttp.BadRequest(w, "bad rootCid")
 		return
 	}
-	v := s.chunkInfo.GetChunkInfoDiscoverOverlays(rootCid)
+	v := s.fileInfo.GetChunkInfoDiscoverOverlays(rootCid)
 	jsonhttp.OK(w, v)
 }
 func (s *Service) chunkInfoServerHandler(w http.ResponseWriter, r *http.Request) {
@@ -28,7 +28,7 @@ func (s *Service) chunkInfoServerHandler(w http.ResponseWriter, r *http.Request)
 		jsonhttp.BadRequest(w, "bad rootCid")
 		return
 	}
-	v := s.chunkInfo.GetChunkInfoServerOverlays(rootCid)
+	v := s.fileInfo.GetChunkInfoServerOverlays(rootCid)
 	jsonhttp.OK(w, v)
 }
 func (s *Service) chunkInfoInitHandler(w http.ResponseWriter, r *http.Request) {
@@ -38,7 +38,7 @@ func (s *Service) chunkInfoInitHandler(w http.ResponseWriter, r *http.Request) {
 		jsonhttp.BadRequest(w, "bad rootCid")
 		return
 	}
-	v := s.chunkInfo.Init(r.Context(), nil, rootCid)
+	v := s.chunkInfo.Discover(r.Context(), nil, rootCid)
 	jsonhttp.OK(w, chunkInfoIntoResp{
 		Msg: v,
 	})
@@ -51,6 +51,6 @@ func (s *Service) chunkInfoSource(w http.ResponseWriter, r *http.Request) {
 		jsonhttp.BadRequest(w, "bad rootCid")
 		return
 	}
-	v := s.chunkInfo.GetChunkInfoSource(rootCid)
+	v := s.fileInfo.GetChunkInfoSource(rootCid)
 	jsonhttp.OK(w, v)
 }

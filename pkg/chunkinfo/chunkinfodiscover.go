@@ -4,7 +4,6 @@ import (
 	"context"
 	"time"
 
-	"github.com/gauss-project/aurorafs/pkg/aurora"
 	"github.com/gauss-project/aurorafs/pkg/bitvector"
 	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/localstore/chunkstore"
@@ -83,24 +82,6 @@ func (ci *ChunkInfo) addRoutes(routes []aco.Route) []aco.Route {
 		}
 	}
 	return res
-}
-
-func (ci *ChunkInfo) getDiscover(rootCid boson.Address) ([]aurora.ChunkInfoOverlay, error) {
-	res := make([]aurora.ChunkInfoOverlay, 0)
-	consumerList, err := ci.chunkStore.GetChunk(chunkstore.DISCOVER, rootCid)
-	if err != nil {
-		return nil, err
-	}
-	for _, c := range consumerList {
-		bv := aurora.BitVectorApi{B: c.B, Len: c.Len}
-		cio := aurora.ChunkInfoOverlay{Overlay: c.Overlay.String(), Bit: bv}
-		res = append(res, cio)
-	}
-	return res, nil
-}
-
-func (ci *ChunkInfo) removeDiscover(rootCid boson.Address) error {
-	return ci.chunkStore.DeleteAllChunk(chunkstore.DISCOVER, rootCid)
 }
 
 func (ci *ChunkInfo) updateDiscover(rootCid, overlay boson.Address, bv []byte) error {

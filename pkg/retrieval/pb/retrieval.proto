@@ -18,4 +18,5 @@ message RequestChunk{
     bytes TargetAddr = 1;
     bytes RootAddr = 2;
     bytes ChunkAddr = 3;
+    int64 Bit = 4;
 }

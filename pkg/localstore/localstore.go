@@ -543,6 +543,12 @@ func (db *DB) HasFile(reference boson.Address) bool {
 	return db.filestore.Has(reference)
 }
 
+func (db *DB) UpdateFile(file filestore.FileView) error {
+	db.batchMu.Lock()
+	defer db.batchMu.Unlock()
+	return db.filestore.Update(file)
+}
+
 func (db *DB) PutChunk(chunkType chunkstore.ChunkType, reference boson.Address, providers []chunkstore.Provider) error {
 	db.batchMu.Lock()
 	defer db.batchMu.Unlock()

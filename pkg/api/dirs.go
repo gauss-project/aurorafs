@@ -15,15 +15,12 @@ import (
 	"strings"
 
 	"github.com/gauss-project/aurorafs/pkg/boson"
-	"github.com/gauss-project/aurorafs/pkg/chunkinfo"
 	"github.com/gauss-project/aurorafs/pkg/file"
 	"github.com/gauss-project/aurorafs/pkg/file/loadsave"
 	"github.com/gauss-project/aurorafs/pkg/jsonhttp"
 	"github.com/gauss-project/aurorafs/pkg/logging"
 	"github.com/gauss-project/aurorafs/pkg/manifest"
 	"github.com/gauss-project/aurorafs/pkg/sctx"
-	"github.com/gauss-project/aurorafs/pkg/shed/driver"
-	"github.com/gauss-project/aurorafs/pkg/storage"
 	"github.com/gauss-project/aurorafs/pkg/tracing"
 	"github.com/gorilla/mux"
 )
@@ -80,24 +77,17 @@ func (s *server) dirUploadHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	dataChunks, _, err := s.traversal.GetChunkHashes(ctx, reference, nil)
+	bitLen, err := s.fileInfo.GetFileSize(reference)
 	if err != nil {
-		logger.Debugf("aurora upload dir: get chunk hashes err: %v", err)
-		logger.Errorf("aurora upload dir: get chunk hashes err")
-		jsonhttp.InternalServerError(w, "could not get chunk hashes")
-		return
+		logger.Errorf("aurora upload file: file size err:%v", err)
 	}
 
-	for _, li := range dataChunks {
-		for _, b := range li {
-			err := s.chunkInfo.OnChunkRetrieved(boson.NewAddress(b), reference, s.overlay)
-			if err != nil {
-				logger.Errorf("aurora upload dir: chunk transfer data err: %v", err)
-				logger.Errorf("aurora upload dir: chunk transfer data err")
-				jsonhttp.InternalServerError(w, "chunk transfer data error")
-				return
-			}
-		}
+	err = s.chunkInfo.OnFileUpload(ctx, reference, bitLen)
+	if err != nil {
+		logger.Errorf("aurora upload dir: chunk transfer data err: %v", err)
+		logger.Errorf("aurora upload dir: chunk transfer data err")
+		jsonhttp.InternalServerError(w, "chunk transfer data error")
+		return
 	}
 
 	if strings.ToLower(r.Header.Get(AuroraPinHeader)) == StringTrue {
@@ -106,6 +96,10 @@ func (s *server) dirUploadHandler(w http.ResponseWriter, r *http.Request) {
 			logger.Error("aurora upload dir: creation of pin failed")
 			jsonhttp.InternalServerError(w, nil)
 			return
+		}
+		err = s.fileInfo.PinFile(reference, true)
+		if err != nil {
+			s.logger.Errorf("aurora upload file:update fileinfo pin failed:%v", err)
 		}
 	}
 
@@ -341,43 +335,7 @@ func (s *server) auroraDeleteHandler(w http.ResponseWriter, r *http.Request) {
 
 	r = r.WithContext(sctx.SetRootHash(r.Context(), hash))
 
-	del := func() error {
-		pyramid := s.chunkInfo.GetChunkPyramid(hash)
-		chunkHashes := make([]chunkinfo.PyramidCidNum, len(pyramid))
-
-		for i, chunk := range pyramid {
-			chunkHashes[i] = *chunk
-		}
-
-		var err error
-
-		for _, chunk := range chunkHashes {
-			if chunk.Cid.Equal(hash) {
-				continue
-			}
-
-			for i := 0; i < chunk.Number; i++ {
-				err = s.storer.Set(r.Context(), storage.ModeSetRemove, chunk.Cid)
-				if err != nil {
-					if errors.Is(err, driver.ErrNotFound) {
-						continue
-					}
-
-					return err
-				}
-			}
-		}
-
-		err = s.storer.Set(r.Context(), storage.ModeSetRemove, hash)
-		if err != nil {
-			if !errors.Is(err, driver.ErrNotFound) {
-				return err
-			}
-		}
-
-		return nil
-	}
-	err = s.chunkInfo.DelFile(hash, del)
+	err = s.fileInfo.DeleteFile(hash)
 	if err != nil {
 		s.logger.Errorf("aurora delete: remove file: %w", err)
 		jsonhttp.InternalServerError(w, "aurora deleting occur error")

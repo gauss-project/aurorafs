@@ -6,6 +6,7 @@ import (
 	"sync"
 
 	"github.com/gauss-project/aurorafs/pkg/boson"
+	"github.com/gauss-project/aurorafs/pkg/fileinfo"
 	"github.com/gauss-project/aurorafs/pkg/localstore"
 	"github.com/gauss-project/aurorafs/pkg/logging"
 	"github.com/gauss-project/aurorafs/pkg/p2p"
@@ -15,7 +16,6 @@ import (
 	"github.com/gauss-project/aurorafs/pkg/sctx"
 	"github.com/gauss-project/aurorafs/pkg/settlement/chain"
 	"github.com/gauss-project/aurorafs/pkg/subscribe"
-	"github.com/gauss-project/aurorafs/pkg/traversal"
 	"resenje.org/singleflight"
 )
 
@@ -24,14 +24,15 @@ type Interface interface {
 
 	FindRoutes(ctx context.Context, rootCid boson.Address, cid boson.Address, bit int) []aco.Route
 
-	OnRetrieved(ctx context.Context, rootCid boson.Address, cid boson.Address, bit int, overlay boson.Address) error
+	OnRetrieved(ctx context.Context, rootCid boson.Address, cid boson.Address, bit int, length int, overlay boson.Address) error
 
-	OnTransferred(ctx context.Context, rootCid boson.Address, cid boson.Address, bit int, overlay boson.Address) error
+	OnTransferred(ctx context.Context, rootCid boson.Address, cid boson.Address, bit int, length int, overlay boson.Address) error
+
+	OnFileUpload(ctx context.Context, rootCid boson.Address, bitLen int) error
 }
 
 type ChunkInfo struct {
 	addr         boson.Address
-	traversal    traversal.Traverser
 	route        routetab.RouteTab
 	streamer     p2p.Streamer
 	logger       logging.Logger
@@ -39,6 +40,7 @@ type ChunkInfo struct {
 	singleflight singleflight.Group
 	oracleChain  chain.Resolver
 	subPub       subscribe.SubPub
+	fileInfo     fileinfo.Interface
 
 	queuesLk       sync.RWMutex
 	queues         sync.Map // map[string]*queue
@@ -49,17 +51,17 @@ type ChunkInfo struct {
 	chunkStore     *localstore.DB
 }
 
-func New(addr boson.Address, streamer p2p.Streamer, logger logging.Logger, traversal traversal.Traverser,
-	chunkStore *localstore.DB, route routetab.RouteTab, oracleChain chain.Resolver,
+func New(addr boson.Address, streamer p2p.Streamer, logger logging.Logger,
+	chunkStore *localstore.DB, route routetab.RouteTab, oracleChain chain.Resolver, fileInfo fileinfo.Interface,
 	subPub subscribe.SubPub) *ChunkInfo {
 	chunkInfo := &ChunkInfo{
 		addr:        addr,
-		traversal:   traversal,
 		route:       route,
 		streamer:    streamer,
 		logger:      logger,
 		metrics:     newMetrics(),
 		oracleChain: oracleChain,
+		fileInfo:    fileInfo,
 		subPub:      subPub,
 
 		timeoutTrigger: newTimeoutTrigger(),
@@ -116,20 +118,34 @@ func (ci *ChunkInfo) FindRoutes(_ context.Context, rootCid boson.Address, _ boso
 	return route
 }
 
-func (ci *ChunkInfo) OnTransferred(_ context.Context, rootCid boson.Address, _ boson.Address, bit int, overlay boson.Address) error {
-	return ci.updateService(rootCid, bit, overlay)
+func (ci *ChunkInfo) OnTransferred(_ context.Context, rootCid boson.Address, _ boson.Address, bit int, length int, overlay boson.Address) error {
+	return ci.updateService(rootCid, bit, length, overlay)
 }
 
-func (ci *ChunkInfo) OnRetrieved(_ context.Context, rootCid boson.Address, _ boson.Address, bit int, overlay boson.Address) error {
-	err := ci.updateService(rootCid, bit, ci.addr)
+func (ci *ChunkInfo) OnRetrieved(_ context.Context, rootCid boson.Address, _ boson.Address, bit int, length int, overlay boson.Address) error {
+	err := ci.updateService(rootCid, bit, length, ci.addr)
 	if err != nil {
 		return err
 	}
-	err = ci.updateSource(rootCid, bit, overlay)
+	err = ci.updateSource(rootCid, bit, length, overlay)
 	if err != nil {
 		return err
 	}
 
+	return nil
+}
+
+func (ci *ChunkInfo) OnFileUpload(ctx context.Context, rootCid boson.Address, length int) error {
+	for i := 0; i < length; i++ {
+		err := ci.updateService(rootCid, i, length, ci.addr)
+		if err != nil {
+			return err
+		}
+		err = ci.updateSource(rootCid, i, length, ci.addr)
+		if err != nil {
+			return err
+		}
+	}
 	return nil
 }
 

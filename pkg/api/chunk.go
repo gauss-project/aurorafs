@@ -89,7 +89,8 @@ func (s *server) chunkGetHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	chunk, err := s.storer.Get(ctx, storage.ModeGetRequest, address)
+	// TODO
+	chunk, err := s.storer.Get(ctx, storage.ModeGetRequest, address, 0, 0)
 	if err != nil {
 		if errors.Is(err, storage.ErrNotFound) {
 			s.logger.Tracef("chunk: chunk not found. addr %s", address)

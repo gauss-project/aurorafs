@@ -1,7 +1,6 @@
 package chunkinfo
 
 import (
-	"github.com/gauss-project/aurorafs/pkg/aurora"
 	"github.com/gauss-project/aurorafs/pkg/bitvector"
 	"github.com/gauss-project/aurorafs/pkg/boson"
 	"github.com/gauss-project/aurorafs/pkg/localstore/chunkstore"
@@ -38,14 +37,14 @@ func (ci *ChunkInfo) isDownload(rootCid, overlay boson.Address) bool {
 	return false
 }
 
-func (ci *ChunkInfo) updateService(rootCid boson.Address, bit int, overlay boson.Address) error {
+func (ci *ChunkInfo) updateService(rootCid boson.Address, bit int, length int, overlay boson.Address) error {
 	has, err := ci.chunkStore.HasChunk(chunkstore.SERVICE, rootCid, overlay)
 	if err != nil {
 		return err
 	}
 
 	var provider chunkstore.Provider
-	provider.Len = bit
+	provider.Len = length
 	provider.Bit = bit
 	provider.Overlay = overlay
 	err = ci.chunkStore.PutChunk(chunkstore.SERVICE, rootCid, []chunkstore.Provider{provider})
@@ -65,9 +64,15 @@ func (ci *ChunkInfo) updateService(rootCid boson.Address, bit int, overlay boson
 			break
 		}
 	}
-	// TODO
-	// if we get the first three chunk of a file,we need to add it into the fileStore
-	// and the update the correct of bitLen
+	if bit == 0 || bit == 1 || bit == 2 {
+		bitV, _ := bitvector.NewFromBytes(consumer.B, consumer.Len)
+		if bitV.Get(0) && bitV.Get(1) && bitV.Get(2) {
+			err = ci.fileInfo.AddFile(rootCid)
+			if err != nil {
+				ci.logger.Errorf("chunkInfo updateService AddFile:%w", err)
+			}
+		}
+	}
 	if !has {
 		if overlay.Equal(ci.addr) {
 			go ci.PublishRootCidStatus(RootCidStatusEven{
@@ -91,31 +96,5 @@ func (ci *ChunkInfo) updateService(rootCid boson.Address, bit int, overlay boson
 		}
 	}
 
-	return nil
-}
-
-func (ci *ChunkInfo) getService(rootCid boson.Address) ([]aurora.ChunkInfoOverlay, error) {
-	res := make([]aurora.ChunkInfoOverlay, 0)
-	consumerList, err := ci.chunkStore.GetChunk(chunkstore.SERVICE, rootCid)
-	if err != nil {
-		return nil, err
-	}
-	for _, c := range consumerList {
-		bv := aurora.BitVectorApi{Len: c.Len, B: c.B}
-		cio := aurora.ChunkInfoOverlay{Overlay: c.Overlay.String(), Bit: bv}
-		res = append(res, cio)
-	}
-	return res, nil
-}
-
-func (ci *ChunkInfo) removeService(rootCid boson.Address) error {
-	err := ci.chunkStore.DeleteAllChunk(chunkstore.SERVICE, rootCid)
-	if err != nil {
-		return err
-	}
-	go ci.PublishRootCidStatus(RootCidStatusEven{
-		RootCid: rootCid,
-		Status:  RootCid_DEL,
-	})
 	return nil
 }
