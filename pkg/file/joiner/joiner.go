@@ -182,7 +182,7 @@ func (j *joiner) readAtOffset(b, data []byte, index, lastIndex, l, cur, subTrieS
 					return ErrMalformedTrie
 				}
 
-				j.readAtOffset(b, chunkData, index, lastIndex, l, cur, subtrieSpan, off, bufferOffset, currentReadSize, bytesRead, eg)
+				j.readAtOffset(b, chunkData, index, lastIndex, l, cur, subtrieSpan, off, bufferOffset, bytesToRead, bytesRead, eg)
 				return nil
 			})
 		}(address, b, index1, lastIndex1, l, cur, subtrieSpan, off, bufferOffset, currentReadSize, subtrieSpanLimit, cursor)
@@ -297,7 +297,7 @@ func (j *joiner) processChunkAddresses(ctx context.Context, fn boson.AddressIter
 			continue
 		}
 
-		func(address boson.Address, index, lastIndex, l int64, eg *errgroup.Group) {
+		func(address boson.Address, index, lastIndex, l int64, cursor int, eg *errgroup.Group) {
 			wg.Add(1)
 
 			eg.Go(func() error {
@@ -324,7 +324,7 @@ func (j *joiner) processChunkAddresses(ctx context.Context, fn boson.AddressIter
 
 				return j.processChunkAddresses(ectx, fn, chunkData, index, lastIndex, l, subtrieSpan)
 			})
-		}(address, index, lastIndex, l, eg)
+		}(address, index, lastIndex, l, cursor, eg)
 
 		wg.Wait()
 	}
